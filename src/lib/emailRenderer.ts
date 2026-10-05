@@ -12,8 +12,10 @@ export interface RenderedEmail {
 }
 
 export function renderEmailHtmlLocally(event: string, customData: Record<string, any> = {}): RenderedEmail {
-  if (event === 'customer_reset_password' || event === 'customer_new_account') {
+  if (event === 'customer_reset_password' || event === 'customer_new_account' || event === 'customer_otp') {
     return renderCustomerAccountEmail(event, customData);
+  } else if (event === 'website_contact_confirmation') {
+    return renderContactConfirmationEmail(customData);
   } else if (event === 'customer_order_review_invitation') {
     return renderReviewInvitationEmail(customData);
   } else if (event === 'customer_order_review_reward') {
@@ -86,7 +88,112 @@ export const BRAND_LOGO_WHITE_HTML = `<a href="https://exacoat.com" target="_bla
 function renderCustomerAccountEmail(event: string, data: Record<string, any>): RenderedEmail {
   const custName = escapeHtml(data.customer_first_name || data.display_name || 'Customer');
 
-  if (event === 'customer_reset_password') {
+  if (event === 'customer_otp') {
+    const otpCode = escapeHtml(data.otp_code || '849201');
+    const subject = `Your Exacoat verification code: ${otpCode}`;
+    const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${subject}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100% !important;
+      background-color: #f7f7f7;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    table { border-collapse: collapse; }
+    img { border: 0; display: block; }
+    @media only screen and (max-width: 620px) {
+      .container-table { width: 100% !important; border-radius: 0 !important; }
+      .mobile-padding { padding-left: 24px !important; padding-right: 24px !important; }
+    }
+  </style>
+</head>
+<body bgcolor="#f7f7f7" style="margin:0;padding:0;background-color:#f7f7f7;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f7f7f7" style="border-collapse:collapse;background-color:#f7f7f7;">
+    <tbody>
+      <tr>
+        <td height="48" style="height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
+      </tr>
+      <tr>
+        <td align="center" style="padding:0 16px;">
+        <!-- Main Card -->
+        <table class="container-table" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background:#ffffff;border:1px solid #e5e5e5;border-radius:20px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.04);">
+          <tbody>
+            <tr>
+              <td style="padding:28px 40px 22px;border-bottom:1px solid #f0f0f0;" class="mobile-padding">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td valign="middle">
+                      ${BRAND_LOGO_HTML}
+                    </td>
+                    <td align="right" valign="middle">
+                      <span style="display:inline-block;padding:5px 13px;background:#f4f4f5;color:#3f3f46;font-size:11px;font-weight:600;border-radius:999px;border:1px solid #e4e4e7;letter-spacing:0.3px;">Security verification</span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:36px 40px 32px;" class="mobile-padding">
+                <h1 style="margin:0 0 20px;font-size:26px;font-weight:800;color:#111111;letter-spacing:-0.6px;line-height:1.25;">Verify your identity</h1>
+                <p style="margin:0 0 14px;font-size:15px;font-weight:600;color:#18181b;">Hi ${custName},</p>
+                <p style="margin:0 0 20px;font-size:14.5px;line-height:1.7;color:#3f3f46;">
+                  Use the verification code below to verify your account or complete your sign-in:
+                </p>
+
+                <!-- OTP Code Card -->
+                <table width="100%" cellpadding="0" cellspacing="0" style="background:#fafafa;border:1px solid #eaeaea;border-radius:16px;margin:24px 0;">
+                  <tr>
+                    <td align="center" style="padding:28px 20px 22px;">
+                      <span style="font-size:40px;font-weight:800;letter-spacing:12px;color:#111111;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;display:inline-block;">${otpCode}</span>
+                      <p style="margin:12px 0 0;font-size:12.5px;color:#71717a;">This code is valid for <strong>5 minutes</strong></p>
+                    </td>
+                  </tr>
+                </table>
+
+                <p style="margin:0 0 10px;font-size:13.5px;color:#71717a;line-height:1.65;">
+                  If you did not request this verification code, you can safely ignore this email.
+                </p>
+
+                <!-- Dedicated Spacer above Support -->
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td height="36" style="height:36px;font-size:0;line-height:0;">&nbsp;</td>
+                  </tr>
+                </table>
+
+                <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #f0f0f0;text-align:center;">
+                  <tr>
+                    <td align="center" style="padding-top:28px;">
+                      <p style="margin:0 0 10px;font-size:12px;line-height:1.65;color:#71717a;">
+                        Have questions about your account? Reach our team at <a href="mailto:support@exacoat.com" style="color:#111111;text-decoration:underline;font-weight:500;">support@exacoat.com</a>
+                      </p>
+                      <p style="margin:0;font-size:11px;color:#a1a1aa;letter-spacing:0.2px;">&copy; Exacoat</p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </td>
+    </tr>
+    <tr>
+      <td height="48" style="height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
+    </tr>
+  </tbody>
+  </table>
+</body>
+</html>`;
+    return { subject, html, isLightMode: true };
+  } else if (event === 'customer_reset_password') {
     const resetUrl = escapeHtml(data.reset_url || 'https://exacoat.com/my-account/lost-password/?key=sample_security_token');
     const subject = 'Password reset for your Exacoat account';
     const html = `<!doctype html>
@@ -286,6 +393,151 @@ function renderCustomerAccountEmail(event: string, data: Record<string, any>): R
 </html>`;
     return { subject, html, isLightMode: true };
   }
+}
+
+function renderContactConfirmationEmail(data: Record<string, any>): RenderedEmail {
+  const name = escapeHtml(data.name || data.customer_name || 'Customer');
+  const topicLabel = escapeHtml(data.topic_label || 'General inquiry');
+  const subjectText = escapeHtml(data.subject || 'Contact inquiry');
+  const orderNumber = escapeHtml(data.order_number || '');
+  const message = escapeHtml(data.message || '');
+  const subject = `We've received your inquiry: ${subjectText} | Exacoat`;
+
+  const orderRow = orderNumber ? `
+    <tr>
+      <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:13px;color:#71717a;width:120px;vertical-align:top;">Order Number</td>
+      <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:#111111;font-weight:600;font-family:monospace;">#${orderNumber}</td>
+    </tr>` : '';
+
+  const messageRow = message ? `
+    <tr>
+      <td style="padding:10px 0 0;font-size:13px;color:#71717a;vertical-align:top;width:120px;">Your Message</td>
+      <td style="padding:10px 0 0;font-size:13.5px;color:#3f3f46;line-height:1.65;white-space:pre-wrap;">${message}</td>
+    </tr>` : '';
+
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${subject}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100% !important;
+      background-color: #f7f7f7;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    table { border-collapse: collapse; }
+    img { border: 0; display: block; }
+    @media only screen and (max-width: 620px) {
+      .container-table { width: 100% !important; border-radius: 0 !important; }
+      .mobile-padding { padding-left: 24px !important; padding-right: 24px !important; }
+    }
+  </style>
+</head>
+<body bgcolor="#f7f7f7" style="margin:0;padding:0;background-color:#f7f7f7;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f7f7f7" style="border-collapse:collapse;background-color:#f7f7f7;">
+    <tbody>
+      <tr>
+        <td height="48" style="height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
+      </tr>
+      <tr>
+        <td align="center" style="padding:0 16px;">
+        <!-- Main Card -->
+        <table class="container-table" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background:#ffffff;border:1px solid #e5e5e5;border-radius:20px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.04);">
+          <tbody>
+            <tr>
+              <td style="padding:28px 40px 22px;border-bottom:1px solid #f0f0f0;" class="mobile-padding">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td valign="middle">
+                      ${BRAND_LOGO_HTML}
+                    </td>
+                    <td align="right" valign="middle">
+                      <span style="display:inline-block;padding:5px 13px;background:#f4f4f5;color:#3f3f46;font-size:11px;font-weight:600;border-radius:999px;border:1px solid #e4e4e7;letter-spacing:0.3px;">Inquiry Received</span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:36px 40px 32px;" class="mobile-padding">
+                <h1 style="margin:0 0 20px;font-size:26px;font-weight:800;color:#111111;letter-spacing:-0.6px;line-height:1.25;">We've received your inquiry</h1>
+                <p style="margin:0 0 14px;font-size:15px;font-weight:600;color:#18181b;">Hi ${name},</p>
+                <p style="margin:0 0 24px;font-size:14.5px;line-height:1.7;color:#3f3f46;">
+                  Thank you for reaching out to Exacoat. We have received your inquiry and our customer care team is reviewing it. We typically reply within 24 business hours (Monday &ndash; Saturday, 09:00 &ndash; 18:00 UTC+7).
+                </p>
+
+                <!-- Inquiry Summary Card -->
+                <table width="100%" cellpadding="0" cellspacing="0" style="background:#fafafa;border:1px solid #eaeaea;border-radius:16px;margin:0 0 24px;">
+                  <tr>
+                    <td style="padding:20px 24px;">
+                      <p style="margin:0 0 14px;font-size:12px;font-weight:700;color:#71717a;text-transform:uppercase;letter-spacing:0.8px;">Inquiry Summary</p>
+                      <table width="100%" cellpadding="0" cellspacing="0">
+                        <tr>
+                          <td style="padding:0 0 10px;border-bottom:1px solid #f0f0f0;font-size:13px;color:#71717a;width:120px;">Topic</td>
+                          <td style="padding:0 0 10px;border-bottom:1px solid #f0f0f0;font-size:14px;color:#111111;font-weight:600;">${topicLabel}</td>
+                        </tr>
+                        <tr>
+                          <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:13px;color:#71717a;width:120px;">Subject</td>
+                          <td style="padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;color:#111111;font-weight:600;">${subjectText}</td>
+                        </tr>
+                        ${orderRow}
+                        ${messageRow}
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+
+                <!-- WhatsApp Card -->
+                <table width="100%" cellpadding="0" cellspacing="0" style="background:#fafafa;border:1px solid #eaeaea;border-radius:16px;margin:0 0 28px;">
+                  <tr>
+                    <td style="padding:20px 24px;">
+                      <table width="100%" cellpadding="0" cellspacing="0">
+                        <tr>
+                          <td style="vertical-align:middle;">
+                            <p style="margin:0 0 4px;font-size:14px;font-weight:700;color:#111111;">Need an immediate answer?</p>
+                            <p style="margin:0;font-size:13px;color:#71717a;">Connect directly with WhatsApp Care for fast assistance.</p>
+                          </td>
+                          <td align="right" style="vertical-align:middle;padding-left:16px;">
+                            <a href="https://api.whatsapp.com/send?phone=628975556000" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:10px 18px;background:#111111;color:#ffffff;font-size:12.5px;font-weight:600;border-radius:100px;text-decoration:none;white-space:nowrap;">
+                              WhatsApp Care &rarr;
+                            </a>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+
+                <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #f0f0f0;text-align:center;">
+                  <tr>
+                    <td align="center" style="padding-top:28px;">
+                      <p style="margin:0 0 10px;font-size:12px;line-height:1.65;color:#71717a;">
+                        Have questions? Reach our team at <a href="mailto:support@exacoat.com" style="color:#111111;text-decoration:underline;font-weight:500;">support@exacoat.com</a>
+                      </p>
+                      <p style="margin:0;font-size:11px;color:#a1a1aa;letter-spacing:0.2px;">&copy; Exacoat</p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </td>
+    </tr>
+    <tr>
+      <td height="48" style="height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
+    </tr>
+  </tbody>
+  </table>
+</body>
+</html>`;
+  return { subject, html, isLightMode: true };
 }
 
 function renderCustomerOrderEmail(event: string, data: Record<string, any>): RenderedEmail {

@@ -194,6 +194,24 @@ class Exacoat_Email_Engine {
 					'reset_url'           => 'https://exacoat.com/my-account/lost-password/?key=sample_key',
 				],
 			],
+			'website_contact_confirmation' => [
+				'category'       => 'Support & Inquiries',
+				'label'          => 'Customer Contact Inquiry Confirmation',
+				'subject'        => "We've received your inquiry: {{subject}} | Exacoat",
+				'badge'          => 'Inquiry received',
+				'icon'           => 'document_verified',
+				'title'          => "We've received your message",
+				'body_primary'   => 'Thank you for reaching out to Exacoat. We’ve received your inquiry and our support team is reviewing the details.',
+				'type'           => 'contact_confirmation',
+				'defaults'       => [
+					'name'         => 'Customer',
+					'customer_name'=> 'Customer',
+					'topic_label'  => 'General inquiry',
+					'subject'      => 'Product inquiry',
+					'order_number' => '',
+					'message'      => 'Hello, I have a question about my device.',
+				],
+			],
 
 			// 2. Customer Orders & Fulfillment
 			'customer_order_processing' => [
@@ -703,8 +721,23 @@ class Exacoat_Email_Engine {
 		$type = $tmpl['type'] ?? 'notice';
 
 		// Branch directly to Light-Mode Customer Account Layout
-		if ( $type === 'customer_account' || in_array( $event, [ 'customer_reset_password', 'customer_new_account' ], true ) ) {
+		if ( $type === 'customer_account' || $type === 'otp' || in_array( $event, [ 'customer_reset_password', 'customer_new_account', 'customer_otp' ], true ) ) {
 			return self::render_customer_account_html( $event, $merged_data, $tmpl );
+		}
+
+		// Branch directly to Customer Contact Confirmation Layout
+		if ( $event === 'website_contact_confirmation' || $type === 'contact_confirmation' ) {
+			return [
+				'subject'   => sprintf( "We've received your inquiry: %s | Exacoat", $merged_data['subject'] ?? 'Contact inquiry' ),
+				'html'      => class_exists( 'Exacoat_Core' ) ? Exacoat_Core::render_contact_confirmation_html( [
+					'name'         => $merged_data['name'] ?? ( $merged_data['customer_name'] ?? 'Customer' ),
+					'topic_label'  => $merged_data['topic_label'] ?? 'General inquiry',
+					'subject'      => $merged_data['subject'] ?? 'Contact inquiry',
+					'order_number' => $merged_data['order_number'] ?? '',
+					'message'      => $merged_data['message'] ?? '',
+				] ) : '',
+				'tmpl_info' => $tmpl,
+			];
 		}
 
 		// Branch directly to Light-Mode Custom Poster Order Layout
@@ -762,9 +795,9 @@ class Exacoat_Email_Engine {
 		}
 
 		// Ensure primary canonical fallbacks
-		if ( ! isset( $replacements['{{artist_name}}'] ) ) {
-			$replacements['{{artist_name}}'] = $artist_name;
-			$replacements['{artist_name}']   = $artist_name;
+		if ( ! isset( $replacements['{{customer_name}}'] ) ) {
+			$replacements['{{customer_name}}'] = $customer_name;
+			$replacements['{customer_name}']   = $customer_name;
 		}
 		if ( ! empty( $merged_data['order_code'] ) ) {
 			$replacements['{{order_code}}'] = (string) $merged_data['order_code'];
@@ -797,17 +830,17 @@ class Exacoat_Email_Engine {
 			$otp_code = esc_html( $merged_data['otp_code'] ?? '849201' );
 			$slot_html = "
 			<tr>
-				<td align=\"center\" style=\"padding:0 40px 32px;\">
-					<table width=\"100%\" style=\"border-collapse:collapse;background:#141414;border-radius:14px;\">
+				<td align=\"center\" style=\"padding:0 36px 28px;\" class=\"mobile-padding\">
+					<table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#fafafa;border:1px solid #eaeaea;border-radius:16px;\">
 						<tbody>
 							<tr>
-								<td align=\"center\" style=\"padding:32px 16px 8px;\">
-									<span style=\"color:#ffffff;font-size:48px;display:inline-block;font-weight:600;letter-spacing:10px;font-family:monospace;\">{$otp_code}</span>
+								<td align=\"center\" style=\"padding:28px 20px 8px;\">
+									<span style=\"color:#111111;font-size:40px;display:inline-block;font-weight:800;letter-spacing:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;\">{$otp_code}</span>
 								</td>
 							</tr>
 							<tr>
-								<td align=\"center\" style=\"padding:0 16px 24px;\">
-									<p style=\"margin:0;font-size:13px;color:#9a9a9a;\">This code is valid for <b>5 minutes</b></p>
+								<td align=\"center\" style=\"padding:0 20px 24px;\">
+									<p style=\"margin:0;font-size:12.5px;color:#71717a;font-family:'Plus Jakarta Sans',sans-serif;\">This code is valid for <b>5 minutes</b></p>
 								</td>
 							</tr>
 						</tbody>
@@ -815,40 +848,41 @@ class Exacoat_Email_Engine {
 				</td>
 			</tr>";
 		} elseif ( $type === 'commission' ) {
-			$art_img   = esc_url( $merged_data['artwork_image'] ?? 'https://media.artmatter.co/2026/08/sample-art.jpg' );
+			$art_img   = esc_url( $merged_data['artwork_image'] ?? '' );
 			$art_title = esc_html( $merged_data['product_title'] ?? ( $merged_data['artwork_title'] ?? 'Exacoat Product' ) );
 			$quantity  = intval( $merged_data['quantity'] ?? 1 );
 			$comm_stat = esc_html( $merged_data['commission_status'] ?? 'Pending' );
 			$comm_amt  = esc_html( $merged_data['commission_amount'] ?? '$15.00' );
-			$share_display = ! empty( $merged_data['share_and_earn'] ) ? 'inline-block' : 'none';
+
+			$img_tr = '';
+			if ( $art_img ) {
+				$img_tr = "
+							<tr>
+								<td align=\"center\" style=\"padding:20px 20px 0;\">
+									<img src=\"{$art_img}\" alt=\"{$art_title}\" style=\"width:100%;max-width:380px;height:auto;border-radius:12px;display:block;\">
+								</td>
+							</tr>";
+			}
 
 			$slot_html = "
 			<tr>
-				<td align=\"center\" style=\"padding:0 40px 32px;\">
-					<table width=\"100%\" style=\"background:#141414;border-radius:14px;overflow:hidden;\">
+				<td align=\"center\" style=\"padding:0 36px 28px;\" class=\"mobile-padding\">
+					<table width=\"100%\" style=\"background:#fafafa;border:1px solid #eaeaea;border-radius:16px;overflow:hidden;\">
 						<tbody>
+							{$img_tr}
 							<tr>
-								<td align=\"center\" style=\"padding-top:20px;\">
-									<img src=\"{$art_img}\" alt=\"{$art_title}\" style=\"width:80%;max-width:480px;height:auto;border-radius:8px;\">
-								</td>
-							</tr>
-							<tr>
-								<td align=\"center\" style=\"padding:20px 16px 24px;\">
-									<p style=\"margin:0 0 6px;font-size:16px;font-weight:600;color:#ffffff;\">{$art_title}</p>
-									<p style=\"margin:0 0 16px;font-size:13px;color:#9a9a9a;\">Quantity: {$quantity}</p>
+								<td align=\"center\" style=\"padding:20px 20px 24px;\">
+									<p style=\"margin:0 0 6px;font-size:16px;font-weight:700;color:#111111;\">{$art_title}</p>
+									<p style=\"margin:0 0 16px;font-size:13px;color:#71717a;\">Quantity: {$quantity}</p>
 									<table cellpadding=\"0\" cellspacing=\"0\" align=\"center\">
 										<tbody>
 											<tr>
-												<td style=\"padding:6px 12px;font-size:11px;background:#333333;color:#ffffff;border-radius:999px;\">
+												<td style=\"padding:5px 12px;font-size:11px;font-weight:600;background:#f4f4f5;color:#52525b;border-radius:999px;border:1px solid #e4e4e7;\">
 													{$comm_stat}
 												</td>
 												<td style=\"padding-left:8px;\"></td>
-												<td style=\"padding:6px 12px;font-size:11px;font-weight:700;background:#f3aa18;color:#111111;border-radius:999px;\">
+												<td style=\"padding:5px 14px;font-size:12px;font-weight:700;background:#111111;color:#ffffff;border-radius:999px;\">
 													{$comm_amt}
-												</td>
-												<td style=\"padding-left:8px;\"></td>
-												<td style=\"display:{$share_display};padding:6px 12px;font-size:11px;font-weight:600;background:#484535;color:#fbbf24;border-radius:999px;\">
-													Share &amp; Earn
 												</td>
 											</tr>
 										</tbody>
@@ -860,9 +894,9 @@ class Exacoat_Email_Engine {
 				</td>
 			</tr>
 			<tr>
-				<td align=\"center\" style=\"padding:0 40px 16px;\">
-					<a href=\"https://exacoat.com/dashboard\" target=\"_blank\" style=\"display:inline-block;padding:14px 32px;font-size:14px;font-weight:600;color:#111111;background:#ffffff;border-radius:12px;text-decoration:none;\">
-						View dashboard
+				<td align=\"center\" style=\"padding:0 36px 20px;\" class=\"mobile-padding\">
+					<a href=\"https://exacoat.com\" target=\"_blank\" style=\"display:inline-block;padding:13px 28px;font-size:14px;font-weight:600;color:#ffffff;background:#111111;border-radius:100px;text-decoration:none;\">
+						View Dashboard &rarr;
 					</a>
 				</td>
 			</tr>";
@@ -870,36 +904,36 @@ class Exacoat_Email_Engine {
 			$art_img   = esc_url( $merged_data['artwork_image'] ?? '' );
 			$art_title = esc_html( $merged_data['product_title'] ?? ( $merged_data['artwork_title'] ?? 'Exacoat Product' ) );
 			$reason    = esc_html( $merged_data['rejection_reason'] ?? 'Submission does not meet curation criteria.' );
-			$cta_text  = esc_html( $tmpl['cta_text'] ?? 'Go to Studio Dashboard' );
-			$cta_url   = esc_url( $tmpl['cta_url'] ?? 'https://exacoat.com/dashboard' );
+			$cta_text  = esc_html( $tmpl['cta_text'] ?? 'Go to Dashboard' );
+			$cta_url   = esc_url( $tmpl['cta_url'] ?? 'https://exacoat.com' );
 
 			$img_html = '';
-			if ( ! empty( $art_img ) && $art_img !== 'https://media.artmatter.co/assets/sample-art.jpg' ) {
+			if ( ! empty( $art_img ) ) {
 				$img_html = "
 				<tr>
-					<td align=\"center\" style=\"padding-top:20px;\">
-						<img src=\"{$art_img}\" alt=\"{$art_title}\" style=\"width:70%;max-width:380px;height:auto;border-radius:8px;border:1px solid rgba(255,255,255,0.08);display:block;\">
+					<td align=\"center\" style=\"padding:20px 20px 0;\">
+						<img src=\"{$art_img}\" alt=\"{$art_title}\" style=\"width:100%;max-width:380px;height:auto;border-radius:12px;display:block;\">
 					</td>
 				</tr>";
 			}
 
 			$slot_html = "
 			<tr>
-				<td align=\"center\" style=\"padding:0 40px 24px;\">
-					<table width=\"100%\" style=\"background:#141414;border-radius:14px;border:1px solid #27272a;overflow:hidden;\">
+				<td align=\"center\" style=\"padding:0 36px 24px;\" class=\"mobile-padding\">
+					<table width=\"100%\" style=\"background:#fafafa;border:1px solid #eaeaea;border-radius:16px;overflow:hidden;\">
 						<tbody>
 							{$img_html}
 							<tr>
-								<td align=\"center\" style=\"padding:16px 20px 14px;\">
-									<p style=\"margin:0 0 6px;font-size:16px;font-weight:700;color:#ffffff;\">{$art_title}</p>
-									<span style=\"display:inline-block;padding:4px 10px;font-size:11px;font-weight:700;background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.3);border-radius:999px;text-transform:uppercase;letter-spacing:0.5px;\">Declined / Not Approved</span>
+								<td align=\"center\" style=\"padding:18px 20px 14px;\">
+									<p style=\"margin:0 0 8px;font-size:16px;font-weight:700;color:#111111;\">{$art_title}</p>
+									<span style=\"display:inline-block;padding:4px 12px;font-size:11px;font-weight:700;background:#fee2e2;color:#dc2626;border-radius:999px;text-transform:uppercase;letter-spacing:0.5px;\">Declined / Not Approved</span>
 								</td>
 							</tr>
 							<tr>
 								<td style=\"padding:0 20px 20px;\">
-									<div style=\"background:rgba(239,68,68,0.06);border-left:3px solid #ef4444;border-radius:6px;padding:12px 14px;text-align:left;\">
-										<p style=\"margin:0 0 4px;font-size:11px;font-weight:700;color:#f87171;text-transform:uppercase;letter-spacing:0.5px;\">Curation Feedback:</p>
-										<p style=\"margin:0;font-size:13px;line-height:1.6;color:#e4e4e7;\">{$reason}</p>
+									<div style=\"background:#ffffff;border:1px solid #fee2e2;border-left:3px solid #ef4444;border-radius:8px;padding:14px 16px;text-align:left;\">
+										<p style=\"margin:0 0 4px;font-size:11px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:0.5px;\">Feedback:</p>
+										<p style=\"margin:0;font-size:13px;line-height:1.6;color:#52525b;\">{$reason}</p>
 									</div>
 								</td>
 							</tr>
@@ -908,30 +942,22 @@ class Exacoat_Email_Engine {
 				</td>
 			</tr>
 			<tr>
-				<td align=\"center\" style=\"padding:0 40px 28px;\">
-					<table cellpadding=\"0\" cellspacing=\"0\" border=\"0\" align=\"center\">
-						<tbody>
-							<tr>
-								<td align=\"center\" style=\"background-color:#ffffff;border-radius:12px;\">
-									<a href=\"{$cta_url}\" target=\"_blank\" style=\"display:inline-block;padding:14px 32px;font-size:14px;font-weight:700;color:#111111;text-decoration:none;border-radius:12px;\">
-										{$cta_text}
-									</a>
-								</td>
-							</tr>
-						</tbody>
-					</table>
+				<td align=\"center\" style=\"padding:0 36px 20px;\" class=\"mobile-padding\">
+					<a href=\"{$cta_url}\" target=\"_blank\" style=\"display:inline-block;padding:13px 28px;font-size:14px;font-weight:600;color:#ffffff;background:#111111;border-radius:100px;text-decoration:none;\">
+						{$cta_text} &rarr;
+					</a>
 				</td>
 			</tr>";
 		} elseif ( $type === 'action_list' ) {
 			$cta_text = esc_html( $tmpl['cta_text'] ?? 'Go to Store' );
-			$cta_url  = esc_url( $tmpl['cta_url'] ?? 'https://exacoat.com/dashboard' );
+			$cta_url  = esc_url( $tmpl['cta_url'] ?? 'https://exacoat.com' );
 			$sec_text = ! empty( $tmpl['secondary_link_text'] ) ? esc_html( $tmpl['secondary_link_text'] ) : '';
 			$sec_url  = ! empty( $merged_data['artist_page_url'] ) ? esc_url( $merged_data['artist_page_url'] ) : ( ! empty( $tmpl['secondary_link_url'] ) ? esc_url( $tmpl['secondary_link_url'] ) : '' );
 
 			$checklist_items = '';
 			if ( ! empty( $tmpl['checklist'] ) && is_array( $tmpl['checklist'] ) ) {
 				foreach ( $tmpl['checklist'] as $item ) {
-					$checklist_items .= "<li style=\"margin-bottom:6px;\">" . esc_html( $item ) . "</li>";
+					$checklist_items .= "<li style=\"margin-bottom:8px;\">" . esc_html( $item ) . "</li>";
 				}
 			}
 
@@ -939,13 +965,13 @@ class Exacoat_Email_Engine {
 
 			$slot_html = "
 			<tr>
-				<td align=\"center\" style=\"padding:0 40px 32px;\">
+				<td align=\"center\" style=\"padding:0 36px 28px;\" class=\"mobile-padding\">
 					<table cellpadding=\"0\" cellspacing=\"0\" border=\"0\" align=\"center\">
 						<tbody>
 							<tr>
-								<td align=\"center\" style=\"background-color:#ffffff;border-radius:12px;\">
-									<a href=\"{$cta_url}\" target=\"_blank\" style=\"display:inline-block;padding:16px 36px;font-size:15px;font-weight:600;color:#111111;text-decoration:none;border-radius:12px;\">
-										{$cta_text}
+								<td align=\"center\">
+									<a href=\"{$cta_url}\" target=\"_blank\" style=\"display:inline-block;padding:13px 28px;font-size:14px;font-weight:600;color:#ffffff;background:#111111;text-decoration:none;border-radius:100px;\">
+										{$cta_text} &rarr;
 									</a>
 								</td>
 							</tr>
@@ -955,18 +981,18 @@ class Exacoat_Email_Engine {
 			if ( $sec_text && $sec_url ) {
 				$slot_html .= "
 					<p style=\"margin:12px 0 0 0;\">
-						<span style=\"font-size:13px;color:#8f8f8f;\">or <a href=\"{$sec_url}\" style=\"color:#ffffff;text-decoration:underline;\">" . esc_html( str_replace( 'or ', '', $sec_text ) ) . "</a></span>
+						<span style=\"font-size:13px;color:#71717a;\">or <a href=\"{$sec_url}\" style=\"color:#111111;text-decoration:underline;font-weight:500;\">" . esc_html( str_replace( 'or ', '', $sec_text ) ) . "</a></span>
 					</p>";
 			}
 
 			if ( $checklist_items ) {
 				$slot_html .= "
-					<table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"margin-top:36px;background-color:#141414;border-radius:12px;\">
+					<table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"margin-top:24px;background-color:#fafafa;border:1px solid #eaeaea;border-radius:16px;\">
 						<tbody>
 							<tr>
-								<td style=\"padding:24px;text-align:left;\">
-									<p style=\"margin:0 0 12px 0;font-weight:600;font-size:14px;color:#ffffff;\">{$checklist_title}</p>
-									<ul style=\"margin:0;padding-left:18px;font-size:14px;line-height:1.6;color:#b0b0b0;\">
+								<td style=\"padding:22px 24px;text-align:left;\">
+									<p style=\"margin:0 0 10px 0;font-weight:700;font-size:14px;color:#111111;\">{$checklist_title}</p>
+									<ul style=\"margin:0;padding-left:18px;font-size:13.5px;line-height:1.65;color:#52525b;\">
 										{$checklist_items}
 									</ul>
 								</td>
@@ -979,28 +1005,27 @@ class Exacoat_Email_Engine {
 		} elseif ( $type === 'payout' ) {
 			$payout_amt  = esc_html( $merged_data['payout_amount'] ?? '$71.73' );
 			$payout_rec  = esc_html( $merged_data['payout_record_id'] ?? $merged_data['payout_id'] ?? 'P-8108' );
-			$payout_meth = esc_html( $merged_data['payout_method'] ?? 'PayPal' );
-			$payout_dest = esc_html( $merged_data['payout_destination'] ?? 'support@exacoat.com' );
-			$cta_url     = esc_url( $tmpl['cta_url'] ?? 'https://exacoat.com/dashboard#payouts' );
-			$cta_text    = esc_html( $tmpl['cta_text'] ?? 'View Payout Statement' );
+			$payout_meth = esc_html( $merged_data['payout_method'] ?? 'Bank Transfer' );
+			$cta_url     = esc_url( $tmpl['cta_url'] ?? 'https://exacoat.com' );
+			$cta_text    = esc_html( $tmpl['cta_text'] ?? 'View Statement' );
 
 			$slot_html = "
 			<tr>
-				<td align=\"center\" style=\"padding:0 40px 32px;\">
-					<table width=\"100%\" style=\"background:#141414;border-radius:14px;border:1px solid rgba(255,255,255,0.06);overflow:hidden;\">
+				<td align=\"center\" style=\"padding:0 36px 28px;\" class=\"mobile-padding\">
+					<table width=\"100%\" style=\"background:#fafafa;border:1px solid #eaeaea;border-radius:16px;overflow:hidden;\">
 						<tbody>
 							<tr>
 								<td align=\"center\" style=\"padding:28px 20px 24px;\">
-									<p style=\"margin:0 0 4px;font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:0.8px;font-family:monospace;\">Total Settlement Transferred</p>
-									<p style=\"margin:0 0 16px;font-size:36px;font-weight:800;color:#f3aa18;letter-spacing:-0.5px;\">{$payout_amt}</p>
+									<p style=\"margin:0 0 4px;font-size:11px;color:#71717a;text-transform:uppercase;letter-spacing:0.8px;font-weight:600;\">Total Settlement Transferred</p>
+									<p style=\"margin:0 0 16px;font-size:36px;font-weight:800;color:#111111;letter-spacing:-0.5px;\">{$payout_amt}</p>
 									<table cellpadding=\"0\" cellspacing=\"0\" align=\"center\" style=\"font-size:12px;\">
 										<tbody>
 											<tr>
-												<td style=\"padding:6px 12px;background:#222;color:#fff;border-radius:999px;font-family:monospace;\">
+												<td style=\"padding:6px 12px;background:#f4f4f5;color:#52525b;border-radius:999px;font-family:monospace;border:1px solid #e4e4e7;\">
 													Payout ID: <b>{$payout_rec}</b>
 												</td>
 												<td style=\"padding-left:8px;\"></td>
-												<td style=\"padding:6px 12px;background:#1e2920;color:#f3aa18;border-radius:999px;font-weight:600;\">
+												<td style=\"padding:6px 12px;background:#e0f2fe;color:#0369a1;border-radius:999px;font-weight:600;\">
 													{$payout_meth}
 												</td>
 											</tr>
@@ -1013,9 +1038,9 @@ class Exacoat_Email_Engine {
 				</td>
 			</tr>
 			<tr>
-				<td align=\"center\" style=\"padding:0 40px 16px;\">
-					<a href=\"{$cta_url}\" target=\"_blank\" style=\"display:inline-block;padding:14px 32px;font-size:14px;font-weight:600;color:#111111;background:#ffffff;border-radius:12px;text-decoration:none;\">
-						{$cta_text}
+				<td align=\"center\" style=\"padding:0 36px 20px;\" class=\"mobile-padding\">
+					<a href=\"{$cta_url}\" target=\"_blank\" style=\"display:inline-block;padding:13px 28px;font-size:14px;font-weight:600;color:#ffffff;background:#111111;border-radius:100px;text-decoration:none;\">
+						{$cta_text} &rarr;
 					</a>
 				</td>
 			</tr>";
@@ -1027,35 +1052,35 @@ class Exacoat_Email_Engine {
 
 			$slot_html = "
 			<tr>
-				<td align=\"center\" style=\"padding:0 40px 32px;\">
-					<table width=\"100%\" style=\"background:#141414;border-radius:14px;border:1px solid rgba(255,255,255,0.06);overflow:hidden;\">
+				<td align=\"center\" style=\"padding:0 36px 28px;\" class=\"mobile-padding\">
+					<table width=\"100%\" style=\"background:#fafafa;border:1px solid #eaeaea;border-radius:16px;overflow:hidden;\">
 						<tbody>";
 			if ( $art_img ) {
 				$slot_html .= "
 							<tr>
-								<td align=\"center\" style=\"padding:24px 24px 0;\">
-									<img src=\"{$art_img}\" alt=\"Custom Poster #{$order_code}\" style=\"width:100%;max-width:380px;height:auto;border-radius:10px;box-shadow:0 10px 25px rgba(0,0,0,0.5);display:block;\">
+								<td align=\"center\" style=\"padding:20px 20px 0;\">
+									<img src=\"{$art_img}\" alt=\"Custom Order #{$order_code}\" style=\"width:100%;max-width:380px;height:auto;border-radius:12px;display:block;\">
 								</td>
 							</tr>";
 			}
 			$slot_html .= "
 							<tr>
-								<td align=\"center\" style=\"padding:24px 20px 28px;\">
-									<p style=\"margin:0 0 4px;font-size:11px;color:#9a9a9a;text-transform:uppercase;letter-spacing:0.8px;font-family:monospace;\">Order Code</p>
-									<p style=\"margin:0 0 16px;font-size:24px;font-weight:800;color:#ffffff;letter-spacing:1px;font-family:monospace;\">#{$order_code}</p>
+								<td align=\"center\" style=\"padding:20px 20px 24px;\">
+									<p style=\"margin:0 0 4px;font-size:11px;color:#71717a;text-transform:uppercase;letter-spacing:0.8px;font-weight:600;\">Order Code</p>
+									<p style=\"margin:0 0 16px;font-size:24px;font-weight:800;color:#111111;letter-spacing:1px;font-family:monospace;\">#{$order_code}</p>
 									<table cellpadding=\"0\" cellspacing=\"0\" border=\"0\" align=\"center\">
 										<tbody>
 											<tr>
-												<td align=\"center\" style=\"background-color:#f3aa18;border-radius:12px;\">
-													<a href=\"{$order_url}\" target=\"_blank\" style=\"display:inline-block;padding:16px 36px;font-size:15px;font-weight:700;color:#111111;text-decoration:none;border-radius:12px;\">
+												<td align=\"center\">
+													<a href=\"{$order_url}\" target=\"_blank\" style=\"display:inline-block;padding:13px 28px;font-size:14px;font-weight:600;color:#111111;background:#f3aa18;text-decoration:none;border-radius:100px;\">
 														{$cta_text} &rarr;
 													</a>
 												</td>
 											</tr>
 										</tbody>
 									</table>
-									<p style=\"margin:16px 0 0;font-size:12px;color:#777777;\">
-										Link expires in 48 hours: <a href=\"{$order_url}\" style=\"color:#f3aa18;text-decoration:underline;\">{$order_url}</a>
+									<p style=\"margin:16px 0 0;font-size:12px;color:#71717a;\">
+										Link expires in 48 hours: <a href=\"{$order_url}\" style=\"color:#111111;text-decoration:underline;\">{$order_url}</a>
 									</p>
 								</td>
 							</tr>
@@ -1065,10 +1090,10 @@ class Exacoat_Email_Engine {
 			</tr>";
 		}
 
-		$secondary_p = $body_secondary ? "<p style=\"margin:0 0 20px;font-size:16px;line-height:1.7;color:#b0b0b0;\">{$body_secondary}</p>" : '';
-		$additional_p = $body_additional ? "<tr><td align=\"center\" style=\"padding:0 40px 32px;\"><p style=\"margin:0;font-size:13px;color:#8f8f8f;\">{$body_additional}</p></td></tr>" : '';
+		$secondary_p  = $body_secondary ? "<p style=\"margin:0 0 16px;font-size:14.5px;line-height:1.7;color:#52525b;\">{$body_secondary}</p>" : '';
+		$additional_p = $body_additional ? "<tr><td align=\"center\" style=\"padding:0 36px 24px;\" class=\"mobile-padding\"><p style=\"margin:0;font-size:13px;line-height:1.6;color:#71717a;\">{$body_additional}</p></td></tr>" : '';
 
-		// Assemble Full Responsive Dark-Mode HTML
+		// Assemble Full Responsive Modern Light Transactional HTML
 		$html = "<!doctype html>
 <html lang=\"en\" xmlns:v=\"urn:schemas-microsoft-com:vml\" xmlns:o=\"urn:schemas-microsoft-com:office:office\">
 <head>
@@ -1077,14 +1102,16 @@ class Exacoat_Email_Engine {
   <meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\">
   <title>" . esc_html( $subject ) . "</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
     body {
       margin: 0;
       padding: 0;
       width: 100% !important;
       -webkit-text-size-adjust: 100%;
       -ms-text-size-adjust: 100%;
-      background-color: #0f0f0f;
-      font-family: 'Neue Haas Display', 'Neue Haas Grotesk Text Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f7f7f7;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
     }
     table {
       border-collapse: collapse;
@@ -1109,106 +1136,77 @@ class Exacoat_Email_Engine {
         padding-right: 20px !important;
       }
       .h1-mobile {
-        font-size: 26px !important;
-        line-height: 34px !important;
+        font-size: 22px !important;
+        line-height: 28px !important;
       }
     }
   </style>
 </head>
-<body bgcolor=\"#0f0f0f\">
-  <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" bgcolor=\"#0f0f0f\" style=\"border-collapse:collapse;background-color:#0f0f0f;\">
+<body bgcolor=\"#f7f7f7\">
+  <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" bgcolor=\"#f7f7f7\" style=\"border-collapse:collapse;background-color:#f7f7f7;\">
     <tbody>
       <tr>
-        <td height=\"48\" style=\"height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;\">&nbsp;</td>
+        <td height=\"40\" style=\"height:40px;line-height:40px;font-size:0;mso-line-height-rule:exactly;\">&nbsp;</td>
       </tr>
       <tr>
         <td align=\"center\" style=\"padding:0 16px;\">
-          <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width:600px;background-color:#1a1a1a;border-radius:16px;overflow:hidden;\" bgcolor=\"#1a1a1a\">
+          <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width:600px;background-color:#ffffff;border:1px solid #e5e5e5;border-radius:20px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.04);\" bgcolor=\"#ffffff\">
             <tbody>
-              <!-- 1. Wordmark Header -->
+              <!-- Header: Logo & Badge -->
               <tr>
-                <td align=\"center\" style=\"padding:48px 40px 12px;text-align:center;\" class=\"mobile-padding\">
-                  ' . self::get_brand_logo_html( true ) . '
-                </td>
-              </tr>
-
-              <!-- 2. Pill Badge -->
-              <tr>
-                <td align=\"center\" style=\"padding:5px 40px 24px;\">
-                  <table cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"border-collapse:collapse;\">
-                    <tbody>
-                      <tr>
-                        <td style=\"padding:4px 12px;font-size:10px;font-weight:500;color:#cfcfcf;background-color:#2a2a2a;border-radius:999px;\">
+                <td style=\"padding:28px 36px 24px;border-bottom:1px solid #f0f0f0;\" class=\"mobile-padding\">
+                  <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\">
+                    <tr>
+                      <td align=\"left\" valign=\"middle\">
+                        " . self::get_brand_logo_html() . "
+                      </td>
+                      <td align=\"right\" valign=\"middle\">
+                        <span style=\"display:inline-block;padding:6px 14px;background:#f4f4f5;border:1px solid #e4e4e7;border-radius:999px;font-size:11px;font-weight:600;color:#52525b;text-transform:uppercase;letter-spacing:0.5px;\">
                           {$badge_text}
-                        </td>
-                      </tr>
-                    </tbody>
+                        </span>
+                      </td>
+                    </tr>
                   </table>
                 </td>
               </tr>
 
-              <!-- 3. Top Divider -->
+              <!-- Main Content -->
               <tr>
-                <td style=\"padding:0 40px;\">
-                  <hr style=\"border:none;border-top:1px solid #2a2a2a;margin:0;\">
-                </td>
-              </tr>
-
-              <!-- 4. Center Visual Icon -->
-              <tr>
-                <td align=\"center\" style=\"padding:28px 0 14px;\">
-                  <img src=\"{$icon_url}\" alt=\"{$badge_text}\" width=\"96\" style=\"display:block;width:96px;height:auto;\">
-                </td>
-              </tr>
-
-              <!-- 5. H1 Headline -->
-              <tr>
-                <td align=\"center\" style=\"padding:0 40px 16px;\" class=\"mobile-padding\">
-                  <h1 class=\"h1-mobile\" style=\"margin:0;font-size:32px;font-weight:600;letter-spacing:-0.4px;color:#ffffff;\">
+                <td style=\"padding:36px 36px 28px;\" class=\"mobile-padding\">
+                  <h1 class=\"h1-mobile\" style=\"margin:0 0 16px;font-size:26px;font-weight:800;color:#111111;letter-spacing:-0.6px;line-height:1.25;\">
                     {$title}
                   </h1>
-                </td>
-              </tr>
-
-              <!-- 6. Greeting & Paragraphs -->
-              <tr>
-                <td align=\"center\" style=\"padding:12px 40px 32px;\" class=\"mobile-padding\">
-                  <p style=\"margin:0 0 12px;font-size:16px;color:#d4d4d4;\">Hi {$artist_name},</p>
-                  <p style=\"margin:0 0 16px;font-size:16px;line-height:1.7;color:#b0b0b0;\">{$body_primary}</p>
+                  <p style=\"margin:0 0 14px;font-size:15px;font-weight:600;color:#111111;\">Hi {$customer_name},</p>
+                  <p style=\"margin:0 0 16px;font-size:14.5px;line-height:1.7;color:#3f3f46;\">{$body_primary}</p>
                   {$secondary_p}
                 </td>
               </tr>
 
-              <!-- 7. Dynamic Content Slot (OTP, Commission, Action List, etc.) -->
+              <!-- Dynamic Content Slot -->
               {$slot_html}
               {$additional_p}
 
-              <!-- 8. Bottom Divider -->
+              <!-- Support & Copyright Footer -->
               <tr>
-                <td style=\"padding:0 40px;\">
-                  <hr style=\"border:none;border-top:1px solid #2a2a2a;margin:0;\">
-                </td>
-              </tr>
-
-              <!-- 9. Help & Support -->
-              <tr>
-                <td align=\"center\" style=\"padding:32px 40px;\">
-                  <p style=\"margin:0;font-size:12px;line-height:1.6;color:#8f8f8f;\">
+                <td style=\"padding:24px 36px 28px;background:#ffffff;border-top:1px solid #f0f0f0;text-align:center;\" class=\"mobile-padding\">
+                  <p style=\"margin:0 0 8px;font-size:12px;line-height:1.65;color:#71717a;\">
                     Have questions or need help?<br>
-                    Reach us at <a href=\"mailto:support@exacoat.com\" style=\"color:#ffffff;text-decoration:underline;\">support@exacoat.com</a>
+                    Reach our team at <a href=\"mailto:support@exacoat.com\" style=\"color:#111111;text-decoration:underline;font-weight:500;\">support@exacoat.com</a>
+                  </p>
+                  <p style=\"margin:0;font-size:11px;color:#a1a1aa;letter-spacing:0.2px;\">
+                    &copy; Exacoat. All rights reserved.
                   </p>
                 </td>
               </tr>
             </tbody>
           </table>
 
-          <!-- 10. Legal Footer -->
-          <table width=\"600\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width:600px;margin-top:28px;\">
+          <!-- Outer Legal Note -->
+          <table width=\"600\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width:600px;margin-top:24px;\">
             <tbody>
               <tr>
                 <td align=\"center\">
-                  <p style=\"margin:0 0 8px;font-size:12px;color:#555555;\">© Exacoat. All rights reserved.</p>
-                  <p style=\"margin:0;font-size:12px;color:#444444;\">You’re receiving this email regarding your Exacoat account.</p>
+                  <p style=\"margin:0;font-size:12px;color:#a1a1aa;\">You&rsquo;re receiving this email regarding your Exacoat account.</p>
                 </td>
               </tr>
             </tbody>
@@ -1216,7 +1214,7 @@ class Exacoat_Email_Engine {
         </td>
       </tr>
       <tr>
-        <td height=\"48\" style=\"height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;\">&nbsp;</td>
+        <td height=\"40\" style=\"height:40px;line-height:40px;font-size:0;mso-line-height-rule:exactly;\">&nbsp;</td>
       </tr>
     </tbody>
   </table>
@@ -2460,7 +2458,26 @@ class Exacoat_Email_Engine {
 		$subject     = preg_replace( $tag_pattern, '', $subject );
 		$subject     = preg_replace( '/\s{2,}/', ' ', trim( $subject ) );
 
-		if ( $event === 'customer_reset_password' ) {
+		if ( $event === 'customer_otp' || ( $tmpl['type'] ?? '' ) === 'otp' ) {
+			$otp_code   = esc_html( $data['otp_code'] ?? '849201' );
+			$badge_text = esc_html( $data['badge_text'] ?? ( $tmpl['badge'] ?? 'Security verification' ) );
+			$title      = esc_html( $data['title'] ?? ( $tmpl['title'] ?? 'Verify your identity' ) );
+			$content_html = "
+			<p style=\"margin:0 0 16px;font-size:14.5px;line-height:1.7;color:#3f3f46;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;\">
+				Use the verification code below to verify your account or complete your sign-in:
+			</p>
+			<table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#fafafa;border:1px solid #eaeaea;border-radius:16px;margin:24px 0;\">
+				<tr>
+					<td align=\"center\" style=\"padding:28px 20px 22px;\">
+						<span style=\"font-size:40px;font-weight:800;letter-spacing:12px;color:#111111;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;display:inline-block;\">{$otp_code}</span>
+						<p style=\"margin:12px 0 0;font-size:12.5px;color:#71717a;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;\">This code is valid for <strong>5 minutes</strong></p>
+					</td>
+				</tr>
+			</table>
+			<p style=\"margin:0 0 20px;font-size:13.5px;line-height:1.65;color:#71717a;font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;\">
+				If you did not request this verification code, you can safely ignore this email.
+			</p>";
+		} elseif ( $event === 'customer_reset_password' ) {
 			$reset_url  = esc_url( $data['reset_url'] ?? home_url( '/my-account/lost-password' ) );
 			$badge_text = 'Account security';
 			$title      = 'Reset your password';

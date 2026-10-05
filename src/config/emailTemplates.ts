@@ -277,6 +277,17 @@ export const EMAIL_TEMPLATES_CATALOG: { category: string; items: EmailTemplateIt
         defaults: { customer_first_name: 'William', reset_url: 'https://exacoat.com/my-account/lost-password/?key=sample_key' }
       },
       {
+        key: 'customer_otp',
+        name: 'Account Verification OTP',
+        category: '👤 Customer Account & Security',
+        badge: 'Security Code',
+        badgeVariant: 'zinc',
+        subject: 'Your Exacoat verification code: {{otp_code}}',
+        trigger: 'Dispatched when customer requests an OTP to verify identity or log in.',
+        payload: '{ "event": "customer_otp", "recipient_email": "customer@gmail.com", "customer_first_name": "William", "otp_code": "849201" }',
+        defaults: { customer_first_name: 'William', otp_code: '849201' }
+      },
+      {
         key: 'customer_new_account',
         name: 'Customer Account Created (Welcome)',
         category: '👤 Customer Account & Security',
@@ -286,6 +297,29 @@ export const EMAIL_TEMPLATES_CATALOG: { category: string; items: EmailTemplateIt
         trigger: 'Dispatched when a new customer registers an account on the store.',
         payload: '{ "event": "customer_new_account", "recipient_email": "customer@gmail.com", "customer_first_name": "William", "account_url": "https://exacoat.com/my-account" }',
         defaults: { customer_first_name: 'William', account_url: 'https://exacoat.com/my-account' }
+      }
+    ]
+  },
+  {
+    category: '💬 Support & Customer Inquiries',
+    items: [
+      {
+        key: 'website_contact_confirmation',
+        name: 'Contact Inquiry Received',
+        category: '💬 Support & Customer Inquiries',
+        badge: 'Inquiry Received',
+        badgeVariant: 'lime',
+        subject: "We've received your inquiry: {{subject}} | Exacoat",
+        trigger: 'Dispatched automatically to customer after submitting the contact form on exacoat.com/contact.',
+        payload: '{ "event": "website_contact_confirmation", "recipient_email": "customer@gmail.com", "name": "William", "topic_label": "Order status & tracking", "subject": "Question about my order delivery", "order_number": "14589", "message": "Hi team, I would like to check when my order will be picked up by the courier. Thank you!" }',
+        defaults: {
+          name: 'William',
+          customer_name: 'William',
+          topic_label: 'Order status & tracking',
+          subject: 'Question about my order delivery',
+          order_number: '14589',
+          message: 'Hi team, I would like to check when my order will be picked up by the courier. Thank you!',
+        }
       }
     ]
   },

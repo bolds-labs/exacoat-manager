@@ -2274,22 +2274,76 @@ class Exacoat_Core {
 		];
 		$details_html = '';
 		foreach ( $rows as $label => $value ) {
-			$details_html .= '<tr><td style="padding:8px 16px 8px 0;color:#71717a;vertical-align:top;white-space:nowrap;">' . esc_html( $label ) . '</td><td style="padding:8px 0;color:#f4f4f5;font-weight:500;">' . esc_html( $value ) . '</td></tr>';
+			$details_html .= '<tr><td style="padding:7px 16px 7px 0;color:#71717a;font-size:13px;vertical-align:top;white-space:nowrap;font-family:\'Plus Jakarta Sans\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;">' . esc_html( $label ) . '</td><td style="padding:7px 0;color:#111111;font-size:13.5px;font-weight:600;font-family:\'Plus Jakarta Sans\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;">' . esc_html( $value ) . '</td></tr>';
 		}
 
-		$brand_logo = class_exists( 'Exacoat_Email_Engine' ) ? Exacoat_Email_Engine::get_brand_logo_html( true ) : '<strong style="color:#ffffff;font-size:20px;">EXACOAT®</strong>';
+		$brand_logo = class_exists( 'Exacoat_Email_Engine' ) ? Exacoat_Email_Engine::get_brand_logo_html() : '<a href="https://exacoat.com" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;"><img src="https://exacoat.com/assets/brand/exacoat-logo.png" alt="Exacoat" width="136" height="24" border="0" style="display:block;border:0;width:136px;height:24px;" /></a>';
 
-		$staff_html = '<div style="background:#08090b;color:#f4f4f5;padding:32px;font-family:Arial,sans-serif;line-height:1.6;">'
-			. '<div style="max-width:680px;margin:0 auto;background:#141414;border:1px solid #262626;border-radius:14px;padding:32px;">'
-			. '<div style="margin-bottom:20px;">' . $brand_logo . '</div>'
-			. '<p style="color:#f3aa18;font-size:11px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;margin:0 0 8px;">New Customer Inquiry</p>'
-			. '<h1 style="font-size:24px;line-height:1.3;margin:0 0 20px;color:#ffffff;">' . esc_html( $subject ) . '</h1>'
-			. '<table role="presentation" style="border-collapse:collapse;margin-bottom:24px;width:100%;">' . $details_html . '</table>'
-			. '<div style="border-top:1px solid #262626;padding-top:20px;">'
-			. '<p style="color:#71717a;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin:0 0 8px;">Message:</p>'
-			. '<div style="color:#e4e4e7;font-size:14px;line-height:1.6;white-space:pre-wrap;">' . nl2br( esc_html( $message ) ) . '</div>'
-			. '</div>'
-			. '</div></div>';
+		$staff_html = '<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>' . esc_html( $email_title ) . '</title>
+  <style>
+    @import url(\'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap\');
+    body { margin:0; padding:0; background-color:#f7f7f7; font-family:\'Plus Jakarta Sans\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,Helvetica,Arial,sans-serif; -webkit-text-size-adjust:100%; }
+    table { border-collapse:collapse; }
+    @media only screen and (max-width:620px) {
+      .container-table { width:100% !important; border-radius:0 !important; }
+      .mobile-padding { padding-left:24px !important; padding-right:24px !important; }
+    }
+  </style>
+</head>
+<body bgcolor="#f7f7f7" style="margin:0;padding:0;background-color:#f7f7f7;font-family:\'Plus Jakarta Sans\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f7f7f7" style="border-collapse:collapse;background-color:#f7f7f7;">
+    <tr><td height="48" style="height:48px;line-height:48px;font-size:0;">&nbsp;</td></tr>
+    <tr>
+      <td align="center" style="padding:0 16px;">
+        <table class="container-table" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background:#ffffff;border:1px solid #e5e5e5;border-radius:20px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.04);">
+          <tr>
+            <td style="padding:28px 40px 22px;border-bottom:1px solid #f0f0f0;" class="mobile-padding">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td valign="middle">' . $brand_logo . '</td>
+                  <td align="right" valign="middle">
+                    <span style="display:inline-block;padding:5px 13px;background:#f4f4f5;color:#3f3f46;font-size:11px;font-weight:600;border-radius:999px;border:1px solid #e4e4e7;letter-spacing:0.3px;font-family:\'Plus Jakarta Sans\',sans-serif;">Customer Inquiry</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:36px 40px 32px;" class="mobile-padding">
+              <h1 style="margin:0 0 20px;font-size:24px;font-weight:800;color:#111111;letter-spacing:-0.5px;line-height:1.3;font-family:\'Plus Jakarta Sans\',sans-serif;">' . esc_html( $subject ) . '</h1>
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#fafafa;border:1px solid #eaeaea;border-radius:16px;margin:20px 0;">
+                <tr>
+                  <td style="padding:20px 24px;">
+                    <p style="margin:0 0 12px;font-size:11px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:#71717a;font-family:\'Plus Jakarta Sans\',sans-serif;">Inquiry Details</p>
+                    <table width="100%" cellpadding="0" cellspacing="0">' . $details_html . '</table>
+                  </td>
+                </tr>
+              </table>
+              <div style="background:#fafafa;border:1px solid #eaeaea;border-radius:16px;padding:20px 24px;margin-top:20px;">
+                <p style="margin:0 0 8px;font-size:11px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:#71717a;font-family:\'Plus Jakarta Sans\',sans-serif;">Customer Message</p>
+                <div style="font-size:14px;color:#18181b;line-height:1.6;white-space:pre-wrap;font-family:\'Plus Jakarta Sans\',sans-serif;">' . nl2br( esc_html( $message ) ) . '</div>
+              </div>
+              <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #f0f0f0;margin-top:32px;text-align:center;">
+                <tr>
+                  <td align="center" style="padding-top:24px;">
+                    <p style="margin:0;font-size:11px;color:#a1a1aa;letter-spacing:0.2px;font-family:\'Plus Jakarta Sans\',sans-serif;">&copy; Exacoat Staff Desk</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+    <tr><td height="48" style="height:48px;line-height:48px;font-size:0;">&nbsp;</td></tr>
+  </table>
+</body>
+</html>';
 
 		$email_class = class_exists( 'Exacoat_Email_Engine' ) ? 'Exacoat_Email_Engine' : ( class_exists( 'Artmatter_Email_Engine' ) ? 'Artmatter_Email_Engine' : false );
 		$support_result = $email_class ? $email_class::send_email( 'website_contact', 'support@exacoat.com', 'Exacoat Support', [
@@ -2341,155 +2395,156 @@ class Exacoat_Core {
 		$message      = nl2br( esc_html( $data['message'] ?? '' ) );
 
 		$logo_html = class_exists( 'Exacoat_Email_Engine' )
-			? Exacoat_Email_Engine::get_brand_logo_html( true )
-			: '<a href="https://exacoat.com" style="color:#ffffff;font-size:20px;font-weight:bold;text-decoration:none;">EXACOAT®</a>';
+			? Exacoat_Email_Engine::get_brand_logo_html()
+			: '<a href="https://exacoat.com" target="_blank" rel="noopener noreferrer" style="display:inline-block;text-decoration:none;"><img src="https://exacoat.com/assets/brand/exacoat-logo.png" alt="Exacoat" width="136" height="24" border="0" style="display:block;border:0;width:136px;height:24px;" /></a>';
 
 		$order_row = '';
 		if ( ! empty( $order_number ) && 'Not provided' !== $order_number ) {
 			$order_clean = ltrim( $order_number, '#' );
-			$order_row = '<tr><td style="padding:6px 16px 6px 0;color:#71717a;font-size:13px;vertical-align:top;white-space:nowrap;">Order Number</td><td style="padding:6px 0;color:#f4f4f5;font-size:13px;font-weight:600;font-family:monospace;">#' . $order_clean . '</td></tr>';
+			$order_row = '<tr><td style="padding:7px 16px 7px 0;color:#71717a;font-size:13px;vertical-align:top;white-space:nowrap;font-family:\'Plus Jakarta Sans\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;">Order Number</td><td style="padding:7px 0;color:#111111;font-size:13.5px;font-weight:600;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;">#' . $order_clean . '</td></tr>';
 		}
 
 		return '<!doctype html>
-<html lang="en">
+<html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <title>' . esc_html( $subject ) . '</title>
   <style>
-    body { margin:0; padding:0; background-color:#0f0f0f; font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,Helvetica,Arial,sans-serif; -webkit-text-size-adjust:100%; }
-    table { border-collapse:collapse; }
-    @media screen and (max-width:600px) {
-      .mobile-padding { padding-left:20px !important; padding-right:20px !important; }
-      .h1-mobile { font-size:24px !important; line-height:30px !important; }
+    @import url(\'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap\');
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100% !important;
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+      background-color: #f7f7f7;
+      font-family: \'Plus Jakarta Sans\', -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    table {
+      border-collapse: collapse;
+      mso-table-lspace: 0pt;
+      mso-table-rspace: 0pt;
+    }
+    img {
+      border: 0;
+      outline: none;
+      text-decoration: none;
+      display: block;
+    }
+    @media only screen and (max-width: 620px) {
+      .container-table { width: 100% !important; border-radius: 0 !important; }
+      .mobile-padding { padding-left: 24px !important; padding-right: 24px !important; }
     }
   </style>
 </head>
-<body bgcolor="#0f0f0f" style="margin:0;padding:0;background-color:#0f0f0f;">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#0f0f0f" style="background-color:#0f0f0f;">
-    <tr>
-      <td height="40" style="height:40px;line-height:40px;font-size:0;">&nbsp;</td>
-    </tr>
-    <tr>
-      <td align="center" style="padding:0 16px;">
-        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background-color:#141414;border:1px solid #262626;border-radius:16px;overflow:hidden;" bgcolor="#141414">
-          <!-- Logo Header -->
-          <tr>
-            <td align="center" style="padding:40px 32px 16px;text-align:center;" class="mobile-padding">
-              ' . $logo_html . '
-            </td>
-          </tr>
+<body bgcolor="#f7f7f7" style="margin:0;padding:0;background-color:#f7f7f7;font-family:\'Plus Jakarta Sans\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f7f7f7" style="border-collapse:collapse;background-color:#f7f7f7;">
+    <tbody>
+      <tr>
+        <td height="48" style="height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
+      </tr>
+      <tr>
+        <td align="center" style="padding:0 16px;">
+          <!-- Main Card -->
+          <table class="container-table" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background:#ffffff;border:1px solid #e5e5e5;border-radius:20px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.04);">
+            <tbody>
+              <!-- Top Header (Logo + Badge) -->
+              <tr>
+                <td style="padding:28px 40px 22px;border-bottom:1px solid #f0f0f0;" class="mobile-padding">
+                  <table width="100%" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td valign="middle">
+                        ' . $logo_html . '
+                      </td>
+                      <td align="right" valign="middle">
+                        <span style="display:inline-block;padding:5px 13px;background:#f4f4f5;color:#3f3f46;font-size:11px;font-weight:600;border-radius:999px;border:1px solid #e4e4e7;letter-spacing:0.3px;font-family:\'Plus Jakarta Sans\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;">Inquiry received</span>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
 
-          <!-- Badge -->
-          <tr>
-            <td align="center" style="padding:0 32px 20px;">
-              <table cellpadding="0" cellspacing="0" border="0">
-                <tr>
-                  <td style="padding:5px 14px;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#f3aa18;background-color:#221c0b;border:1px solid rgba(243,170,24,0.3);border-radius:999px;">
-                    Inquiry Received
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
+              <!-- Message Headline & Body -->
+              <tr>
+                <td style="padding:36px 40px 32px;" class="mobile-padding">
+                  <h1 style="margin:0 0 20px;font-size:26px;font-weight:800;color:#111111;letter-spacing:-0.6px;line-height:1.25;font-family:\'Plus Jakarta Sans\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;">We\'ve received your message</h1>
+                  <p style="margin:0 0 14px;font-size:15px;font-weight:600;color:#18181b;font-family:\'Plus Jakarta Sans\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;">Hi ' . $name . ',</p>
+                  <p style="margin:0 0 20px;font-size:14.5px;line-height:1.7;color:#3f3f46;font-family:\'Plus Jakarta Sans\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;">Thank you for reaching out to Exacoat. We’ve received your inquiry and our support team is reviewing the details.</p>
 
-          <!-- Divider -->
-          <tr>
-            <td style="padding:0 32px;">
-              <hr style="border:none;border-top:1px solid #262626;margin:0;">
-            </td>
-          </tr>
+                  <!-- Inquiry Recap Card -->
+                  <table width="100%" cellpadding="0" cellspacing="0" style="background:#fafafa;border:1px solid #eaeaea;border-radius:16px;margin:24px 0;">
+                    <tr>
+                      <td style="padding:20px 24px;">
+                        <p style="margin:0 0 12px;font-size:11px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:#71717a;font-family:\'Plus Jakarta Sans\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;">Inquiry Details</p>
+                        <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                          <tr>
+                            <td style="padding:7px 16px 7px 0;color:#71717a;font-size:13px;vertical-align:top;white-space:nowrap;font-family:\'Plus Jakarta Sans\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;">Topic</td>
+                            <td style="padding:7px 0;color:#111111;font-size:13.5px;font-weight:600;font-family:\'Plus Jakarta Sans\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;">' . $topic_label . '</td>
+                          </tr>
+                          <tr>
+                            <td style="padding:7px 16px 7px 0;color:#71717a;font-size:13px;vertical-align:top;white-space:nowrap;font-family:\'Plus Jakarta Sans\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;">Subject</td>
+                            <td style="padding:7px 0;color:#111111;font-size:13.5px;font-weight:600;font-family:\'Plus Jakarta Sans\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;">' . $subject . '</td>
+                          </tr>
+                          ' . $order_row . '
+                        </table>
+                        <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e5e5e5;">
+                          <p style="margin:0 0 6px;font-size:11px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:#71717a;font-family:\'Plus Jakarta Sans\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;">Your Message</p>
+                          <div style="font-size:13.5px;color:#3f3f46;line-height:1.6;white-space:pre-wrap;font-family:\'Plus Jakarta Sans\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;">' . $message . '</div>
+                        </div>
+                      </td>
+                    </tr>
+                  </table>
 
-          <!-- Headline & Greeting -->
-          <tr>
-            <td style="padding:28px 32px 12px;" class="mobile-padding">
-              <h1 class="h1-mobile" style="margin:0 0 16px;font-size:26px;font-weight:700;line-height:1.2;color:#ffffff;letter-spacing:-0.4px;">
-                We\'ve received your message
-              </h1>
-              <p style="margin:0 0 12px;font-size:15px;color:#e4e4e7;line-height:1.6;">
-                Hi ' . $name . ',
-              </p>
-              <p style="margin:0 0 20px;font-size:14px;color:#a1a1aa;line-height:1.6;">
-                Thank you for reaching out to Exacoat. We’ve received your inquiry and our support team is reviewing the details.
-              </p>
-            </td>
-          </tr>
+                  <!-- Response Time & WhatsApp Assistance -->
+                  <p style="margin:0 0 8px;font-size:13.5px;color:#52525b;line-height:1.6;font-family:\'Plus Jakarta Sans\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;">
+                    Our customer care team typically responds within <strong style="color:#111111;">24 business hours</strong> (Monday to Saturday, 09:00 – 18:00 UTC+7).
+                  </p>
+                  <p style="margin:0 0 18px;font-size:13.5px;color:#52525b;line-height:1.6;font-family:\'Plus Jakarta Sans\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;">
+                    For urgent inquiries or in-transit delivery support, reach our team directly via WhatsApp:
+                  </p>
+                  <table cellpadding="0" cellspacing="0" border="0" style="margin-bottom:8px;">
+                    <tr>
+                      <td align="center" style="background-color:#f3aa18;border-radius:100px;">
+                        <a href="https://api.whatsapp.com/send?phone=628975556000" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:12px 28px;font-size:13.5px;font-weight:700;color:#111111;text-decoration:none;border-radius:100px;letter-spacing:0.2px;font-family:\'Plus Jakarta Sans\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;">
+                          Chat on WhatsApp (+62 897-555-6000) &rarr;
+                        </a>
+                      </td>
+                    </tr>
+                  </table>
 
-          <!-- Inquiry Recap Card -->
-          <tr>
-            <td style="padding:0 32px 24px;" class="mobile-padding">
-              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0d0d0d;border:1px solid #262626;border-radius:12px;padding:20px;">
-                <tr>
-                  <td style="padding:16px 20px;">
-                    <p style="margin:0 0 12px;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#71717a;">
-                      Inquiry Details
-                    </p>
-                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                      <tr>
-                        <td style="padding:6px 16px 6px 0;color:#71717a;font-size:13px;vertical-align:top;white-space:nowrap;">Topic</td>
-                        <td style="padding:6px 0;color:#f4f4f5;font-size:13px;font-weight:500;">' . $topic_label . '</td>
-                      </tr>
-                      <tr>
-                        <td style="padding:6px 16px 6px 0;color:#71717a;font-size:13px;vertical-align:top;white-space:nowrap;">Subject</td>
-                        <td style="padding:6px 0;color:#f4f4f5;font-size:13px;font-weight:500;">' . $subject . '</td>
-                      </tr>
-                      ' . $order_row . '
-                    </table>
-                    <div style="margin-top:16px;padding-top:16px;border-top:1px solid #262626;">
-                      <p style="margin:0 0 6px;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#71717a;">Your Message</p>
-                      <div style="font-size:13px;color:#d4d4d8;line-height:1.6;white-space:pre-wrap;">' . $message . '</div>
-                    </div>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
+                  <!-- Dedicated Spacer -->
+                  <table width="100%" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td height="36" style="height:36px;font-size:0;line-height:0;">&nbsp;</td>
+                    </tr>
+                  </table>
 
-          <!-- Hours & Urgency Info -->
-          <tr>
-            <td style="padding:0 32px 28px;" class="mobile-padding">
-              <p style="margin:0 0 8px;font-size:13px;color:#a1a1aa;line-height:1.6;">
-                Our customer care team typically responds within <strong style="color:#ffffff;">24 business hours</strong> (Monday to Saturday, 09:00 – 18:00 UTC+7).
-              </p>
-              <p style="margin:0 0 20px;font-size:13px;color:#a1a1aa;line-height:1.6;">
-                For urgent inquiries or in-transit delivery support, reach our team directly via WhatsApp:
-              </p>
-              <table cellpadding="0" cellspacing="0" border="0">
-                <tr>
-                  <td align="center" style="background-color:#f3aa18;border-radius:10px;">
-                    <a href="https://api.whatsapp.com/send?phone=628975556000" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:12px 24px;font-size:13px;font-weight:700;color:#000000;text-decoration:none;border-radius:10px;">
-                      Chat on WhatsApp (+62 897-555-6000) &rarr;
-                    </a>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-
-          <!-- Divider -->
-          <tr>
-            <td style="padding:0 32px;">
-              <hr style="border:none;border-top:1px solid #262626;margin:0;">
-            </td>
-          </tr>
-
-          <!-- Footer -->
-          <tr>
-            <td align="center" style="padding:24px 32px 32px;text-align:center;" class="mobile-padding">
-              <p style="margin:0 0 4px;font-size:12px;color:#71717a;">
-                Exacoat® Precision Skins &bull; <a href="https://exacoat.com" style="color:#f3aa18;text-decoration:none;">exacoat.com</a>
-              </p>
-              <p style="margin:0;font-size:11px;color:#52525b;">
-                This is an automated confirmation of your inquiry submission.
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-    <tr>
-      <td height="40" style="height:40px;line-height:40px;font-size:0;">&nbsp;</td>
-    </tr>
+                  <!-- Help & Assistance Section -->
+                  <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #f0f0f0;text-align:center;">
+                    <tr>
+                      <td align="center" style="padding-top:28px;">
+                        <p style="margin:0 0 10px;font-size:12px;line-height:1.65;color:#71717a;font-family:\'Plus Jakarta Sans\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;">
+                          Have questions about your inquiry? Reach our team at <a href="mailto:support@exacoat.com" style="color:#111111;text-decoration:underline;font-weight:500;">support@exacoat.com</a>
+                        </p>
+                        <p style="margin:0;font-size:11px;color:#a1a1aa;letter-spacing:0.2px;font-family:\'Plus Jakarta Sans\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;">
+                          &copy; Exacoat
+                        </p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </td>
+      </tr>
+      <tr>
+        <td height="48" style="height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
+      </tr>
+    </tbody>
   </table>
 </body>
 </html>';
