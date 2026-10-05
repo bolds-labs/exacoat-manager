@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Fix courier resolution for domestic Goorita HQ consolidation orders to correctly identify JNE Express\n- Prevent false Goorita US dispatch card and allow freely changing courier to JNE in order drawer\n- Automatically calculate and record Biteship JNE Express REG shipping rate for consolidation orders\n- Display domestic consolidation details and JNE tariff preview in consolidation modal`,
+      changelog: `### Version ${version}\n- Fix backend courier detection in order manager to prevent customer note consolidation text from overriding domestic carrier with Goorita\n- Prevent overwriting explicitly set JNE courier and enforce JNE for domestic Goorita HQ consolidation orders\n- Update order detail drawer and courier display to strictly resolve domestic JNE Express for consolidation orders`,
     },
   };
 

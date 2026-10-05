@@ -340,15 +340,27 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
         }
       }
 
+      const isConsolidation = Boolean(
+        (order?.meta_data || []).some((m: any) => m.key === '_is_consolidation_order' && (m.value === 'yes' || m.value === true || m.value === '1')) ||
+        (order?.meta_data || []).some((m: any) => m.key === '_goorita_consolidated_orders' && Array.isArray(m.value) && m.value.length > 0) ||
+        String(order?.shipping?.company || '').toLowerCase().includes('goorita')
+      );
+
       const resolvedCourier = resolveOrderCourier(order);
 
       if (order.tracking) {
         const rawTrack = String(order.tracking.tracking_number || '').trim();
         const validTrack = rawTrack.startsWith('field_') ? '' : rawTrack;
-        const carrierId = String(order.tracking.carrier_id || (order as any).carrier_id || '').toLowerCase().trim();
+        let carrierId = String(order.tracking.carrier_id || (order as any).carrier_id || '').toLowerCase().trim();
+
+        if (isConsolidation && carrierId === 'goorita') {
+          carrierId = 'jne';
+        }
 
         // Prioritize explicit carrierId from tracking/order, falling back to resolvedCourier
-        const effectiveCarrierId = carrierId || resolvedCourier.courierId || 'jne';
+        const effectiveCarrierId = (carrierId && (!isConsolidation || carrierId !== 'goorita'))
+          ? carrierId
+          : (resolvedCourier.courierId || 'jne');
 
         const isPreset = COURIER_PRESETS.some(p => p.value === effectiveCarrierId && p.value !== 'custom');
         
@@ -584,9 +596,17 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
           showToast('success', 'Tracking Saved', `Tracking code saved for Order #${orderNum}. Status kept as ${currentStatusInfo.label}.`);
         }
         if (res.order) {
+          if (isConsolidationOrder && res.order.tracking && res.order.tracking.carrier_id === 'goorita') {
+            res.order.tracking.carrier_id = 'jne';
+            res.order.tracking.courier = 'JNE Express';
+          }
           Object.assign(order, res.order);
         } else if ((res as any).tracking_info) {
           order.tracking = (res as any).tracking_info;
+        }
+        if (isConsolidationOrder && order.tracking && order.tracking.carrier_id === 'goorita') {
+          order.tracking.carrier_id = 'jne';
+          order.tracking.courier = 'JNE Express';
         }
         await loadNotes(order.id);
         if (onOrderUpdated) onOrderUpdated();

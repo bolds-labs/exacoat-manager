@@ -1244,6 +1244,13 @@ class Exacoat_Order_Manager {
 		];
 		$carrier_id = $carrier_map[ strtolower( trim( $courier ) ) ] ?? strtolower( trim( $courier ) );
 
+		$is_consolidation = ( 'yes' === (string) $order->get_meta( '_is_consolidation_order' ) ) ||
+			! empty( $order->get_meta( '_goorita_consolidated_orders' ) ) ||
+			( false !== stripos( (string) $order->get_shipping_company(), 'goorita' ) );
+		if ( $is_consolidation && ( empty( $carrier_id ) || 'goorita' === $carrier_id ) ) {
+			$carrier_id = 'jne';
+		}
+
 		if ( empty( $tracking_url ) && class_exists( 'Artmatter_Shipping_Tracker' ) ) {
 			$tracking_url = Artmatter_Shipping_Tracker::get_carrier_tracking_url( $carrier_id, $tracking_number );
 		}
@@ -1804,11 +1811,21 @@ class Exacoat_Order_Manager {
 		}
 
 		// Intelligent courier detection from Customer Note, Shipping Method, or Shipping Lines
+		$is_consolidation = ( 'yes' === (string) $order->get_meta( '_is_consolidation_order' ) ) ||
+			! empty( $order->get_meta( '_goorita_consolidated_orders' ) ) ||
+			( false !== stripos( (string) $order->get_shipping_company(), 'goorita' ) );
+		$shipping_country = strtoupper( trim( (string) $order->get_shipping_country() ?: (string) $order->get_billing_country() ) );
+		$is_domestic = empty( $shipping_country ) || in_array( $shipping_country, [ 'ID', 'INDONESIA' ], true );
+
+		if ( $is_consolidation && ( empty( $carrier_val ) || 'goorita' === strtolower( (string) $carrier_val ) ) ) {
+			$carrier_val = 'jne';
+		}
+
 		$detected_carrier = '';
 		$detected_service = '';
 		$search_texts = [];
 		$cust_note = (string) $order->get_customer_note();
-		if ( ! empty( $cust_note ) ) {
+		if ( ! empty( $cust_note ) && ! str_starts_with( strtolower( trim( $cust_note ) ), 'consolidated goorita' ) ) {
 			$search_texts[] = $cust_note;
 		}
 		$ship_method = (string) $order->get_shipping_method();
@@ -1840,7 +1857,7 @@ class Exacoat_Order_Manager {
 					$detected_carrier = 'pos';
 				} elseif ( str_contains( $st_lower, 'lion' ) ) {
 					$detected_carrier = 'lion';
-				} elseif ( str_contains( $st_lower, 'goorita' ) ) {
+				} elseif ( str_contains( $st_lower, 'goorita' ) && ! $is_consolidation && ! $is_domestic ) {
 					$detected_carrier = 'goorita';
 				} elseif ( str_contains( $st_lower, 'dhl' ) ) {
 					$detected_carrier = 'dhl';
@@ -1852,8 +1869,17 @@ class Exacoat_Order_Manager {
 			}
 		}
 
-		// If carrier_val was empty or was defaulted to generic jne without tracking, use detected carrier
-		if ( ! empty( $detected_carrier ) && ( empty( $carrier_val ) || 'jne' === strtolower( (string) $carrier_val ) ) ) {
+		if ( $is_consolidation ) {
+			if ( empty( $detected_carrier ) || 'goorita' === $detected_carrier ) {
+				$detected_carrier = 'jne';
+			}
+			if ( empty( $detected_service ) ) {
+				$detected_service = 'REG';
+			}
+		}
+
+		// If carrier_val was empty, use detected carrier
+		if ( ! empty( $detected_carrier ) && empty( $carrier_val ) ) {
 			$carrier_val = $detected_carrier;
 		}
 

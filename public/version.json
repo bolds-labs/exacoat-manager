@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.160",
+  "version": "0.1.161",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.160.zip?v=0.1.160",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.161.zip?v=0.1.161",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-10-05T10:29:43.235Z",
+  "last_updated": "2026-10-05T11:22:56.543Z",
   "sections": {
-    "changelog": "### Version 0.1.160\n- Fix courier resolution for domestic Goorita HQ consolidation orders to correctly identify JNE Express\n- Prevent false Goorita US dispatch card and allow freely changing courier to JNE in order drawer\n- Automatically calculate and record Biteship JNE Express REG shipping rate for consolidation orders\n- Display domestic consolidation details and JNE tariff preview in consolidation modal"
+    "changelog": "### Version 0.1.161\n- Fix backend courier detection in order manager to prevent customer note consolidation text from overriding domestic carrier with Goorita\n- Prevent overwriting explicitly set JNE courier and enforce JNE for domestic Goorita HQ consolidation orders\n- Update order detail drawer and courier display to strictly resolve domestic JNE Express for consolidation orders"
   }
 }

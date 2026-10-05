@@ -221,7 +221,7 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
   if (isConsolidation) {
     const carrier = String(order.tracking?.carrier_id || order.carrier_id || '').toLowerCase().trim();
     const sl = order.shipping_lines?.[0];
-    const sTitle = String(sl?.method_title || '').toUpperCase();
+    const sTitle = String(sl?.method_title || order.shipping_method_name || (order as any).shipping_courier_name || '').toUpperCase();
     const sMatch = sTitle.match(/(?:REG|YES|OKE|BEST|GOKIL|SIUNTUNG)/i);
     const serviceName = sMatch ? sMatch[0] : 'REG';
 
@@ -425,8 +425,17 @@ export function getOrderCourierDisplay(order: any): string {
   if (!order) return 'Courier';
   if (isStorePickupOrder(order)) return 'Store Pickup (SMB)';
 
+  const isConsolidation = Boolean(
+    (order.meta_data || []).some((m: any) => m.key === '_is_consolidation_order' && (m.value === 'yes' || m.value === true || m.value === '1')) ||
+    (order.meta_data || []).some((m: any) => m.key === '_goorita_consolidated_orders' && Array.isArray(m.value) && m.value.length > 0) ||
+    String(order.shipping?.company || '').toLowerCase().includes('goorita')
+  );
+
   // If backend already resolved a formatted courier like "JNE - REG", use it directly
-  const backendCourier = String(order.tracking?.courier || order.shipping_courier_name || '').trim();
+  let backendCourier = String(order.tracking?.courier || order.shipping_courier_name || '').trim();
+  if (isConsolidation && backendCourier.toLowerCase().includes('goorita')) {
+    backendCourier = '';
+  }
   if (backendCourier && backendCourier.includes('-') && !backendCourier.toLowerCase().includes('unknown')) {
     return backendCourier;
   }
@@ -439,7 +448,7 @@ export function getOrderCourierDisplay(order: any): string {
     if (resolved.courierId === 'jne') prefix = 'JNE';
     else if (resolved.courierId === 'sicepat') prefix = 'SiCepat';
     else if (resolved.courierId === 'pos') prefix = 'POS';
-    else if (resolved.courierId === 'goorita') prefix = 'Goorita';
+    else if (resolved.courierId === 'goorita') prefix = isConsolidation ? 'JNE' : 'Goorita';
     else if (resolved.courierId === 'dhl') prefix = 'DHL';
     else if (resolved.courierId === 'fedex') prefix = 'FedEx';
     else if (resolved.courierId === 'rayspeed') prefix = 'Rayspeed';
@@ -461,7 +470,7 @@ export function getOrderCourierDisplay(order: any): string {
         if (p0Lower.includes('jne')) p0 = 'JNE';
         else if (p0Lower.includes('sicepat')) p0 = 'SiCepat';
         else if (p0Lower.includes('pos')) p0 = 'POS';
-        else if (p0Lower.includes('goorita')) p0 = 'Goorita';
+        else if (p0Lower.includes('goorita')) p0 = isConsolidation ? 'JNE' : 'Goorita';
         else if (p0Lower.includes('rayspeed')) p0 = 'Rayspeed';
         return `${p0} - ${parts.slice(1).join('-').trim().toUpperCase()}`;
       }
@@ -469,6 +478,9 @@ export function getOrderCourierDisplay(order: any): string {
   }
 
   if (backendCourier && backendCourier !== 'Express Courier') {
+    if (isConsolidation && backendCourier.toLowerCase().includes('goorita')) {
+      return 'JNE - REG';
+    }
     if (backendCourier.toLowerCase() === 'jne express') return 'JNE';
     return backendCourier;
   }
