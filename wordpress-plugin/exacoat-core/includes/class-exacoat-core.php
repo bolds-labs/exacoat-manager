@@ -2449,7 +2449,7 @@ class Exacoat_Core {
           <tr>
             <td style="padding:0 32px 28px;" class="mobile-padding">
               <p style="margin:0 0 8px;font-size:13px;color:#a1a1aa;line-height:1.6;">
-                Our customer care team typically responds within <strong style="color:#ffffff;">24 business hours</strong> (Monday to Saturday, 09:00 – 18:00 WIB).
+                Our customer care team typically responds within <strong style="color:#ffffff;">24 business hours</strong> (Monday to Saturday, 09:00 – 18:00 UTC+7).
               </p>
               <p style="margin:0 0 20px;font-size:13px;color:#a1a1aa;line-height:1.6;">
                 For urgent inquiries or in-transit delivery support, reach our team directly via WhatsApp:
