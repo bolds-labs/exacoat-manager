@@ -2176,18 +2176,48 @@ class Exacoat_Core {
 			'map_meta_cap',
 			'user_has_cap',
 			'load-post-new.php',
+			'phpmailer_init',
+			'wp_mail_from',
+			'wp_mail_from_name',
 		];
 		foreach ( $hooks_to_check as $hook ) {
 			if ( isset( $wp_filter[ $hook ] ) ) {
 				$callbacks = [];
 				foreach ( $wp_filter[ $hook ]->callbacks as $priority => $arr ) {
-					foreach ( array_keys( $arr ) as $cb_name ) {
-						$callbacks[] = "p{$priority}: {$cb_name}";
+					foreach ( $arr as $cb_name => $cb_data ) {
+						$location = 'unknown';
+						$func = $cb_data['function'] ?? null;
+						if ( is_array( $func ) && isset( $func[0], $func[1] ) ) {
+							try {
+								$ref = new ReflectionMethod( $func[0], $func[1] );
+								$location = $ref->getFileName() . ':' . $ref->getStartLine();
+							} catch ( \Throwable $e ) {
+								$location = is_string( $func[0] ) ? $func[0] . '::' . $func[1] : get_class( $func[0] ) . '::' . $func[1];
+							}
+						} elseif ( $func instanceof Closure || is_string( $func ) ) {
+							try {
+								$ref = new ReflectionFunction( $func );
+								$location = $ref->getFileName() . ':' . $ref->getStartLine();
+							} catch ( \Throwable $e ) {
+								$location = (string) $cb_name;
+							}
+						}
+						$callbacks[] = "p{$priority}: {$cb_name} [{$location}]";
 					}
 				}
 				$filter_checks[ $hook ] = $callbacks;
 			}
 		}
+
+		$mock_mailer = (object) [
+			'Host' => '',
+			'Port' => '',
+			'Username' => '',
+			'From' => '',
+			'FromName' => '',
+			'Mailer' => '',
+		];
+		do_action_ref_array( 'phpmailer_init', [ &$mock_mailer ] );
 
 		return rest_ensure_response( [
 			'post_type_exists' => post_type_exists( 'shop_coupon' ),
@@ -2205,6 +2235,10 @@ class Exacoat_Core {
 			'wc_coupons_enabled' => function_exists( 'wc_coupons_enabled' ) ? wc_coupons_enabled() : 'function_missing',
 			'user_checks' => $user_checks,
 			'filter_checks' => $filter_checks,
+			'mock_mailer' => $mock_mailer,
+			'admin_email' => get_option( 'admin_email' ),
+			'wc_from_email' => get_option( 'woocommerce_email_from_address' ),
+			'wc_from_name' => get_option( 'woocommerce_email_from_name' ),
 			'htaccess_snippet' => $htaccess_snippet,
 			'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown',
 		] );
