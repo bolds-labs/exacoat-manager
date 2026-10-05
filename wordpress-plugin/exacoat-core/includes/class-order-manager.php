@@ -1251,8 +1251,8 @@ class Exacoat_Order_Manager {
 			$carrier_id = 'jne';
 		}
 
-		if ( empty( $tracking_url ) && class_exists( 'Artmatter_Shipping_Tracker' ) ) {
-			$tracking_url = Artmatter_Shipping_Tracker::get_carrier_tracking_url( $carrier_id, $tracking_number );
+		if ( empty( $tracking_url ) ) {
+			$tracking_url = self::get_order_tracking_url( $order );
 		}
 
 		$carrier_labels = [
@@ -1567,31 +1567,41 @@ class Exacoat_Order_Manager {
 
 		$payload = self::get_email_order_payload( $order );
 
-		// Attach courier tracking if available for shipping emails
-		if ( 'customer_order_shipped' === $template_key ) {
-			$tracking_code = $order->get_meta( 'tracking_number' ) ?: $order->get_meta( '_artmatter_tracking_number' );
-			$courier_val   = $order->get_meta( 'carrier_id' ) ?: ( $order->get_meta( '_artmatter_courier' ) ?: 'Express Courier' );
+		// Attach courier tracking if available for shipping/delivery emails
+		if ( 'customer_order_shipped' === $template_key || 'customer_order_delivered' === $template_key ) {
+			$tracking_code = $order->get_meta( 'tracking_number' ) ?: ( $order->get_meta( '_tracking_number' ) ?: ( $order->get_meta( '_exacoat_tracking_number' ) ?: $order->get_meta( '_artmatter_tracking_number' ) ) );
+			$courier_val   = $order->get_meta( '_exacoat_courier' ) ?: ( $order->get_meta( 'carrier_id' ) ?: ( $order->get_meta( '_shipping_carrier' ) ?: 'Express Courier' ) );
 			$payload['tracking_number'] = (string) $tracking_code;
 			$payload['courier']         = (string) $courier_val;
+			$payload['tracking_url']    = self::get_order_tracking_url( $order );
+		}
+		if ( in_array( $template_key, [ 'customer_order_store_pickup_ready', 'customer_order_store_pickup_completed' ], true ) ) {
+			$payload['is_store_pickup'] = true;
+			if ( 'customer_order_store_pickup_ready' === $template_key ) {
+				$payload['pickup_ready'] = true;
+			} else {
+				$payload['pickup_review'] = true;
+			}
 		}
 
 		$email_class = class_exists( 'Exacoat_Email_Engine' ) ? 'Exacoat_Email_Engine' : ( class_exists( 'Artmatter_Email_Engine' ) ? 'Artmatter_Email_Engine' : false );
-		if ( ! $email_class ) {
-			return new WP_Error( 'no_email_engine', 'Exacoat Email Engine is not available', [ 'status' => 500 ] );
+		if ( ! $email_class || ! class_exists( 'Exacoat_Email_Engine' ) ) {
+			$email_class = 'Exacoat_Email_Engine';
 		}
 
 		$result = $email_class::send_email( $template_key, $recipient_email, $recipient_name, $payload );
 
 		// Record in WooCommerce Order Notes for staff traceability
 		$template_labels = [
-			'customer_order_processing'        => 'Order Confirmation',
-			'customer_order_invoice'           => 'Order Invoice & Details',
-			'customer_order_in_production'     => 'In Production',
-			'customer_order_awaiting_pickup'   => 'Ready for Courier Pickup',
-			'customer_order_shipped'           => 'Shipped & Tracking',
-			'customer_order_on_hold'           => 'Order On Hold',
-			'customer_order_delivered'         => 'Order Delivered',
-			'customer_order_store_pickup_ready'=> 'Store Pickup Ready',
+			'customer_order_processing'             => 'Order Confirmation',
+			'customer_order_invoice'                => 'Order Invoice & Details',
+			'customer_order_in_production'          => 'In Production',
+			'customer_order_awaiting_pickup'        => 'Ready for Courier Pickup',
+			'customer_order_shipped'                => 'Shipped & Tracking',
+			'customer_order_on_hold'                => 'Order On Hold',
+			'customer_order_delivered'              => 'Order Delivered',
+			'customer_order_store_pickup_ready'     => 'Store Pickup Ready',
+			'customer_order_store_pickup_completed' => 'Store Pickup Completed',
 		];
 		$tmpl_name = $template_labels[ $template_key ] ?? $template_key;
 		$user = wp_get_current_user();
@@ -1926,9 +1936,7 @@ class Exacoat_Order_Manager {
 
 		$tracking = null;
 		if ( ! empty( $tracking_code ) ) {
-			$tracking_url = class_exists( 'Artmatter_Shipping_Tracker' )
-				? Artmatter_Shipping_Tracker::get_carrier_tracking_url( $carrier_key, $tracking_code )
-				: '';
+			$tracking_url = self::get_order_tracking_url( $order );
 
 			$tracking = [
 				'courier'         => $carrier_display,
@@ -2669,9 +2677,16 @@ class Exacoat_Order_Manager {
 		$total_val        = (float) $order->get_total();
 		$refunded_val     = (float) $order->get_total_refunded();
 
+		$tracking_num_val = (string) ( $order->get_meta( 'tracking_number' ) ?: ( $order->get_meta( '_tracking_number' ) ?: ( $order->get_meta( '_exacoat_tracking_number' ) ?: '' ) ) );
+		$track_url_val    = self::get_order_tracking_url( $order );
+
 		$base = [
 			'order_number'         => (string) $order_id,
 			'customer_first_name'  => $order->get_billing_first_name() ?: ( $order->get_formatted_billing_full_name() ?: 'Valued Customer' ),
+			'customer_email'       => $order->get_billing_email(),
+			'order_key'            => (string) $order->get_order_key(),
+			'tracking_number'      => $tracking_num_val,
+			'tracking_url'         => $track_url_val,
 			'currency'             => $currency,
 			'items'                => $items_data,
 			'item_count'           => count( $items_data ),
@@ -2694,32 +2709,74 @@ class Exacoat_Order_Manager {
 	}
 
 	/**
+	 * Build direct Exacoat Storefront tracking URL (/track) prefilled with order number, email, and security key
+	 */
+	public static function get_order_tracking_url( $order ): string {
+		if ( ! $order instanceof WC_Order ) {
+			$order = is_numeric( $order ) ? wc_get_order( (int) $order ) : null;
+		}
+		$track_base = function_exists( 'exacoat_storefront_url' ) ? exacoat_storefront_url( 'track' ) : home_url( '/track' );
+		if ( ! $order ) {
+			return $track_base;
+		}
+		$billing_email = $order->get_billing_email();
+		$order_num     = ltrim( (string) $order->get_order_number(), '#' );
+		$order_key     = $order->get_order_key();
+
+		return add_query_arg( array_filter( [
+			'order_id'    => $order_num,
+			'order_email' => $billing_email,
+			'key'         => $order_key,
+		] ), $track_base );
+	}
+
+	/**
+	 * In-memory guard to prevent duplicate status email dispatches within the same PHP process
+	 */
+	private static array $sent_status_emails = [];
+
+	/**
 	 * Send Customer Shipping Notification Email via ZeptoMail
 	 */
-	public static function send_customer_shipping_email( $order, array $tracking_info ) {
+	public static function send_customer_shipping_email( $order, array $tracking_info = [] ) {
 		$customer_email = $order->get_billing_email();
 		if ( ! is_email( $customer_email ) ) return;
 
-		$order_id     = $order->get_id();
-		$courier      = $tracking_info['courier'] ?? 'Express Courier';
-		$tracking_num = $tracking_info['tracking_number'] ?? '';
-		$order_received_url = $order->get_checkout_order_received_url();
-		$tracking_url = ! empty( $order_received_url )
-			? $order_received_url . '#exacoat-order-tracking'
-			: ( $tracking_info['tracking_url'] ?? '' );
+		$order_id = $order->get_id();
+		$dedup_key = "{$order_id}_customer_order_shipped";
+		if ( ! empty( self::$sent_status_emails[ $dedup_key ] ) ) {
+			return;
+		}
 
-		if ( class_exists( 'Exacoat_Email_Engine' ) ) {
+		$courier      = $tracking_info['courier'] ?? ( $order->get_meta( '_exacoat_courier' ) ?: ( $order->get_meta( 'carrier_id' ) ?: 'Express Courier' ) );
+		$tracking_num = $tracking_info['tracking_number'] ?? ( $order->get_meta( 'tracking_number' ) ?: ( $order->get_meta( '_tracking_number' ) ?: ( $order->get_meta( '_exacoat_tracking_number' ) ?: '' ) ) );
+		$tracking_url = self::get_order_tracking_url( $order );
+
+		$invoice_html = self::generate_invoice_html( $order );
+		$order_num    = str_replace( '#', '', $order->get_order_number() );
+		$attachments  = [
+			[
+				'content'   => base64_encode( $invoice_html ),
+				'mime_type' => 'text/html',
+				'name'      => "Invoice-INV-{$order_num}.html",
+			],
+		];
+
+		$email_class = class_exists( 'Exacoat_Email_Engine' ) ? 'Exacoat_Email_Engine' : ( class_exists( 'Artmatter_Email_Engine' ) ? 'Artmatter_Email_Engine' : false );
+		if ( $email_class ) {
+			self::$sent_status_emails[ $dedup_key ] = true;
 			if ( class_exists( 'Exacoat_Logger' ) ) {
 				Exacoat_Logger::info( 'emails', "Dispatched customer_order_shipped email for Order #{$order_id} to {$customer_email} ({$courier} #{$tracking_num})" );
 			}
-			Exacoat_Email_Engine::send_email(
+			$email_class::send_email(
 				'customer_order_shipped',
 				$customer_email,
 				$order->get_formatted_billing_full_name() ?: 'Valued Customer',
 				self::get_email_order_payload( $order, [
 					'courier'         => $courier,
-					'tracking_number' => $tracking_num,
+					'tracking_number' => (string) $tracking_num,
 					'tracking_url'    => $tracking_url,
+					'attachments'     => $attachments,
 				] )
 			);
 		}
@@ -2740,7 +2797,8 @@ class Exacoat_Order_Manager {
 
 		$customer_email = $order->get_billing_email();
 		$customer_name  = $order->get_formatted_billing_full_name() ?: 'Customer';
-		if ( ! is_email( $customer_email ) || ! class_exists( 'Artmatter_Email_Engine' ) ) return;
+		$email_class    = class_exists( 'Exacoat_Email_Engine' ) ? 'Exacoat_Email_Engine' : ( class_exists( 'Artmatter_Email_Engine' ) ? 'Artmatter_Email_Engine' : false );
+		if ( ! is_email( $customer_email ) || ! $email_class ) return;
 
 		$clean_to = str_replace( 'wc-', '', $to_status );
 
@@ -2767,42 +2825,54 @@ class Exacoat_Order_Manager {
 			str_contains( $customer_note, 'shipping courier:' ) ||
 			str_contains( $customer_note, 'jasa kirim:' );
 
+		$meta_pickup = $order->get_meta( 'is_store_pickup' ) ?: ( $order->get_meta( '_is_store_pickup' ) ?: ( $order->get_meta( 'store_pickup' ) ?: '' ) );
 		$is_store_pickup = ! $has_courier && (
 			str_contains( $shipping_method, 'pickup' ) ||
 			str_contains( $shipping_method_id, 'local_pickup' ) ||
 			str_contains( $shipping_method, 'ambil di toko' ) ||
 			str_contains( $shipping_method, 'ambil sendiri' ) ||
-			'yes' === $order->get_meta( 'is_store_pickup' ) ||
-			'1' === $order->get_meta( 'is_store_pickup' ) ||
+			in_array( strtolower( (string) $meta_pickup ), [ 'yes', '1', 'true' ], true ) ||
 			in_array( $clean_to, [ 'smb-ready', 'smb-picked' ], true )
 		);
 
 		if ( 'processing' === $clean_to ) {
 			self::send_order_confirmation_once( $order );
-		} elseif ( 'in-production' === $clean_to ) {
-			Artmatter_Email_Engine::send_email(
-				'customer_order_in_production',
-				$customer_email,
-				$customer_name,
-				self::get_email_order_payload( $order )
-			);
-		} elseif ( 'smb-ready' === $clean_to ) {
-			Artmatter_Email_Engine::send_email(
-				'customer_order_store_pickup_ready',
-				$customer_email,
-				$customer_name,
-				self::get_email_order_payload( $order, [
-					'is_store_pickup' => true,
-					'pickup_ready'    => true,
-				] )
-			);
-		} elseif ( in_array( $clean_to, [ 'awaiting-pickup', 'awaiting_pickup' ], true ) ) {
-			Artmatter_Email_Engine::send_email(
-				'customer_order_awaiting_pickup',
-				$customer_email,
-				$customer_name,
-				self::get_email_order_payload( $order )
-			);
+		} elseif ( in_array( $clean_to, [ 'in-production', 'in_production', 'preparing-order', 'preparing_order' ], true ) ) {
+			$dedup_key = "{$order_id}_customer_order_in_production";
+			if ( empty( self::$sent_status_emails[ $dedup_key ] ) ) {
+				self::$sent_status_emails[ $dedup_key ] = true;
+				$email_class::send_email(
+					'customer_order_in_production',
+					$customer_email,
+					$customer_name,
+					self::get_email_order_payload( $order )
+				);
+			}
+		} elseif ( 'smb-ready' === $clean_to || ( $is_store_pickup && in_array( $clean_to, [ 'ready-to-ship', 'ready_to_ship', 'awaiting-pickup', 'awaiting_pickup' ], true ) ) ) {
+			$dedup_key = "{$order_id}_customer_order_store_pickup_ready";
+			if ( empty( self::$sent_status_emails[ $dedup_key ] ) ) {
+				self::$sent_status_emails[ $dedup_key ] = true;
+				$email_class::send_email(
+					'customer_order_store_pickup_ready',
+					$customer_email,
+					$customer_name,
+					self::get_email_order_payload( $order, [
+						'is_store_pickup' => true,
+						'pickup_ready'    => true,
+					] )
+				);
+			}
+		} elseif ( in_array( $clean_to, [ 'ready-to-ship', 'ready_to_ship', 'awaiting-pickup', 'awaiting_pickup' ], true ) ) {
+			$dedup_key = "{$order_id}_customer_order_awaiting_pickup";
+			if ( empty( self::$sent_status_emails[ $dedup_key ] ) ) {
+				self::$sent_status_emails[ $dedup_key ] = true;
+				$email_class::send_email(
+					'customer_order_awaiting_pickup',
+					$customer_email,
+					$customer_name,
+					self::get_email_order_payload( $order )
+				);
+			}
 		} elseif ( 'shipped' === $clean_to ) {
 			// Record shipped_at timestamp if not already set
 			if ( empty( $order->get_meta( '_shipped_at' ) ) ) {
@@ -2853,10 +2923,7 @@ class Exacoat_Order_Manager {
 			];
 			$courier_name = $carrier_labels[ $carrier_key ] ?? ( ! empty( $carrier_val ) ? ucfirst( (string) $carrier_val ) : 'Express Courier' );
 
-			$order_received_url = $order->get_checkout_order_received_url();
-			$tracking_url = ! empty( $order_received_url )
-				? $order_received_url . '#exacoat-order-tracking'
-				: ( class_exists( 'Exacoat_Shipping_Tracker' ) ? Exacoat_Shipping_Tracker::get_carrier_tracking_url( $carrier_key, $tracking_code ) : '' );
+			$tracking_url = self::get_order_tracking_url( $order );
 
 			$invoice_html = self::generate_invoice_html( $order );
 			$order_num    = str_replace( '#', '', $order->get_order_number() );
@@ -2868,8 +2935,10 @@ class Exacoat_Order_Manager {
 				],
 			];
 
-			if ( class_exists( 'Exacoat_Email_Engine' ) ) {
-				Exacoat_Email_Engine::send_email(
+			$dedup_key = "{$order_id}_customer_order_shipped";
+			if ( empty( self::$sent_status_emails[ $dedup_key ] ) ) {
+				self::$sent_status_emails[ $dedup_key ] = true;
+				$email_class::send_email(
 					'customer_order_shipped',
 					$customer_email,
 					$customer_name,
@@ -2906,12 +2975,14 @@ class Exacoat_Order_Manager {
 			$order->save();
 
 			// Send Delivery confirmation email
-			if ( class_exists( 'Exacoat_Email_Engine' ) ) {
-				$carrier_display = $order->get_meta( '_exacoat_courier' ) ?: ( $order->get_meta( '_artmatter_courier' ) ?: ( $order->get_meta( 'carrier_id' ) ?: 'Express Courier' ) );
-				$tracking_num    = $order->get_meta( 'tracking_number' ) ?: ( $order->get_meta( '_tracking_number' ) ?: ( $order->get_meta( '_exacoat_tracking_number' ) ?: $order->get_meta( '_artmatter_tracking_number' ) ) );
+			$carrier_display = $order->get_meta( '_exacoat_courier' ) ?: ( $order->get_meta( '_artmatter_courier' ) ?: ( $order->get_meta( 'carrier_id' ) ?: 'Express Courier' ) );
+			$tracking_num    = $order->get_meta( 'tracking_number' ) ?: ( $order->get_meta( '_tracking_number' ) ?: ( $order->get_meta( '_exacoat_tracking_number' ) ?: $order->get_meta( '_artmatter_tracking_number' ) ) );
 
-				if ( $is_store_pickup ) {
-					Exacoat_Email_Engine::send_email(
+			if ( $is_store_pickup || 'smb-picked' === $clean_to ) {
+				$dedup_key = "{$order_id}_customer_order_store_pickup_completed";
+				if ( empty( self::$sent_status_emails[ $dedup_key ] ) ) {
+					self::$sent_status_emails[ $dedup_key ] = true;
+					$email_class::send_email(
 						'customer_order_store_pickup_completed',
 						$customer_email,
 						$customer_name,
@@ -2920,14 +2991,19 @@ class Exacoat_Order_Manager {
 							'pickup_review'   => true,
 						] )
 					);
-				} else {
-					Artmatter_Email_Engine::send_email(
+				}
+			} else {
+				$dedup_key = "{$order_id}_customer_order_delivered";
+				if ( empty( self::$sent_status_emails[ $dedup_key ] ) ) {
+					self::$sent_status_emails[ $dedup_key ] = true;
+					$email_class::send_email(
 						'customer_order_delivered',
 						$customer_email,
 						$customer_name,
 						self::get_email_order_payload( $order, [
 							'courier'         => (string) $carrier_display,
 							'tracking_number' => (string) $tracking_num,
+							'tracking_url'    => self::get_order_tracking_url( $order ),
 						] )
 					);
 				}
@@ -2946,7 +3022,7 @@ class Exacoat_Order_Manager {
 				Artmatter_Review_Manager::cancel_scheduled_invitation( $order_id );
 			}
 			$ref_amt = self::format_email_clean_price( $order->get_total_refunded() ?: $order->get_total(), $order->get_currency() );
-			Artmatter_Email_Engine::send_email(
+			$email_class::send_email(
 				'customer_order_refunded',
 				$customer_email,
 				$customer_name,
@@ -2955,14 +3031,14 @@ class Exacoat_Order_Manager {
 				] )
 			);
 		} elseif ( in_array( $clean_to, [ 'on-hold', 'on_hold' ], true ) ) {
-			Artmatter_Email_Engine::send_email(
+			$email_class::send_email(
 				'customer_order_on_hold',
 				$customer_email,
 				$customer_name,
 				self::get_email_order_payload( $order )
 			);
 		} elseif ( 'failed' === $clean_to ) {
-			Artmatter_Email_Engine::send_email(
+			$email_class::send_email(
 				'customer_order_failed',
 				$customer_email,
 				$customer_name,
@@ -3517,19 +3593,30 @@ class Exacoat_Order_Manager {
 		$order_id    = $order->get_id();
 		$status_name = wc_get_order_status_name( $raw_status );
 
+		$clean_stage_status = str_replace( 'wc-', '', $raw_status );
 		$status_stages = [
 			'pending'         => 1,
 			'on-hold'         => 1,
 			'processing'      => 1,
+			'confirmed'       => 1,
 			'in-production'   => 2,
+			'in_production'   => 2,
+			'preparing-order' => 2,
+			'preparing_order' => 2,
 			'quality-check'   => 3,
+			'quality_check'   => 3,
 			'awaiting-pickup' => 4,
+			'awaiting_pickup' => 4,
+			'ready-to-ship'   => 4,
+			'ready_to_ship'   => 4,
+			'smb-ready'       => 4,
 			'shipped'         => 5,
 			'completed'       => 6,
 			'delivered'       => 6,
+			'smb-picked'      => 6,
 		];
 
-		$active_stage = $status_stages[ $raw_status ] ?? 1;
+		$active_stage = $status_stages[ $clean_stage_status ] ?? ( $status_stages[ $raw_status ] ?? 1 );
 		$is_cancelled = in_array( $raw_status, [ 'cancelled', 'refunded', 'failed' ], true );
 		if ( $is_cancelled ) return;
 

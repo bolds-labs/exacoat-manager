@@ -3,7 +3,7 @@
  * Plugin Name:       Exacoat Core Platform
  * Plugin URI:        https://exacoat.com
  * Description:       Proprietary e-commerce core engine, configurator manager, and ERP workstation integration for Exacoat.
- * Version:           0.1.161
+ * Version:           0.1.162
  * Author:            Exacoat
  * Author URI:        https://exacoat.com
  * License:           Proprietary
@@ -15,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ! defined( 'EXACOAT_CORE_VERSION' ) ) {
-	define( 'EXACOAT_CORE_VERSION', '0.1.161' );
+	define( 'EXACOAT_CORE_VERSION', '0.1.162' );
 }
 if ( ! defined( 'EXACOAT_CORE_FILE' ) ) {
 	define( 'EXACOAT_CORE_FILE', __FILE__ );
@@ -437,6 +437,23 @@ require_once EXACOAT_CORE_PATH . 'includes/class-customer-manager.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-custom-label-manager.php';
 require_once EXACOAT_CORE_PATH . 'admin/class-admin-settings.php';
 require_once EXACOAT_CORE_PATH . 'admin/class-github-updater.php';
+
+// Defensive backward compatibility class aliases (prevents fatal errors from any legacy hooks/snippets)
+if ( ! class_exists( 'Artmatter_Email_Engine' ) && class_exists( 'Exacoat_Email_Engine' ) ) {
+	class_alias( 'Exacoat_Email_Engine', 'Artmatter_Email_Engine' );
+}
+if ( ! class_exists( 'Artmatter_Order_Manager' ) && class_exists( 'Exacoat_Order_Manager' ) ) {
+	class_alias( 'Exacoat_Order_Manager', 'Artmatter_Order_Manager' );
+}
+if ( ! class_exists( 'Artmatter_Shipping_Tracker' ) && class_exists( 'Exacoat_Shipping_Tracker' ) ) {
+	class_alias( 'Exacoat_Shipping_Tracker', 'Artmatter_Shipping_Tracker' );
+}
+if ( ! class_exists( 'Artmatter_Core' ) && class_exists( 'Exacoat_Core' ) ) {
+	class_alias( 'Exacoat_Core', 'Artmatter_Core' );
+}
+if ( ! class_exists( 'Artmatter_Logger' ) && class_exists( 'Exacoat_Logger' ) ) {
+	class_alias( 'Exacoat_Logger', 'Artmatter_Logger' );
+}
 
 // Initialize Headless Pages REST Controller
 if ( class_exists( 'Exacoat_Pages_Controller' ) ) {

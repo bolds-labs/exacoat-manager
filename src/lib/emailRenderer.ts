@@ -313,7 +313,7 @@ function renderCustomerOrderEmail(event: string, data: Record<string, any>): Ren
     shipping_address: 'William Vance\nJl. Sudirman No. 42\nJakarta Selatan 12190\nIndonesia',
     courier: 'JNE Express',
     tracking_number: event === 'customer_order_shipped' ? 'JNE9842194829' : '',
-    tracking_url: event === 'customer_order_shipped' ? 'https://www.jne.co.id' : '',
+    tracking_url: event === 'customer_order_shipped' ? 'https://exacoat.com/track?order_id=14589' : '',
   };
 
   const merged: Record<string, any> = { ...defaults, ...data };
@@ -417,7 +417,18 @@ function renderCustomerOrderEmail(event: string, data: Record<string, any>): Ren
   if (showShipment && merged.tracking_number) {
     const courier = escapeHtml(merged.courier || 'JNE Express');
     const trackingNum = escapeHtml(merged.tracking_number);
-    const trackingUrl = escapeHtml(merged.tracking_url || `https://parcelsapp.com/en/tracking/${trackingNum}`);
+    const nativeTrackUrl = `https://exacoat.com/track?order_id=${encodeURIComponent(String(merged.order_number || '14589').replace(/^#/, ''))}&order_email=${encodeURIComponent(merged.customer_email || 'customer@example.com')}`;
+    const rawTrackUrl = merged.tracking_url || '';
+    const isExternalPortal = Boolean(
+      rawTrackUrl &&
+      (rawTrackUrl.includes('parcelsapp.com') ||
+       rawTrackUrl.includes('jne.co.id') ||
+       rawTrackUrl.includes('biteship.com') ||
+       rawTrackUrl.includes('sicepat.com') ||
+       rawTrackUrl.includes('17track.net') ||
+       rawTrackUrl.includes('trackingmore.com'))
+    );
+    const trackingUrl = escapeHtml(!rawTrackUrl || isExternalPortal ? nativeTrackUrl : rawTrackUrl);
 
     shipmentHtml = `
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:16px;margin:28px 0;">

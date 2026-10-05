@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Fix backend courier detection in order manager to prevent customer note consolidation text from overriding domestic carrier with Goorita\n- Prevent overwriting explicitly set JNE courier and enforce JNE for domestic Goorita HQ consolidation orders\n- Update order detail drawer and courier display to strictly resolve domestic JNE Express for consolidation orders`,
+      changelog: `### Version ${version}\n- Add customer confirmation auto-reply email for website contact form submissions\n- Expand contact topic mapping and enhance staff notification email template\n- Remove Headquarters & Lab section and synchronize contact submission pipeline with Next.js storefront`,
     },
   };
 

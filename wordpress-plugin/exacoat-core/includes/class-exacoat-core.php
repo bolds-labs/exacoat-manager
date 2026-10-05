@@ -2225,7 +2225,7 @@ class Exacoat_Core {
 		$order      = sanitize_text_field( $params['order_number'] ?? '' );
 		$message    = sanitize_textarea_field( $params['message'] ?? '' );
 		$started_at = absint( $params['started_at'] ?? 0 );
-		$topics     = [ 'general', 'order', 'business', 'product', 'press' ];
+		$topics     = [ 'order', 'warranty', 'fit', 'business', 'general', 'product', 'press' ];
 
 		if ( ! in_array( $topic, $topics, true ) ) {
 			$topic = 'general';
@@ -2240,7 +2240,8 @@ class Exacoat_Core {
 		}
 
 		$now_ms = time() * 1000;
-		if ( ! $started_at || $started_at > $now_ms || ( $now_ms - $started_at ) < 3000 || ( $now_ms - $started_at ) > 2 * HOUR_IN_SECONDS * 1000 ) {
+		// 60-second grace window for client/server clock variance
+		if ( ! $started_at || $started_at > ( $now_ms + 60000 ) || ( $now_ms - $started_at ) < 1500 || ( $now_ms - $started_at ) > 2 * HOUR_IN_SECONDS * 1000 ) {
 			return new WP_Error( 'invalid_submission', 'Please refresh the page and try again.', [ 'status' => 400 ] );
 		}
 
@@ -2248,16 +2249,18 @@ class Exacoat_Core {
 		$remote_ip    = sanitize_text_field( $forwarded_ip ?: ( $_SERVER['REMOTE_ADDR'] ?? 'unknown' ) );
 		$rate_key     = 'exacoat_contact_rate_' . md5( $remote_ip );
 		$rate_count   = (int) get_transient( $rate_key );
-		if ( $rate_count >= 5 ) {
+		if ( $rate_count >= 10 ) {
 			return new WP_Error( 'contact_rate_limited', 'Too many messages. Please try again later.', [ 'status' => 429 ] );
 		}
 
 		set_transient( $rate_key, $rate_count + 1, HOUR_IN_SECONDS );
 
 		$topic_labels = [
+			'order'    => 'Order support & tracking',
+			'warranty' => 'Installation Warranty claim',
+			'fit'      => 'Device model & custom fit inquiry',
+			'business' => 'Business & bulk orders',
 			'general'  => 'General inquiry',
-			'order'    => 'Order support',
-			'business' => 'Business project',
 			'product'  => 'Product question',
 			'press'    => 'Press and partnership',
 		];
@@ -2271,33 +2274,221 @@ class Exacoat_Core {
 		];
 		$details_html = '';
 		foreach ( $rows as $label => $value ) {
-			$details_html .= '<tr><td style="padding:8px 16px 8px 0;color:#71717a;vertical-align:top;white-space:nowrap;">' . esc_html( $label ) . '</td><td style="padding:8px 0;color:#f4f4f5;">' . esc_html( $value ) . '</td></tr>';
+			$details_html .= '<tr><td style="padding:8px 16px 8px 0;color:#71717a;vertical-align:top;white-space:nowrap;">' . esc_html( $label ) . '</td><td style="padding:8px 0;color:#f4f4f5;font-weight:500;">' . esc_html( $value ) . '</td></tr>';
 		}
 
-		$html = '<div style="background:#08090b;color:#f4f4f5;padding:32px;font-family:Arial,sans-serif;line-height:1.6;">'
-			. '<div style="max-width:680px;margin:0 auto;">'
-			. '<p style="color:#f3aa18;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;">New website contact</p>'
-			. '<h1 style="font-size:28px;line-height:1.2;margin:12px 0 24px;">' . esc_html( $subject ) . '</h1>'
-			. '<table role="presentation" style="border-collapse:collapse;margin-bottom:24px;">' . $details_html . '</table>'
-			. '<div style="border-top:1px solid rgba(255,255,255,0.12);padding-top:24px;white-space:pre-wrap;">' . nl2br( esc_html( $message ) ) . '</div>'
+		$brand_logo = class_exists( 'Exacoat_Email_Engine' ) ? Exacoat_Email_Engine::get_brand_logo_html( true ) : '<strong style="color:#ffffff;font-size:20px;">EXACOAT®</strong>';
+
+		$staff_html = '<div style="background:#08090b;color:#f4f4f5;padding:32px;font-family:Arial,sans-serif;line-height:1.6;">'
+			. '<div style="max-width:680px;margin:0 auto;background:#141414;border:1px solid #262626;border-radius:14px;padding:32px;">'
+			. '<div style="margin-bottom:20px;">' . $brand_logo . '</div>'
+			. '<p style="color:#f3aa18;font-size:11px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;margin:0 0 8px;">New Customer Inquiry</p>'
+			. '<h1 style="font-size:24px;line-height:1.3;margin:0 0 20px;color:#ffffff;">' . esc_html( $subject ) . '</h1>'
+			. '<table role="presentation" style="border-collapse:collapse;margin-bottom:24px;width:100%;">' . $details_html . '</table>'
+			. '<div style="border-top:1px solid #262626;padding-top:20px;">'
+			. '<p style="color:#71717a;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin:0 0 8px;">Message:</p>'
+			. '<div style="color:#e4e4e7;font-size:14px;line-height:1.6;white-space:pre-wrap;">' . nl2br( esc_html( $message ) ) . '</div>'
+			. '</div>'
 			. '</div></div>';
 
 		$email_class = class_exists( 'Exacoat_Email_Engine' ) ? 'Exacoat_Email_Engine' : ( class_exists( 'Artmatter_Email_Engine' ) ? 'Artmatter_Email_Engine' : false );
-		$result = $email_class ? $email_class::send_email( 'website_contact', 'support@exacoat.com', 'Exacoat Support', [
+		$support_result = $email_class ? $email_class::send_email( 'website_contact', 'support@exacoat.com', 'Exacoat Support', [
 			'subject'    => $email_title,
-			'htmlbody'   => $html,
+			'htmlbody'   => $staff_html,
 			'reply_to'   => $email,
 			'reply_name' => $name,
 		] ) : [ 'success' => true ];
 
-		if ( empty( $result['success'] ) ) {
+		if ( empty( $support_result['success'] ) ) {
 			return new WP_Error( 'contact_delivery_failed', 'Your message could not be sent. Please contact support@exacoat.com directly.', [ 'status' => 502 ] );
+		}
+
+		// Send customer confirmation receipt email
+		if ( $email_class && is_email( $email ) ) {
+			$customer_subject = sprintf( "We've received your inquiry: %s | Exacoat®", $subject );
+			$customer_html    = self::render_contact_confirmation_html( [
+				'name'         => $name,
+				'email'        => $email,
+				'topic_label'  => $topic_label,
+				'subject'      => $subject,
+				'order_number' => $order,
+				'message'      => $message,
+			] );
+
+			$email_class::send_email( 'website_contact_confirmation', $email, $name, [
+				'subject'    => $customer_subject,
+				'htmlbody'   => $customer_html,
+				'reply_to'   => 'support@exacoat.com',
+				'reply_name' => 'Exacoat Care',
+			] );
 		}
 
 		return rest_ensure_response( [
 			'success' => true,
-			'message' => 'Your message has been sent.',
+			'message' => 'Your message has been received by the Exacoat team and a confirmation email has been sent to your inbox.',
 		] );
+	}
+
+	public static function render_contact_confirmation_html( array $data ): string {
+		$name         = esc_html( $data['name'] ?? 'Customer' );
+		$topic_label  = esc_html( $data['topic_label'] ?? 'General inquiry' );
+		$subject      = esc_html( $data['subject'] ?? 'Contact inquiry' );
+		$order_number = esc_html( $data['order_number'] ?? '' );
+		$message      = nl2br( esc_html( $data['message'] ?? '' ) );
+
+		$logo_html = class_exists( 'Exacoat_Email_Engine' )
+			? Exacoat_Email_Engine::get_brand_logo_html( true )
+			: '<a href="https://exacoat.com" style="color:#ffffff;font-size:20px;font-weight:bold;text-decoration:none;">EXACOAT®</a>';
+
+		$order_row = '';
+		if ( ! empty( $order_number ) && 'Not provided' !== $order_number ) {
+			$order_clean = ltrim( $order_number, '#' );
+			$order_row = '<tr><td style="padding:6px 16px 6px 0;color:#71717a;font-size:13px;vertical-align:top;white-space:nowrap;">Order Number</td><td style="padding:6px 0;color:#f4f4f5;font-size:13px;font-weight:600;font-family:monospace;">#' . $order_clean . '</td></tr>';
+		}
+
+		return '<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>' . esc_html( $subject ) . '</title>
+  <style>
+    body { margin:0; padding:0; background-color:#0f0f0f; font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,Helvetica,Arial,sans-serif; -webkit-text-size-adjust:100%; }
+    table { border-collapse:collapse; }
+    @media screen and (max-width:600px) {
+      .mobile-padding { padding-left:20px !important; padding-right:20px !important; }
+      .h1-mobile { font-size:24px !important; line-height:30px !important; }
+    }
+  </style>
+</head>
+<body bgcolor="#0f0f0f" style="margin:0;padding:0;background-color:#0f0f0f;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#0f0f0f" style="background-color:#0f0f0f;">
+    <tr>
+      <td height="40" style="height:40px;line-height:40px;font-size:0;">&nbsp;</td>
+    </tr>
+    <tr>
+      <td align="center" style="padding:0 16px;">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background-color:#141414;border:1px solid #262626;border-radius:16px;overflow:hidden;" bgcolor="#141414">
+          <!-- Logo Header -->
+          <tr>
+            <td align="center" style="padding:40px 32px 16px;text-align:center;" class="mobile-padding">
+              ' . $logo_html . '
+            </td>
+          </tr>
+
+          <!-- Badge -->
+          <tr>
+            <td align="center" style="padding:0 32px 20px;">
+              <table cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="padding:5px 14px;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#f3aa18;background-color:#221c0b;border:1px solid rgba(243,170,24,0.3);border-radius:999px;">
+                    Inquiry Received
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Divider -->
+          <tr>
+            <td style="padding:0 32px;">
+              <hr style="border:none;border-top:1px solid #262626;margin:0;">
+            </td>
+          </tr>
+
+          <!-- Headline & Greeting -->
+          <tr>
+            <td style="padding:28px 32px 12px;" class="mobile-padding">
+              <h1 class="h1-mobile" style="margin:0 0 16px;font-size:26px;font-weight:700;line-height:1.2;color:#ffffff;letter-spacing:-0.4px;">
+                We\'ve received your message
+              </h1>
+              <p style="margin:0 0 12px;font-size:15px;color:#e4e4e7;line-height:1.6;">
+                Hi ' . $name . ',
+              </p>
+              <p style="margin:0 0 20px;font-size:14px;color:#a1a1aa;line-height:1.6;">
+                Thank you for reaching out to Exacoat. We’ve received your inquiry and our support team is reviewing the details.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Inquiry Recap Card -->
+          <tr>
+            <td style="padding:0 32px 24px;" class="mobile-padding">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0d0d0d;border:1px solid #262626;border-radius:12px;padding:20px;">
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <p style="margin:0 0 12px;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#71717a;">
+                      Inquiry Details
+                    </p>
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="padding:6px 16px 6px 0;color:#71717a;font-size:13px;vertical-align:top;white-space:nowrap;">Topic</td>
+                        <td style="padding:6px 0;color:#f4f4f5;font-size:13px;font-weight:500;">' . $topic_label . '</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:6px 16px 6px 0;color:#71717a;font-size:13px;vertical-align:top;white-space:nowrap;">Subject</td>
+                        <td style="padding:6px 0;color:#f4f4f5;font-size:13px;font-weight:500;">' . $subject . '</td>
+                      </tr>
+                      ' . $order_row . '
+                    </table>
+                    <div style="margin-top:16px;padding-top:16px;border-top:1px solid #262626;">
+                      <p style="margin:0 0 6px;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#71717a;">Your Message</p>
+                      <div style="font-size:13px;color:#d4d4d8;line-height:1.6;white-space:pre-wrap;">' . $message . '</div>
+                    </div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Hours & Urgency Info -->
+          <tr>
+            <td style="padding:0 32px 28px;" class="mobile-padding">
+              <p style="margin:0 0 8px;font-size:13px;color:#a1a1aa;line-height:1.6;">
+                Our customer care team typically responds within <strong style="color:#ffffff;">24 business hours</strong> (Monday to Saturday, 09:00 – 18:00 WIB).
+              </p>
+              <p style="margin:0 0 20px;font-size:13px;color:#a1a1aa;line-height:1.6;">
+                For urgent inquiries or in-transit delivery support, reach our team directly via WhatsApp:
+              </p>
+              <table cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center" style="background-color:#f3aa18;border-radius:10px;">
+                    <a href="https://api.whatsapp.com/send?phone=628975556000" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:12px 24px;font-size:13px;font-weight:700;color:#000000;text-decoration:none;border-radius:10px;">
+                      Chat on WhatsApp (+62 897-555-6000) &rarr;
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Divider -->
+          <tr>
+            <td style="padding:0 32px;">
+              <hr style="border:none;border-top:1px solid #262626;margin:0;">
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td align="center" style="padding:24px 32px 32px;text-align:center;" class="mobile-padding">
+              <p style="margin:0 0 4px;font-size:12px;color:#71717a;">
+                Exacoat® Precision Skins &bull; <a href="https://exacoat.com" style="color:#f3aa18;text-decoration:none;">exacoat.com</a>
+              </p>
+              <p style="margin:0;font-size:11px;color:#52525b;">
+                This is an automated confirmation of your inquiry submission.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+    <tr>
+      <td height="40" style="height:40px;line-height:40px;font-size:0;">&nbsp;</td>
+    </tr>
+  </table>
+</body>
+</html>';
 	}
 
 	public function rest_get_settings( WP_REST_Request $request ) {

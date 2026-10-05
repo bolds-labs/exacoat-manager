@@ -245,7 +245,7 @@ class Exacoat_Email_Engine {
 				'defaults'       => self::get_mock_order_defaults( '14589', [
 					'courier'         => 'JNE Express',
 					'tracking_number' => 'JNE9842194829',
-					'tracking_url'    => 'https://www.jne.co.id',
+					'tracking_url'    => 'https://exacoat.com/track?order_id=14589',
 				] ),
 			],
 			'customer_order_completed' => [
@@ -1378,7 +1378,37 @@ class Exacoat_Email_Engine {
 
 		$courier         = esc_html( $data['courier'] ?? '' );
 		$tracking_number = esc_html( $data['tracking_number'] ?? '' );
-		$tracking_url    = esc_url( $data['tracking_url'] ?? ( $tracking_number ? "https://parcelsapp.com/en/tracking/{$tracking_number}" : '' ) );
+
+		// Always direct customers to Exacoat's native /track page prefilled with their order details
+		$track_order_id    = $data['order_id'] ?? ( $data['order_number'] ?? '' );
+		$track_order_email = $data['customer_email'] ?? ( $data['billing_email'] ?? '' );
+		$track_order_key   = $data['order_key'] ?? '';
+
+		$native_track_url = '';
+		if ( ! empty( $track_order_id ) ) {
+			$track_base = function_exists( 'exacoat_storefront_url' ) ? exacoat_storefront_url( 'track' ) : home_url( '/track' );
+			$native_track_url = add_query_arg( array_filter( [
+				'order_id'    => ltrim( (string) $track_order_id, '#' ),
+				'order_email' => $track_order_email,
+				'key'         => $track_order_key,
+			] ), $track_base );
+		}
+
+		$raw_tracking_url = ! empty( $data['tracking_url'] ) ? (string) $data['tracking_url'] : '';
+		$is_external_portal = ! empty( $raw_tracking_url ) && (
+			stripos( $raw_tracking_url, 'parcelsapp.com' ) !== false
+			|| stripos( $raw_tracking_url, 'jne.co.id' ) !== false
+			|| stripos( $raw_tracking_url, 'biteship.com' ) !== false
+			|| stripos( $raw_tracking_url, 'sicepat.com' ) !== false
+			|| stripos( $raw_tracking_url, '17track.net' ) !== false
+			|| stripos( $raw_tracking_url, 'trackingmore.com' ) !== false
+		);
+
+		if ( ! empty( $native_track_url ) && ( empty( $raw_tracking_url ) || $is_external_portal ) ) {
+			$tracking_url = esc_url( $native_track_url );
+		} else {
+			$tracking_url = esc_url( $raw_tracking_url ?: ( ! empty( $native_track_url ) ? $native_track_url : ( function_exists( 'exacoat_storefront_url' ) ? exacoat_storefront_url( 'track' ) : home_url( '/track' ) ) ) );
+		}
 
 		// Shipment Block (strictly ONLY shown in emails when order has shipped)
 		$is_shipped_email = in_array( $event, [ 'customer_order_shipped', 'customer_completed_order' ], true )
@@ -2989,8 +3019,9 @@ class Exacoat_Email_Engine {
 		$customer_name  = $order->get_formatted_billing_full_name() ?: 'Customer';
 		if ( ! is_email( $customer_email ) ) return;
 
-		$payload = class_exists( 'Artmatter_Order_Manager' ) 
-			? Artmatter_Order_Manager::get_email_order_payload( $order, [ 'customer_note' => $customer_note ] )
+		$order_mgr_class = class_exists( 'Exacoat_Order_Manager' ) ? 'Exacoat_Order_Manager' : ( class_exists( 'Artmatter_Order_Manager' ) ? 'Artmatter_Order_Manager' : '' );
+		$payload = ! empty( $order_mgr_class )
+			? $order_mgr_class::get_email_order_payload( $order, [ 'customer_note' => $customer_note ] )
 			: [ 'customer_note' => $customer_note ];
 
 		self::send_email( 'customer_order_note', $customer_email, $customer_name, $payload );
@@ -3042,8 +3073,9 @@ class Exacoat_Email_Engine {
 		$customer_name  = $order->get_formatted_billing_full_name() ?: 'Customer';
 		if ( ! is_email( $customer_email ) ) return;
 
-		$payload = class_exists( 'Artmatter_Order_Manager' )
-			? Artmatter_Order_Manager::get_email_order_payload( $order )
+		$order_mgr_class = class_exists( 'Exacoat_Order_Manager' ) ? 'Exacoat_Order_Manager' : ( class_exists( 'Artmatter_Order_Manager' ) ? 'Artmatter_Order_Manager' : '' );
+		$payload = ! empty( $order_mgr_class )
+			? $order_mgr_class::get_email_order_payload( $order )
 			: [];
 
 		self::send_email( 'customer_order_invoice', $customer_email, $customer_name, $payload );

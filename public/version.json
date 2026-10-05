@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.161",
+  "version": "0.1.162",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.161.zip?v=0.1.161",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.162.zip?v=0.1.162",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-10-05T11:22:56.543Z",
+  "last_updated": "2026-10-05T12:03:21.096Z",
   "sections": {
-    "changelog": "### Version 0.1.161\n- Fix backend courier detection in order manager to prevent customer note consolidation text from overriding domestic carrier with Goorita\n- Prevent overwriting explicitly set JNE courier and enforce JNE for domestic Goorita HQ consolidation orders\n- Update order detail drawer and courier display to strictly resolve domestic JNE Express for consolidation orders"
+    "changelog": "### Version 0.1.162\n- Add customer confirmation auto-reply email for website contact form submissions\n- Expand contact topic mapping and enhance staff notification email template\n- Remove Headquarters & Lab section and synchronize contact submission pipeline with Next.js storefront"
   }
 }

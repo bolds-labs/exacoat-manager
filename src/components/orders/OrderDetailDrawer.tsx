@@ -128,6 +128,17 @@ const getPublicTrackingUrl = (carrier?: string, trackingNum?: string, customUrl?
   return `https://biteship.com/track/${encodeURIComponent(trackingNum.trim())}`;
 };
 
+const getExacoatTrackingUrl = (order: Order): string => {
+  const cleanId = String(order.order_number || order.id || '').replace(/^#/, '').trim();
+  const email = order.customer_email || (order as any).billing?.email || (order as any).customer?.email || '';
+  const key = (order as any).order_key || (order as any).key || '';
+  const params = new URLSearchParams();
+  if (cleanId) params.set('order_id', cleanId);
+  if (email) params.set('order_email', email);
+  if (key) params.set('key', key);
+  return `https://exacoat.com/track?${params.toString()}`;
+};
+
 const renderNoteHtml = (content: string) => {
   if (!content) return null;
   if (!content.includes('<')) return content;
@@ -3447,19 +3458,32 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                   </span>
                 )}
                 {order.tracking?.tracking_number && (
-                  <a
-                    href={getPublicTrackingUrl(
-                      order.tracking.courier || courier,
-                      order.tracking.tracking_number,
-                      order.tracking.tracking_url
-                    )}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-xs text-neutral-200 font-sans flex items-center gap-1.5 border border-white/[0.1] transition-all cursor-pointer"
-                  >
-                    <ExternalLink className="w-3 h-3" />
-                    <span>Carrier Portal</span>
-                  </a>
+                  <div className="flex items-center gap-1.5">
+                    <a
+                      href={getExacoatTrackingUrl(order)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2.5 py-1 rounded-lg bg-[#f3aa18]/15 hover:bg-[#f3aa18]/25 text-xs text-[#f3aa18] font-sans flex items-center gap-1.5 border border-[#f3aa18]/30 transition-all cursor-pointer font-medium"
+                      title="Customer Live Tracking Page on Exacoat"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      <span>Track on Exacoat</span>
+                    </a>
+                    <a
+                      href={getPublicTrackingUrl(
+                        order.tracking.courier || courier,
+                        order.tracking.tracking_number,
+                        order.tracking.tracking_url
+                      )}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-[11px] text-neutral-400 font-sans flex items-center gap-1 border border-white/[0.06] transition-all cursor-pointer"
+                      title="Direct Carrier Portal"
+                    >
+                      <ExternalLink className="w-2.5 h-2.5" />
+                      <span>Carrier</span>
+                    </a>
+                  </div>
                 )}
               </div>
             </div>

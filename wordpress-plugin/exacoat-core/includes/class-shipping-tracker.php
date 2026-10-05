@@ -38,6 +38,8 @@ class Exacoat_Shipping_Tracker {
 		// 6. Public Tracking Shortcodes: [exacoat_order_tracking], [exacoat_track_order]
 		add_shortcode( 'exacoat_order_tracking', [ __CLASS__, 'render_tracking_shortcode' ] );
 		add_shortcode( 'exacoat_track_order', [ __CLASS__, 'render_tracking_shortcode' ] );
+		add_shortcode( 'artmatter_order_tracking', [ __CLASS__, 'render_tracking_shortcode' ] );
+		add_shortcode( 'artmatter_track_order', [ __CLASS__, 'render_tracking_shortcode' ] );
 
 		// 7. AJAX Handlers for Tracking Diagnostics, Admin Sync, & Live Customer Refresh
 		add_action( 'wp_ajax_exacoat_test_trackingmore_connection', [ __CLASS__, 'ajax_test_trackingmore_connection' ] );
@@ -426,15 +428,32 @@ class Exacoat_Shipping_Tracker {
 		ob_start();
 
 		$order_id_input = isset( $_REQUEST['order_id'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['order_id'] ) ) : '';
-		$order_id_input = ltrim( $order_id_input, '#' );
-		$email_input    = isset( $_REQUEST['order_email'] ) ? sanitize_email( wp_unslash( $_REQUEST['order_email'] ) ) : ( isset( $_REQUEST['email'] ) ? sanitize_email( wp_unslash( $_REQUEST['email'] ) ) : '' );
-		$order_key      = isset( $_REQUEST['key'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['key'] ) ) : '';
+		if ( empty( $order_id_input ) && isset( $_REQUEST['order_number'] ) ) {
+			$order_id_input = sanitize_text_field( wp_unslash( $_REQUEST['order_number'] ) );
+		}
+		if ( empty( $order_id_input ) && isset( $_REQUEST['order'] ) ) {
+			$order_id_input = sanitize_text_field( wp_unslash( $_REQUEST['order'] ) );
+		}
+		$order_id_input = ltrim( trim( $order_id_input ), '#' );
+
+		$email_input = isset( $_REQUEST['order_email'] ) ? sanitize_email( wp_unslash( $_REQUEST['order_email'] ) ) : ( isset( $_REQUEST['email'] ) ? sanitize_email( wp_unslash( $_REQUEST['email'] ) ) : ( isset( $_REQUEST['billing_email'] ) ? sanitize_email( wp_unslash( $_REQUEST['billing_email'] ) ) : '' ) );
+		$order_key   = isset( $_REQUEST['key'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['key'] ) ) : ( isset( $_REQUEST['order_key'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['order_key'] ) ) : '' );
 
 		$order = null;
 		$error_msg = '';
 
 		if ( ! empty( $order_id_input ) ) {
 			$found_order = wc_get_order( (int) $order_id_input );
+			if ( ! $found_order && function_exists( 'wc_get_orders' ) ) {
+				$potential_orders = wc_get_orders( [
+					'limit'      => 1,
+					'meta_key'   => '_order_number',
+					'meta_value' => $order_id_input,
+				] );
+				if ( ! empty( $potential_orders ) ) {
+					$found_order = reset( $potential_orders );
+				}
+			}
 			if ( $found_order ) {
 				$matched = false;
 				if ( ! empty( $order_key ) && hash_equals( (string) $found_order->get_order_key(), $order_key ) ) {
@@ -458,11 +477,16 @@ class Exacoat_Shipping_Tracker {
 		if ( wp_style_is( 'artmatter-reviews', 'registered' ) ) {
 			wp_enqueue_style( 'artmatter-reviews' );
 		}
+		if ( wp_style_is( 'exacoat-core', 'registered' ) ) {
+			wp_enqueue_style( 'exacoat-core' );
+		}
 
-		if ( $order && class_exists( 'Artmatter_Order_Manager' ) ) {
+		$order_manager_class = class_exists( 'Exacoat_Order_Manager' ) ? 'Exacoat_Order_Manager' : ( class_exists( 'Artmatter_Order_Manager' ) ? 'Artmatter_Order_Manager' : '' );
+
+		if ( $order && ! empty( $order_manager_class ) ) {
 			echo '<div class="artmatter-track-form-container artmatter-review-form-container" style="max-width:820px;">';
 			echo '<div class="artmatter-public-tracker">';
-			Artmatter_Order_Manager::render_order_details_timeline( $order );
+			$order_manager_class::render_order_details_timeline( $order );
 			echo '</div>';
 			echo '</div>';
 		} else {

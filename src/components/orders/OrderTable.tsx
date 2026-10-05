@@ -517,7 +517,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
 
     for (const order of selectedOrdersList) {
       try {
-        const res = await updateOrderStatusDirect(order.id, bulkStatusTarget, false);
+        const res = await updateOrderStatusDirect(order.id, bulkStatusTarget, true);
         if (res.success) successCount++;
       } catch (e) {
         console.error('Failed to update order in bulk', order.id, e);
@@ -555,7 +555,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
 
     for (const order of ordersToMarkPreparing) {
       try {
-        const res = await updateOrderStatusDirect(order.id, 'preparing-order', false);
+        const res = await updateOrderStatusDirect(order.id, 'preparing-order', true);
         if (res.success) successCount++;
       } catch (e) {
         console.error('Failed to update order status to preparing-order', order.id, e);

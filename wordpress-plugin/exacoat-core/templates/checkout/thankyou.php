@@ -39,9 +39,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 				'on-hold'         => 1,
 				'processing'      => 1,
 				'in-production'   => 2,
+				'preparing-order' => 2,
 				'quality-check'   => 3,
 				'awaiting-pickup' => 4,
+				'ready-to-ship'   => 4,
+				'smb-ready'       => 4,
 				'shipped'         => 5,
+				'smb-picked'      => 6,
 				'completed'       => 6,
 				'delivered'       => 6,
 			];
@@ -230,12 +234,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 							$tracker_class = class_exists( 'Exacoat_Shipping_Tracker' ) ? 'Exacoat_Shipping_Tracker' : false;
 
 							if ( $tracking_number ) :
-								$track_url = '';
-								if ( $tracker_class ) {
-									$track_url = $tracker_class::get_carrier_tracking_url( $carrier, $tracking_number );
-								} elseif ( function_exists( 'exacoat_get_carrier_tracking_url' ) ) {
-									$track_url = exacoat_get_carrier_tracking_url( $carrier, $tracking_number );
-								}
+								$track_url = class_exists( 'Exacoat_Order_Manager' )
+									? Exacoat_Order_Manager::get_order_tracking_url( $order )
+									: add_query_arg( [
+										'order_id'    => ltrim( (string) $order_num, '#' ),
+										'order_email' => $order->get_billing_email(),
+										'key'         => $order->get_order_key(),
+									], function_exists( 'exacoat_storefront_url' ) ? exacoat_storefront_url( 'track' ) : home_url( '/track' ) );
 
 								$checkpoints = $order->get_meta( '_exacoat_tracking_checkpoints' ) ?: ( $order->get_meta( '_artmatter_tracking_checkpoints' ) ?: get_post_meta( $order_id, '_artmatter_tracking_checkpoints', true ) );
 								if ( ! is_array( $checkpoints ) ) {
@@ -271,6 +276,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 								<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);">
 									<div style="color:#a1a1aa;font-size:11.5px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
 										<span>Tracking: <strong style="color:#f3aa18;font-family:monospace;font-size:12.5px;"><?php echo esc_html( $tracking_number ); ?></strong></span>
+										<?php if ( ! empty( $track_url ) ) : ?>
+											<a href="<?php echo esc_url( $track_url ); ?>" style="font-size:11.5px;color:#f3aa18;text-decoration:none;font-weight:600;display:inline-flex;align-items:center;gap:4px;" target="_blank">
+												<span><?php esc_html_e( 'Live Tracking Details', 'exacoat-core' ); ?> &rarr;</span>
+											</a>
+										<?php endif; ?>
 									</div>
 
 									<?php if ( ! empty( $checkpoints ) && is_array( $checkpoints ) ) : 
@@ -339,12 +349,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 			<!-- Action Buttons -->
 			<div class="artmatter-ty-actions" style="margin-top:24px;">
-				<a href="<?php echo esc_url( home_url( '/shop/' ) ); ?>" class="artmatter-ty-btn-primary">
-					<span><?php esc_html_e( 'Explore More Skins', 'exacoat-core' ); ?></span>
+				<a href="<?php echo esc_url( class_exists( 'Exacoat_Order_Manager' ) ? Exacoat_Order_Manager::get_order_tracking_url( $order ) : home_url( '/track' ) ); ?>" class="artmatter-ty-btn-primary">
+					<span><?php esc_html_e( 'Track Order Status', 'exacoat-core' ); ?></span>
 					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
 				</a>
-				<a href="<?php echo esc_url( home_url( '/account#orders' ) ); ?>" class="artmatter-ty-btn-secondary">
-					<span><?php esc_html_e( 'View Order History', 'exacoat-core' ); ?></span>
+				<a href="<?php echo esc_url( home_url( '/shop/' ) ); ?>" class="artmatter-ty-btn-secondary">
+					<span><?php esc_html_e( 'Explore More Skins', 'exacoat-core' ); ?></span>
 				</a>
 			</div>
 

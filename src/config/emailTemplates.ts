@@ -122,8 +122,8 @@ export const EMAIL_TEMPLATES_CATALOG: { category: string; items: EmailTemplateIt
         badgeVariant: 'lime',
         subject: 'Your Exacoat order #{{order_number}} is on its way',
         trigger: 'Dispatched when order is dispatched with courier tracking link.',
-        payload: '{ "event": "customer_order_shipped", "recipient_email": "customer@gmail.com", "order_number": "14589", "customer_first_name": "William", "courier": "JNE Express", "tracking_number": "JNE9842194829" }',
-        defaults: { order_number: '14589', customer_first_name: 'William', courier: 'JNE Express', tracking_number: 'JNE9842194829' }
+        payload: '{ "event": "customer_order_shipped", "recipient_email": "customer@gmail.com", "order_number": "14589", "customer_first_name": "William", "courier": "JNE Express", "tracking_number": "JNE9842194829", "tracking_url": "https://exacoat.com/track?order_id=14589" }',
+        defaults: { order_number: '14589', customer_first_name: 'William', courier: 'JNE Express', tracking_number: 'JNE9842194829', tracking_url: 'https://exacoat.com/track?order_id=14589' }
       },
       {
         key: 'customer_order_completed',
