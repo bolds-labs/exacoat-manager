@@ -73,10 +73,32 @@ class Exacoat_Email_Engine {
 
 	public static function get_config(): array {
 		$settings = Exacoat_Core::get_settings();
+		$token    = trim( $settings['zeptomail_token'] ?? '' );
+
+		// Auto-discover ZeptoMail token from transmail plugin configuration if not explicitly set
+		if ( empty( $token ) ) {
+			$raw_agents = get_option( 'transmail_additional_mail_agents' );
+			if ( ! empty( $raw_agents ) ) {
+				$decoded = json_decode( base64_decode( $raw_agents ), true );
+				if ( is_array( $decoded ) ) {
+					foreach ( $decoded as $agent_email => $agents_list ) {
+						if ( is_array( $agents_list ) ) {
+							foreach ( $agents_list as $ag ) {
+								if ( ! empty( $ag['Token'] ) ) {
+									$token = $ag['Token'];
+									break 2;
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
 		return [
-			'zeptomail_token' => trim( $settings['zeptomail_token'] ?? '' ),
+			'zeptomail_token' => $token,
 			'from_email'      => trim( $settings['email_from_address'] ?? 'support@exacoat.com' ),
-			'from_name'       => trim( $settings['email_from_name'] ?? 'Exacoat' ),
+			'from_name'       => trim( $settings['email_from_name'] ?? 'Exacoat Support' ),
 			'reply_to'        => 'support@exacoat.com',
 		];
 	}
@@ -3121,7 +3143,16 @@ class Exacoat_Email_Engine {
 
 		// Direct ZeptoMail Send Mail API
 		if ( ! empty( $config['zeptomail_token'] ) ) {
-			$api_url = 'https://api.zeptomail.com/v1.1/email';
+			$domain   = get_option( 'transmail_domain_name', 'zoho.com' );
+			$base_url = 'https://api.zeptomail.com';
+			if ( class_exists( 'Transmail_Helper' ) && method_exists( 'Transmail_Helper', 'getZeptoMailUrlForDomain' ) ) {
+				$base_url = Transmail_Helper::getZeptoMailUrlForDomain( $domain );
+			} elseif ( strpos( $domain, 'eu' ) !== false ) {
+				$base_url = 'https://api.zeptomail.eu';
+			} elseif ( strpos( $domain, 'in' ) !== false ) {
+				$base_url = 'https://api.zeptomail.in';
+			}
+			$api_url = rtrim( $base_url, '/' ) . '/v1.1/email';
 			$payload = [
 				'from'     => [
 					'address' => $from_email,
@@ -3144,7 +3175,7 @@ class Exacoat_Email_Engine {
 				$payload['reply_to'] = [
 					[
 						'address' => $reply_to,
-						'name'    => sanitize_text_field( $data['reply_name'] ?? '' ),
+						'name'    => sanitize_text_field( $data['reply_name'] ?? $from_name ),
 					],
 				];
 			}
@@ -3167,9 +3198,10 @@ class Exacoat_Email_Engine {
 				$payload['attachments'] = $attachments;
 			}
 
-			$auth_header = str_starts_with( $config['zeptomail_token'], 'Zoho-enczapikey ' )
-				? $config['zeptomail_token']
-				: 'Zoho-enczapikey ' . $config['zeptomail_token'];
+			$clean_token = trim( $config['zeptomail_token'] );
+			$auth_header = str_starts_with( $clean_token, 'Zoho-enczapikey ' )
+				? $clean_token
+				: 'Zoho-enczapikey ' . $clean_token;
 
 			$start = microtime( true );
 			$response = wp_remote_post( $api_url, [
@@ -3183,111 +3215,136 @@ class Exacoat_Email_Engine {
 			] );
 			$latency = round( ( microtime( true ) - $start ) * 1000 );
 
-			if ( is_wp_error( $response ) ) {
-				$err_msg = $response->get_error_message();
+			$status_code = ! is_wp_error( $response ) ? wp_remote_retrieve_response_code( $response ) : 500;
+			$body        = ! is_wp_error( $response ) ? json_decode( wp_remote_retrieve_body( $response ), true ) : null;
+			$is_ok       = ( $status_code >= 200 && $status_code < 300 );
+			$request_id  = $body['data'][0]['request_id'] ?? ( $body['request_id'] ?? '' );
+			$err_msg     = ! $is_ok ? ( is_wp_error( $response ) ? $response->get_error_message() : ( $body['message'] ?? ( $body['error']['message'] ?? ( $body['error']['details'][0]['message'] ?? "HTTP {$status_code}" ) ) ) ) : null;
+
+			if ( $is_ok ) {
 				if ( class_exists( 'Exacoat_Logger' ) ) {
-					Exacoat_Logger::error( 'email', "ZeptoMail Direct API Failed: {$err_msg}", [ 'event' => $event, 'recipient' => $recipient_email ] );
+					Exacoat_Logger::log(
+						'success',
+						'email',
+						"Direct ZeptoMail Email Sent: '{$event}' to {$recipient_email} from {$from_email} -> HTTP {$status_code} ({$latency}ms)",
+						[
+							'event'       => $event,
+							'recipient'   => $recipient_email,
+							'from'        => $from_email,
+							'status_code' => $status_code,
+							'latency_ms'  => $latency,
+							'request_id'  => $request_id,
+						]
+					);
 				} elseif ( class_exists( 'Artmatter_Logger' ) ) {
-					Artmatter_Logger::log( 'error', 'email', "ZeptoMail Direct API Failed: {$err_msg}", [ 'event' => $event, 'recipient' => $recipient_email ] );
+					Artmatter_Logger::log(
+						'success',
+						'email',
+						"Direct ZeptoMail Email Sent: '{$event}' to {$recipient_email} from {$from_email} -> HTTP {$status_code} ({$latency}ms)",
+						[
+							'event'       => $event,
+							'recipient'   => $recipient_email,
+							'from'        => $from_email,
+							'status_code' => $status_code,
+							'latency_ms'  => $latency,
+							'request_id'  => $request_id,
+						]
+					);
 				}
 
 				if ( class_exists( 'Exacoat_Email_Logger' ) ) {
 					Exacoat_Email_Logger::log_outbound( [
-						'request_id'      => '',
+						'request_id'      => $request_id,
 						'provider'        => 'zeptomail',
 						'event'           => $event,
 						'order_id'        => intval( $data['order_id'] ?? $data['order_number'] ?? 0 ),
 						'recipient_email' => $recipient_email,
 						'recipient_name'  => $recipient_name ?: 'Customer',
 						'subject'         => $subject,
-						'status'          => 'failed',
-						'status_code'     => 500,
+						'status'          => 'sent',
+						'status_code'     => $status_code,
 						'latency_ms'      => $latency,
-						'error_message'   => $err_msg,
+						'error_message'   => null,
 						'metadata'        => $data,
 					] );
 				}
 
-				return [ 'success' => false, 'message' => "ZeptoMail Error: {$err_msg}", 'latency_ms' => $latency ];
+				return [
+					'success'     => true,
+					'status_code' => $status_code,
+					'latency_ms'  => $latency,
+					'message'     => "Email sent directly via ZeptoMail in {$latency}ms!",
+					'response'    => $body,
+				];
 			}
 
-			$status_code = wp_remote_retrieve_response_code( $response );
-			$body        = json_decode( wp_remote_retrieve_body( $response ), true );
-			$is_ok       = ( $status_code >= 200 && $status_code < 300 );
-			$request_id  = $body['data'][0]['request_id'] ?? ( $body['request_id'] ?? '' );
-			$err_msg     = ! $is_ok ? ( $body['message'] ?? ( $body['error']['message'] ?? "HTTP {$status_code}" ) ) : null;
-
+			// If direct ZeptoMail API returned an error, log warning and gracefully fall through to wp_mail()
 			if ( class_exists( 'Exacoat_Logger' ) ) {
 				Exacoat_Logger::log(
-					$is_ok ? 'success' : 'error',
+					'warning',
 					'email',
-					"Direct ZeptoMail Email Sent: '{$event}' to {$recipient_email} -> HTTP {$status_code} ({$latency}ms)",
-					[
-						'event'       => $event,
-						'recipient'   => $recipient_email,
-						'status_code' => $status_code,
-						'latency_ms'  => $latency,
-						'request_id'  => $request_id,
-					]
-				);
-			} elseif ( class_exists( 'Artmatter_Logger' ) ) {
-				Artmatter_Logger::log(
-					$is_ok ? 'success' : 'error',
-					'email',
-					"Direct ZeptoMail Email Sent: '{$event}' to {$recipient_email} -> HTTP {$status_code} ({$latency}ms)",
-					[
-						'event'       => $event,
-						'recipient'   => $recipient_email,
-						'status_code' => $status_code,
-						'latency_ms'  => $latency,
-						'request_id'  => $request_id,
-					]
+					"Direct ZeptoMail API returned {$status_code}: {$err_msg}. Falling back to wp_mail() delivery.",
+					[ 'event' => $event, 'recipient' => $recipient_email, 'from' => $from_email, 'error' => $err_msg ]
 				);
 			}
-
-			if ( class_exists( 'Exacoat_Email_Logger' ) ) {
-				Exacoat_Email_Logger::log_outbound( [
-					'request_id'      => $request_id,
-					'provider'        => 'zeptomail',
-					'event'           => $event,
-					'order_id'        => intval( $data['order_id'] ?? $data['order_number'] ?? 0 ),
-					'recipient_email' => $recipient_email,
-					'recipient_name'  => $recipient_name ?: 'Customer',
-					'subject'         => $subject,
-					'status'          => $is_ok ? 'sent' : 'failed',
-					'status_code'     => $status_code,
-					'latency_ms'      => $latency,
-					'error_message'   => $err_msg,
-					'metadata'        => $data,
-				] );
-			}
-
-			return [
-				'success'     => $is_ok,
-				'status_code' => $status_code,
-				'latency_ms'  => $latency,
-				'message'     => $is_ok ? "Email sent directly via ZeptoMail in {$latency}ms!" : ( $body['message'] ?? "HTTP {$status_code}" ),
-				'response'    => $body,
-			];
 		}
 
 		// Fallback to WordPress standard wp_mail()
+		if ( class_exists( 'Exacoat_Core' ) && method_exists( 'Exacoat_Core', 'maybe_sync_email_senders' ) ) {
+			Exacoat_Core::maybe_sync_email_senders();
+		}
+
 		$headers  = [ 'Content-Type: text/html; charset=UTF-8', "From: {$from_name} <{$from_email}>" ];
 		$reply_to = sanitize_email( $data['reply_to'] ?? '' );
 		if ( is_email( $reply_to ) ) {
-			$reply_name = sanitize_text_field( $data['reply_name'] ?? '' );
+			$reply_name = sanitize_text_field( $data['reply_name'] ?? $from_name );
 			$headers[]  = "Reply-To: {$reply_name} <{$reply_to}>";
 		}
 
 		$from_filter = function() use ( $from_email ) { return $from_email; };
 		$name_filter = function() use ( $from_name ) { return $from_name; };
+
+		// Intercept $args['headers'] in transMail and WP core wp_mail filter
+		$wp_mail_filter = function( $args ) use ( $from_email, $from_name ) {
+			if ( ! is_array( $args ) ) {
+				return $args;
+			}
+			$h_list = $args['headers'] ?? [];
+			if ( is_string( $h_list ) ) {
+				$h_list = explode( "\n", str_replace( "\r\n", "\n", $h_list ) );
+			}
+			if ( is_array( $h_list ) ) {
+				$h_list = array_values( array_filter( $h_list, function( $h ) {
+					return stripos( trim( (string) $h ), 'from:' ) !== 0;
+				} ) );
+				$h_list[] = "From: {$from_name} <{$from_email}>";
+				$args['headers'] = $h_list;
+			}
+			return $args;
+		};
+
+		// Intercept PHPMailer directly for core mailers and SMTP plugins
+		$phpmailer_filter = function( $phpmailer ) use ( $from_email, $from_name ) {
+			if ( ! empty( $from_email ) ) {
+				$phpmailer->From   = $from_email;
+				$phpmailer->Sender = $from_email;
+			}
+			if ( ! empty( $from_name ) ) {
+				$phpmailer->FromName = $from_name;
+			}
+		};
+
 		add_filter( 'wp_mail_from', $from_filter, 999 );
 		add_filter( 'wp_mail_from_name', $name_filter, 999 );
+		add_filter( 'wp_mail', $wp_mail_filter, 999 );
+		add_action( 'phpmailer_init', $phpmailer_filter, 999999 );
 
 		$sent = wp_mail( $recipient_email, $subject, $html, $headers );
 
 		remove_filter( 'wp_mail_from', $from_filter, 999 );
 		remove_filter( 'wp_mail_from_name', $name_filter, 999 );
+		remove_filter( 'wp_mail', $wp_mail_filter, 999 );
+		remove_action( 'phpmailer_init', $phpmailer_filter, 999999 );
 
 		if ( class_exists( 'Exacoat_Logger' ) ) {
 			Exacoat_Logger::log(

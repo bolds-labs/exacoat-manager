@@ -249,6 +249,7 @@ class Exacoat_Core {
 			} elseif ( class_exists( 'Artmatter_Email_Engine' ) ) {
 				Artmatter_Email_Engine::init();
 			}
+			self::maybe_sync_email_senders();
 		} catch ( \Throwable $e ) {
 			error_log( 'Exacoat Email Engine init error: ' . $e->getMessage() );
 		}
@@ -2144,6 +2145,71 @@ class Exacoat_Core {
 		] );
 	}
 
+	/**
+	 * Synchronize authoritative email senders across plugins (TransMail, WooCommerce, WP Mail SMTP)
+	 */
+	public static function maybe_sync_email_senders(): void {
+		// 1. Sync TransMail (ZeptoMail WordPress plugin)
+		$raw_transmail = get_option( 'transmail_additional_mail_agents' );
+		if ( ! empty( $raw_transmail ) ) {
+			$agents = json_decode( base64_decode( $raw_transmail ), true );
+			if ( is_array( $agents ) ) {
+				$primary_token = '';
+				foreach ( $agents as $email_key => $agent_list ) {
+					if ( is_array( $agent_list ) && ! empty( $agent_list[0]['Token'] ) ) {
+						$primary_token = $agent_list[0]['Token'];
+						break;
+					}
+				}
+
+				$updated = false;
+				if ( ! empty( $primary_token ) ) {
+					if ( ! isset( $agents['support@exacoat.com'] ) ) {
+						$agents['support@exacoat.com'] = [
+							[
+								'fromName'  => 'Exacoat Support',
+								'Token'     => $primary_token,
+								'isDefault' => false,
+							],
+						];
+						$updated = true;
+					}
+					if ( ! isset( $agents['orders@exacoat.com'] ) ) {
+						$agents['orders@exacoat.com'] = [
+							[
+								'fromName'  => 'Exacoat',
+								'Token'     => $primary_token,
+								'isDefault' => false,
+							],
+						];
+						$updated = true;
+					}
+				}
+
+				if ( $updated ) {
+					update_option( 'transmail_additional_mail_agents', base64_encode( wp_json_encode( $agents ) ), false );
+				}
+			}
+		}
+
+		// 2. Sync WP Mail SMTP settings in case it is ever enabled
+		$smtp_opt = get_option( 'wp_mail_smtp' );
+		if ( is_array( $smtp_opt ) && isset( $smtp_opt['mail'] ) ) {
+			if ( ( $smtp_opt['mail']['from_email'] ?? '' ) === 'noreply@exacoat.com' || ! empty( $smtp_opt['mail']['from_name_force'] ) ) {
+				$smtp_opt['mail']['from_email']      = 'support@exacoat.com';
+				$smtp_opt['mail']['from_name']       = 'Exacoat Support';
+				$smtp_opt['mail']['from_email_force'] = false;
+				$smtp_opt['mail']['from_name_force']  = false;
+				update_option( 'wp_mail_smtp', $smtp_opt, false );
+			}
+		}
+
+		// 3. Sync WooCommerce from email options
+		if ( get_option( 'woocommerce_email_from_address' ) === 'noreply@exacoat.com' ) {
+			update_option( 'woocommerce_email_from_address', 'support@exacoat.com' );
+		}
+	}
+
 	public function rest_debug_coupon_post_type( WP_REST_Request $request ) {
 		$pto = get_post_type_object( 'shop_coupon' );
 		$show_ui_types = get_post_types( [ 'show_ui' => true ] );
@@ -2210,6 +2276,8 @@ class Exacoat_Core {
 		}
 
 		global $wpdb;
+		self::maybe_sync_email_senders();
+
 		$email_options = [
 			'admin_email'                    => get_option( 'admin_email' ),
 			'woocommerce_email_from_address' => get_option( 'woocommerce_email_from_address' ),
@@ -2219,6 +2287,31 @@ class Exacoat_Core {
 			"SELECT option_name, option_value FROM {$wpdb->options} WHERE option_value LIKE '%noreply@exacoat.com%' LIMIT 20",
 			ARRAY_A
 		);
+
+		$raw_transmail = get_option( 'transmail_additional_mail_agents' );
+		$decoded_transmail = ! empty( $raw_transmail ) ? json_decode( base64_decode( $raw_transmail ), true ) : null;
+		$masked_agents = [];
+		if ( is_array( $decoded_transmail ) ) {
+			foreach ( $decoded_transmail as $k => $v ) {
+				$masked_agents[ $k ] = array_map( function( $ag ) {
+					$tok = (string) ( $ag['Token'] ?? '' );
+					$masked_tok = strlen( $tok ) > 10 ? substr( $tok, 0, 8 ) . '...' . substr( $tok, -6 ) : '***';
+					return [
+						'fromName'  => $ag['fromName'] ?? '',
+						'Token'     => $masked_tok,
+						'isDefault' => $ag['isDefault'] ?? false,
+					];
+				}, (array) $v );
+			}
+		}
+
+		$transmail_debug = [
+			'domain_name'       => get_option( 'transmail_domain_name' ),
+			'content_type'      => get_option( 'transmail_content_type' ),
+			'agents'            => $masked_agents,
+			'connection_status' => json_decode( get_option( 'transmail_connection_status' ), true ),
+			'test_mail_case'    => get_option( 'transmail_test_mail_case' ),
+		];
 
 		$mock_mailer = (object) [
 			'Host' => '',
@@ -2253,6 +2346,7 @@ class Exacoat_Core {
 			'mock_mailer' => $mock_mailer,
 			'noreply_options' => $noreply_options,
 			'email_options' => $email_options,
+			'transmail_debug' => $transmail_debug,
 			'test_filter' => [
 				'from' => $test_from_in,
 				'name' => $test_from_out,
