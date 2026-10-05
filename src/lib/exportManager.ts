@@ -533,6 +533,7 @@ export async function fetchPendingGooritaOrders(): Promise<{
 export async function createGooritaConsolidationOrder(params: {
   order_ids: number[];
   recipient?: Partial<typeof GOORITA_HQ_DEFAULT_ADDRESS>;
+  shipping_cost?: number;
 }): Promise<{
   success: boolean;
   order_id?: number;
@@ -554,6 +555,7 @@ export async function createGooritaConsolidationOrder(params: {
       ...GOORITA_HQ_DEFAULT_ADDRESS,
       ...(params.recipient || {}),
     },
+    shipping_cost: params.shipping_cost ?? 10000,
   };
 
   for (const url of endpoints) {

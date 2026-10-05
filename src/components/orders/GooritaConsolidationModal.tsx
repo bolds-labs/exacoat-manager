@@ -161,6 +161,7 @@ export const GooritaConsolidationModal: React.FC<GooritaConsolidationModalProps>
       const res = await createGooritaConsolidationOrder({
         order_ids: orderIds,
         recipient: GOORITA_HQ_DEFAULT_ADDRESS,
+        shipping_cost: 10000,
       });
 
       if (res.success && res.order_number) {
@@ -332,6 +333,29 @@ export const GooritaConsolidationModal: React.FC<GooritaConsolidationModalProps>
           <span className="text-[11px] font-mono text-zinc-400 shrink-0 hidden sm:inline">
             Ciracas, Jakarta Timur
           </span>
+        </div>
+
+        {/* Domestic Shipping Method & Live Tariff */}
+        <div className="p-3.5 rounded-xl bg-cyan-950/20 border border-cyan-500/20 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
+              <Truck className="w-3.5 h-3.5" />
+            </div>
+            <div className="min-w-0 truncate">
+              <span className="text-[11px] text-zinc-400 font-medium block">
+                Domestic Shipping Method:
+              </span>
+              <span className="font-semibold text-white text-xs truncate block">
+                JNE Express - REG (1-2 business days)
+              </span>
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 font-mono text-xs font-bold border border-emerald-500/25">
+              Rp 10.000
+            </span>
+            <span className="text-[10px] text-zinc-400 block mt-0.5 font-mono">Biteship Tariff</span>
+          </div>
         </div>
 
         {/* Modal Actions */}

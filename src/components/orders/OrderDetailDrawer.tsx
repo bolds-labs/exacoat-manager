@@ -282,13 +282,18 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
     return () => window.removeEventListener('exacoat_order_printed', handlePrintedEvt);
   }, [order]);
 
-  const isUsOrder = Boolean(
-    (order?.shipping?.country || order?.billing?.country || '').toUpperCase() === 'US' ||
-    courier === 'goorita' ||
-    (order?.shipping_lines?.[0]?.method_id || '').toLowerCase().includes('goorita')
+  const isConsolidationOrder = Boolean(
+    (order?.meta_data || []).some((m: any) => m.key === '_is_consolidation_order' && (m.value === 'yes' || m.value === true || m.value === '1')) ||
+    (order?.meta_data || []).some((m: any) => m.key === '_goorita_consolidated_orders' && Array.isArray(m.value) && m.value.length > 0) ||
+    String(order?.shipping?.company || '').toLowerCase().includes('goorita')
   );
 
   const destCountry = (order?.shipping?.country || order?.billing?.country || '').toUpperCase();
+  const isUsOrder = !isConsolidationOrder && Boolean(
+    ['US', 'USA', 'UNITED STATES'].includes(destCountry) ||
+    (courier === 'goorita' && destCountry !== 'ID' && destCountry !== 'INDONESIA') ||
+    ((order?.shipping_lines?.[0]?.method_id || '').toLowerCase().includes('goorita') && destCountry !== 'ID' && destCountry !== 'INDONESIA')
+  );
   const isSeaDestination = ['SG', 'MY', 'TH', 'PH', 'VN', 'TW', 'JP', 'HK'].includes(destCountry);
   const isRayspeedOrder = Boolean(
     courier === 'rayspeed' ||
@@ -340,12 +345,10 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
       if (order.tracking) {
         const rawTrack = String(order.tracking.tracking_number || '').trim();
         const validTrack = rawTrack.startsWith('field_') ? '' : rawTrack;
-        const carrierId = order.tracking.carrier_id || '';
+        const carrierId = String(order.tracking.carrier_id || (order as any).carrier_id || '').toLowerCase().trim();
 
-        // If carrier_id was empty or defaulted to generic jne, prioritize specific courier from note or method
-        const effectiveCarrierId = (resolvedCourier.courierId && resolvedCourier.courierId !== 'jne')
-          ? resolvedCourier.courierId
-          : (carrierId || resolvedCourier.courierId);
+        // Prioritize explicit carrierId from tracking/order, falling back to resolvedCourier
+        const effectiveCarrierId = carrierId || resolvedCourier.courierId || 'jne';
 
         const isPreset = COURIER_PRESETS.some(p => p.value === effectiveCarrierId && p.value !== 'custom');
         
@@ -1764,6 +1767,57 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
               </button>
             </div>
           </form>
+
+          {/* Domestic Goorita Consolidation Shipment Banner */}
+          {isConsolidationOrder && (() => {
+            const consolidatedIds: number[] = (order.meta_data || []).find((m: any) => m.key === '_goorita_consolidated_orders')?.value || [];
+            return (
+              <div className="p-4 rounded-xl bg-cyan-950/20 border border-cyan-500/25 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Truck className="w-4 h-4 text-cyan-400" />
+                    <span className="text-xs font-bold text-white font-sans uppercase tracking-wider">
+                      Domestic JNE Consolidation
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                      Ciracas, Jakarta Timur
+                    </span>
+                    {consolidatedIds.length > 0 && (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/25">
+                        {consolidatedIds.length} USA {consolidatedIds.length === 1 ? 'Order' : 'Orders'}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[11px] font-mono font-bold text-cyan-400">
+                    Goorita HQ Hub
+                  </span>
+                </div>
+                <p className="text-[11px] text-zinc-300 leading-snug">
+                  Master domestic parcel dispatched to Goorita freight forwarder hub (Jonathan Rio). Shipped via JNE Express.
+                </p>
+                {consolidatedIds.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                    <span className="text-[10px] text-zinc-400 font-medium">Consolidated shipments:</span>
+                    {consolidatedIds.map((cid: number) => (
+                      <span key={cid} className="px-2 py-0.5 rounded bg-white/[0.06] text-white font-mono text-[10px] font-semibold border border-white/[0.08]">
+                        #{cid}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsLabelModalOpen(true)}
+                    className="px-3.5 py-2 rounded-xl bg-[#f3aa18] hover:bg-[#d9940c] text-zinc-950 text-xs font-bold font-sans flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Print A6 JNE Thermal Label</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Goorita US Shipment Quick Actions (US Orders & Goorita Courier) */}
           {isUsOrder && (() => {

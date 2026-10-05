@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Fix PDF.js worker resolution so Goorita USPS airwaybills render reliably for 2-page thermal printing\n- Distinguish booked orders from pending rendering in thermal label print modal with retry capability\n- Add manual Goorita Production booking preview modal with live rates and service selection\n- Permanently disable automated Goorita booking generation in favor of operator confirmation\n- Remove legacy copy form and WhatsApp shortcuts from Goorita dispatch panel\n- Reconnect order #542507 to active Goorita AWB #7089105044`,
+      changelog: `### Version ${version}\n- Fix courier resolution for domestic Goorita HQ consolidation orders to correctly identify JNE Express\n- Prevent false Goorita US dispatch card and allow freely changing courier to JNE in order drawer\n- Automatically calculate and record Biteship JNE Express REG shipping rate for consolidation orders\n- Display domestic consolidation details and JNE tariff preview in consolidation modal`,
     },
   };
 

@@ -10,6 +10,15 @@ const awbImageCache = new Map<string, string>();
  */
 export function isGooritaOrder(order?: Order | null): boolean {
   if (!order) return false;
+
+  // Domestic consolidation shipments sent TO Goorita HQ are handled by domestic couriers (JNE)
+  const isConsolidation = Boolean(
+    (order.meta_data || []).some((m: any) => m.key === '_is_consolidation_order' && (m.value === 'yes' || m.value === true || m.value === '1')) ||
+    (order.meta_data || []).some((m: any) => m.key === '_goorita_consolidated_orders' && Array.isArray(m.value) && m.value.length > 0) ||
+    String(order.shipping?.company || '').toLowerCase().includes('goorita')
+  );
+  if (isConsolidation) return false;
+
   const carrier = (order.tracking?.carrier_id || order.tracking?.courier || '').toLowerCase();
   const methodId = (order.shipping_lines?.[0]?.method_id || '').toLowerCase();
   const methodTitle = (order.shipping_lines?.[0]?.method_title || '').toLowerCase();
@@ -27,6 +36,14 @@ export function isGooritaOrder(order?: Order | null): boolean {
  */
 export function isOrderGooritaBooked(order?: Order | null): boolean {
   if (!order) return false;
+
+  const isConsolidation = Boolean(
+    (order.meta_data || []).some((m: any) => m.key === '_is_consolidation_order' && (m.value === 'yes' || m.value === true || m.value === '1')) ||
+    (order.meta_data || []).some((m: any) => m.key === '_goorita_consolidated_orders' && Array.isArray(m.value) && m.value.length > 0) ||
+    String(order.shipping?.company || '').toLowerCase().includes('goorita')
+  );
+  if (isConsolidation) return false;
+
   return Boolean(
     getOrderGooritaAwbUrl(order) ||
     order.goorita_order_id ||

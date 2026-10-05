@@ -1798,12 +1798,71 @@ class Exacoat_Export_Manager {
 			$order->set_address( $address_data, 'billing' );
 			$order->set_address( $address_data, 'shipping' );
 
+			// Determine domestic JNE shipping rate for consolidation parcel
+			$shipping_cost = (float) ( $request->get_param( 'shipping_cost' ) ?: 0 );
+			if ( $shipping_cost <= 0 ) {
+				$shipping_cost = 10000;
+				try {
+					$api_key = '';
+					if ( class_exists( 'Exacoat_Shipping_Tracker' ) && method_exists( 'Exacoat_Shipping_Tracker', 'get_biteship_api_key' ) ) {
+						$api_key = Exacoat_Shipping_Tracker::get_biteship_api_key();
+					} elseif ( defined( 'BITESHIP_API_KEY' ) ) {
+						$api_key = trim( (string) BITESHIP_API_KEY );
+					}
+					if ( empty( $api_key ) ) {
+						$biteship_settings = get_option( 'woocommerce_biteship_shipping_settings', [] );
+						$api_key           = $biteship_settings['api_key'] ?? '';
+					}
+					if ( empty( $api_key ) ) {
+						$api_key = 'biteship_live.eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiRXhhY29hdCIsInVzZXJJZCI6IjY2ZDM1NmE0OWEyOGQzMDAxMjUyN2Q1NCIsImlhdCI6MTc1ODQ1MTM5Mn0.zAWrMuQusXZc8_V0AyJCRO09Yig4n9uUjqza4E5lXag';
+					}
+
+					$biteship_res = wp_remote_post( 'https://api.biteship.com/v1/rates/couriers', [
+						'headers' => [
+							'Authorization' => $api_key,
+							'Content-Type'  => 'application/json',
+						],
+						'body'    => wp_json_encode( [
+							'origin_postal_code'      => 17142,
+							'destination_postal_code' => (int) ( $postcode ?: 13830 ),
+							'couriers'                => 'jne',
+							'items'                   => [
+								[
+									'name'     => 'Consolidated USA Shipments',
+									'value'    => 50000,
+									'weight'   => max( 1000, $total_child_items * 100 ),
+									'quantity' => 1,
+								],
+							],
+						] ),
+						'timeout' => 8,
+					] );
+
+					if ( ! is_wp_error( $biteship_res ) ) {
+						$biteship_data = json_decode( wp_remote_retrieve_body( $biteship_res ), true );
+						if ( ! empty( $biteship_data['pricing'] ) && is_array( $biteship_data['pricing'] ) ) {
+							foreach ( $biteship_data['pricing'] as $p ) {
+								if ( ( $p['courier_service_code'] ?? '' ) === 'reg' ) {
+									$shipping_cost = (float) ( $p['price'] ?? 10000 );
+									break;
+								}
+							}
+						}
+					}
+				} catch ( \Throwable $e ) {
+					// Fallback to standard 10000
+				}
+			}
+
 			// Add shipping item (JNE Express - REG)
 			if ( class_exists( 'WC_Order_Item_Shipping' ) ) {
 				$shipping_item = new \WC_Order_Item_Shipping();
 				$shipping_item->set_method_title( 'JNE Express - REG' );
 				$shipping_item->set_method_id( 'jne_shipping' );
-				$shipping_item->set_total( 0 );
+				$shipping_item->set_total( $shipping_cost );
+				$shipping_item->add_meta_data( 'cost', $shipping_cost, true );
+				$shipping_item->add_meta_data( '_biteship_courier_code', 'jne', true );
+				$shipping_item->add_meta_data( '_biteship_service_code', 'reg', true );
 				$order->add_item( $shipping_item );
 			}
 
@@ -1821,9 +1880,12 @@ class Exacoat_Export_Manager {
 			$order->update_meta_data( 'carrier_id', 'jne' );
 			$order->update_meta_data( '_carrier_id', 'jne' );
 			$order->update_meta_data( 'courier', 'JNE Express' );
+			$order->update_meta_data( '_shipping_raw_price', $shipping_cost );
+			$order->update_meta_data( '_shipping_biteship_courier_rate', $shipping_cost );
 			$order->update_meta_data( '_billing_district', 'Ciracas' );
 
-			$order->calculate_totals();
+			$order->set_shipping_total( $shipping_cost );
+			$order->set_total( $shipping_cost );
 			$order->save();
 
 			$order_id     = $order->get_id();

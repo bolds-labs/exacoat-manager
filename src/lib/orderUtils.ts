@@ -188,7 +188,7 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
     return { courierId: 'jne', courierName: 'JNE Express', isCustom: false };
   }
 
-  // If this is a store pickup order, return pickup
+  // 1. If this is a store pickup order, return pickup
   if (isStorePickupOrder(order)) {
     return {
       courierId: 'custom',
@@ -198,10 +198,70 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
     };
   }
 
-  // Gather candidate text sources in prioritized order
+  const PRESET_MAP: Record<string, string> = {
+    jne: 'JNE Express',
+    sicepat: 'SiCepat',
+    pos: 'POS Indonesia',
+    goorita: 'Goorita Send USA',
+    dhl: 'DHL Express',
+    fedex: 'FedEx International',
+    rayspeed: 'Rayspeed Asia',
+    biteship: 'Biteship (Auto)',
+    lion: 'Lion Parcel',
+    jnt: 'J&T Express',
+  };
+
+  // 2. Domestic consolidation shipment to Goorita HQ
+  const isConsolidation = Boolean(
+    (order.meta_data || []).some((m: any) => m.key === '_is_consolidation_order' && (m.value === 'yes' || m.value === true || m.value === '1')) ||
+    (order.meta_data || []).some((m: any) => m.key === '_goorita_consolidated_orders' && Array.isArray(m.value) && m.value.length > 0) ||
+    String(order.shipping?.company || '').toLowerCase().includes('goorita')
+  );
+
+  if (isConsolidation) {
+    const carrier = String(order.tracking?.carrier_id || order.carrier_id || '').toLowerCase().trim();
+    const sl = order.shipping_lines?.[0];
+    const sTitle = String(sl?.method_title || '').toUpperCase();
+    const sMatch = sTitle.match(/(?:REG|YES|OKE|BEST|GOKIL|SIUNTUNG)/i);
+    const serviceName = sMatch ? sMatch[0] : 'REG';
+
+    if (carrier && PRESET_MAP[carrier] && carrier !== 'goorita') {
+      return {
+        courierId: carrier,
+        courierName: PRESET_MAP[carrier],
+        serviceName,
+        rawMatch: sl?.method_title || PRESET_MAP[carrier],
+        isCustom: false,
+      };
+    }
+    return {
+      courierId: 'jne',
+      courierName: 'JNE Express',
+      serviceName,
+      rawMatch: sl?.method_title || 'JNE Express - REG',
+      isCustom: false,
+    };
+  }
+
+  // 3. Check tracking object if already saved on the order with a valid tracking number
+  const trackingNumber = String(order.tracking?.tracking_number || order.tracking_number || '').trim();
+  const savedCarrierId = String(order.tracking?.carrier_id || order.carrier_id || '').toLowerCase().trim();
+  if (trackingNumber && trackingNumber !== '⚠️' && !trackingNumber.startsWith('field_') && savedCarrierId && PRESET_MAP[savedCarrierId]) {
+    const slTitle = String(order.shipping_lines?.[0]?.method_title || '');
+    const serviceMatch = slTitle.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*[-:]\s*([A-Za-z0-9_\s]+)/i);
+    return {
+      courierId: savedCarrierId,
+      courierName: PRESET_MAP[savedCarrierId],
+      serviceName: serviceMatch ? serviceMatch[1].trim().toUpperCase() : undefined,
+      rawMatch: slTitle || PRESET_MAP[savedCarrierId],
+      isCustom: false,
+    };
+  }
+
+  // 4. Gather candidate text sources in prioritized order
   const candidateTexts: string[] = [];
 
-  // 1. Customer note (highest priority because buyer selected shipping at checkout)
+  // Customer note: only prioritize if explicit courier prefix is present
   const customerNote = String(order.customer_note || '').trim();
   if (customerNote) {
     const noteMatch = customerNote.match(/shipping courier\s*:\s*([^\r\n]+)/i) ||
@@ -209,15 +269,16 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
                       customerNote.match(/jasa kirim\s*:\s*([^\r\n]+)/i);
     if (noteMatch && noteMatch[1]) {
       candidateTexts.push(noteMatch[1].trim());
+    } else if (!customerNote.toLowerCase().startsWith('consolidated goorita') && customerNote.length < 80) {
+      candidateTexts.push(customerNote);
     }
-    candidateTexts.push(customerNote);
   }
 
-  // 2. Shipping method name and title
+  // Shipping method name and title
   if (order.shipping_method_name) candidateTexts.push(String(order.shipping_method_name));
   if (order.shipping_method) candidateTexts.push(String(order.shipping_method));
 
-  // 3. Shipping lines items
+  // Shipping lines items
   if (Array.isArray(order.shipping_lines)) {
     for (const sl of order.shipping_lines) {
       if (sl?.method_title) candidateTexts.push(String(sl.method_title));
@@ -225,7 +286,7 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
     }
   }
 
-  // 4. Order meta data
+  // Order meta data
   if (Array.isArray(order.meta_data)) {
     for (const m of order.meta_data) {
       const k = String(m?.key || '').toLowerCase();
@@ -235,9 +296,12 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
     }
   }
 
-  // 5. Backend detected carrier fields if present
+  // Backend detected carrier fields if present
   if (order.detected_courier) candidateTexts.push(String(order.detected_courier));
   if (order.shipping_courier_name) candidateTexts.push(String(order.shipping_courier_name));
+
+  const country = String(order.shipping?.country || order.billing?.country || '').toUpperCase();
+  const isDomestic = country === 'ID' || country === 'INDONESIA';
 
   // Scan texts for recognized Indonesian & International couriers
   for (const text of candidateTexts) {
@@ -293,7 +357,7 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
         isCustom: false,
       };
     }
-    if (t.includes('goorita')) {
+    if (t.includes('goorita') && !isDomestic && !isConsolidation) {
       return {
         courierId: 'goorita',
         courierName: 'Goorita Send USA',
@@ -340,26 +404,7 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
     }
   }
 
-  // 6. Check tracking object if already saved on the order
-  if (order.tracking?.carrier_id) {
-    const cid = String(order.tracking.carrier_id).toLowerCase().trim();
-    const PRESET_MAP: Record<string, string> = {
-      jne: 'JNE Express',
-      sicepat: 'SiCepat',
-      pos: 'POS Indonesia',
-      goorita: 'Goorita Send USA',
-      dhl: 'DHL Express',
-      fedex: 'FedEx International',
-      rayspeed: 'Rayspeed Asia',
-      biteship: 'Biteship (Auto)',
-      lion: 'Lion Parcel',
-      jnt: 'J&T Express',
-    };
-    if (PRESET_MAP[cid]) {
-      return { courierId: cid, courierName: PRESET_MAP[cid], isCustom: false };
-    }
-  }
-
+  // 5. Fallback to tracking courier if non-preset custom name
   if (order.tracking?.courier && order.tracking.courier !== 'Express Courier' && order.tracking.courier !== 'JNE Express') {
     return {
       courierId: 'custom',
