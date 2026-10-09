@@ -706,7 +706,18 @@ class Exacoat_BCA_Payment_Webhook {
 		$existing_totals = self::get_active_pending_totals();
 
 		// Retrieve or regenerate unique code (strictly 1-50 and collision-free against active orders)
-		$unique_code = (int) WC()->session->get( 'bca_unique_payment_code' );
+		$unique_code = 0;
+		if ( ! empty( $_SERVER['HTTP_X_EXACOAT_BCA_UNIQUE_CODE'] ) ) {
+			$candidate = (int) $_SERVER['HTTP_X_EXACOAT_BCA_UNIQUE_CODE'];
+			if ( $candidate >= self::MIN_UNIQUE_CODE && $candidate <= self::MAX_UNIQUE_CODE && ! in_array( $base_total + $candidate, $existing_totals, true ) ) {
+				$unique_code = $candidate;
+			}
+		}
+
+		if ( ! $unique_code && WC()->session ) {
+			$unique_code = (int) WC()->session->get( 'bca_unique_payment_code' );
+		}
+
 		if (
 			! $unique_code
 			|| $unique_code < self::MIN_UNIQUE_CODE
@@ -714,6 +725,9 @@ class Exacoat_BCA_Payment_Webhook {
 			|| ( $base_total > 0 && in_array( $base_total + $unique_code, $existing_totals, true ) )
 		) {
 			$unique_code = self::generate_unique_code( $base_total, $existing_totals );
+		}
+
+		if ( WC()->session ) {
 			WC()->session->set( 'bca_unique_payment_code', $unique_code );
 			WC()->session->set( 'random_fee', $unique_code );
 		}
@@ -805,6 +819,9 @@ class Exacoat_BCA_Payment_Webhook {
 
 		if ( function_exists( 'WC' ) && WC()->session ) {
 			$code = (int) ( WC()->session->get( 'bca_unique_payment_code' ) ?: WC()->session->get( 'random_fee' ) );
+			if ( ! $code && ! empty( $_SERVER['HTTP_X_EXACOAT_BCA_UNIQUE_CODE'] ) ) {
+				$code = (int) $_SERVER['HTTP_X_EXACOAT_BCA_UNIQUE_CODE'];
+			}
 			if ( $code > 0 ) {
 				$order->update_meta_data( '_bca_unique_code', $code );
 			}
@@ -874,8 +891,15 @@ class Exacoat_BCA_Payment_Webhook {
 		if ( ! $fee_item_target ) {
 			// Order was placed via BACS, but fee item was not yet added to cart:
 			// Automatically inject Unique Payment Code fee (Rp 1 - Rp 50) directly into the order!
-			$base_total  = $order_total;
-			$new_code    = self::generate_unique_code( $base_total, $existing_totals );
+			$base_total     = $order_total;
+			$preferred_code = 0;
+			if ( ! empty( $_SERVER['HTTP_X_EXACOAT_BCA_UNIQUE_CODE'] ) ) {
+				$candidate = (int) $_SERVER['HTTP_X_EXACOAT_BCA_UNIQUE_CODE'];
+				if ( $candidate >= self::MIN_UNIQUE_CODE && $candidate <= self::MAX_UNIQUE_CODE && ! in_array( $base_total + $candidate, $existing_totals, true ) ) {
+					$preferred_code = $candidate;
+				}
+			}
+			$new_code = $preferred_code > 0 ? $preferred_code : self::generate_unique_code( $base_total, $existing_totals );
 
 			$new_fee_item = new \WC_Order_Item_Fee();
 			$new_fee_item->set_name( 'Unique Payment Code' );
@@ -892,7 +916,7 @@ class Exacoat_BCA_Payment_Webhook {
 			return;
 		}
 
-		$base_total      = $order_total - $current_code;
+		$base_total   = $order_total - $current_code;
 		$needs_update = false;
 		$new_code     = $current_code;
 
@@ -901,7 +925,14 @@ class Exacoat_BCA_Payment_Webhook {
 			|| $current_code > self::MAX_UNIQUE_CODE
 			|| in_array( $order_total, $existing_totals, true )
 		) {
-			$new_code     = self::generate_unique_code( $base_total, $existing_totals );
+			$preferred_code = 0;
+			if ( ! empty( $_SERVER['HTTP_X_EXACOAT_BCA_UNIQUE_CODE'] ) ) {
+				$candidate = (int) $_SERVER['HTTP_X_EXACOAT_BCA_UNIQUE_CODE'];
+				if ( $candidate >= self::MIN_UNIQUE_CODE && $candidate <= self::MAX_UNIQUE_CODE && ! in_array( $base_total + $candidate, $existing_totals, true ) ) {
+					$preferred_code = $candidate;
+				}
+			}
+			$new_code     = $preferred_code > 0 ? $preferred_code : self::generate_unique_code( $base_total, $existing_totals );
 			$needs_update = true;
 		}
 
