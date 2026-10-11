@@ -1263,9 +1263,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
         const devFamily = res.profile.family || summary?.family || 'phone';
         const isBigFamily = devFamily === 'laptop' || devFamily === 'tablet' || (devFamily as string) === 'tablet_laptop' || devFamily === 'keyboard';
-        const normalizedMultiplier = isBigFamily
-          ? 2.0
-          : (devFamily === 'foldable' ? 1.3 : (res.profile.size_multiplier || 1.0));
+        const rawMult = res.profile.size_multiplier;
+        const normalizedMultiplier = (res.profile.disable_finish_surcharges || rawMult === 0)
+          ? 0
+          : (typeof rawMult === 'number' && rawMult > 0 && rawMult !== 1.0)
+            ? rawMult
+            : isBigFamily
+              ? 2.0
+              : (devFamily === 'foldable' ? 1.3 : (rawMult ?? 1.0));
 
         const devName = decodeHtmlEntities(res.profile.device_name || summary?.name || `Device #${productId}`);
         const devSlug = res.profile.device_slug || summary?.slug || '';
@@ -4546,7 +4551,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const simulatedTotalPrice = useMemo(() => {
     if (!editingProfile) return 0;
     let total = editingProfile.base_price || 0;
-    const multiplier = editingProfile.size_multiplier || 1.0;
+    const multiplier = typeof editingProfile.size_multiplier === 'number'
+      ? editingProfile.size_multiplier
+      : (editingProfile.size_multiplier ? Number(editingProfile.size_multiplier) : 1.0);
+    const deviceDisableSurcharges = Boolean(editingProfile.disable_finish_surcharges || multiplier === 0);
 
     editingProfile.layers.forEach((layer, idx) => {
       const isSelected = selectedSimLayers[layer.id] ?? (layer.default_selected || layer.is_required);
@@ -4558,8 +4566,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
         const partFinishSlug = selectedLayerFinishes[layer.id] || selectedSimFinish;
         const fObj = finishes.find((f) => (f.slug || f.id) === partFinishSlug || f.id === partFinishSlug);
         const baseFinishExtra = Number(fObj?.extra_price) || 0;
+        const layerDisableSurcharges = deviceDisableSurcharges || Boolean(layer.disable_finish_surcharge);
 
-        if (fObj && baseFinishExtra > 0) {
+        if (fObj && baseFinishExtra > 0 && !layerDisableSurcharges) {
           const isCustomDeviceFinish = Boolean(
             fObj.is_custom_per_device ||
             (layer.assets_by_view &&
@@ -8413,12 +8422,20 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                               let extra = 0;
                               const baseFinishExtra = Number(finish.extra_price) || 0;
+                              const mult = typeof editingProfile.size_multiplier === 'number'
+                                ? editingProfile.size_multiplier
+                                : (editingProfile.size_multiplier ? Number(editingProfile.size_multiplier) : 1.0);
+                              const disableSurcharges = Boolean(
+                                editingProfile.disable_finish_surcharges ||
+                                mult === 0 ||
+                                currentActiveLayer.disable_finish_surcharge
+                              );
 
-                              if (baseFinishExtra > 0) {
+                              if (baseFinishExtra > 0 && !disableSurcharges) {
                                 if (isCustomDeviceFinish) {
-                                  extra = Math.round(baseFinishExtra * (isPrimary ? (editingProfile.size_multiplier || 1.0) : 1.0));
+                                  extra = Math.round(baseFinishExtra * (isPrimary ? mult : 1.0));
                                 } else if (isPrimary) {
-                                  extra = Math.round(baseFinishExtra * (editingProfile.size_multiplier || 1.0));
+                                  extra = Math.round(baseFinishExtra * mult);
                                 } else if (finish.accent_extra_price && finish.accent_extra_price > 0) {
                                   extra = finish.accent_extra_price;
                                 } else {
@@ -9103,7 +9120,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 </div>
 
                                 {/* Part Attributes: Required, Pre-selected, Extra Price */}
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-white/5">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-2 border-t border-white/5">
                                   <label className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-950/60 border border-white/5 text-xs font-sans cursor-pointer">
                                     <span className="text-zinc-200 font-medium">Required</span>
                                     <input
@@ -9166,6 +9183,24 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                       </div>
                                     );
                                   })()}
+
+                                  <label className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-950/60 border border-white/5 text-xs font-sans cursor-pointer">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-zinc-200 font-medium">No Surcharge</span>
+                                      <InfoTooltip text="Finishes on this part add IDR 0 extra price (exempt from premium finish surcharges)." />
+                                    </div>
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(editingProfile.disable_finish_surcharges || editingProfile.size_multiplier === 0 || currentActiveLayer.disable_finish_surcharge)}
+                                      disabled={Boolean(editingProfile.disable_finish_surcharges || editingProfile.size_multiplier === 0)}
+                                      onChange={(e) =>
+                                        handleUpdateLayer(currentActiveLayer.id, {
+                                          disable_finish_surcharge: e.target.checked,
+                                        })
+                                      }
+                                      className="w-4 h-4 rounded text-[#f3aa18] focus:ring-0 focus:outline-none accent-[#f3aa18] cursor-pointer disabled:opacity-50"
+                                    />
+                                  </label>
                                 </div>
 
                                 {/* Layer Display Mode: 3D Viewport vs Non-Visual Kit Part */}
@@ -11725,20 +11760,51 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   <input
                                     type="number"
                                     step="0.1"
+                                    min="0"
                                     value={editingProfile.size_multiplier}
-                                    onChange={(e) =>
+                                    onChange={(e) => {
+                                      const val = parseFloat(e.target.value);
                                       setEditingProfile({
                                         ...editingProfile,
-                                        size_multiplier: Number(e.target.value) || 1.0,
-                                      })
-                                    }
+                                        size_multiplier: isNaN(val) ? 1.0 : val,
+                                        disable_finish_surcharges: val === 0 ? true : editingProfile.disable_finish_surcharges,
+                                      });
+                                    }}
                                     className="w-16 px-2 py-0.5 text-xs font-mono text-right rounded bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
                                   />
                                   <span className="text-[11px] text-amber-400 font-mono">
-                                    +IDR {Math.round(30000 * (editingProfile.size_multiplier || 1.0)).toLocaleString('id-ID')}
+                                    {editingProfile.disable_finish_surcharges || editingProfile.size_multiplier === 0
+                                      ? '+IDR 0 (Included)'
+                                      : `+IDR ${Math.round(30000 * (editingProfile.size_multiplier || 1.0)).toLocaleString('id-ID')}`}
                                   </span>
                                 </div>
                               </div>
+
+                              {/* Disable Finish Surcharges Toggle */}
+                              <label className="flex items-center justify-between p-2.5 rounded-lg bg-zinc-950/60 border border-white/5 text-xs font-sans cursor-pointer hover:border-white/10 transition-colors">
+                                <div className="space-y-0.5 pr-2">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-zinc-200 font-medium">Disable Finish Surcharges</span>
+                                    <InfoTooltip text="All finishes have IDR 0 extra price on this device (included in base price). Ideal for devices offering only signature skins like Magic Keyboard." />
+                                  </div>
+                                  <p className="text-[11px] text-zinc-500">
+                                    Finishes add +IDR 0 on all parts (base price covers the skin)
+                                  </p>
+                                </div>
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(editingProfile.disable_finish_surcharges || editingProfile.size_multiplier === 0)}
+                                  onChange={(e) => {
+                                    const checked = e.target.checked;
+                                    setEditingProfile({
+                                      ...editingProfile,
+                                      disable_finish_surcharges: checked,
+                                      size_multiplier: checked ? 0 : (editingProfile.size_multiplier === 0 ? 1.0 : editingProfile.size_multiplier),
+                                    });
+                                  }}
+                                  className="w-4 h-4 rounded text-[#f3aa18] focus:ring-0 focus:outline-none accent-[#f3aa18] cursor-pointer"
+                                />
+                              </label>
 
                               {/* Dynamic Finish Surcharges (Brackets) */}
                               <div className="p-3 rounded-xl bg-zinc-950/80 border border-white/5 space-y-2.5">

@@ -3398,6 +3398,7 @@ class Exacoat_Configurator_Engine {
 			'currency'             => sanitize_text_field( $params['currency'] ?? 'IDR' ),
 			'size_multiplier'      => (float) ( $params['size_multiplier'] ?? 1.0 ),
 			'texture_scale'        => isset( $params['texture_scale'] ) ? (float) $params['texture_scale'] : 1.0,
+			'disable_finish_surcharges' => ! empty( $params['disable_finish_surcharges'] ),
 			'configurator_version' => in_array( $params['configurator_version'] ?? '', [ 'v1', 'v2' ], true ) ? $params['configurator_version'] : 'v2',
 			'device_colors'        => is_array( $params['device_colors'] ?? null ) ? $params['device_colors'] : [],
 			'views'                => $raw_views,

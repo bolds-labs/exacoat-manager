@@ -546,6 +546,7 @@ export interface ConfiguratorLayer {
   texture_scale?: number;
   texture_size?: 'auto' | 'small' | 'big';
   is_non_visual?: boolean;
+  disable_finish_surcharge?: boolean;
 }
 
 export interface ConfiguratorVariantOption {
@@ -616,6 +617,7 @@ export interface DeviceConfiguratorProfile {
   currency: string;
   size_multiplier: number;
   texture_scale?: number;
+  disable_finish_surcharges?: boolean;
   is_configurable: boolean;
   configurator_version?: 'v1' | 'v2';
   device_colors?: { id: string; name: string; hex: string; body_image_url?: string; body_images_by_view?: Record<string, string> }[];
