@@ -74,20 +74,20 @@ if ( ! class_exists( 'WC_Biteship_Shipping_Method' ) && class_exists( 'WC_Shippi
 			if ( ! is_user_logged_in() && ( ! function_exists( 'WC' ) || ! WC()->customer || ! WC()->customer->has_calculated_shipping() ) && ! wp_doing_ajax() && ! $is_store_api_request ) {
 				return;
 			}
-			if ( ! isset( $package['destination']['country'] ) || 'ID' !== $package['destination']['country'] || empty( $package['destination']['postcode'] ) ) {
+			$dest_country    = strtoupper( trim( (string) ( $package['destination']['country'] ?? '' ) ) );
+			$destination_zip = trim( (string) ( $package['destination']['postcode'] ?? '' ) );
+			if ( 'ID' !== $dest_country || empty( $destination_zip ) ) {
 				if ( function_exists( 'WC' ) && WC()->session ) {
 					WC()->session->__unset( 'biteship_destination_data' );
 				}
 				return;
 			}
-			if ( ! preg_match( '/^\d{5}$/', $package['destination']['postcode'] ) ) {
+			if ( ! preg_match( '/^\d{5}$/', $destination_zip ) ) {
 				if ( function_exists( 'WC' ) && WC()->session ) {
 					WC()->session->__unset( 'biteship_destination_data' );
 				}
 				return;
 			}
-
-			$destination_zip   = trim( (string) $package['destination']['postcode'] );
 			$stable_cart_items = [];
 			foreach ( $package['contents'] as $values ) {
 				$stable_cart_items[] = [

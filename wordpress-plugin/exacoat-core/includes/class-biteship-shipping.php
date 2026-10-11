@@ -161,7 +161,7 @@ class Exacoat_Biteship_Engine {
 	}
 
 	public static function resolve_postcode( $postcode ) {
-		$postcode = sanitize_text_field( $postcode );
+		$postcode = trim( sanitize_text_field( $postcode ) );
 		if ( ! preg_match( '/^\d{5}$/', $postcode ) ) {
 			return new WP_Error( 'invalid_postcode', 'Enter a valid Indonesian postal code.', [ 'status' => 400 ] );
 		}
@@ -302,6 +302,13 @@ class Exacoat_Biteship_Engine {
 	public static function modify_posted_address_data( $data ) {
 		if ( ! function_exists( 'is_checkout' ) || ! is_checkout() || ! function_exists( 'WC' ) || ! WC()->session ) {
 			return $data;
+		}
+
+		if ( isset( $data['billing_postcode'] ) && is_string( $data['billing_postcode'] ) ) {
+			$data['billing_postcode'] = trim( $data['billing_postcode'] );
+		}
+		if ( isset( $data['shipping_postcode'] ) && is_string( $data['shipping_postcode'] ) ) {
+			$data['shipping_postcode'] = trim( $data['shipping_postcode'] );
 		}
 
 		$session_data  = WC()->session->get( 'biteship_destination_data' );

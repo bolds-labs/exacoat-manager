@@ -421,8 +421,8 @@ class Exacoat_Checkout_Engine {
 	}
 
 	public static function resolve_headless_checkout_address( WP_REST_Request $request ) {
-		$country  = strtoupper( sanitize_text_field( $request->get_param( 'country' ) ?: 'ID' ) );
-		$postcode = sanitize_text_field( $request->get_param( 'postcode' ) ?: '' );
+		$country  = strtoupper( trim( sanitize_text_field( $request->get_param( 'country' ) ?: 'ID' ) ) );
+		$postcode = trim( sanitize_text_field( $request->get_param( 'postcode' ) ?: '' ) );
 
 		if ( 'ID' !== $country || ! preg_match( '/^\d{5}$/', $postcode ) ) {
 			return new WP_Error( 'invalid_postcode', 'Enter a valid Indonesian postal code.', [ 'status' => 400 ] );

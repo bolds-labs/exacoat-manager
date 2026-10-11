@@ -53,7 +53,7 @@ jQuery(function ($) {
     const autoAddr = $('#biteship_automated_input_billing').val() || '';
     const city = $('#billing_city').val() || '';
     const state = $('#billing_state option:selected').text() || $('#billing_state').val() || '';
-    const postcode = $('#billing_postcode').val() || '';
+    const postcode = sanitizePostcodeField($('#billing_postcode'));
     const countryName = $('#billing_country option:selected').text() || country;
 
     let line1 = addr1;
@@ -84,9 +84,28 @@ jQuery(function ($) {
     $('#recap-shipping').text(shippingLabel.replace(/\s+/g, ' ').trim());
   }
 
+  function sanitizePostcodeField($field) {
+    if (!$field || !$field.length) return '';
+    const rawVal = $field.val() || '';
+    const country = $('#billing_country').val() || '';
+    let cleaned = rawVal.trim();
+    if (country === 'ID') {
+      // Strip any whitespace (internal, trailing, or leading) from Indonesian postal code
+      cleaned = cleaned.replace(/\s+/g, '');
+    }
+    if (rawVal !== cleaned) {
+      $field.val(cleaned);
+      $('#shipping_postcode').val(cleaned);
+    }
+    return cleaned;
+  }
+
   function validatePostcodeFormat(postcode, country) {
     if (!postcode) return { valid: false, message: 'Postal code is required.' };
     postcode = postcode.trim();
+    if (country === 'ID') {
+      postcode = postcode.replace(/\s+/g, '');
+    }
 
     switch (country) {
       case 'ID':
@@ -147,7 +166,7 @@ jQuery(function ($) {
   function checkAndDisplayPostcodeError() {
     const country = $('#billing_country').val();
     const $field = $('#billing_postcode_field');
-    const postcode = $('#billing_postcode').val() || '';
+    const postcode = sanitizePostcodeField($('#billing_postcode'));
 
     $field.find('.artmatter-field-inline-error, .artmatter-postcode-inline-error').remove();
     $('.artmatter-postcode-inline-error').remove();
@@ -195,7 +214,7 @@ jQuery(function ($) {
       });
 
       // Postcode format check
-      const postcode = $('#billing_postcode').val() || '';
+      const postcode = sanitizePostcodeField($('#billing_postcode'));
       if (!postcode) {
         $('#billing_postcode_field').addClass('woocommerce-invalid');
         isValid = false;
@@ -384,7 +403,7 @@ jQuery(function ($) {
 
     // Sync billing address to shipping fields
     $('#shipping_country').val($('#billing_country').val());
-    $('#shipping_postcode').val($('#billing_postcode').val());
+    $('#shipping_postcode').val(sanitizePostcodeField($('#billing_postcode')));
     $('#shipping_city').val($('#billing_city').val());
     $('#shipping_state').val($('#billing_state').val());
     $('#shipping_address_1').val($('#billing_address_1').val());
@@ -526,7 +545,7 @@ jQuery(function ($) {
       $addr2Field.hide().addClass('is-hidden').attr('style', 'display: none !important;');
       $autoField.show().attr('style', 'display: flex !important;');
 
-      const postcode = $('#billing_postcode').val() || '';
+      const postcode = sanitizePostcodeField($('#billing_postcode'));
       const autoAddr = $('#biteship_automated_input_billing').val() || '';
       const isValid = postcode.match(/^\d{5}$/) && autoAddr && autoAddr.indexOf('not found') === -1;
       if (isValid) {
@@ -652,10 +671,10 @@ jQuery(function ($) {
     }
   }
 
-  // Bind Postcode Keyup for Biteship lookup
-  $(document).on('keyup', '#billing_postcode', function () {
+  // Handle Postcode Lookup for Biteship
+  function handlePostcodeLookup() {
     if ($('#billing_country').val() !== 'ID') return;
-    const postcode = $(this).val().trim();
+    const postcode = sanitizePostcodeField($('#billing_postcode'));
     if (postcode === currentPostcode) return;
     currentPostcode = postcode;
 
@@ -675,7 +694,21 @@ jQuery(function ($) {
         $body.trigger('update_checkout');
       }
     }
-  });
+  }
+
+  function checkAndTriggerAutofillPostcode() {
+    if ($('#billing_country').val() !== 'ID') return;
+    const $postcodeField = $('#billing_postcode');
+    if (!$postcodeField.length) return;
+    const postcode = sanitizePostcodeField($postcodeField);
+    if (postcode && postcode.match(/^\d{5}$/) && postcode !== currentPostcode) {
+      handlePostcodeLookup();
+    }
+  }
+
+  // Bind Postcode events for Biteship lookup (keyboard, paste, blur, autofill)
+  $(document).on('input change blur paste keyup animationstart', '#billing_postcode', handlePostcodeLookup);
+  $(document).on('focus change', 'form.checkout input, form.checkout select', checkAndTriggerAutofillPostcode);
 
   // Toggle Token Editor Link
   $(document).on('click', '.bte-toggle-link', function () {
@@ -716,6 +749,8 @@ jQuery(function ($) {
     if (country !== 'ID') {
       $('#biteship_automated_input_billing').val('');
       populateTokenEditor(null);
+    } else {
+      checkAndTriggerAutofillPostcode();
     }
     updateAddressFieldsVisibility();
     $body.trigger('update_checkout');
@@ -913,7 +948,8 @@ jQuery(function ($) {
       $('#billing_address_2').val(areaDetails);
       $('#bte-edit-toggle').show();
     } else {
-      if ($postcodeField.val().match(/^\d{5}$/)) {
+      const currentVal = sanitizePostcodeField($postcodeField);
+      if (currentVal.match(/^\d{5}$/)) {
         $autoInput.val('Postal code not found. Please check.').css('color', '#ef4444').closest('.form-row').addClass('biteship-error-message');
       } else {
         $autoInput.val('').css('color', '#ffffff').closest('.form-row').removeClass('biteship-error-message');
@@ -1075,8 +1111,15 @@ jQuery(function ($) {
     }
   });
 
-  if ($('#billing_country').val() === 'ID' && $('#billing_postcode').val() && $('#billing_postcode').val().match(/^\d{5}$/)) {
+  const initialPostcode = sanitizePostcodeField($('#billing_postcode'));
+  if ($('#billing_country').val() === 'ID' && initialPostcode && initialPostcode.match(/^\d{5}$/)) {
+    currentPostcode = initialPostcode;
     isAwaitingBiteshipResponse = true;
     $body.trigger('update_checkout');
   }
+
+  [80, 300, 800, 1500, 3000].forEach(function (delay) {
+    setTimeout(checkAndTriggerAutofillPostcode, delay);
+  });
+  $(window).on('load', checkAndTriggerAutofillPostcode);
 });
