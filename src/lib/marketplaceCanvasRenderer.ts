@@ -681,8 +681,8 @@ function drawLeftHeadlineBlock(
     .filter(Boolean);
 
   const hasSubBadge = Boolean(subBadgeText.trim());
-  const badgeH = options?.badgeHeight ?? 68;
-  const badgeGap = options?.badgeHeight ? 18 : 22;
+  const badgeH = options?.badgeHeight ? Math.round(options.badgeHeight * 1.3) : 88; // 30% larger (was 68 -> 88)
+  const badgeGap = options?.badgeHeight ? 24 : 28; // proportional spacing (was 18/22 -> 24/28)
   const canvasW = ctx.canvas?.width || 1500;
   // Widened from 50% (720px) to 70% of canvas width (1050px on 1500px canvas) with multi-line support
   const defaultMaxW = Math.floor(canvasW * 0.70);
@@ -720,18 +720,18 @@ function drawLeftHeadlineBlock(
   const targetBottomY = 1220;
   let currentY = startY ?? Math.max(650, targetBottomY - totalBlockH);
 
-  // 1. Sub-badge pill (e.g. "Model Cut & 360")
+  // 1. Sub-badge pill (e.g. "Model Cut & 360", "Model Cut")
   // Full-rounded capsule with transparent background (no background fill)
   if (hasSubBadge) {
-    const badgeFontSize = options?.badgeHeight ? 28 : 32;
+    const badgeFontSize = options?.badgeHeight ? 36 : 42; // 30% larger (was 28/32 -> 36/42)
     ctx.font = `800 ${badgeFontSize}px "Chakra Petch", sans-serif`;
     const textMetrics = ctx.measureText(subBadgeText);
-    const badgeW = textMetrics.width + (options?.badgeHeight ? 48 : 60);
+    const badgeW = textMetrics.width + (options?.badgeHeight ? 62 : 78); // 30% larger padding (was 48/60 -> 62/78)
     const badgeR = badgeH / 2; // Full rounded capsule!
 
     pathRoundedRect(ctx, x, currentY, badgeW, badgeH, badgeR);
     ctx.strokeStyle = '#18181b';
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 3.25; // 30% thicker stroke (was 2.5 -> 3.25)
     ctx.stroke();
 
     ctx.fillStyle = '#09090b';
