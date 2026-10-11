@@ -1028,6 +1028,27 @@ class Exacoat_TikTok_Client {
 			'callback'            => [ __CLASS__, 'rest_delete_product' ],
 			'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
 		]);
+
+		// 15. GET /tiktok/product-preview
+		register_rest_route( $ns, '/tiktok/product-preview', [
+			'methods'             => 'GET',
+			'callback'            => [ __CLASS__, 'rest_product_preview' ],
+			'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
+		]);
+
+		// 16. POST /tiktok/upload-image
+		register_rest_route( $ns, '/tiktok/upload-image', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_upload_image' ],
+			'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
+		]);
+
+		// 17. POST /tiktok/product/inject-images
+		register_rest_route( $ns, '/tiktok/product/inject-images', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_inject_product_images' ],
+			'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
+		]);
 	}
 
 	public static function rest_refresh_shops( \WP_REST_Request $request ): \WP_REST_Response {
@@ -1649,6 +1670,455 @@ class Exacoat_TikTok_Client {
 			'product_id' => $product_id,
 			'message'    => 'TikTok product deactivated and removed from active storefront.',
 		], 200 );
+	}
+
+	/**
+	 * REST Endpoint: Preview a TikTok Shop product, its gallery images, and SKU variations
+	 */
+	public static function rest_product_preview( \WP_REST_Request $request ): \WP_REST_Response {
+		$raw_id = trim( sanitize_text_field( (string) ( $request->get_param( 'product_id' ) ?? $request->get_param( 'item_id' ) ?? $request->get_param( 'url' ) ?? '' ) ) );
+		if ( preg_match( '/(\d{15,22})/', $raw_id, $m ) ) {
+			$product_id = $m[1];
+		} else {
+			$product_id = preg_replace( '/[^0-9]/', '', $raw_id );
+		}
+
+		if ( empty( $product_id ) ) {
+			return new \WP_REST_Response([
+				'success' => false,
+				'error'   => 'A valid TikTok Product ID is required.',
+			], 400 );
+		}
+
+		$api_res = self::call_api( "/product/202309/products/{$product_id}", 'GET' );
+		if ( ! $api_res['success'] || empty( $api_res['response'] ) ) {
+			return new \WP_REST_Response([
+				'success' => false,
+				'error'   => $api_res['error'] ?? 'Failed to retrieve product details from TikTok Shop.',
+				'raw'     => $api_res['raw'] ?? null,
+			], 400 );
+		}
+
+		$source = $api_res['response'];
+		$title  = (string) ( $source['title'] ?? '' );
+
+		// Format main gallery images (preserve URI and display URL)
+		$images = [];
+		foreach ( (array) ( $source['main_images'] ?? [] ) as $img ) {
+			$uri = (string) ( $img['uri'] ?? '' );
+			$url = (string) ( $img['urls'][0] ?? ( $img['url_list'][0] ?? ( $img['thumb_urls'][0] ?? '' ) ) );
+			if ( ! empty( $uri ) || ! empty( $url ) ) {
+				$images[] = [
+					'image_id'  => $uri ?: $url,
+					'image_url' => $url,
+				];
+			}
+		}
+
+		// Parse SKUs into tier_variation options and models for unified Image Injector UI
+		$option_map = [];
+		$models     = [];
+		$attr_name  = 'Warna';
+
+		foreach ( (array) ( $source['skus'] ?? [] ) as $sku ) {
+			$sku_id = (string) ( $sku['id'] ?? '' );
+			$attrs  = (array) ( $sku['sales_attributes'] ?? [] );
+			$attr0  = $attrs[0] ?? [];
+			if ( ! empty( $attr0['name'] ) ) {
+				$attr_name = (string) $attr0['name'];
+			}
+
+			$val_name    = trim( (string) ( $attr0['value_name'] ?? ( $sku['seller_sku'] ?? '' ) ) );
+			$sku_img_uri = (string) ( $attr0['sku_img']['uri'] ?? '' );
+			$sku_img_url = (string) ( $attr0['sku_img']['urls'][0] ?? ( $attr0['sku_img']['url_list'][0] ?? '' ) );
+
+			$opt_idx = 0;
+			if ( ! empty( $val_name ) ) {
+				$key = strtolower( $val_name );
+				if ( ! isset( $option_map[ $key ] ) ) {
+					$option_map[ $key ] = [
+						'index'     => count( $option_map ),
+						'option'    => $val_name,
+						'image_id'  => $sku_img_uri,
+						'image_url' => $sku_img_url,
+						'image'     => ! empty( $sku_img_uri ) ? [
+							'image_id'  => $sku_img_uri,
+							'image_url' => $sku_img_url,
+						] : null,
+					];
+				}
+				$opt_idx = $option_map[ $key ]['index'];
+			}
+
+			$price_val = (float) (
+				$sku['price']['tax_exclusive_price']
+				?? $sku['price']['sale_price']
+				?? $sku['price']['amount']
+				?? 0
+			);
+
+			$stock_qty = 0;
+			if ( ! empty( $sku['inventory'][0]['quantity'] ) ) {
+				$stock_qty = (int) $sku['inventory'][0]['quantity'];
+			} elseif ( ! empty( $sku['stock_infos'][0]['available_stock'] ) ) {
+				$stock_qty = (int) $sku['stock_infos'][0]['available_stock'];
+			}
+
+			$models[] = [
+				'model_id'       => $sku_id,
+				'tier_index'     => [ $opt_idx ],
+				'model_sku'      => (string) ( $sku['seller_sku'] ?? '' ),
+				'original_price' => $price_val,
+				'current_price'  => $price_val,
+				'normal_stock'   => $stock_qty,
+			];
+		}
+
+		$tier_variation = [];
+		if ( ! empty( $option_map ) ) {
+			$tier_variation[] = [
+				'name'        => $attr_name,
+				'options'     => array_values( $option_map ),
+				'option_list' => array_values( $option_map ),
+			];
+		}
+
+		return new \WP_REST_Response([
+			'success'           => true,
+			'item_id'           => $product_id,
+			'product_id'        => $product_id,
+			'item_name'         => $title,
+			'description'       => (string) ( $source['description'] ?? '' ),
+			'category_id'       => 0,
+			'item_status'       => (string) ( $source['status'] ?? 'ACTIVATE' ),
+			'weight'            => 0.05,
+			'images'            => $images,
+			'tier_variation'    => $tier_variation,
+			'models'            => $models,
+			'seller_centre_url' => "https://seller-id.tiktok.com/product/edit/{$product_id}",
+		], 200 );
+	}
+
+	/**
+	 * Upload an image buffer to TikTok Shop Open Platform (/product/202309/images/upload)
+	 */
+	public static function upload_media_image( string $image_bytes, string $filename = 'product.jpg', string $use_case = 'MAIN_IMAGE' ): array {
+		$token_res = self::ensure_valid_token();
+		if ( ! $token_res['success'] ) {
+			return $token_res;
+		}
+
+		$s            = self::get_settings();
+		$access_token = trim( (string) $token_res['access_token'] );
+		$app_key      = trim( (string) $s['app_key'] );
+		$app_secret   = trim( (string) $s['app_secret'] );
+
+		$path      = '/product/202309/images/upload';
+		$timestamp = time();
+
+		$query = [
+			'app_key'   => $app_key,
+			'timestamp' => $timestamp,
+		];
+
+		// Multipart upload requests on TikTok 202309 exclude the multipart body from HMAC signing
+		$sign          = self::generate_signature( $path, $query, '', $app_secret );
+		$query['sign'] = $sign;
+
+		$url = self::API_BASE_URL . $path . '?' . http_build_query( $query );
+
+		$boundary  = wp_generate_uuid4();
+		$mime_type = str_ends_with( strtolower( $filename ), '.png' ) ? 'image/png' : 'image/jpeg';
+		$clean_use = in_array( $use_case, [ 'MAIN_IMAGE', 'ATTRIBUTE_IMAGE', 'DESCRIPTION_IMAGE' ], true ) ? $use_case : 'MAIN_IMAGE';
+
+		$payload  = '';
+		$payload .= "--{$boundary}\r\n";
+		$payload .= "Content-Disposition: form-data; name=\"use_case\"\r\n\r\n";
+		$payload .= "{$clean_use}\r\n";
+
+		$payload .= "--{$boundary}\r\n";
+		$payload .= "Content-Disposition: form-data; name=\"data\"; filename=\"{$filename}\"\r\n";
+		$payload .= "Content-Type: {$mime_type}\r\n\r\n";
+		$payload .= $image_bytes . "\r\n";
+		$payload .= "--{$boundary}--\r\n";
+
+		$res = wp_remote_post( $url, [
+			'headers' => [
+				'Content-Type'       => "multipart/form-data; boundary={$boundary}",
+				'x-tts-access-token' => $access_token,
+			],
+			'body'    => $payload,
+			'timeout' => 45,
+		]);
+
+		if ( is_wp_error( $res ) ) {
+			return [
+				'success' => false,
+				'error'   => $res->get_error_message(),
+			];
+		}
+
+		$data = json_decode( wp_remote_retrieve_body( $res ), true );
+		if ( ! is_array( $data ) || ( isset( $data['code'] ) && (int) $data['code'] !== 0 ) ) {
+			return [
+				'success' => false,
+				'error'   => $data['message'] ?? 'Failed to upload image to TikTok Shop.',
+				'code'    => $data['code'] ?? -1,
+				'raw'     => $data,
+			];
+		}
+
+		$info = $data['data'] ?? [];
+		$uri  = (string) ( $info['uri'] ?? '' );
+		if ( empty( $uri ) ) {
+			return [
+				'success' => false,
+				'error'   => 'TikTok Shop image upload did not return a valid image URI.',
+				'raw'     => $data,
+			];
+		}
+
+		return [
+			'success'   => true,
+			'image_id'  => $uri,
+			'image_url' => (string) ( $info['url'] ?? '' ),
+			'use_case'  => $clean_use,
+		];
+	}
+
+	/**
+	 * REST Endpoint: Upload an image to TikTok Shop Media
+	 */
+	public static function rest_upload_image( \WP_REST_Request $request ): \WP_REST_Response {
+		$filename    = 'product.jpg';
+		$image_bytes = '';
+		$use_case    = sanitize_text_field( (string) ( $request->get_param( 'use_case' ) ?: 'MAIN_IMAGE' ) );
+
+		$body = $request->get_json_params() ?: [];
+		if ( ! empty( $body['use_case'] ) ) {
+			$use_case = sanitize_text_field( (string) $body['use_case'] );
+		}
+
+		if ( ! empty( $body['image_data'] ) ) {
+			$raw_b64 = (string) $body['image_data'];
+			if ( preg_match( '/^data:image\/(\w+);base64,/', $raw_b64, $m ) ) {
+				$filename = 'product.' . ( $m[1] === 'png' ? 'png' : 'jpg' );
+				$raw_b64  = substr( $raw_b64, strpos( $raw_b64, ',' ) + 1 );
+			}
+			$image_bytes = base64_decode( $raw_b64 );
+		} elseif ( ! empty( $_FILES['image']['tmp_name'] ) && is_uploaded_file( $_FILES['image']['tmp_name'] ) ) {
+			$filename    = sanitize_file_name( $_FILES['image']['name'] ?? 'product.jpg' );
+			$image_bytes = file_get_contents( $_FILES['image']['tmp_name'] );
+		}
+
+		if ( empty( $image_bytes ) ) {
+			return new \WP_REST_Response([
+				'success' => false,
+				'error'   => 'No image data or file provided for TikTok upload.',
+			], 400 );
+		}
+
+		$upload_res = self::upload_media_image( $image_bytes, $filename, $use_case );
+		if ( ! $upload_res['success'] ) {
+			return new \WP_REST_Response( $upload_res, 400 );
+		}
+
+		return new \WP_REST_Response( $upload_res, 200 );
+	}
+
+	/**
+	 * REST Endpoint: Non-destructively inject primary cover image (and optional variant SKU images) into TikTok Shop listing
+	 */
+	public static function rest_inject_product_images( \WP_REST_Request $request ): \WP_REST_Response {
+		@set_time_limit( 180 );
+		$body = $request->get_json_params() ?: [];
+
+		$product_id     = trim( sanitize_text_field( (string) ( $body['product_id'] ?? $body['item_id'] ?? '' ) ) );
+		$cover_image_id = trim( (string) ( $body['cover_image_id'] ?? '' ) );
+		$variant_images = (array) ( $body['variant_images'] ?? [] );
+
+		if ( empty( $product_id ) ) {
+			return new \WP_REST_Response([
+				'success' => false,
+				'error'   => 'A valid TikTok Product ID is required.',
+			], 400 );
+		}
+
+		if ( empty( $cover_image_id ) && empty( $variant_images ) ) {
+			return new \WP_REST_Response([
+				'success' => false,
+				'error'   => 'At least cover_image_id or variant_images must be provided.',
+			], 400 );
+		}
+
+		// 1. Fetch current product details to preserve existing gallery images non-destructively
+		$get_res = self::call_api( "/product/202309/products/{$product_id}", 'GET' );
+		if ( ! $get_res['success'] || empty( $get_res['response'] ) ) {
+			return new \WP_REST_Response([
+				'success' => false,
+				'error'   => $get_res['error'] ?? 'Could not fetch current product details from TikTok Shop.',
+			], 400 );
+		}
+
+		$src                     = $get_res['response'];
+		$existing_main_images    = (array) ( $src['main_images'] ?? [] );
+		$gallery_preserved_count = 0;
+		$cover_updated           = false;
+		$variants_updated        = 0;
+		$errors                  = [];
+		$partial_payload         = [];
+
+		// 2. Build non-destructive main_images array (replace index 0, preserve indices 1..8)
+		if ( ! empty( $cover_image_id ) ) {
+			$new_main_images = [
+				[ 'uri' => $cover_image_id ],
+			];
+			$seen_uris = [ $cover_image_id => true ];
+
+			for ( $i = 1; $i < count( $existing_main_images ); $i++ ) {
+				$ex_uri = trim( (string) ( $existing_main_images[ $i ]['uri'] ?? '' ) );
+				if ( ! empty( $ex_uri ) && empty( $seen_uris[ $ex_uri ] ) ) {
+					$new_main_images[]     = [ 'uri' => $ex_uri ];
+					$seen_uris[ $ex_uri ]  = true;
+					$gallery_preserved_count++;
+				}
+			}
+
+			$partial_payload['main_images'] = array_slice( $new_main_images, 0, 9 );
+		}
+
+		// 3. Optionally inject variant SKU attribute images ONLY if variant_images was explicitly supplied
+		if ( ! empty( $variant_images ) && ! empty( $src['skus'] ) && is_array( $src['skus'] ) ) {
+			$var_map = [];
+			foreach ( $variant_images as $vi ) {
+				$opt = strtolower( trim( (string) ( $vi['option'] ?? '' ) ) );
+				$uri = trim( (string) ( $vi['image_id'] ?? '' ) );
+				if ( ! empty( $opt ) && ! empty( $uri ) ) {
+					$var_map[ $opt ] = $uri;
+				}
+			}
+
+			if ( ! empty( $var_map ) ) {
+				$updated_skus = [];
+				$matched_opts = [];
+
+				foreach ( $src['skus'] as $sku ) {
+					$sku_entry = [
+						'id' => (string) ( $sku['id'] ?? '' ),
+					];
+					if ( ! empty( $sku['seller_sku'] ) ) {
+						$sku_entry['seller_sku'] = (string) $sku['seller_sku'];
+					}
+					if ( ! empty( $sku['price'] ) ) {
+						$price_amt = (string) ( $sku['price']['tax_exclusive_price'] ?? $sku['price']['sale_price'] ?? $sku['price']['amount'] ?? '' );
+						$currency  = (string) ( $sku['price']['currency'] ?? 'IDR' );
+						if ( $price_amt !== '' ) {
+							$sku_entry['price'] = [
+								'amount'   => $price_amt,
+								'currency' => $currency,
+							];
+						}
+					}
+
+					// Preserve inventory
+					$inv_list = [];
+					if ( ! empty( $sku['inventory'] ) && is_array( $sku['inventory'] ) ) {
+						foreach ( $sku['inventory'] as $inv ) {
+							if ( ! empty( $inv['warehouse_id'] ) ) {
+								$inv_list[] = [
+									'warehouse_id' => (string) $inv['warehouse_id'],
+									'quantity'     => (int) ( $inv['quantity'] ?? 0 ),
+								];
+							}
+						}
+					} elseif ( ! empty( $sku['stock_infos'] ) && is_array( $sku['stock_infos'] ) ) {
+						foreach ( $sku['stock_infos'] as $st ) {
+							if ( ! empty( $st['warehouse_id'] ) ) {
+								$inv_list[] = [
+									'warehouse_id' => (string) $st['warehouse_id'],
+									'quantity'     => (int) ( $st['available_stock'] ?? 0 ),
+								];
+							}
+						}
+					}
+					if ( ! empty( $inv_list ) ) {
+						$sku_entry['inventory'] = $inv_list;
+					}
+
+					// Map sales_attributes with updated sku_img
+					$sales_attrs = [];
+					foreach ( (array) ( $sku['sales_attributes'] ?? [] ) as $a_idx => $attr ) {
+						$clean_attr = [
+							'id'         => (string) ( $attr['id'] ?? '' ),
+							'name'       => (string) ( $attr['name'] ?? '' ),
+							'value_id'   => (string) ( $attr['value_id'] ?? '' ),
+							'value_name' => (string) ( $attr['value_name'] ?? '' ),
+						];
+						$val_lookup = strtolower( trim( $clean_attr['value_name'] ) );
+						if ( $a_idx === 0 && isset( $var_map[ $val_lookup ] ) ) {
+							$clean_attr['sku_img'] = [ 'uri' => $var_map[ $val_lookup ] ];
+							$matched_opts[ $val_lookup ] = true;
+						} elseif ( ! empty( $attr['sku_img']['uri'] ) ) {
+							$clean_attr['sku_img'] = [ 'uri' => (string) $attr['sku_img']['uri'] ];
+						}
+						$sales_attrs[] = $clean_attr;
+					}
+					if ( ! empty( $sales_attrs ) ) {
+						$sku_entry['sales_attributes'] = $sales_attrs;
+					}
+
+					$updated_skus[] = $sku_entry;
+				}
+
+				if ( ! empty( $matched_opts ) ) {
+					$partial_payload['skus'] = $updated_skus;
+					$variants_updated        = count( $matched_opts );
+				}
+			}
+		}
+
+		// 4. Execute non-destructive partial_edit on TikTok Shop
+		$edit_res = self::call_api( "/product/202309/products/{$product_id}/partial_edit", 'POST', [], $partial_payload );
+
+		if ( $edit_res['success'] ) {
+			if ( ! empty( $cover_image_id ) ) {
+				$cover_updated = true;
+			}
+		} else {
+			$err_msg = $edit_res['error'] ?? 'TikTok partial_edit request failed.';
+			$errors[] = $err_msg;
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::log( 'error', 'tiktok_inject_images', 'partial_edit failed: ' . $err_msg, [
+					'product_id' => $product_id,
+					'payload'    => $partial_payload,
+					'res'        => $edit_res,
+				]);
+			}
+		}
+
+		$overall_success = $cover_updated || $variants_updated > 0;
+		$summary_parts   = [];
+		$summary_parts[] = 'Cover: ' . ( $cover_updated ? 'Updated' : 'Unchanged' );
+		$summary_parts[] = "{$gallery_preserved_count} gallery photos preserved";
+		if ( $variants_updated > 0 ) {
+			$summary_parts[] = "{$variants_updated} variant photos updated";
+		}
+
+		return new \WP_REST_Response([
+			'success'                 => $overall_success,
+			'item_id'                 => $product_id,
+			'product_id'              => $product_id,
+			'cover_updated'           => $cover_updated,
+			'gallery_preserved_count' => $gallery_preserved_count,
+			'variants_updated'        => $variants_updated,
+			'variants_added'          => 0,
+			'variants_reordered'      => false,
+			'prices_updated'          => 0,
+			'seller_centre_url'       => "https://seller-id.tiktok.com/product/edit/{$product_id}",
+			'errors'                  => $errors,
+			'error'                   => ! $overall_success ? implode( ' | ', $errors ) : null,
+			'message'                 => 'TikTok Shop update complete (' . implode( ', ', $summary_parts ) . ').',
+		], $overall_success ? 200 : 400 );
 	}
 }
 

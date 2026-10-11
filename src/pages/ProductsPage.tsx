@@ -458,9 +458,10 @@ export const ProductsPage: React.FC = () => {
   const [isShopeeDuplicatorOpen, setIsShopeeDuplicatorOpen] = useState(false);
   const [duplicatorInitialIdOrUrl, setDuplicatorInitialIdOrUrl] = useState<string | undefined>(undefined);
 
-  // Shopee Image Injector Modal State
+  // Shopee / TikTok Image Injector Modal State
   const [isShopeeImageInjectorOpen, setIsShopeeImageInjectorOpen] = useState(false);
   const [imageInjectorTargetItem, setImageInjectorTargetItem] = useState<ShopeeListingItem | null>(null);
+  const [imageInjectorTargetTikTokItem, setImageInjectorTargetTikTokItem] = useState<TikTokListingItem | null>(null);
 
   // Delete Confirmation Modal State
   const [productToDelete, setProductToDelete] = useState<{
@@ -815,7 +816,15 @@ export const ProductsPage: React.FC = () => {
 
   // Open Image Injector for a specific Shopee listing
   const handleOpenShopeeImageInjector = (item: ShopeeListingItem) => {
+    setImageInjectorTargetTikTokItem(null);
     setImageInjectorTargetItem(item);
+    setIsShopeeImageInjectorOpen(true);
+  };
+
+  // Open Image Injector for a specific TikTok listing
+  const handleOpenTikTokImageInjector = (item: TikTokListingItem) => {
+    setImageInjectorTargetItem(null);
+    setImageInjectorTargetTikTokItem(item);
     setIsShopeeImageInjectorOpen(true);
   };
 
@@ -1970,7 +1979,17 @@ export const ProductsPage: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="pt-3 border-t border-zinc-100 dark:border-white/5 flex items-center justify-end gap-1.5">
+                    <div className="pt-3 border-t border-zinc-100 dark:border-white/5 flex items-center justify-between gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenTikTokImageInjector(item)}
+                        className="h-8 px-2.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-700/80 text-zinc-700 dark:text-zinc-200 border border-zinc-200/80 dark:border-white/[0.08] text-[11px] font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+                        title="Inject primary cover image from image generator"
+                      >
+                        <ImageIcon className="w-3.5 h-3.5 text-zinc-400" />
+                        <span>Inject Images</span>
+                      </button>
+
                       <button
                         type="button"
                         onClick={() =>
@@ -2044,6 +2063,15 @@ export const ProductsPage: React.FC = () => {
                           </td>
                           <td className="py-3 px-4 text-right">
                             <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenTikTokImageInjector(item)}
+                                className="h-8 px-2.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-700/80 text-zinc-700 dark:text-zinc-200 border border-zinc-200/80 dark:border-white/[0.08] text-[11px] font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+                                title="Inject primary cover image from image generator"
+                              >
+                                <ImageIcon className="w-3.5 h-3.5 text-zinc-400" />
+                                <span>Inject Images</span>
+                              </button>
                               <button
                                 type="button"
                                 onClick={() =>
@@ -2239,16 +2267,23 @@ export const ProductsPage: React.FC = () => {
         initialUrlOrId={duplicatorInitialIdOrUrl}
       />
 
-      {/* Shopee Image Injector Modal */}
+      {/* Shopee / TikTok Image Injector Modal */}
       <ShopeeImageInjectorModal
         isOpen={isShopeeImageInjectorOpen}
         onClose={() => {
           setIsShopeeImageInjectorOpen(false);
           setImageInjectorTargetItem(null);
+          setImageInjectorTargetTikTokItem(null);
         }}
         item={imageInjectorTargetItem}
+        tiktokItem={imageInjectorTargetTikTokItem}
+        channel={imageInjectorTargetTikTokItem ? 'tiktok' : 'shopee'}
         onSuccess={() => {
-          loadShopeeProducts();
+          if (imageInjectorTargetTikTokItem) {
+            loadTikTokProducts();
+          } else {
+            loadShopeeProducts();
+          }
         }}
       />
 

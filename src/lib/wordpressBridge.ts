@@ -7807,7 +7807,8 @@ export interface ShopeeInjectImagesPayload {
 
 export interface ShopeeInjectImagesResult {
   success: boolean;
-  item_id: number;
+  item_id: number | string;
+  product_id?: string;
   cover_updated: boolean;
   gallery_preserved_count: number;
   variants_updated: number;
@@ -7861,6 +7862,151 @@ export async function injectShopeeProductImagesDirect(
       variants_added: 0,
       variants_reordered: false,
       prices_updated: 0,
+      error: err.message,
+    };
+  }
+}
+
+export async function fetchTikTokProductPreviewDirect(
+  productIdOrUrl: string | number
+): Promise<ShopeeProductPreview> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/tiktok/product-preview?product_id=${encodeURIComponent(String(productIdOrUrl))}`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      headers: { Accept: 'application/json' },
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return data as ShopeeProductPreview;
+    }
+    return {
+      success: false,
+      item_id: 0,
+      item_name: '',
+      description: '',
+      category_id: 0,
+      item_status: 'ERROR',
+      weight: 0,
+      images: [],
+      tier_variation: [],
+      models: [],
+      error: data?.message || data?.error || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      item_id: 0,
+      item_name: '',
+      description: '',
+      category_id: 0,
+      item_status: 'ERROR',
+      weight: 0,
+      images: [],
+      tier_variation: [],
+      models: [],
+      error: err.message,
+    };
+  }
+}
+
+export async function uploadTikTokMediaImageDirect(params: {
+  file?: File;
+  base64?: string;
+  filename?: string;
+  use_case?: 'MAIN_IMAGE' | 'ATTRIBUTE_IMAGE' | 'DESCRIPTION_IMAGE';
+}): Promise<{
+  success: boolean;
+  image_id?: string;
+  image_url?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const useCase = params.use_case || 'MAIN_IMAGE';
+  const url = `${base}/wp-json/exacoat-core/v1/tiktok/upload-image?use_case=${encodeURIComponent(useCase)}`;
+
+  try {
+    let body: any;
+    const headers: Record<string, string> = { Accept: 'application/json' };
+
+    if (params.base64) {
+      headers['Content-Type'] = 'application/json';
+      body = JSON.stringify({
+        image_data: params.base64,
+        filename: params.filename || 'product.jpg',
+        use_case: useCase,
+      });
+    } else if (params.file) {
+      const formData = new FormData();
+      formData.append('image', params.file);
+      formData.append('use_case', useCase);
+      body = formData;
+    } else {
+      return { success: false, error: 'No image file or base64 data provided.' };
+    }
+
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers,
+      body,
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        image_id: data.image_id,
+        image_url: data.image_url,
+      };
+    }
+    return {
+      success: false,
+      error: data?.message || data?.error || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function injectTikTokProductImagesDirect(payload: {
+  product_id: string | number;
+  cover_image_id?: string;
+  variant_images?: ShopeeInjectVariantImageItem[];
+}): Promise<ShopeeInjectImagesResult> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/tiktok/product/inject-images`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return data as ShopeeInjectImagesResult;
+    }
+    return {
+      success: false,
+      item_id: payload.product_id,
+      product_id: String(payload.product_id),
+      cover_updated: Boolean(data?.cover_updated),
+      gallery_preserved_count: Number(data?.gallery_preserved_count) || 0,
+      variants_updated: Number(data?.variants_updated) || 0,
+      errors: Array.isArray(data?.errors) ? data.errors : [],
+      error: data?.message || data?.error || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      item_id: payload.product_id,
+      product_id: String(payload.product_id),
+      cover_updated: false,
+      gallery_preserved_count: 0,
+      variants_updated: 0,
       error: err.message,
     };
   }
