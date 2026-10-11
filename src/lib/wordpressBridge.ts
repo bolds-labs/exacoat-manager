@@ -3063,6 +3063,8 @@ export async function fetchOrdersDirect(params?: {
   customer?: number | string;
   page?: number;
   per_page?: number;
+  date_after?: string;
+  date_before?: string;
 }): Promise<{
   success: boolean;
   orders: Order[];
@@ -3079,6 +3081,8 @@ export async function fetchOrdersDirect(params?: {
   if (params?.customer) url.searchParams.set('customer', String(params.customer));
   if (params?.page) url.searchParams.set('page', String(params.page));
   if (params?.per_page) url.searchParams.set('per_page', String(params.per_page));
+  if (params?.date_after) url.searchParams.set('date_after', params.date_after);
+  if (params?.date_before) url.searchParams.set('date_before', params.date_before);
   url.searchParams.set('_t', String(Date.now()));
   url.searchParams.set('_nocache', '1');
 

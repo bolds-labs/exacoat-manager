@@ -291,7 +291,7 @@ export const App: React.FC = () => {
       if (!quiet) setIsLoading(true);
       else setIsRefreshing(true);
 
-      const ordersRes = await fetchOrdersDirect({ per_page: 50 });
+      const ordersRes = await fetchOrdersDirect({ per_page: 500 });
       if (ordersRes.success) {
         setOrders(ordersRes.orders);
       }

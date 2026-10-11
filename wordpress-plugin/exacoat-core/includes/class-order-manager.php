@@ -502,7 +502,9 @@ class Exacoat_Order_Manager {
 			$search   = sanitize_text_field( $request->get_param( 'search' ) ?: '' );
 			$courier  = sanitize_text_field( $request->get_param( 'courier' ) ?: '' );
 			$page     = max( 1, intval( $request->get_param( 'page' ) ?: 1 ) );
-			$per_page = max( 1, min( 250, intval( $request->get_param( 'per_page' ) ?: 50 ) ) );
+			$per_page = max( 1, min( 1000, intval( $request->get_param( 'per_page' ) ?: 50 ) ) );
+			$date_after  = sanitize_text_field( $request->get_param( 'date_after' ) ?: '' );
+			$date_before = sanitize_text_field( $request->get_param( 'date_before' ) ?: '' );
 
 			$args = [
 				'limit'    => $per_page,
@@ -511,6 +513,14 @@ class Exacoat_Order_Manager {
 				'orderby'  => 'date',
 				'order'    => 'DESC',
 			];
+
+			if ( ! empty( $date_after ) && ! empty( $date_before ) ) {
+				$args['date_created'] = $date_after . '...' . $date_before;
+			} elseif ( ! empty( $date_after ) ) {
+				$args['date_created'] = '>=' . $date_after;
+			} elseif ( ! empty( $date_before ) ) {
+				$args['date_created'] = '<=' . $date_before;
+			}
 
 			if ( 'any' !== $status && ! empty( $status ) ) {
 				$clean_status = str_replace( 'wc-', '', $status );
@@ -3865,7 +3875,7 @@ class Exacoat_Order_Manager {
 
 			<script>
 			(function() {
-				var refreshBtn = document.getElementById('artmatter-refresh-tracking-btn');
+				var refreshBtn = document.getElementById('exacoat-refresh-tracking-btn') || document.getElementById('artmatter-refresh-tracking-btn');
 				if (!refreshBtn) return;
 
 				function formatCheckpointTime(str) {

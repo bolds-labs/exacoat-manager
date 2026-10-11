@@ -139,7 +139,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
 
     try {
       const [webRes, shpRes, ttRes] = await Promise.allSettled([
-        fetchOrdersDirect({ per_page: 250 }),
+        fetchOrdersDirect({ per_page: 500 }),
         fetchShopeeOrdersDirect(),
         fetchTikTokOrdersDirect(),
       ]);
