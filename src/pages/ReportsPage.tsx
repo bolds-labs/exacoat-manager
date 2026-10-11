@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { DateRangePicker, DatePreset } from '../components/ui/DateRangePicker';
 import { GlassCard } from '../components/ui/GlassCard';
 import { CardEyebrow } from '../components/ui/CardEyebrow';
@@ -25,23 +25,21 @@ import {
   ShopeeOrder,
   TikTokOrder,
 } from '../lib/wordpressBridge';
-import { 
-  formatCurrency, 
-  getStoreDateKey, 
-  getStoreDayStartMs, 
-  getStoreDayEndMs, 
-  formatStoreDateFull 
+import {
+  formatCurrency,
+  getStoreDateKey,
+  getStoreDayStartMs,
+  getStoreDayEndMs,
+  formatStoreDateFull,
 } from '../lib/formatters';
 import { Order } from '../types';
 import {
   RefreshCw,
   DollarSign,
   ShoppingBag,
-  TrendingUp,
-  Package,
+  Wallet,
   CreditCard,
-  Layers,
-  ArrowUpRight,
+  Receipt,
   AlertCircle,
   Loader2,
 } from 'lucide-react';
@@ -51,20 +49,17 @@ interface ReportsPageProps {
   onNavigate?: (tab: string, filter?: string) => void;
 }
 
-export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
-  // 1. Timespan horizon state
+export const ReportsPage: React.FC<ReportsPageProps> = () => {
   const [datePreset, setDatePreset] = useState<DatePreset>('30d');
   const [customStart, setCustomStart] = useState<string>('');
   const [customEnd, setCustomEnd] = useState<string>('');
 
-  // 2. Multi-channel filter state (default all active)
   const [selectedChannels, setSelectedChannels] = useState<FinancialChannel[]>([
     'webstore',
     'shopee',
     'tiktok',
   ]);
 
-  // 3. Raw orders state
   const [webOrders, setWebOrders] = useState<Order[]>([]);
   const [shopeeOrders, setShopeeOrders] = useState<ShopeeOrder[]>([]);
   const [tiktokOrders, setTikTokOrders] = useState<TikTokOrder[]>([]);
@@ -73,8 +68,8 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
+  const hasAutoSyncedEscrowRef = useRef(false);
 
-  // Compute start and end timestamps based on preset strictly in store timezone (Asia/Jakarta, UTC+7)
   const { startMs, endMs, dateLabel } = useMemo(() => {
     const todayKey = getStoreDateKey(Date.now());
     const todayStartMs = getStoreDayStartMs(todayKey);
@@ -172,30 +167,30 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
     };
   }, [datePreset, customStart, customEnd]);
 
-  // Load all channel orders concurrently with optional full channel API sync
   const loadFinancialData = useCallback(async (quiet = false, syncChannels = false) => {
     if (!quiet) setIsLoading(true);
     else setIsRefreshing(true);
     setError(null);
 
     try {
-      // 1. Webstore orders
       const webPromise = fetchOrdersDirect({ per_page: 500 });
 
-      // 2. Shopee orders: sync live from Shopee API when requested; fallback to cached orders
       const shopeePromise = syncChannels
-        ? syncShopeeOrdersDirect(60, 500).then(res => {
-            if (res.success && Array.isArray(res.orders)) return res;
-            return fetchShopeeOrdersDirect();
-          }).catch(() => fetchShopeeOrdersDirect())
+        ? syncShopeeOrdersDirect(60, 500)
+            .then(res => {
+              if (res.success && Array.isArray(res.orders)) return res;
+              return fetchShopeeOrdersDirect();
+            })
+            .catch(() => fetchShopeeOrdersDirect())
         : fetchShopeeOrdersDirect();
 
-      // 3. TikTok orders: sync live from TikTok Shop API when requested; fallback to cached orders
       const tiktokPromise = syncChannels
-        ? syncTikTokOrdersDirect(60, 500).then(res => {
-            if (res.success && Array.isArray(res.orders)) return res;
-            return fetchTikTokOrdersDirect();
-          }).catch(() => fetchTikTokOrdersDirect())
+        ? syncTikTokOrdersDirect(60, 500)
+            .then(res => {
+              if (res.success && Array.isArray(res.orders)) return res;
+              return fetchTikTokOrdersDirect();
+            })
+            .catch(() => fetchTikTokOrdersDirect())
         : fetchTikTokOrdersDirect();
 
       const [webRes, shpRes, ttRes] = await Promise.allSettled([
@@ -204,34 +199,51 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
         tiktokPromise,
       ]);
 
-      // Webstore orders
       if (webRes.status === 'fulfilled' && webRes.value.success && Array.isArray(webRes.value.orders)) {
         setWebOrders(webRes.value.orders);
       } else {
         setWebOrders([]);
       }
 
-      // Shopee orders
+      let loadedShopee: ShopeeOrder[] = [];
       if (shpRes.status === 'fulfilled' && shpRes.value.success && Array.isArray(shpRes.value.orders)) {
-        setShopeeOrders(shpRes.value.orders);
+        loadedShopee = shpRes.value.orders;
+        setShopeeOrders(loadedShopee);
       } else {
         setShopeeOrders([]);
       }
 
-      // TikTok orders
+      let loadedTikTok: TikTokOrder[] = [];
       if (ttRes.status === 'fulfilled' && ttRes.value.success && Array.isArray(ttRes.value.orders)) {
-        setTikTokOrders(ttRes.value.orders);
+        loadedTikTok = ttRes.value.orders;
+        setTikTokOrders(loadedTikTok);
       } else {
         setTikTokOrders([]);
       }
 
       setLastRefreshedAt(new Date());
+
+      // If cached marketplace orders do not yet have escrow fee details synced, trigger a background sync once
+      if (!syncChannels && !hasAutoSyncedEscrowRef.current) {
+        const needsShopeeEscrow = loadedShopee.some(
+          o => o.pay_time && o.order_status !== 'CANCELLED' && !o.escrow_synced
+        );
+        const needsTikTokEscrow = loadedTikTok.some(
+          o => o.pay_time && o.order_status !== 'CANCELLED' && !o.escrow_synced
+        );
+        if (needsShopeeEscrow || needsTikTokEscrow) {
+          hasAutoSyncedEscrowRef.current = true;
+          loadFinancialData(true, true);
+        }
+      }
     } catch (err: any) {
       console.warn('Failed to load multi-channel financial data:', err);
       setError(err?.message || 'Could not synchronize financial data.');
     } finally {
       setIsLoading(false);
-      setIsRefreshing(false);
+      if (syncChannels || hasAutoSyncedEscrowRef.current === false) {
+        setIsRefreshing(false);
+      }
     }
   }, []);
 
@@ -239,7 +251,6 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
     loadFinancialData();
   }, [loadFinancialData]);
 
-  // Normalize all orders into unified financial records
   const allRecords = useMemo(() => {
     const list: UnifiedFinancialRecord[] = [];
     webOrders.forEach(o => list.push(normalizeWebstoreOrder(o)));
@@ -248,16 +259,13 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
     return list;
   }, [webOrders, shopeeOrders, tiktokOrders]);
 
-  // Aggregate metrics based on selected channels and timespan
   const summary = useMemo(() => {
     return aggregateFinancialMetrics(allRecords, selectedChannels, startMs, endMs);
   }, [allRecords, selectedChannels, startMs, endMs]);
 
-  // Channel toggles handlers
   const handleToggleChannel = (ch: FinancialChannel) => {
     setSelectedChannels(prev => {
       if (prev.includes(ch)) {
-        // Don't allow deselecting all channels; leave at least one
         if (prev.length === 1) return prev;
         return prev.filter(c => c !== ch);
       } else {
@@ -278,6 +286,16 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
     exportFinancialReportToCsv(summary, dateLabel);
   };
 
+  const totalSellerDeductions = summary.totalPlatformFees + summary.totalSellerVouchers;
+  const effectiveFeeRatePct =
+    summary.totalGrossRevenue > 0
+      ? ((totalSellerDeductions / summary.totalGrossRevenue) * 100).toFixed(1)
+      : '0.0';
+  const cleanMarginPct =
+    summary.totalGrossRevenue > 0
+      ? ((summary.totalCleanRevenue / summary.totalGrossRevenue) * 100).toFixed(1)
+      : '0.0';
+
   return (
     <div className="space-y-6">
       {/* 1. Header & Quick Actions */}
@@ -295,7 +313,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
             Revenue & Sales Reports
           </h1>
           <p className="text-sm text-neutral-400 mt-1 font-sans">
-            Cross-platform monetization, marketplace cash flow, and channel performance ledger.
+            Gross product sales, marketplace fee deductions, and clean withdrawable payout ledger.
           </p>
         </div>
 
@@ -310,15 +328,15 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
             onClick={() => loadFinancialData(true, true)}
             disabled={isLoading || isRefreshing}
             className="min-h-11 px-3.5 rounded-xl border border-white/10 bg-[#121316] text-neutral-200 hover:bg-white/[0.06] hover:text-white text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer shadow-xs disabled:opacity-50"
-            title="Sync live Shopee and TikTok Shop APIs and refresh multi-channel financial ledger"
+            title="Sync live Shopee and TikTok Shop orders & escrow settlement fees"
           >
             <RefreshCw className={clsx('w-3.5 h-3.5', (isLoading || isRefreshing) && 'animate-spin text-[#f3aa18]')} />
-            <span>{isRefreshing ? 'Syncing...' : 'Refresh'}</span>
+            <span>{isRefreshing ? 'Syncing Escrow...' : 'Refresh & Sync'}</span>
           </button>
         </div>
       </header>
 
-      {/* 2. Timespan Horizon Selector (Standard Workstation Picker) */}
+      {/* 2. Timespan Horizon Selector */}
       <DateRangePicker
         preset={datePreset}
         onPresetChange={setDatePreset}
@@ -359,7 +377,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
             Synchronizing financial ledgers for {dateLabel}...
           </p>
           <p className="text-xs text-neutral-500 font-mono">
-            Querying Webstore, Shopee, and TikTok Shop transactions.
+            Querying Webstore, Shopee, and TikTok Shop transactions and escrow settlements.
           </p>
         </div>
       )}
@@ -385,16 +403,16 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
       {/* 6. Active Financial Dashboard Content */}
       {!isLoading && !error && (
         <>
-          {/* Executive Money KPI Cards (5-Grid) */}
+          {/* Executive Money KPI Cards (Left-to-Right Reconciliation Flow) */}
           <section
-            className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 font-sans"
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 font-sans"
             aria-label="Executive financial metrics"
           >
             {/* 1. Gross Product Sales */}
-            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[130px] border-[#f3aa18]/25 bg-[#f3aa18]/[0.02]">
+            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[132px] border-[#f3aa18]/25 bg-[#f3aa18]/[0.02]">
               <div className="flex items-center justify-between">
-                <CardEyebrow>Gross Sales</CardEyebrow>
-                <div className="p-2 rounded-xl bg-[#f3aa18]/10 text-[#f3aa18] transition-colors border border-[#f3aa18]/20">
+                <CardEyebrow>1. Gross Sales</CardEyebrow>
+                <div className="p-2 rounded-xl bg-[#f3aa18]/10 text-[#f3aa18] border border-[#f3aa18]/20">
                   <DollarSign className="w-4 h-4" />
                 </div>
               </div>
@@ -402,97 +420,99 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
                 <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-white tabular-nums">
                   {formatCurrency(summary.totalGrossRevenue, summary.primaryCurrency)}
                 </p>
-                <p className="text-[10px] font-mono text-neutral-400 mt-0.5">
+                <p className="text-[10px] font-mono text-neutral-400 mt-1 leading-relaxed">
                   {summary.totalPaidThenCancelledGross > 0
                     ? `Incl. paid-cancelled (${summary.totalOrders + summary.totalPaidThenCancelledOrders}): ${formatCurrency(
                         summary.totalGrossRevenue + summary.totalPaidThenCancelledGross,
                         summary.primaryCurrency
                       )}`
-                    : 'Product sales before platform vouchers'}
+                    : 'Product selling price before fees'}
                 </p>
               </div>
             </GlassCard>
 
-            {/* 2. Buyer Paid (Out-of-Pocket Checkout Total) */}
-            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[130px] border-emerald-500/25 bg-emerald-500/[0.02]">
+            {/* 2. Platform Fees & Seller Deductions */}
+            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[132px] border-rose-500/20 bg-rose-500/[0.02]">
               <div className="flex items-center justify-between">
-                <CardEyebrow>Buyer Paid</CardEyebrow>
-                <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 transition-colors border border-emerald-500/20">
-                  <CreditCard className="w-4 h-4" />
+                <CardEyebrow>2. Platform Fees</CardEyebrow>
+                <div className="p-2 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                  <Receipt className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-2">
+                <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-rose-400 tabular-nums">
+                  {totalSellerDeductions > 0
+                    ? `-${formatCurrency(totalSellerDeductions, summary.primaryCurrency)}`
+                    : formatCurrency(0, summary.primaryCurrency)}
+                </p>
+                <p className="text-[10px] font-mono text-neutral-400 mt-1 leading-relaxed">
+                  {totalSellerDeductions > 0
+                    ? `${effectiveFeeRatePct}% take rate (Admin, Service, Trans, AMS)`
+                    : isRefreshing
+                    ? 'Syncing marketplace escrow fee breakdown...'
+                    : 'Admin, service, transaction & seller vouchers'}
+                </p>
+              </div>
+            </GlassCard>
+
+            {/* 3. Clean Revenue (Withdrawable Payout) */}
+            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[132px] border-emerald-500/30 bg-emerald-500/[0.03]">
+              <div className="flex items-center justify-between">
+                <CardEyebrow>3. Clean Revenue</CardEyebrow>
+                <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
+                  <Wallet className="w-4 h-4" />
                 </div>
               </div>
               <div className="mt-2">
                 <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-emerald-400 tabular-nums">
-                  {formatCurrency(summary.totalBuyerPaid, summary.primaryCurrency)}
+                  {formatCurrency(summary.totalCleanRevenue, summary.primaryCurrency)}
                 </p>
-                <p className="text-[10px] font-mono text-neutral-400 mt-0.5">
-                  {summary.totalShippingAndFees > 0
-                    ? `Includes +${formatCurrency(summary.totalShippingAndFees, summary.primaryCurrency)} ship & fees`
-                    : 'Out-of-pocket buyer checkout total'}
+                <p className="text-[10px] font-mono text-neutral-300 mt-1 leading-relaxed">
+                  Withdrawable payout ({cleanMarginPct}% net of gross)
                 </p>
               </div>
             </GlassCard>
 
-            {/* 3. Platform Vouchers & Seller Discounts */}
-            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[130px]">
+            {/* 4. Buyer Checkout & Platform Voucher Subsidy */}
+            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[132px]">
               <div className="flex items-center justify-between">
-                <CardEyebrow>Vouchers & Promos</CardEyebrow>
-                <div className="p-2 rounded-xl bg-white/[0.04] group-hover:bg-amber-500/10 text-neutral-400 group-hover:text-amber-400 transition-colors border border-white/[0.06]">
-                  <Layers className="w-4 h-4" />
+                <CardEyebrow>Buyer Checkout</CardEyebrow>
+                <div className="p-2 rounded-xl bg-white/[0.04] text-sky-400 border border-white/[0.06]">
+                  <CreditCard className="w-4 h-4" />
                 </div>
               </div>
               <div className="mt-2">
-                <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-amber-400 tabular-nums">
-                  {formatCurrency(
-                    summary.totalPlatformSubsidy + summary.totalSellerDiscount,
-                    summary.primaryCurrency
-                  )}
+                <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-white tabular-nums">
+                  {formatCurrency(summary.totalBuyerPaid, summary.primaryCurrency)}
                 </p>
-                <p className="text-[10px] font-mono text-neutral-400 mt-0.5">
-                  Platform: {formatCurrency(summary.totalPlatformSubsidy, summary.primaryCurrency)} · Promo:{' '}
-                  {formatCurrency(summary.totalSellerDiscount, summary.primaryCurrency)}
+                <p className="text-[10px] font-mono text-amber-400/90 mt-1 leading-relaxed">
+                  {summary.totalPlatformSubsidy > 0
+                    ? `Buyer Vouchers (Platform): -${formatCurrency(summary.totalPlatformSubsidy, summary.primaryCurrency)}`
+                    : 'Out-of-pocket buyer payment'}
                 </p>
               </div>
             </GlassCard>
 
-            {/* 4. Total Paid Orders & Cancelled Info */}
-            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[130px]">
+            {/* 5. Paid Orders, Units & Clean AOV */}
+            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[132px]">
               <div className="flex items-center justify-between">
-                <CardEyebrow>Paid Orders</CardEyebrow>
-                <div className="p-2 rounded-xl bg-white/[0.04] group-hover:bg-sky-500/10 text-neutral-400 group-hover:text-sky-400 transition-colors border border-white/[0.06]">
+                <CardEyebrow>Paid Orders & AOV</CardEyebrow>
+                <div className="p-2 rounded-xl bg-white/[0.04] text-neutral-300 border border-white/[0.06]">
                   <ShoppingBag className="w-4 h-4" />
                 </div>
               </div>
               <div className="mt-2">
-                <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-white tabular-nums">
-                  {summary.totalOrders.toLocaleString()}
-                </p>
-                <p className="text-[10px] font-mono text-neutral-400 mt-0.5">
-                  {summary.totalCancelledOrders > 0
-                    ? `Excl. ${summary.totalCancelledOrders} cancelled (${formatCurrency(
-                        summary.totalCancelledGross,
-                        summary.primaryCurrency
-                      )})`
-                    : `${summary.totalUnitsSold.toLocaleString()} units across ${selectedChannels.length} channels`}
-                </p>
-              </div>
-            </GlassCard>
-
-            {/* 5. Average Order Value & Units Sold */}
-            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[130px] col-span-2 sm:col-span-1">
-              <div className="flex items-center justify-between">
-                <CardEyebrow>Avg Order Value</CardEyebrow>
-                <div className="p-2 rounded-xl bg-white/[0.04] group-hover:bg-purple-500/10 text-neutral-400 group-hover:text-purple-400 transition-colors border border-white/[0.06]">
-                  <TrendingUp className="w-4 h-4" />
+                <div className="flex items-baseline justify-between gap-2">
+                  <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-white tabular-nums">
+                    {summary.totalOrders.toLocaleString()}
+                  </p>
+                  <span className="text-[11px] font-mono text-neutral-400">
+                    {summary.totalUnitsSold.toLocaleString()} units
+                  </span>
                 </div>
-              </div>
-              <div className="mt-2">
-                <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-white tabular-nums">
-                  {formatCurrency(summary.averageOrderValue, summary.primaryCurrency)}
-                </p>
-                <p className="text-[10px] font-mono text-neutral-400 mt-0.5">
-                  {summary.totalUnitsSold.toLocaleString()} units · Paid AOV:{' '}
-                  {formatCurrency(summary.averageBuyerPaidValue, summary.primaryCurrency)}
+                <p className="text-[10px] font-mono text-neutral-400 mt-1 leading-relaxed">
+                  Clean AOV: {formatCurrency(summary.averageCleanOrderValue, summary.primaryCurrency)}
+                  {summary.totalCancelledOrders > 0 ? ` · Excl. ${summary.totalCancelledOrders} cancel` : ''}
                 </p>
               </div>
             </GlassCard>
@@ -505,6 +525,8 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
                 timeline={summary.timeline}
                 selectedChannels={selectedChannels}
                 totalRevenue={summary.totalGrossRevenue}
+                totalCleanRevenue={summary.totalCleanRevenue}
+                totalPlatformFees={totalSellerDeductions}
                 totalBuyerPaid={summary.totalBuyerPaid}
               />
             </div>

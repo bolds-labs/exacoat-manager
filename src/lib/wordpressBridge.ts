@@ -237,6 +237,20 @@ export interface ShopeeOrder {
   buyer_paid_amount?: number;
   seller_discount?: number;
   platform_voucher_subsidy?: number;
+  escrow_synced?: boolean;
+  escrow_amount?: number;
+  net_escrow_amount?: number;
+  total_platform_fee?: number;
+  commission_fee?: number;
+  service_fee?: number;
+  seller_transaction_fee?: number;
+  ams_commission_fee?: number;
+  other_platform_fee?: number;
+  voucher_from_seller?: number;
+  voucher_from_shopee?: number;
+  actual_shipping_fee?: number;
+  buyer_paid_shipping?: number;
+  shopee_shipping_rebate?: number;
   currency: string;
   shipping_carrier: string;
   tracking_number: string;
@@ -362,6 +376,15 @@ export interface TikTokOrder {
   seller_discount?: number;
   platform_discount?: number;
   platform_voucher_subsidy?: number;
+  escrow_synced?: boolean;
+  escrow_amount?: number;
+  net_escrow_amount?: number;
+  total_platform_fee?: number;
+  commission_fee?: number;
+  service_fee?: number;
+  seller_transaction_fee?: number;
+  ams_commission_fee?: number;
+  other_platform_fee?: number;
   shipping_fee?: number;
   buyer_service_fee?: number;
   currency: string;
@@ -7801,6 +7824,7 @@ export interface ShopeeInjectVariantPlanItem {
 export interface ShopeeInjectImagesPayload {
   item_id: number;
   cover_image_id?: string;
+  item_name?: string;
   variant_images?: ShopeeInjectVariantImageItem[];
   variant_plan?: ShopeeInjectVariantPlanItem[];
 }
@@ -7810,6 +7834,8 @@ export interface ShopeeInjectImagesResult {
   item_id: number | string;
   product_id?: string;
   cover_updated: boolean;
+  title_updated?: boolean;
+  item_name?: string;
   gallery_preserved_count: number;
   variants_updated: number;
   variants_added?: number;
@@ -7844,6 +7870,8 @@ export async function injectShopeeProductImagesDirect(
       success: false,
       item_id: payload.item_id,
       cover_updated: Boolean(data?.cover_updated),
+      title_updated: Boolean(data?.title_updated),
+      item_name: data?.item_name,
       gallery_preserved_count: Number(data?.gallery_preserved_count) || 0,
       variants_updated: Number(data?.variants_updated) || 0,
       variants_added: Number(data?.variants_added) || 0,
@@ -7857,6 +7885,7 @@ export async function injectShopeeProductImagesDirect(
       success: false,
       item_id: payload.item_id,
       cover_updated: false,
+      title_updated: false,
       gallery_preserved_count: 0,
       variants_updated: 0,
       variants_added: 0,
@@ -7971,7 +8000,9 @@ export async function uploadTikTokMediaImageDirect(params: {
 export async function injectTikTokProductImagesDirect(payload: {
   product_id: string | number;
   cover_image_id?: string;
+  item_name?: string;
   variant_images?: ShopeeInjectVariantImageItem[];
+  variant_plan?: ShopeeInjectVariantPlanItem[];
 }): Promise<ShopeeInjectImagesResult> {
   const base = getWordPressBaseUrl();
   const url = `${base}/wp-json/exacoat-core/v1/tiktok/product/inject-images`;
@@ -7994,8 +8025,13 @@ export async function injectTikTokProductImagesDirect(payload: {
       item_id: payload.product_id,
       product_id: String(payload.product_id),
       cover_updated: Boolean(data?.cover_updated),
+      title_updated: Boolean(data?.title_updated),
+      item_name: data?.item_name,
       gallery_preserved_count: Number(data?.gallery_preserved_count) || 0,
       variants_updated: Number(data?.variants_updated) || 0,
+      variants_added: Number(data?.variants_added) || 0,
+      variants_reordered: Boolean(data?.variants_reordered),
+      prices_updated: Number(data?.prices_updated) || 0,
       errors: Array.isArray(data?.errors) ? data.errors : [],
       error: data?.message || data?.error || `HTTP ${res.status}`,
     };
@@ -8005,8 +8041,12 @@ export async function injectTikTokProductImagesDirect(payload: {
       item_id: payload.product_id,
       product_id: String(payload.product_id),
       cover_updated: false,
+      title_updated: false,
       gallery_preserved_count: 0,
       variants_updated: 0,
+      variants_added: 0,
+      variants_reordered: false,
+      prices_updated: 0,
       error: err.message,
     };
   }

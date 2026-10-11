@@ -36,7 +36,17 @@ export interface UnifiedFinancialRecord {
   potentialGrossRevenue: number;
   originalProductPrice: number;
   sellerDiscount: number;
+  sellerVoucher: number;
   platformSubsidy: number;
+  platformFee: number;
+  commissionFee: number;
+  serviceFee: number;
+  transactionFee: number;
+  affiliateCommission: number;
+  otherPlatformFee: number;
+  cleanRevenue: number;
+  potentialCleanRevenue: number;
+  escrowSynced: boolean;
   shippingAndFees: number;
   buyerPaidAmount: number;
   potentialBuyerPaidAmount: number;
@@ -60,14 +70,24 @@ export interface ChannelMetrics {
   channel: FinancialChannel;
   label: string;
   grossRevenue: number;
+  cleanRevenue: number;
   netRevenue: number;
   buyerPaidAmount: number;
   platformSubsidy: number;
   sellerDiscount: number;
+  sellerVouchers: number;
+  platformFees: number;
+  commissionFees: number;
+  serviceFees: number;
+  transactionFees: number;
+  affiliateCommissions: number;
+  otherPlatformFees: number;
   shippingAndFees: number;
   ordersCount: number;
+  escrowSyncedCount: number;
   unitsSold: number;
   aov: number;
+  cleanAov: number;
   buyerPaidAov: number;
   percentageOfTotal: number;
   cancelledOrdersCount: number;
@@ -84,10 +104,15 @@ export interface DailyFinancialPoint {
   shopee: number;
   tiktok: number;
   total: number;
+  webstoreClean: number;
+  shopeeClean: number;
+  tiktokClean: number;
+  totalClean: number;
   webstoreBuyerPaid: number;
   shopeeBuyerPaid: number;
   tiktokBuyerPaid: number;
   totalBuyerPaid: number;
+  totalPlatformFees: number;
   totalVoucherSubsidy: number;
   totalSellerDiscount: number;
   totalShippingAndFees: number;
@@ -107,15 +132,26 @@ export interface TopFinancialProduct {
 
 export interface FinancialAnalyticsSummary {
   totalGrossRevenue: number;
+  totalCleanRevenue: number;
   totalNetRevenue: number;
   totalBuyerPaid: number;
   totalPlatformSubsidy: number;
   totalSellerDiscount: number;
+  totalSellerVouchers: number;
+  totalPlatformFees: number;
+  totalCommissionFees: number;
+  totalServiceFees: number;
+  totalTransactionFees: number;
+  totalAffiliateCommissions: number;
+  totalOtherPlatformFees: number;
   totalShippingAndFees: number;
   totalRefunded: number;
   totalOrders: number;
+  escrowSyncedOrders: number;
+  marketplaceOrdersCount: number;
   totalUnitsSold: number;
   averageOrderValue: number;
+  averageCleanOrderValue: number;
   averageBuyerPaidValue: number;
   totalCancelledOrders: number;
   totalCancelledGross: number;
@@ -199,8 +235,9 @@ export function normalizeWebstoreOrder(order: Order): UnifiedFinancialRecord {
   const refundedIdr = toOrderIdr(Number(order.total_refunded) || 0);
 
   const potentialGross = productSubtotalIdr > 0 ? productSubtotalIdr : buyerPaidIdr;
+  const potentialClean = Math.max(0, potentialGross - sellerDiscountIdr - refundedIdr);
   const grossIdr = isPaid ? potentialGross : 0;
-  const netIdr = isPaid ? Math.max(0, grossIdr - refundedIdr) : 0;
+  const cleanIdr = isPaid ? potentialClean : 0;
 
   const createdDate = order.created_at ? (parseStoreDate(order.created_at) || new Date(order.created_at)) : new Date();
   const timestamp = !isNaN(createdDate.getTime()) ? createdDate.getTime() : Date.now();
@@ -225,11 +262,21 @@ export function normalizeWebstoreOrder(order: Order): UnifiedFinancialRecord {
     potentialGrossRevenue: potentialGross,
     originalProductPrice: potentialGross,
     sellerDiscount: isPaid ? sellerDiscountIdr : 0,
+    sellerVoucher: isPaid ? sellerDiscountIdr : 0,
     platformSubsidy: 0,
+    platformFee: 0,
+    commissionFee: 0,
+    serviceFee: 0,
+    transactionFee: 0,
+    affiliateCommission: 0,
+    otherPlatformFee: 0,
+    cleanRevenue: cleanIdr,
+    potentialCleanRevenue: potentialClean,
+    escrowSynced: true,
     shippingAndFees: isPaid ? shippingAndFeesIdr : 0,
     buyerPaidAmount: isPaid ? buyerPaidIdr : 0,
     potentialBuyerPaidAmount: buyerPaidIdr,
-    netRevenue: netIdr,
+    netRevenue: cleanIdr,
     refundedAmount: refundedIdr,
     currency: 'IDR',
     status: st,
@@ -289,13 +336,33 @@ export function normalizeShopeeOrder(order: ShopeeOrder): UnifiedFinancialRecord
   const potentialGross = Number(order.gross_amount) || (itemsSubtotal > 0 ? itemsSubtotal : rawBuyerPaid);
   const potentialBuyerPaid = rawBuyerPaid > 0 ? rawBuyerPaid : (isPaid ? potentialGross : 0);
   const sellerDiscountVal = Number(order.seller_discount) || Math.max(0, originalSubtotal - potentialGross);
+  const sellerVoucherVal = Number(order.voucher_from_seller) || 0;
   const platformSubsidyVal =
-    Number(order.platform_voucher_subsidy) ||
+    Number(order.platform_voucher_subsidy ?? order.voucher_from_shopee) ||
     (potentialBuyerPaid > 0 ? Math.max(0, potentialGross - potentialBuyerPaid) : 0);
   const shippingAndFeesVal = potentialBuyerPaid > potentialGross ? potentialBuyerPaid - potentialGross : 0;
 
+  const commissionFeeVal = Number(order.commission_fee) || 0;
+  const serviceFeeVal = Number(order.service_fee) || 0;
+  const transactionFeeVal = Number(order.seller_transaction_fee) || 0;
+  const affiliateFeeVal = Number(order.ams_commission_fee) || 0;
+  const otherFeeVal = Number(order.other_platform_fee) || 0;
+  const sumFeeComponents = commissionFeeVal + serviceFeeVal + transactionFeeVal + affiliateFeeVal + otherFeeVal;
+  const rawEscrow = Number(order.escrow_amount ?? order.net_escrow_amount) || 0;
+  const rawPlatformFee = Number(order.total_platform_fee) || sumFeeComponents;
+  const escrowSynced = Boolean(order.escrow_synced) || rawEscrow > 0 || rawPlatformFee > 0;
+
+  const potentialClean =
+    rawEscrow > 0 ? rawEscrow : Math.max(0, potentialGross - sellerVoucherVal - rawPlatformFee);
+  const effectivePlatformFee =
+    rawPlatformFee > 0
+      ? rawPlatformFee
+      : rawEscrow > 0 && potentialGross > rawEscrow + sellerVoucherVal
+      ? potentialGross - sellerVoucherVal - rawEscrow
+      : 0;
+
   const gross = isPaid ? potentialGross : 0;
-  const net = isPaid ? potentialGross : 0;
+  const clean = isPaid ? potentialClean : 0;
 
   const timestamp = order.create_timestamp
     ? order.create_timestamp * 1000
@@ -318,11 +385,21 @@ export function normalizeShopeeOrder(order: ShopeeOrder): UnifiedFinancialRecord
     potentialGrossRevenue: potentialGross,
     originalProductPrice: originalSubtotal > 0 ? originalSubtotal : potentialGross,
     sellerDiscount: isPaid ? sellerDiscountVal : 0,
+    sellerVoucher: isPaid ? sellerVoucherVal : 0,
     platformSubsidy: isPaid ? platformSubsidyVal : 0,
+    platformFee: isPaid ? effectivePlatformFee : 0,
+    commissionFee: isPaid ? commissionFeeVal : 0,
+    serviceFee: isPaid ? serviceFeeVal : 0,
+    transactionFee: isPaid ? transactionFeeVal : 0,
+    affiliateCommission: isPaid ? affiliateFeeVal : 0,
+    otherPlatformFee: isPaid ? otherFeeVal : 0,
+    cleanRevenue: clean,
+    potentialCleanRevenue: potentialClean,
+    escrowSynced,
     shippingAndFees: isPaid ? shippingAndFeesVal : 0,
     buyerPaidAmount: isPaid ? potentialBuyerPaid : 0,
     potentialBuyerPaidAmount: potentialBuyerPaid,
-    netRevenue: net,
+    netRevenue: clean,
     refundedAmount: isRefunded ? potentialGross : 0,
     currency: order.currency || 'IDR',
     status: st,
@@ -388,8 +465,27 @@ export function normalizeTikTokOrder(order: TikTokOrder): UnifiedFinancialRecord
     (Number(order.shipping_fee) || 0) + (Number(order.buyer_service_fee) || 0) ||
     (potentialBuyerPaid > potentialGross ? potentialBuyerPaid - potentialGross : 0);
 
+  const commissionFeeVal = Number(order.commission_fee) || 0;
+  const serviceFeeVal = Number(order.service_fee) || 0;
+  const transactionFeeVal = Number(order.seller_transaction_fee) || 0;
+  const affiliateFeeVal = Number(order.ams_commission_fee) || 0;
+  const otherFeeVal = Number(order.other_platform_fee) || 0;
+  const sumFeeComponents = commissionFeeVal + serviceFeeVal + transactionFeeVal + affiliateFeeVal + otherFeeVal;
+  const rawEscrow = Number(order.escrow_amount ?? order.net_escrow_amount) || 0;
+  const rawPlatformFee = Number(order.total_platform_fee) || sumFeeComponents;
+  const escrowSynced = Boolean(order.escrow_synced) || rawEscrow > 0 || rawPlatformFee > 0;
+
+  const potentialClean =
+    rawEscrow > 0 ? rawEscrow : Math.max(0, potentialGross - rawPlatformFee);
+  const effectivePlatformFee =
+    rawPlatformFee > 0
+      ? rawPlatformFee
+      : rawEscrow > 0 && potentialGross > rawEscrow
+      ? potentialGross - rawEscrow
+      : 0;
+
   const gross = isPaid ? potentialGross : 0;
-  const net = isPaid ? potentialGross : 0;
+  const clean = isPaid ? potentialClean : 0;
 
   const timestamp = order.create_timestamp
     ? order.create_timestamp * 1000
@@ -418,11 +514,21 @@ export function normalizeTikTokOrder(order: TikTokOrder): UnifiedFinancialRecord
     potentialGrossRevenue: potentialGross,
     originalProductPrice: originalSubtotal > 0 ? originalSubtotal : potentialGross,
     sellerDiscount: isPaid ? explicitSellerDisc : 0,
+    sellerVoucher: 0,
     platformSubsidy: isPaid ? explicitPlatDisc : 0,
+    platformFee: isPaid ? effectivePlatformFee : 0,
+    commissionFee: isPaid ? commissionFeeVal : 0,
+    serviceFee: isPaid ? serviceFeeVal : 0,
+    transactionFee: isPaid ? transactionFeeVal : 0,
+    affiliateCommission: isPaid ? affiliateFeeVal : 0,
+    otherPlatformFee: isPaid ? otherFeeVal : 0,
+    cleanRevenue: clean,
+    potentialCleanRevenue: potentialClean,
+    escrowSynced,
     shippingAndFees: isPaid ? explicitShipAndFees : 0,
     buyerPaidAmount: isPaid ? potentialBuyerPaid : 0,
     potentialBuyerPaidAmount: potentialBuyerPaid,
-    netRevenue: net,
+    netRevenue: clean,
     refundedAmount: isRefunded ? potentialGross : 0,
     currency: order.currency || 'IDR',
     status: st,
@@ -457,13 +563,22 @@ export function aggregateFinancialMetrics(
   const filtered = inWindowRecords.filter(rec => rec.isPaid && rec.statusNormalized === 'paid');
 
   let totalGross = 0;
-  let totalNet = 0;
+  let totalClean = 0;
   let totalBuyerPaid = 0;
   let totalPlatformSubsidy = 0;
   let totalSellerDiscount = 0;
+  let totalSellerVouchers = 0;
+  let totalPlatformFees = 0;
+  let totalCommissionFees = 0;
+  let totalServiceFees = 0;
+  let totalTransactionFees = 0;
+  let totalAffiliateCommissions = 0;
+  let totalOtherPlatformFees = 0;
   let totalShippingAndFees = 0;
   let totalRefunded = 0;
   let totalOrders = 0;
+  let escrowSyncedOrders = 0;
+  let marketplaceOrdersCount = 0;
   let totalUnits = 0;
   let totalCancelledOrders = 0;
   let totalCancelledGross = 0;
@@ -474,14 +589,24 @@ export function aggregateFinancialMetrics(
     channel,
     label,
     grossRevenue: 0,
+    cleanRevenue: 0,
     netRevenue: 0,
     buyerPaidAmount: 0,
     platformSubsidy: 0,
     sellerDiscount: 0,
+    sellerVouchers: 0,
+    platformFees: 0,
+    commissionFees: 0,
+    serviceFees: 0,
+    transactionFees: 0,
+    affiliateCommissions: 0,
+    otherPlatformFees: 0,
     shippingAndFees: 0,
     ordersCount: 0,
+    escrowSyncedCount: 0,
     unitsSold: 0,
     aov: 0,
+    cleanAov: 0,
     buyerPaidAov: 0,
     percentageOfTotal: 0,
     cancelledOrdersCount: 0,
@@ -519,10 +644,15 @@ export function aggregateFinancialMetrics(
       shopee: 0,
       tiktok: 0,
       total: 0,
+      webstoreClean: 0,
+      shopeeClean: 0,
+      tiktokClean: 0,
+      totalClean: 0,
       webstoreBuyerPaid: 0,
       shopeeBuyerPaid: 0,
       tiktokBuyerPaid: 0,
       totalBuyerPaid: 0,
+      totalPlatformFees: 0,
       totalVoucherSubsidy: 0,
       totalSellerDiscount: 0,
       totalShippingAndFees: 0,
@@ -545,10 +675,15 @@ export function aggregateFinancialMetrics(
         shopee: 0,
         tiktok: 0,
         total: 0,
+        webstoreClean: 0,
+        shopeeClean: 0,
+        tiktokClean: 0,
+        totalClean: 0,
         webstoreBuyerPaid: 0,
         shopeeBuyerPaid: 0,
         tiktokBuyerPaid: 0,
         totalBuyerPaid: 0,
+        totalPlatformFees: 0,
         totalVoucherSubsidy: 0,
         totalSellerDiscount: 0,
         totalShippingAndFees: 0,
@@ -576,30 +711,65 @@ export function aggregateFinancialMetrics(
     }
 
     totalGross += rec.grossRevenue;
-    totalNet += rec.netRevenue;
+    totalClean += rec.cleanRevenue;
     totalBuyerPaid += rec.buyerPaidAmount;
     totalPlatformSubsidy += rec.platformSubsidy;
     totalSellerDiscount += rec.sellerDiscount;
+    totalSellerVouchers += rec.sellerVoucher;
+    totalPlatformFees += rec.platformFee;
+    totalCommissionFees += rec.commissionFee;
+    totalServiceFees += rec.serviceFee;
+    totalTransactionFees += rec.transactionFee;
+    totalAffiliateCommissions += rec.affiliateCommission;
+    totalOtherPlatformFees += rec.otherPlatformFee;
     totalShippingAndFees += rec.shippingAndFees;
     totalRefunded += rec.refundedAmount;
     totalOrders += 1;
+    if (ch === 'shopee' || ch === 'tiktok') {
+      marketplaceOrdersCount += 1;
+      if (rec.escrowSynced) {
+        escrowSyncedOrders += 1;
+      }
+    }
     totalUnits += rec.itemsCount;
 
     breakdown[ch].grossRevenue += rec.grossRevenue;
-    breakdown[ch].netRevenue += rec.netRevenue;
+    breakdown[ch].cleanRevenue += rec.cleanRevenue;
+    breakdown[ch].netRevenue += rec.cleanRevenue;
     breakdown[ch].buyerPaidAmount += rec.buyerPaidAmount;
     breakdown[ch].platformSubsidy += rec.platformSubsidy;
     breakdown[ch].sellerDiscount += rec.sellerDiscount;
+    breakdown[ch].sellerVouchers += rec.sellerVoucher;
+    breakdown[ch].platformFees += rec.platformFee;
+    breakdown[ch].commissionFees += rec.commissionFee;
+    breakdown[ch].serviceFees += rec.serviceFee;
+    breakdown[ch].transactionFees += rec.transactionFee;
+    breakdown[ch].affiliateCommissions += rec.affiliateCommission;
+    breakdown[ch].otherPlatformFees += rec.otherPlatformFee;
     breakdown[ch].shippingAndFees += rec.shippingAndFees;
     breakdown[ch].ordersCount += 1;
+    if (rec.escrowSynced) {
+      breakdown[ch].escrowSyncedCount += 1;
+    }
     breakdown[ch].unitsSold += rec.itemsCount;
 
     dailyMap[dKey][ch] += rec.grossRevenue;
     dailyMap[dKey].total += rec.grossRevenue;
-    if (ch === 'webstore') dailyMap[dKey].webstoreBuyerPaid += rec.buyerPaidAmount;
-    if (ch === 'shopee') dailyMap[dKey].shopeeBuyerPaid += rec.buyerPaidAmount;
-    if (ch === 'tiktok') dailyMap[dKey].tiktokBuyerPaid += rec.buyerPaidAmount;
+    if (ch === 'webstore') {
+      dailyMap[dKey].webstoreClean += rec.cleanRevenue;
+      dailyMap[dKey].webstoreBuyerPaid += rec.buyerPaidAmount;
+    }
+    if (ch === 'shopee') {
+      dailyMap[dKey].shopeeClean += rec.cleanRevenue;
+      dailyMap[dKey].shopeeBuyerPaid += rec.buyerPaidAmount;
+    }
+    if (ch === 'tiktok') {
+      dailyMap[dKey].tiktokClean += rec.cleanRevenue;
+      dailyMap[dKey].tiktokBuyerPaid += rec.buyerPaidAmount;
+    }
+    dailyMap[dKey].totalClean += rec.cleanRevenue;
     dailyMap[dKey].totalBuyerPaid += rec.buyerPaidAmount;
+    dailyMap[dKey].totalPlatformFees += rec.platformFee;
     dailyMap[dKey].totalVoucherSubsidy += rec.platformSubsidy;
     dailyMap[dKey].totalSellerDiscount += rec.sellerDiscount;
     dailyMap[dKey].totalShippingAndFees += rec.shippingAndFees;
@@ -629,11 +799,13 @@ export function aggregateFinancialMetrics(
   (['webstore', 'shopee', 'tiktok'] as FinancialChannel[]).forEach(ch => {
     const item = breakdown[ch];
     item.aov = item.ordersCount > 0 ? Math.round(item.grossRevenue / item.ordersCount) : 0;
+    item.cleanAov = item.ordersCount > 0 ? Math.round(item.cleanRevenue / item.ordersCount) : 0;
     item.buyerPaidAov = item.ordersCount > 0 ? Math.round(item.buyerPaidAmount / item.ordersCount) : 0;
     item.percentageOfTotal = totalGross > 0 ? Math.round((item.grossRevenue / safeTotalGross) * 100) : 0;
   });
 
   const aov = totalOrders > 0 ? Math.round(totalGross / totalOrders) : 0;
+  const cleanAov = totalOrders > 0 ? Math.round(totalClean / totalOrders) : 0;
   const buyerPaidAov = totalOrders > 0 ? Math.round(totalBuyerPaid / totalOrders) : 0;
 
   const timeline = Object.values(dailyMap).sort((a, b) => a.date.localeCompare(b.date));
@@ -644,15 +816,26 @@ export function aggregateFinancialMetrics(
 
   return {
     totalGrossRevenue: totalGross,
-    totalNetRevenue: totalNet,
+    totalCleanRevenue: totalClean,
+    totalNetRevenue: totalClean,
     totalBuyerPaid,
     totalPlatformSubsidy,
     totalSellerDiscount,
+    totalSellerVouchers,
+    totalPlatformFees,
+    totalCommissionFees,
+    totalServiceFees,
+    totalTransactionFees,
+    totalAffiliateCommissions,
+    totalOtherPlatformFees,
     totalShippingAndFees,
     totalRefunded,
     totalOrders,
+    escrowSyncedOrders,
+    marketplaceOrdersCount,
     totalUnitsSold: totalUnits,
     averageOrderValue: aov,
+    averageCleanOrderValue: cleanAov,
     averageBuyerPaidValue: buyerPaidAov,
     totalCancelledOrders,
     totalCancelledGross,
@@ -712,10 +895,15 @@ export function aggregateTimelineByGranularity(
           shopee: 0,
           tiktok: 0,
           total: 0,
+          webstoreClean: 0,
+          shopeeClean: 0,
+          tiktokClean: 0,
+          totalClean: 0,
           webstoreBuyerPaid: 0,
           shopeeBuyerPaid: 0,
           tiktokBuyerPaid: 0,
           totalBuyerPaid: 0,
+          totalPlatformFees: 0,
           totalVoucherSubsidy: 0,
           totalSellerDiscount: 0,
           totalShippingAndFees: 0,
@@ -729,10 +917,15 @@ export function aggregateTimelineByGranularity(
       weeklyMap[weekKey].shopee += point.shopee;
       weeklyMap[weekKey].tiktok += point.tiktok;
       weeklyMap[weekKey].total += point.total;
+      weeklyMap[weekKey].webstoreClean += point.webstoreClean;
+      weeklyMap[weekKey].shopeeClean += point.shopeeClean;
+      weeklyMap[weekKey].tiktokClean += point.tiktokClean;
+      weeklyMap[weekKey].totalClean += point.totalClean;
       weeklyMap[weekKey].webstoreBuyerPaid += point.webstoreBuyerPaid;
       weeklyMap[weekKey].shopeeBuyerPaid += point.shopeeBuyerPaid;
       weeklyMap[weekKey].tiktokBuyerPaid += point.tiktokBuyerPaid;
       weeklyMap[weekKey].totalBuyerPaid += point.totalBuyerPaid;
+      weeklyMap[weekKey].totalPlatformFees += point.totalPlatformFees;
       weeklyMap[weekKey].totalVoucherSubsidy += point.totalVoucherSubsidy;
       weeklyMap[weekKey].totalSellerDiscount += point.totalSellerDiscount;
       weeklyMap[weekKey].totalShippingAndFees += point.totalShippingAndFees;
@@ -764,10 +957,15 @@ export function aggregateTimelineByGranularity(
           shopee: 0,
           tiktok: 0,
           total: 0,
+          webstoreClean: 0,
+          shopeeClean: 0,
+          tiktokClean: 0,
+          totalClean: 0,
           webstoreBuyerPaid: 0,
           shopeeBuyerPaid: 0,
           tiktokBuyerPaid: 0,
           totalBuyerPaid: 0,
+          totalPlatformFees: 0,
           totalVoucherSubsidy: 0,
           totalSellerDiscount: 0,
           totalShippingAndFees: 0,
@@ -781,10 +979,15 @@ export function aggregateTimelineByGranularity(
       monthlyMap[monthKey].shopee += point.shopee;
       monthlyMap[monthKey].tiktok += point.tiktok;
       monthlyMap[monthKey].total += point.total;
+      monthlyMap[monthKey].webstoreClean += point.webstoreClean;
+      monthlyMap[monthKey].shopeeClean += point.shopeeClean;
+      monthlyMap[monthKey].tiktokClean += point.tiktokClean;
+      monthlyMap[monthKey].totalClean += point.totalClean;
       monthlyMap[monthKey].webstoreBuyerPaid += point.webstoreBuyerPaid;
       monthlyMap[monthKey].shopeeBuyerPaid += point.shopeeBuyerPaid;
       monthlyMap[monthKey].tiktokBuyerPaid += point.tiktokBuyerPaid;
       monthlyMap[monthKey].totalBuyerPaid += point.totalBuyerPaid;
+      monthlyMap[monthKey].totalPlatformFees += point.totalPlatformFees;
       monthlyMap[monthKey].totalVoucherSubsidy += point.totalVoucherSubsidy;
       monthlyMap[monthKey].totalSellerDiscount += point.totalSellerDiscount;
       monthlyMap[monthKey].totalShippingAndFees += point.totalShippingAndFees;
@@ -814,9 +1017,15 @@ export function exportFinancialReportToCsv(
     'Payment Method',
     'Items Count',
     'Gross Product Sales (IDR)',
-    'Seller Discount / Coupon (IDR)',
-    'Platform Voucher Subsidy (IDR)',
-    'Shipping & Fees (IDR)',
+    'Seller Voucher / Coupon (IDR)',
+    'Platform Admin Fee (IDR)',
+    'Platform Service Fee (IDR)',
+    'Transaction / Processing Fee (IDR)',
+    'Affiliate Commission (IDR)',
+    'Total Platform Fees (IDR)',
+    'Clean Withdrawable Revenue (IDR)',
+    'Buyer Voucher Subsidy from Platform (IDR)',
+    'Shipping & Buyer Fees (IDR)',
     'Buyer Paid Total (IDR)',
     'Refunded (IDR)',
   ];
@@ -832,7 +1041,13 @@ export function exportFinancialReportToCsv(
     `"${(rec.paymentMethod || '-').replace(/"/g, '""')}"`,
     rec.itemsCount,
     rec.grossRevenue,
-    rec.sellerDiscount,
+    rec.sellerVoucher,
+    rec.commissionFee,
+    rec.serviceFee,
+    rec.transactionFee,
+    rec.affiliateCommission,
+    rec.platformFee,
+    rec.cleanRevenue,
     rec.platformSubsidy,
     rec.shippingAndFees,
     rec.buyerPaidAmount,
@@ -844,15 +1059,21 @@ export function exportFinancialReportToCsv(
     [`Period: ${dateLabel}`],
     [`Generated: ${new Date().toLocaleString()}`],
     [`Gross Product Sales (IDR): ${summary.totalGrossRevenue}`],
-    [`Platform Voucher Subsidies (IDR): ${summary.totalPlatformSubsidy}`],
-    [`Seller Discounts / Coupons (IDR): ${summary.totalSellerDiscount}`],
+    [`Seller Vouchers / Coupons (IDR): ${summary.totalSellerVouchers}`],
+    [`Total Platform Fees Deducted (IDR): ${summary.totalPlatformFees}`],
+    [`  Admin / Commission Fees (IDR): ${summary.totalCommissionFees}`],
+    [`  Service Fees (IDR): ${summary.totalServiceFees}`],
+    [`  Transaction / Processing Fees (IDR): ${summary.totalTransactionFees}`],
+    [`  Affiliate Commissions (IDR): ${summary.totalAffiliateCommissions}`],
+    [`Clean Withdrawable Revenue / Escrow (IDR): ${summary.totalCleanRevenue}`],
+    [`Buyer Voucher Subsidies by Platform (IDR): ${summary.totalPlatformSubsidy}`],
     [`Shipping & Buyer Fees (IDR): ${summary.totalShippingAndFees}`],
     [`Buyer Paid Cash Total (IDR): ${summary.totalBuyerPaid}`],
     [`Paid Orders: ${summary.totalOrders}`],
     [`Units Sold: ${summary.totalUnitsSold}`],
     [`Excluded Cancelled / Unpaid Orders: ${summary.totalCancelledOrders} (Rp ${summary.totalCancelledGross})`],
     [`Gross Average Order Value (IDR): ${summary.averageOrderValue}`],
-    [`Buyer Paid Average Order Value (IDR): ${summary.averageBuyerPaidValue}`],
+    [`Clean Average Order Value (IDR): ${summary.averageCleanOrderValue}`],
     ['------------------------------------------'],
     headers,
   ];

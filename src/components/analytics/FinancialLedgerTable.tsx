@@ -65,15 +65,19 @@ export const FinancialLedgerTable: React.FC<FinancialLedgerTableProps> = ({
     return filteredRecords.reduce(
       (acc, rec) => {
         const gross = rec.isPaid ? rec.grossRevenue : rec.potentialGrossRevenue;
+        const clean = rec.isPaid ? rec.cleanRevenue : rec.potentialCleanRevenue;
         const paid = rec.isPaid ? rec.buyerPaidAmount : rec.potentialBuyerPaidAmount;
+        const fees = rec.platformFee + rec.sellerVoucher;
         acc.gross += gross;
+        acc.clean += clean;
+        acc.fees += fees;
         acc.paid += paid;
-        acc.vouchers += rec.platformSubsidy + rec.sellerDiscount;
+        acc.vouchers += rec.platformSubsidy;
         acc.shipping += rec.shippingAndFees;
         acc.units += rec.itemsCount;
         return acc;
       },
-      { gross: 0, paid: 0, vouchers: 0, shipping: 0, units: 0 }
+      { gross: 0, clean: 0, fees: 0, paid: 0, vouchers: 0, shipping: 0, units: 0 }
     );
   }, [filteredRecords]);
 
@@ -154,7 +158,7 @@ export const FinancialLedgerTable: React.FC<FinancialLedgerTableProps> = ({
             </h3>
           </div>
           <p className="text-xs text-neutral-400 mt-0.5">
-            Click any order row to inspect line items, platform voucher subsidies, seller promos, and buyer payment details.
+            Click any order to inspect seller fee deductions, clean withdrawable payout, and buyer checkout reconciliation.
           </p>
         </div>
 
@@ -261,21 +265,24 @@ export const FinancialLedgerTable: React.FC<FinancialLedgerTableProps> = ({
             Orders: <strong className="text-white">{filteredRecords.length}</strong> ({scopeTotals.units} units)
           </span>
           <span>
-            Gross Sales: <strong className="text-white">{formatCurrency(scopeTotals.gross, primaryCurrency)}</strong>
+            Gross: <strong className="text-white">{formatCurrency(scopeTotals.gross, primaryCurrency)}</strong>
           </span>
-          {scopeTotals.vouchers > 0 && (
+          {scopeTotals.fees > 0 && (
             <span>
-              Vouchers & Discounts: <strong className="text-amber-400">-{formatCurrency(scopeTotals.vouchers, primaryCurrency)}</strong>
-            </span>
-          )}
-          {scopeTotals.shipping > 0 && (
-            <span>
-              Shipping & Fees: <strong className="text-sky-400">+{formatCurrency(scopeTotals.shipping, primaryCurrency)}</strong>
+              Platform Fees: <strong className="text-rose-400">-{formatCurrency(scopeTotals.fees, primaryCurrency)}</strong>
             </span>
           )}
           <span>
-            Buyer Paid: <strong className="text-emerald-400">{formatCurrency(scopeTotals.paid, primaryCurrency)}</strong>
+            Clean Withdrawable: <strong className="text-emerald-400 font-bold">{formatCurrency(scopeTotals.clean, primaryCurrency)}</strong>
           </span>
+          <span>
+            Buyer Paid: <strong className="text-neutral-300">{formatCurrency(scopeTotals.paid, primaryCurrency)}</strong>
+          </span>
+          {scopeTotals.vouchers > 0 && (
+            <span className="text-amber-400/90">
+              Buyer Vouchers (Platform): -{formatCurrency(scopeTotals.vouchers, primaryCurrency)}
+            </span>
+          )}
         </div>
         <span className="text-[10px] text-neutral-500">
           {statusScope === 'paid'
@@ -297,7 +304,8 @@ export const FinancialLedgerTable: React.FC<FinancialLedgerTableProps> = ({
               <th className="py-3 px-4">Status</th>
               <th className="py-3 px-4 text-center">Units</th>
               <th className="py-3 px-4 text-right">Gross Sales</th>
-              <th className="py-3 px-4 text-right">Vouchers / Fees</th>
+              <th className="py-3 px-4 text-right">Platform Fees</th>
+              <th className="py-3 px-4 text-right">Clean Payout</th>
               <th className="py-3 px-4 text-right">Buyer Paid</th>
             </tr>
           </thead>
@@ -305,9 +313,9 @@ export const FinancialLedgerTable: React.FC<FinancialLedgerTableProps> = ({
             {paginatedRecords.map(rec => {
               const isExpanded = expandedOrderId === rec.id;
               const displayGross = rec.isPaid ? rec.grossRevenue : rec.potentialGrossRevenue;
+              const displayClean = rec.isPaid ? rec.cleanRevenue : rec.potentialCleanRevenue;
               const displayPaid = rec.isPaid ? rec.buyerPaidAmount : rec.potentialBuyerPaidAmount;
-              const voucherOrPromo = rec.platformSubsidy + rec.sellerDiscount;
-              const hasDiff = voucherOrPromo > 0 || rec.shippingAndFees > 0;
+              const totalFeeDeductions = rec.platformFee + rec.sellerVoucher;
 
               return (
                 <React.Fragment key={rec.id}>
@@ -339,11 +347,11 @@ export const FinancialLedgerTable: React.FC<FinancialLedgerTableProps> = ({
                     </td>
 
                     <td className="py-3 px-4">
-                      <div className="font-semibold text-white truncate max-w-[180px]">
+                      <div className="font-semibold text-white truncate max-w-[170px]">
                         {rec.customerName}
                       </div>
                       {rec.customerCity && (
-                        <div className="text-[10px] text-neutral-400 font-mono truncate max-w-[180px]">
+                        <div className="text-[10px] text-neutral-400 font-mono truncate max-w-[170px]">
                           {rec.customerCity}
                         </div>
                       )}
@@ -357,50 +365,53 @@ export const FinancialLedgerTable: React.FC<FinancialLedgerTableProps> = ({
                       {rec.itemsCount}
                     </td>
 
+                    {/* 1. Gross Sales */}
                     <td
                       className={clsx(
-                        'py-3 px-4 text-right font-mono font-bold tabular-nums text-sm whitespace-nowrap',
+                        'py-3 px-4 text-right font-mono font-bold tabular-nums text-xs whitespace-nowrap',
                         rec.isPaid ? 'text-white' : 'text-neutral-500 line-through'
                       )}
                     >
                       {formatCurrency(displayGross, primaryCurrency)}
                     </td>
 
+                    {/* 2. Platform Fees Deducted */}
                     <td className="py-3 px-4 text-right font-mono text-[11px] tabular-nums whitespace-nowrap">
-                      {hasDiff ? (
-                        <div className="flex flex-col items-end gap-0.5">
-                          {rec.platformSubsidy > 0 && (
-                            <span className="text-amber-400" title="Platform Voucher Subsidy (Shopee / TikTok)">
-                              -{formatCurrency(rec.platformSubsidy, primaryCurrency)} voucher
-                            </span>
-                          )}
-                          {rec.sellerDiscount > 0 && (
-                            <span className="text-amber-300" title="Seller Discount / Coupon">
-                              -{formatCurrency(rec.sellerDiscount, primaryCurrency)} promo
-                            </span>
-                          )}
-                          {rec.shippingAndFees > 0 && (
-                            <span className="text-sky-400" title="Shipping & Buyer Service Fees">
-                              +{formatCurrency(rec.shippingAndFees, primaryCurrency)} ship/fee
-                            </span>
-                          )}
-                        </div>
+                      {totalFeeDeductions > 0 ? (
+                        <span className="text-rose-400 font-semibold">
+                          -{formatCurrency(totalFeeDeductions, primaryCurrency)}
+                        </span>
                       ) : (
                         <span className="text-neutral-600">-</span>
                       )}
                     </td>
 
-                    <td className="py-3 px-4 text-right font-mono font-semibold text-emerald-400 tabular-nums whitespace-nowrap">
-                      {formatCurrency(displayPaid, primaryCurrency)}
+                    {/* 3. Clean Withdrawable Revenue */}
+                    <td className="py-3 px-4 text-right font-mono font-black text-emerald-400 tabular-nums whitespace-nowrap text-xs">
+                      {formatCurrency(displayClean, primaryCurrency)}
+                    </td>
+
+                    {/* 4. Buyer Paid (Checkout) */}
+                    <td className="py-3 px-4 text-right font-mono text-[11px] tabular-nums whitespace-nowrap">
+                      <div className="flex flex-col items-end gap-0.5">
+                        <span className="text-neutral-300 font-medium">
+                          {formatCurrency(displayPaid, primaryCurrency)}
+                        </span>
+                        {rec.platformSubsidy > 0 && (
+                          <span className="text-[10px] text-amber-400/90" title="Buyer voucher subsidy funded by platform">
+                            -{formatCurrency(rec.platformSubsidy, primaryCurrency)} voucher
+                          </span>
+                        )}
+                      </div>
                     </td>
                   </tr>
 
                   {isExpanded && (
                     <tr className="bg-[#090a0d]/80 border-b border-white/[0.06]">
-                      <td colSpan={9} className="p-4 sm:p-5">
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                          {/* Left 2 Columns: Line Items */}
-                          <div className="lg:col-span-2 space-y-2">
+                      <td colSpan={10} className="p-4 sm:p-5">
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                          {/* Column 1 (5 cols): Line Items & Metadata */}
+                          <div className="lg:col-span-5 space-y-2">
                             <div className="text-[10px] font-mono uppercase tracking-wider text-neutral-400 font-bold">
                               Order Line Items ({rec.itemsCount} {rec.itemsCount === 1 ? 'unit' : 'units'})
                             </div>
@@ -448,23 +459,31 @@ export const FinancialLedgerTable: React.FC<FinancialLedgerTableProps> = ({
                                 </div>
                               ))}
                             </div>
-                          </div>
 
-                          {/* Right Column: Financial Breakdown Waterfall */}
-                          <div className="space-y-2">
-                            <div className="text-[10px] font-mono uppercase tracking-wider text-neutral-400 font-bold">
-                              Financial Reconciliation
-                            </div>
-                            <div className="p-3.5 rounded-xl border border-white/[0.06] bg-[#121316] space-y-2 font-mono text-xs">
-                              {rec.originalProductPrice > displayGross && (
-                                <div className="flex items-center justify-between text-neutral-400">
-                                  <span>Original Listing Price:</span>
-                                  <span className="tabular-nums line-through">
-                                    {formatCurrency(rec.originalProductPrice, primaryCurrency)}
-                                  </span>
+                            <div className="p-3 rounded-xl border border-white/[0.06] bg-[#121316] space-y-1 font-mono text-[10px] text-neutral-400">
+                              <div className="flex items-center justify-between">
+                                <span>Created:</span>
+                                <span className="text-neutral-200">{rec.dateTimeFormatted}</span>
+                              </div>
+                              {rec.payTimeFormatted && (
+                                <div className="flex items-center justify-between">
+                                  <span>Paid At:</span>
+                                  <span className="text-neutral-200">{rec.payTimeFormatted}</span>
                                 </div>
                               )}
+                              <div className="flex items-center justify-between">
+                                <span>Payment Method:</span>
+                                <span className="text-neutral-200">{rec.paymentMethod || '-'}</span>
+                              </div>
+                            </div>
+                          </div>
 
+                          {/* Column 2 (4 cols): Seller Payout Reconciliation Waterfall */}
+                          <div className="lg:col-span-4 space-y-2">
+                            <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-400 font-bold">
+                              Seller Payout Reconciliation
+                            </div>
+                            <div className="p-3.5 rounded-xl border border-emerald-500/20 bg-[#121316] space-y-2 font-mono text-xs">
                               <div className="flex items-center justify-between text-white font-bold">
                                 <span>Gross Product Sales:</span>
                                 <span className="tabular-nums">
@@ -472,24 +491,94 @@ export const FinancialLedgerTable: React.FC<FinancialLedgerTableProps> = ({
                                 </span>
                               </div>
 
-                              {rec.sellerDiscount > 0 && (
+                              {rec.sellerVoucher > 0 && (
                                 <div className="flex items-center justify-between text-amber-300">
-                                  <span>
-                                    Seller Discount / Coupon
-                                    {rec.couponCodes && rec.couponCodes.length > 0
-                                      ? ` (${rec.couponCodes.join(', ')})`
-                                      : ''}
-                                    :
-                                  </span>
+                                  <span>Seller Voucher / Coupon:</span>
                                   <span className="tabular-nums">
-                                    -{formatCurrency(rec.sellerDiscount, primaryCurrency)}
+                                    -{formatCurrency(rec.sellerVoucher, primaryCurrency)}
                                   </span>
                                 </div>
                               )}
 
+                              {rec.commissionFee > 0 && (
+                                <div className="flex items-center justify-between text-rose-400">
+                                  <span>Admin / Commission Fee:</span>
+                                  <span className="tabular-nums">
+                                    -{formatCurrency(rec.commissionFee, primaryCurrency)}
+                                  </span>
+                                </div>
+                              )}
+
+                              {rec.serviceFee > 0 && (
+                                <div className="flex items-center justify-between text-rose-400">
+                                  <span>Service Fee (Layanan):</span>
+                                  <span className="tabular-nums">
+                                    -{formatCurrency(rec.serviceFee, primaryCurrency)}
+                                  </span>
+                                </div>
+                              )}
+
+                              {rec.transactionFee > 0 && (
+                                <div className="flex items-center justify-between text-rose-400">
+                                  <span>Order Processing / Trans Fee:</span>
+                                  <span className="tabular-nums">
+                                    -{formatCurrency(rec.transactionFee, primaryCurrency)}
+                                  </span>
+                                </div>
+                              )}
+
+                              {rec.affiliateCommission > 0 && (
+                                <div className="flex items-center justify-between text-rose-400">
+                                  <span>Affiliate Commission (AMS):</span>
+                                  <span className="tabular-nums">
+                                    -{formatCurrency(rec.affiliateCommission, primaryCurrency)}
+                                  </span>
+                                </div>
+                              )}
+
+                              {rec.otherPlatformFee > 0 && (
+                                <div className="flex items-center justify-between text-rose-400">
+                                  <span>Other Platform Fee:</span>
+                                  <span className="tabular-nums">
+                                    -{formatCurrency(rec.otherPlatformFee, primaryCurrency)}
+                                  </span>
+                                </div>
+                              )}
+
+                              {totalFeeDeductions > 0 && (
+                                <div className="pt-1.5 border-t border-white/[0.06] flex items-center justify-between text-rose-400 font-semibold">
+                                  <span>Total Seller Fees:</span>
+                                  <span className="tabular-nums">
+                                    -{formatCurrency(totalFeeDeductions, primaryCurrency)}
+                                  </span>
+                                </div>
+                              )}
+
+                              <div className="pt-2 border-t border-emerald-500/30 flex items-center justify-between text-emerald-400 font-black text-sm">
+                                <span>Clean Withdrawable Revenue:</span>
+                                <span className="tabular-nums">
+                                  {formatCurrency(displayClean, primaryCurrency)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Column 3 (3 cols): Buyer Checkout Summary */}
+                          <div className="lg:col-span-3 space-y-2">
+                            <div className="text-[10px] font-mono uppercase tracking-wider text-neutral-400 font-bold">
+                              Buyer Checkout Summary
+                            </div>
+                            <div className="p-3.5 rounded-xl border border-white/[0.06] bg-[#121316] space-y-2 font-mono text-xs">
+                              <div className="flex items-center justify-between text-neutral-300">
+                                <span>Product Selling Price:</span>
+                                <span className="tabular-nums">
+                                  {formatCurrency(displayGross, primaryCurrency)}
+                                </span>
+                              </div>
+
                               {rec.platformSubsidy > 0 && (
                                 <div className="flex items-center justify-between text-amber-400">
-                                  <span>Platform Voucher Subsidy:</span>
+                                  <span>Buyer Voucher (Platform):</span>
                                   <span className="tabular-nums">
                                     -{formatCurrency(rec.platformSubsidy, primaryCurrency)}
                                   </span>
@@ -498,36 +587,25 @@ export const FinancialLedgerTable: React.FC<FinancialLedgerTableProps> = ({
 
                               {rec.shippingAndFees > 0 && (
                                 <div className="flex items-center justify-between text-sky-400">
-                                  <span>Shipping & Service Fee:</span>
+                                  <span>Buyer Shipping & Fees:</span>
                                   <span className="tabular-nums">
                                     +{formatCurrency(rec.shippingAndFees, primaryCurrency)}
                                   </span>
                                 </div>
                               )}
 
-                              <div className="pt-2 border-t border-white/[0.08] flex items-center justify-between text-emerald-400 font-bold">
-                                <span>Buyer Paid (Checkout):</span>
+                              <div className="pt-2 border-t border-white/[0.08] flex items-center justify-between text-white font-bold">
+                                <span>Buyer Paid Total:</span>
                                 <span className="tabular-nums">
                                   {formatCurrency(displayPaid, primaryCurrency)}
                                 </span>
                               </div>
 
-                              <div className="pt-2 border-t border-white/[0.06] space-y-1 text-[10px] text-neutral-400">
-                                <div className="flex items-center justify-between">
-                                  <span>Created:</span>
-                                  <span className="text-neutral-300">{rec.dateTimeFormatted}</span>
-                                </div>
-                                {rec.payTimeFormatted && (
-                                  <div className="flex items-center justify-between">
-                                    <span>Paid At:</span>
-                                    <span className="text-neutral-300">{rec.payTimeFormatted}</span>
-                                  </div>
-                                )}
-                                <div className="flex items-center justify-between">
-                                  <span>Payment Method:</span>
-                                  <span className="text-neutral-300">{rec.paymentMethod || '-'}</span>
-                                </div>
-                              </div>
+                              {rec.platformSubsidy > 0 && (
+                                <p className="text-[10px] text-neutral-500 font-sans leading-relaxed pt-1">
+                                  *Buyer vouchers are subsidized by marketplace platform and do not reduce seller payout.
+                                </p>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -540,7 +618,7 @@ export const FinancialLedgerTable: React.FC<FinancialLedgerTableProps> = ({
 
             {paginatedRecords.length === 0 && (
               <tr>
-                <td colSpan={9} className="py-12 text-center text-neutral-500 font-mono text-xs">
+                <td colSpan={10} className="py-12 text-center text-neutral-500 font-mono text-xs">
                   No financial transactions found matching current criteria.
                 </td>
               </tr>

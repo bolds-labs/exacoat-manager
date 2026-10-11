@@ -515,9 +515,11 @@ class Exacoat_Shopee_Client {
 				$order_map[ $old_ord['order_sn'] ] = $old_ord;
 			}
 		}
+		$newly_synced_sns = [];
 		foreach ( $normalized_orders as $new_ord ) {
 			if ( ! empty( $new_ord['order_sn'] ) ) {
 				$sn = $new_ord['order_sn'];
+				$newly_synced_sns[ $sn ] = true;
 				// Preserve existing tracking number if already cached
 				if ( empty( $new_ord['tracking_number'] ) && ! empty( $order_map[ $sn ]['tracking_number'] ) ) {
 					$new_ord['tracking_number'] = $order_map[ $sn ]['tracking_number'];
@@ -528,7 +530,64 @@ class Exacoat_Shopee_Client {
 					$new_ord['is_printed'] = true;
 					$new_ord['shipping_document_status'] = 'PRINTED';
 				}
+				// Preserve cached escrow fields before refreshing
+				if ( ! empty( $order_map[ $sn ]['escrow_synced'] ) ) {
+					$preserve_keys = [
+						'escrow_synced',
+						'escrow_amount',
+						'net_escrow_amount',
+						'total_platform_fee',
+						'commission_fee',
+						'service_fee',
+						'seller_transaction_fee',
+						'ams_commission_fee',
+						'other_platform_fee',
+						'voucher_from_seller',
+						'voucher_from_shopee',
+						'seller_coin_cash_back',
+						'actual_shipping_fee',
+						'buyer_paid_shipping',
+						'shopee_shipping_rebate',
+					];
+					foreach ( $preserve_keys as $pk ) {
+						if ( isset( $order_map[ $sn ][ $pk ] ) ) {
+							$new_ord[ $pk ] = $order_map[ $sn ][ $pk ];
+						}
+					}
+				}
 				$order_map[ $sn ] = $new_ord;
+			}
+		}
+
+		// Step 3: Batch-fetch escrow/income settlement details for active orders
+		$escrow_target_sns = [];
+		foreach ( $order_map as $sn => $cand_ord ) {
+			if ( count( $escrow_target_sns ) >= 360 ) {
+				break;
+			}
+			$st = strtoupper( (string) ( $cand_ord['order_status'] ?? '' ) );
+			if ( in_array( $st, [ 'UNPAID', 'CANCELLED', 'IN_CANCEL' ], true ) ) {
+				continue;
+			}
+			$needs_escrow = empty( $cand_ord['escrow_synced'] ) || (float) ( $cand_ord['escrow_amount'] ?? 0 ) <= 0;
+			if ( $needs_escrow ) {
+				$escrow_target_sns[] = $sn;
+			}
+		}
+
+		if ( ! empty( $escrow_target_sns ) ) {
+			$escrow_map = self::fetch_escrow_details_for_orders(
+				$escrow_target_sns,
+				$partner_id,
+				$partner_key,
+				$base_url,
+				$access_token,
+				$shop_id
+			);
+			foreach ( $escrow_map as $sn => $esc ) {
+				if ( isset( $order_map[ $sn ] ) ) {
+					$order_map[ $sn ] = self::apply_escrow_to_order( $order_map[ $sn ], $esc );
+				}
 			}
 		}
 
@@ -580,6 +639,202 @@ class Exacoat_Shopee_Client {
 			'total_cached' => count( $all_cached_orders ),
 			'synced_at'    => date( 'Y-m-d H:i:s' ),
 		];
+	}
+
+	/**
+	 * Fetch Shopee escrow / income details in batches of 20 using get_escrow_detail_batch
+	 * with single-order get_escrow_detail fallback.
+	 */
+	public static function fetch_escrow_details_for_orders(
+		array $order_sns,
+		int $partner_id,
+		string $partner_key,
+		string $base_url,
+		string $access_token,
+		int $shop_id
+	): array {
+		$escrow_map = [];
+		$chunks = array_chunk( array_values( array_unique( $order_sns ) ), 20 );
+		$single_fallback_sns = [];
+
+		foreach ( $chunks as $chunk_sns ) {
+			$batch_path = '/api/v2/payment/get_escrow_detail_batch';
+			$batch_ts   = time();
+			$batch_sign = self::sign_shop( $batch_path, $batch_ts, $partner_id, $partner_key, $access_token, $shop_id );
+
+			$batch_url = "{$base_url}{$batch_path}?" . http_build_query([
+				'partner_id'   => $partner_id,
+				'timestamp'    => $batch_ts,
+				'access_token' => $access_token,
+				'shop_id'      => $shop_id,
+				'sign'         => $batch_sign,
+			]);
+
+			$batch_res = wp_remote_post( $batch_url, [
+				'headers' => [ 'Content-Type' => 'application/json' ],
+				'body'    => wp_json_encode([ 'order_sn_list' => array_values( $chunk_sns ) ]),
+				'timeout' => 25,
+			]);
+
+			$resolved_in_chunk = [];
+			if ( ! is_wp_error( $batch_res ) ) {
+				$batch_data = json_decode( wp_remote_retrieve_body( $batch_res ), true );
+				$resp       = $batch_data['response'] ?? [];
+				$entries    = [];
+
+				if ( isset( $resp['escrow_detail'] ) && is_array( $resp['escrow_detail'] ) && isset( $resp['escrow_detail'][0] ) ) {
+					$entries = $resp['escrow_detail'];
+				} elseif ( isset( $resp['escrow_detail_list'] ) && is_array( $resp['escrow_detail_list'] ) ) {
+					$entries = $resp['escrow_detail_list'];
+				} elseif ( isset( $resp['order_list'] ) && is_array( $resp['order_list'] ) ) {
+					$entries = $resp['order_list'];
+				} elseif ( is_array( $resp ) ) {
+					$entries = $resp;
+				}
+
+				foreach ( $entries as $entry ) {
+					if ( ! is_array( $entry ) ) {
+						continue;
+					}
+					$detail = ( isset( $entry['escrow_detail'] ) && is_array( $entry['escrow_detail'] ) ) ? $entry['escrow_detail'] : $entry;
+					$sn     = (string) ( $detail['order_sn'] ?? ( $entry['order_sn'] ?? '' ) );
+					$income = $detail['order_income'] ?? ( $entry['order_income'] ?? null );
+					if ( ! empty( $sn ) && is_array( $income ) ) {
+						$parsed = self::parse_shopee_order_income( $income );
+						if ( $parsed['escrow_amount'] > 0 || $parsed['explicit_platform_fee'] > 0 ) {
+							$escrow_map[ $sn ]       = $parsed;
+							$resolved_in_chunk[ $sn ] = true;
+						}
+					}
+				}
+			}
+
+			foreach ( $chunk_sns as $sn ) {
+				if ( empty( $resolved_in_chunk[ $sn ] ) && count( $single_fallback_sns ) < 25 ) {
+					$single_fallback_sns[] = $sn;
+				}
+			}
+		}
+
+		// Fallback to single get_escrow_detail if batch missed any orders
+		foreach ( $single_fallback_sns as $sn ) {
+			$single_path = '/api/v2/payment/get_escrow_detail';
+			$single_ts   = time();
+			$single_sign = self::sign_shop( $single_path, $single_ts, $partner_id, $partner_key, $access_token, $shop_id );
+
+			$single_url = "{$base_url}{$single_path}?" . http_build_query([
+				'partner_id'   => $partner_id,
+				'timestamp'    => $single_ts,
+				'access_token' => $access_token,
+				'shop_id'      => $shop_id,
+				'sign'         => $single_sign,
+				'order_sn'     => $sn,
+			]);
+
+			$single_res = wp_remote_get( $single_url, [ 'timeout' => 15 ] );
+			if ( ! is_wp_error( $single_res ) ) {
+				$single_data = json_decode( wp_remote_retrieve_body( $single_res ), true );
+				$income      = $single_data['response']['order_income'] ?? null;
+				if ( is_array( $income ) ) {
+					$parsed = self::parse_shopee_order_income( $income );
+					if ( $parsed['escrow_amount'] > 0 || $parsed['explicit_platform_fee'] > 0 ) {
+						$escrow_map[ $sn ] = $parsed;
+					}
+				}
+			}
+		}
+
+		return $escrow_map;
+	}
+
+	/**
+	 * Parse Shopee order_income array into standardized fee and escrow fields
+	 */
+	public static function parse_shopee_order_income( array $inc ): array {
+		$escrow_raw = ( isset( $inc['escrow_amount_after_adjustment'] ) && is_numeric( $inc['escrow_amount_after_adjustment'] ) && (float) $inc['escrow_amount_after_adjustment'] > 0 )
+			? (float) $inc['escrow_amount_after_adjustment']
+			: (float) ( $inc['escrow_amount'] ?? 0 );
+		$escrow_amount          = max( 0.0, $escrow_raw );
+		$commission_fee         = abs( (float) ( $inc['commission_fee'] ?? 0 ) );
+		$service_fee            = abs( (float) ( $inc['service_fee'] ?? 0 ) );
+		$seller_transaction_fee = abs( (float) ( $inc['seller_transaction_fee'] ?? 0 ) );
+		$ams_commission_fee     = abs( (float) ( $inc['ams_commission_fee'] ?? ( $inc['order_ams_commission_fee'] ?? 0 ) ) );
+		$campaign_fee           = abs( (float) ( $inc['campaign_fee'] ?? 0 ) );
+		$withholding_tax        = abs( (float) ( $inc['withholding_tax'] ?? ( $inc['escrow_tax'] ?? ( $inc['cross_border_tax'] ?? 0 ) ) ) );
+		$voucher_from_seller    = abs( (float) ( $inc['voucher_from_seller'] ?? 0 ) );
+		$voucher_from_shopee    = abs( (float) ( $inc['voucher_from_shopee'] ?? 0 ) );
+		$seller_coin_cash_back  = abs( (float) ( $inc['seller_coin_cash_back'] ?? 0 ) );
+		$coins                  = abs( (float) ( $inc['coins'] ?? 0 ) );
+		$cost_of_goods_sold     = (float) ( $inc['cost_of_goods_sold'] ?? 0 );
+		$actual_shipping_fee    = abs( (float) ( $inc['actual_shipping_fee'] ?? 0 ) );
+		$buyer_paid_shipping    = abs( (float) ( $inc['buyer_paid_shipping_fee'] ?? 0 ) );
+		$shopee_shipping_rebate = abs( (float) ( $inc['shopee_shipping_rebate'] ?? 0 ) );
+
+		$explicit_platform_fee = $commission_fee + $service_fee + $seller_transaction_fee + $ams_commission_fee + $campaign_fee + $withholding_tax;
+
+		return [
+			'escrow_synced'          => true,
+			'escrow_amount'          => $escrow_amount,
+			'commission_fee'         => $commission_fee,
+			'service_fee'            => $service_fee,
+			'seller_transaction_fee' => $seller_transaction_fee,
+			'ams_commission_fee'     => $ams_commission_fee,
+			'campaign_fee'           => $campaign_fee,
+			'withholding_tax'        => $withholding_tax,
+			'voucher_from_seller'    => $voucher_from_seller,
+			'voucher_from_shopee'    => $voucher_from_shopee,
+			'seller_coin_cash_back'  => $seller_coin_cash_back,
+			'coins'                  => $coins,
+			'cost_of_goods_sold'     => $cost_of_goods_sold,
+			'actual_shipping_fee'    => $actual_shipping_fee,
+			'buyer_paid_shipping'    => $buyer_paid_shipping,
+			'shopee_shipping_rebate' => $shopee_shipping_rebate,
+			'explicit_platform_fee'  => $explicit_platform_fee,
+		];
+	}
+
+	/**
+	 * Merge parsed escrow fields onto a normalized Shopee order
+	 */
+	public static function apply_escrow_to_order( array $ord, array $esc ): array {
+		$gross = (float) ( $ord['gross_amount'] ?? ( $ord['total_amount'] ?? 0 ) );
+		if ( $esc['cost_of_goods_sold'] > 0 && $esc['cost_of_goods_sold'] > $gross ) {
+			$gross = $esc['cost_of_goods_sold'];
+			$ord['gross_amount'] = $gross;
+		}
+
+		$seller_voucher = $esc['voucher_from_seller'] + $esc['seller_coin_cash_back'];
+		$escrow_amt     = $esc['escrow_amount'];
+
+		if ( $escrow_amt > 0 && $gross > 0 ) {
+			$implied_fee        = max( 0.0, ( $gross - $seller_voucher ) - $escrow_amt );
+			$total_platform_fee = max( $esc['explicit_platform_fee'], $implied_fee );
+			$other_platform_fee = max( 0.0, $total_platform_fee - $esc['explicit_platform_fee'] );
+		} else {
+			$total_platform_fee = $esc['explicit_platform_fee'];
+			$other_platform_fee = 0.0;
+			if ( $escrow_amt <= 0 && $gross > 0 && $total_platform_fee > 0 ) {
+				$escrow_amt = max( 0.0, $gross - $seller_voucher - $total_platform_fee );
+			}
+		}
+
+		$ord['escrow_synced']          = true;
+		$ord['escrow_amount']          = $escrow_amt;
+		$ord['net_escrow_amount']      = $escrow_amt;
+		$ord['total_platform_fee']     = $total_platform_fee;
+		$ord['commission_fee']         = $esc['commission_fee'];
+		$ord['service_fee']            = $esc['service_fee'];
+		$ord['seller_transaction_fee'] = $esc['seller_transaction_fee'];
+		$ord['ams_commission_fee']     = $esc['ams_commission_fee'];
+		$ord['other_platform_fee']     = $other_platform_fee + $esc['campaign_fee'] + $esc['withholding_tax'];
+		$ord['voucher_from_seller']    = $seller_voucher;
+		$ord['voucher_from_shopee']    = $esc['voucher_from_shopee'] + $esc['coins'];
+		$ord['seller_coin_cash_back']  = $esc['seller_coin_cash_back'];
+		$ord['actual_shipping_fee']    = $esc['actual_shipping_fee'];
+		$ord['buyer_paid_shipping']    = $esc['buyer_paid_shipping'];
+		$ord['shopee_shipping_rebate'] = $esc['shopee_shipping_rebate'];
+
+		return $ord;
 	}
 
 	/**
@@ -3170,6 +3425,7 @@ class Exacoat_Shopee_Client {
 
 		$item_id        = (int) ( $body['item_id'] ?? 0 );
 		$cover_image_id = trim( (string) ( $body['cover_image_id'] ?? '' ) );
+		$new_item_name  = trim( sanitize_text_field( (string) ( $body['item_name'] ?? '' ) ) );
 		$variant_images = (array) ( $body['variant_images'] ?? [] );
 		$variant_plan   = (array) ( $body['variant_plan'] ?? [] );
 
@@ -3180,14 +3436,15 @@ class Exacoat_Shopee_Client {
 			], 400 );
 		}
 
-		if ( empty( $cover_image_id ) && empty( $variant_images ) && empty( $variant_plan ) ) {
+		if ( empty( $cover_image_id ) && empty( $variant_images ) && empty( $variant_plan ) && empty( $new_item_name ) ) {
 			return new \WP_REST_Response([
 				'success' => false,
-				'error'   => 'At least one cover_image_id, variant_images, or variant_plan must be provided.',
+				'error'   => 'At least one of cover_image_id, variant_images, variant_plan, or item_name must be provided.',
 			], 400 );
 		}
 
 		$cover_updated           = false;
+		$title_updated           = false;
 		$gallery_preserved_count = 0;
 		$variants_updated        = 0;
 		$variants_added          = 0;
@@ -3208,43 +3465,58 @@ class Exacoat_Shopee_Client {
 			], 400 );
 		}
 
-		$src = $base_res['response']['item_list'][0];
+		$src                = $base_res['response']['item_list'][0];
 		$existing_image_ids = $src['image']['image_id_list'] ?? [];
+		$existing_title     = trim( (string) ( $src['item_name'] ?? '' ) );
+		$title_changed      = ( $new_item_name !== '' && $new_item_name !== $existing_title );
 
-		// 2. Non-destructively update primary cover image (index 0) while preserving existing gallery images (indices 1..8)
-		if ( ! empty( $cover_image_id ) ) {
-			$new_image_ids = [ $cover_image_id ];
+		// 2. Non-destructively update primary cover image (index 0) and/or item title (item_name)
+		if ( ! empty( $cover_image_id ) || $title_changed ) {
+			$update_item_payload = [
+				'item_id' => $item_id,
+			];
 
-			// Preserve existing gallery images (skipping the old primary image at index 0)
-			if ( is_array( $existing_image_ids ) ) {
-				for ( $i = 1; $i < count( $existing_image_ids ); $i++ ) {
-					$existing_id = (string) $existing_image_ids[ $i ];
-					if ( ! empty( $existing_id ) && $existing_id !== $cover_image_id && ! in_array( $existing_id, $new_image_ids, true ) ) {
-						$new_image_ids[] = $existing_id;
-						$gallery_preserved_count++;
+			if ( ! empty( $cover_image_id ) ) {
+				$new_image_ids = [ $cover_image_id ];
+
+				// Preserve existing gallery images (skipping the old primary image at index 0)
+				if ( is_array( $existing_image_ids ) ) {
+					for ( $i = 1; $i < count( $existing_image_ids ); $i++ ) {
+						$existing_id = (string) $existing_image_ids[ $i ];
+						if ( ! empty( $existing_id ) && $existing_id !== $cover_image_id && ! in_array( $existing_id, $new_image_ids, true ) ) {
+							$new_image_ids[] = $existing_id;
+							$gallery_preserved_count++;
+						}
 					}
 				}
+
+				// Shopee allows maximum 9 images per product
+				$new_image_ids = array_slice( $new_image_ids, 0, 9 );
+				$update_item_payload['image'] = [
+					'image_id_list' => $new_image_ids,
+				];
 			}
 
-			// Shopee allows maximum 9 images per product
-			$new_image_ids = array_slice( $new_image_ids, 0, 9 );
+			if ( $title_changed ) {
+				$update_item_payload['item_name'] = $new_item_name;
+			}
 
-			$update_item_res = self::call_shop_api( '/api/v2/product/update_item', 'POST', [], [
-				'item_id' => $item_id,
-				'image'   => [
-					'image_id_list' => $new_image_ids,
-				],
-			]);
+			$update_item_res = self::call_shop_api( '/api/v2/product/update_item', 'POST', [], $update_item_payload );
 
 			if ( $update_item_res['success'] ) {
-				$cover_updated = true;
+				if ( ! empty( $cover_image_id ) ) {
+					$cover_updated = true;
+				}
+				if ( $title_changed ) {
+					$title_updated = true;
+				}
 			} else {
-				$err_msg = $update_item_res['message'] ?? $update_item_res['error'] ?? 'Failed to update cover image.';
-				$errors[] = 'Cover update: ' . $err_msg;
+				$err_msg = $update_item_res['message'] ?? $update_item_res['error'] ?? 'Failed to update item details on Shopee.';
+				$errors[] = 'Item update: ' . $err_msg;
 				if ( class_exists( 'Exacoat_Logger' ) ) {
-					Exacoat_Logger::log( 'error', 'shopee_inject_images', 'update_item image failed: ' . $err_msg, [
+					Exacoat_Logger::log( 'error', 'shopee_inject_images', 'update_item failed: ' . $err_msg, [
 						'item_id' => $item_id,
-						'payload' => $new_image_ids,
+						'payload' => $update_item_payload,
 						'res'     => $update_item_res,
 					]);
 				}
@@ -3704,6 +3976,9 @@ class Exacoat_Shopee_Client {
 		if ( $variants_added > 0 ) {
 			$summary_parts[] = sprintf( '%d new variants created (stock 100)', $variants_added );
 		}
+		if ( $title_updated ) {
+			$summary_parts[] = 'title updated';
+		}
 		if ( $variants_reordered ) {
 			$summary_parts[] = 'variant order updated';
 		}
@@ -3712,9 +3987,11 @@ class Exacoat_Shopee_Client {
 		}
 
 		return new \WP_REST_Response([
-			'success'                 => $all_success || $cover_updated || $variants_updated > 0 || $variants_added > 0 || $prices_updated > 0 || $variants_reordered,
+			'success'                 => $all_success || $cover_updated || $title_updated || $variants_updated > 0 || $variants_added > 0 || $prices_updated > 0 || $variants_reordered,
 			'item_id'                 => $item_id,
 			'cover_updated'           => $cover_updated,
+			'title_updated'           => $title_updated,
+			'item_name'               => $title_updated ? $new_item_name : ( $src['item_name'] ?? '' ),
 			'gallery_preserved_count' => $gallery_preserved_count,
 			'variants_updated'        => $variants_updated,
 			'variants_added'          => $variants_added,

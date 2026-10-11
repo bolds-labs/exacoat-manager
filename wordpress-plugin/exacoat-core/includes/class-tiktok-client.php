@@ -604,7 +604,50 @@ class Exacoat_TikTok_Client {
 		foreach ( $normalized_orders as $new_ord ) {
 			$oid = (string) ( $new_ord['order_id'] ?? ( $new_ord['order_sn'] ?? '' ) );
 			if ( ! empty( $oid ) ) {
+				if ( ! empty( $order_map[ $oid ]['escrow_synced'] ) ) {
+					$preserve_keys = [
+						'escrow_synced',
+						'escrow_amount',
+						'net_escrow_amount',
+						'total_platform_fee',
+						'commission_fee',
+						'service_fee',
+						'seller_transaction_fee',
+						'ams_commission_fee',
+						'other_platform_fee',
+					];
+					foreach ( $preserve_keys as $pk ) {
+						if ( isset( $order_map[ $oid ][ $pk ] ) ) {
+							$new_ord[ $pk ] = $order_map[ $oid ][ $pk ];
+						}
+					}
+				}
 				$order_map[ $oid ] = $new_ord;
+			}
+		}
+
+		// Step 3: Fetch TikTok Finance settlement / fee details for active orders
+		$finance_target_ids = [];
+		foreach ( $order_map as $oid => $cand_ord ) {
+			if ( count( $finance_target_ids ) >= 40 ) {
+				break;
+			}
+			$st = strtoupper( (string) ( $cand_ord['order_status'] ?? '' ) );
+			if ( in_array( $st, [ 'UNPAID', 'CANCELLED', 'CANCEL' ], true ) ) {
+				continue;
+			}
+			$needs_fin = empty( $cand_ord['escrow_synced'] ) || (float) ( $cand_ord['escrow_amount'] ?? 0 ) <= 0;
+			if ( $needs_fin ) {
+				$finance_target_ids[] = (string) $oid;
+			}
+		}
+
+		if ( ! empty( $finance_target_ids ) ) {
+			$finance_map = self::fetch_finance_details_for_orders( $finance_target_ids );
+			foreach ( $finance_map as $oid => $fin ) {
+				if ( isset( $order_map[ $oid ] ) ) {
+					$order_map[ $oid ] = self::apply_finance_to_order( $order_map[ $oid ], $fin );
+				}
 			}
 		}
 
@@ -627,6 +670,177 @@ class Exacoat_TikTok_Client {
 			'synced_at'    => date( 'Y-m-d H:i:s' ),
 			'elapsed'      => $elapsed,
 		];
+	}
+
+	/**
+	 * Fetch TikTok Shop finance settlement and fee details for order IDs
+	 */
+	public static function fetch_finance_details_for_orders( array $order_ids ): array {
+		$finance_map = [];
+
+		// 1. Try batch unsettled orders endpoint (/finance/202501/orders/unsettled)
+		$unsettled_res = self::call_api( '/finance/202501/orders/unsettled', 'GET', [
+			'page_size' => 50,
+		]);
+		if ( ! empty( $unsettled_res['success'] ) && is_array( $unsettled_res['response'] ?? null ) ) {
+			$resp  = $unsettled_res['response'];
+			$items = $resp['transactions'] ?? ( $resp['orders'] ?? ( $resp['unsettled_transactions'] ?? [] ) );
+			if ( is_array( $items ) ) {
+				foreach ( $items as $tx ) {
+					if ( ! is_array( $tx ) ) continue;
+					$oid = (string) ( $tx['order_id'] ?? ( $tx['id'] ?? '' ) );
+					if ( ! empty( $oid ) ) {
+						$parsed = self::parse_tiktok_finance_tx( $tx );
+						if ( $parsed['escrow_amount'] > 0 || $parsed['explicit_platform_fee'] > 0 ) {
+							$finance_map[ $oid ] = $parsed;
+						}
+					}
+				}
+			}
+		}
+
+		// 2. Per-order statement_transactions lookup for remaining order IDs (up to 25 per sync)
+		$lookup_count = 0;
+		$prefer_202309 = false;
+		foreach ( $order_ids as $oid ) {
+			if ( isset( $finance_map[ $oid ] ) ) {
+				continue;
+			}
+			if ( $lookup_count >= 25 ) {
+				break;
+			}
+			$lookup_count++;
+
+			$tx_res = null;
+			if ( ! $prefer_202309 ) {
+				$tx_res = self::call_api( "/finance/202501/orders/{$oid}/statement_transactions", 'GET' );
+				if ( empty( $tx_res['success'] ) ) {
+					$tx_res_old = self::call_api( "/finance/202309/orders/{$oid}/statement_transactions", 'GET' );
+					if ( ! empty( $tx_res_old['success'] ) ) {
+						$tx_res = $tx_res_old;
+						$prefer_202309 = true;
+					}
+				}
+			} else {
+				$tx_res = self::call_api( "/finance/202309/orders/{$oid}/statement_transactions", 'GET' );
+			}
+
+			if ( ! empty( $tx_res['success'] ) && is_array( $tx_res['response'] ?? null ) ) {
+				$resp   = $tx_res['response'];
+				$parsed = self::parse_tiktok_finance_tx( $resp );
+				if ( $parsed['escrow_amount'] <= 0 && ! empty( $resp['statement_transactions'] ) && is_array( $resp['statement_transactions'] ) ) {
+					foreach ( $resp['statement_transactions'] as $sub_tx ) {
+						if ( is_array( $sub_tx ) ) {
+							$sub_parsed = self::parse_tiktok_finance_tx( $sub_tx );
+							if ( $sub_parsed['escrow_amount'] > 0 || $sub_parsed['explicit_platform_fee'] > 0 ) {
+								$parsed = $sub_parsed;
+								break;
+							}
+						}
+					}
+				}
+				if ( $parsed['escrow_amount'] > 0 || $parsed['explicit_platform_fee'] > 0 ) {
+					$finance_map[ $oid ] = $parsed;
+				}
+			}
+		}
+
+		return $finance_map;
+	}
+
+	/**
+	 * Parse a TikTok finance transaction/settlement payload
+	 */
+	public static function parse_tiktok_finance_tx( array $tx ): array {
+		$settlement = max( 0.0, (float) ( $tx['settlement_amount'] ?? ( $tx['est_settlement_amount'] ?? 0 ) ) );
+		$fee_total  = abs( (float) ( $tx['fee_and_tax_amount'] ?? ( $tx['est_fee_tax_amount'] ?? ( $tx['fee_amount'] ?? 0 ) ) ) );
+
+		$fee_bd = $tx['fee_tax_breakdown']['fee'] ?? ( $tx['fee_breakdown'] ?? [] );
+		if ( ! is_array( $fee_bd ) ) {
+			$fee_bd = [];
+		}
+
+		$commission_fee = abs( (float) (
+			$fee_bd['platform_commission_amount'] ??
+			$tx['platform_commission_amount'] ??
+			$tx['fee_tax_breakdown_fee_platform_commission_amount'] ?? 0
+		) );
+
+		$service_fee = abs( (float) ( $fee_bd['sfp_service_fee_amount'] ?? ( $tx['sfp_service_fee_amount'] ?? 0 ) ) )
+			+ abs( (float) ( $fee_bd['bonus_cashback_service_fee_amount'] ?? 0 ) )
+			+ abs( (float) ( $fee_bd['mall_service_fee_amount'] ?? 0 ) )
+			+ abs( (float) ( $fee_bd['live_specials_fee_amount'] ?? 0 ) );
+
+		$transaction_fee = abs( (float) (
+			$fee_bd['transaction_fee_amount'] ??
+			$tx['transaction_fee_amount'] ??
+			$tx['fee_tax_breakdown_fee_transaction_fee_amount'] ?? 0
+		) ) + abs( (float) ( $fee_bd['credit_card_handling_fee_amount'] ?? 0 ) );
+
+		$affiliate_fee = abs( (float) (
+			$fee_bd['affiliate_commission_amount'] ??
+			$tx['affiliate_commission_amount'] ??
+			$tx['fee_tax_breakdown_fee_affiliate_commission_amount'] ?? 0
+		) )
+			+ abs( (float) ( $fee_bd['affiliate_partner_commission_amount'] ?? 0 ) )
+			+ abs( (float) ( $fee_bd['affiliate_ads_commission_amount'] ?? 0 ) );
+
+		// Also inspect sku_transactions if root breakdown was empty
+		if ( $commission_fee <= 0 && $service_fee <= 0 && ! empty( $tx['sku_transactions'] ) && is_array( $tx['sku_transactions'] ) ) {
+			foreach ( $tx['sku_transactions'] as $sku_tx ) {
+				if ( ! is_array( $sku_tx ) ) continue;
+				$s_fee = $sku_tx['fee_tax_breakdown']['fee'] ?? [];
+				$commission_fee  += abs( (float) ( $s_fee['platform_commission_amount'] ?? ( $sku_tx['platform_commission_amount'] ?? 0 ) ) );
+				$service_fee     += abs( (float) ( $s_fee['sfp_service_fee_amount'] ?? 0 ) ) + abs( (float) ( $s_fee['bonus_cashback_service_fee_amount'] ?? 0 ) );
+				$transaction_fee += abs( (float) ( $s_fee['transaction_fee_amount'] ?? ( $sku_tx['transaction_fee_amount'] ?? 0 ) ) );
+				$affiliate_fee   += abs( (float) ( $s_fee['affiliate_commission_amount'] ?? ( $sku_tx['affiliate_commission_amount'] ?? 0 ) ) );
+			}
+		}
+
+		$explicit_fee = max( $fee_total, $commission_fee + $service_fee + $transaction_fee + $affiliate_fee );
+
+		return [
+			'escrow_synced'          => true,
+			'escrow_amount'          => $settlement,
+			'commission_fee'         => $commission_fee,
+			'service_fee'            => $service_fee,
+			'seller_transaction_fee' => $transaction_fee,
+			'ams_commission_fee'     => $affiliate_fee,
+			'explicit_platform_fee'  => $explicit_fee,
+		];
+	}
+
+	/**
+	 * Merge parsed TikTok finance fields onto a normalized TikTok order
+	 */
+	public static function apply_finance_to_order( array $ord, array $fin ): array {
+		$gross      = (float) ( $ord['gross_amount'] ?? ( $ord['total_amount'] ?? 0 ) );
+		$escrow_amt = $fin['escrow_amount'];
+
+		if ( $escrow_amt > 0 && $gross > 0 ) {
+			$implied_fee        = max( 0.0, $gross - $escrow_amt );
+			$total_platform_fee = max( $fin['explicit_platform_fee'], $implied_fee );
+		} else {
+			$total_platform_fee = $fin['explicit_platform_fee'];
+			if ( $escrow_amt <= 0 && $gross > 0 && $total_platform_fee > 0 ) {
+				$escrow_amt = max( 0.0, $gross - $total_platform_fee );
+			}
+		}
+
+		$known_parts        = $fin['commission_fee'] + $fin['service_fee'] + $fin['seller_transaction_fee'] + $fin['ams_commission_fee'];
+		$other_platform_fee = max( 0.0, $total_platform_fee - $known_parts );
+
+		$ord['escrow_synced']          = true;
+		$ord['escrow_amount']          = $escrow_amt;
+		$ord['net_escrow_amount']      = $escrow_amt;
+		$ord['total_platform_fee']     = $total_platform_fee;
+		$ord['commission_fee']         = $fin['commission_fee'];
+		$ord['service_fee']            = $fin['service_fee'];
+		$ord['seller_transaction_fee'] = $fin['seller_transaction_fee'];
+		$ord['ams_commission_fee']     = $fin['ams_commission_fee'];
+		$ord['other_platform_fee']     = $other_platform_fee;
+
+		return $ord;
 	}
 
 	/**
@@ -1935,7 +2149,9 @@ class Exacoat_TikTok_Client {
 
 		$product_id     = trim( sanitize_text_field( (string) ( $body['product_id'] ?? $body['item_id'] ?? '' ) ) );
 		$cover_image_id = trim( (string) ( $body['cover_image_id'] ?? '' ) );
+		$new_title      = trim( sanitize_text_field( (string) ( $body['item_name'] ?? $body['title'] ?? '' ) ) );
 		$variant_images = (array) ( $body['variant_images'] ?? [] );
+		$variant_plan   = (array) ( $body['variant_plan'] ?? [] );
 
 		if ( empty( $product_id ) ) {
 			return new \WP_REST_Response([
@@ -1944,14 +2160,14 @@ class Exacoat_TikTok_Client {
 			], 400 );
 		}
 
-		if ( empty( $cover_image_id ) && empty( $variant_images ) ) {
+		if ( empty( $cover_image_id ) && empty( $variant_images ) && empty( $variant_plan ) && empty( $new_title ) ) {
 			return new \WP_REST_Response([
 				'success' => false,
-				'error'   => 'At least cover_image_id or variant_images must be provided.',
+				'error'   => 'At least one of cover_image_id, variant_images, variant_plan, or title must be provided.',
 			], 400 );
 		}
 
-		// 1. Fetch current product details to preserve existing gallery images non-destructively
+		// 1. Fetch current product details to preserve existing gallery images and SKUs non-destructively
 		$get_res = self::call_api( "/product/202309/products/{$product_id}", 'GET' );
 		if ( ! $get_res['success'] || empty( $get_res['response'] ) ) {
 			return new \WP_REST_Response([
@@ -1962,13 +2178,23 @@ class Exacoat_TikTok_Client {
 
 		$src                     = $get_res['response'];
 		$existing_main_images    = (array) ( $src['main_images'] ?? [] );
+		$existing_title          = trim( (string) ( $src['title'] ?? '' ) );
 		$gallery_preserved_count = 0;
 		$cover_updated           = false;
+		$title_updated           = false;
 		$variants_updated        = 0;
+		$variants_added          = 0;
+		$variants_reordered      = false;
+		$prices_updated          = 0;
 		$errors                  = [];
 		$partial_payload         = [];
 
-		// 2. Build non-destructive main_images array (replace index 0, preserve indices 1..8)
+		// 2. Non-destructively update title if changed
+		if ( $new_title !== '' && $new_title !== $existing_title ) {
+			$partial_payload['title'] = $new_title;
+		}
+
+		// 3. Build non-destructive main_images array (replace index 0, preserve indices 1..8)
 		if ( ! empty( $cover_image_id ) ) {
 			$new_main_images = [
 				[ 'uri' => $cover_image_id ],
@@ -1987,8 +2213,52 @@ class Exacoat_TikTok_Client {
 			$partial_payload['main_images'] = array_slice( $new_main_images, 0, 9 );
 		}
 
-		// 3. Optionally inject variant SKU attribute images ONLY if variant_images was explicitly supplied
-		if ( ! empty( $variant_images ) && ! empty( $src['skus'] ) && is_array( $src['skus'] ) ) {
+		// 4. Update variant SKU attribute photos, ordering, and per-variant pricing
+		$sku_price_updates = [];
+		if ( ! empty( $variant_images ) || ! empty( $variant_plan ) ) {
+			// Index existing SKUs
+			$existing_skus_by_opt = [];
+			$default_attr_id      = '';
+			$default_attr_name    = 'Warna';
+			$default_currency     = 'IDR';
+			$default_warehouse_id = '';
+			$default_price        = '149000';
+			$default_sku_img      = ! empty( $cover_image_id ) ? [ 'uri' => $cover_image_id ] : null;
+
+			foreach ( (array) ( $src['skus'] ?? [] ) as $old_idx => $sku ) {
+				$s_attrs  = (array) ( $sku['sales_attributes'] ?? [] );
+				$attr0    = $s_attrs[0] ?? [];
+				$val_name = trim( (string) ( $attr0['value_name'] ?? ( $sku['seller_sku'] ?? '' ) ) );
+
+				if ( ! empty( $attr0['id'] ) && empty( $default_attr_id ) ) {
+					$default_attr_id = (string) $attr0['id'];
+				}
+				if ( ! empty( $attr0['name'] ) ) {
+					$default_attr_name = (string) $attr0['name'];
+				}
+				if ( ! empty( $sku['price']['currency'] ) ) {
+					$default_currency = (string) $sku['price']['currency'];
+				}
+				if ( ! empty( $sku['price']['amount'] ) ) {
+					$default_price = (string) $sku['price']['amount'];
+				}
+				if ( ! empty( $attr0['sku_img']['uri'] ) && empty( $default_sku_img ) ) {
+					$default_sku_img = [ 'uri' => (string) $attr0['sku_img']['uri'] ];
+				}
+				if ( ! empty( $sku['inventory'][0]['warehouse_id'] ) && empty( $default_warehouse_id ) ) {
+					$default_warehouse_id = (string) $sku['inventory'][0]['warehouse_id'];
+				}
+
+				if ( ! empty( $val_name ) ) {
+					$existing_skus_by_opt[ strtolower( $val_name ) ] = [
+						'sku'     => $sku,
+						'old_idx' => $old_idx,
+						'opt'     => $val_name,
+					];
+				}
+			}
+
+			// Build lookup map from variant_images
 			$var_map = [];
 			foreach ( $variant_images as $vi ) {
 				$opt = strtolower( trim( (string) ( $vi['option'] ?? '' ) ) );
@@ -1998,10 +2268,172 @@ class Exacoat_TikTok_Client {
 				}
 			}
 
-			if ( ! empty( $var_map ) ) {
-				$updated_skus = [];
-				$matched_opts = [];
+			if ( ! empty( $variant_plan ) ) {
+				$rebuilt_skus           = [];
+				$skus_structure_changed = false;
 
+				foreach ( array_values( $variant_plan ) as $new_idx => $plan_item ) {
+					$opt_name = trim( (string) ( $plan_item['option'] ?? '' ) );
+					if ( empty( $opt_name ) ) {
+						continue;
+					}
+					$lookup_key = strtolower( $opt_name );
+					$plan_price = (float) ( $plan_item['price'] ?? 0 );
+					$plan_img   = trim( (string) ( $plan_item['image_id'] ?? '' ) );
+
+					$matched = $existing_skus_by_opt[ $lookup_key ] ?? null;
+
+					if ( $matched ) {
+						$raw_sku = $matched['sku'];
+						if ( $matched['old_idx'] !== $new_idx ) {
+							$variants_reordered     = true;
+							$skus_structure_changed = true;
+						}
+
+						// Image update
+						$resolved_img_uri = '';
+						if ( isset( $var_map[ $lookup_key ] ) ) {
+							$resolved_img_uri       = $var_map[ $lookup_key ];
+							$variants_updated++;
+							$skus_structure_changed = true;
+						} elseif ( ! empty( $plan_img ) ) {
+							$resolved_img_uri = $plan_img;
+							$old_uri = (string) ( $raw_sku['sales_attributes'][0]['sku_img']['uri'] ?? '' );
+							if ( $plan_img !== $old_uri ) {
+								$variants_updated++;
+								$skus_structure_changed = true;
+							}
+						}
+
+						// Price update
+						$curr_price = (float) ( $raw_sku['price']['amount'] ?? ( $raw_sku['price']['tax_exclusive_price'] ?? 0 ) );
+						$effective_amount = ( $plan_price > 0 ) ? (string) round( $plan_price ) : ( (string) ( $raw_sku['price']['amount'] ?? $default_price ) );
+						if ( $plan_price > 0 && abs( $plan_price - $curr_price ) >= 1 ) {
+							$sku_price_updates[]    = [
+								'id'    => (string) $raw_sku['id'],
+								'price' => [
+									'amount'   => $effective_amount,
+									'currency' => $raw_sku['price']['currency'] ?? $default_currency,
+								],
+							];
+							$skus_structure_changed = true;
+						}
+
+						$clean_sku = [
+							'id' => (string) $raw_sku['id'],
+						];
+						if ( ! empty( $raw_sku['seller_sku'] ) ) {
+							$clean_sku['seller_sku'] = (string) $raw_sku['seller_sku'];
+						}
+						$clean_sku['price'] = [
+							'amount'   => $effective_amount,
+							'currency' => (string) ( $raw_sku['price']['currency'] ?? $default_currency ),
+						];
+
+						// Inventory
+						$clean_inv = [];
+						if ( ! empty( $raw_sku['inventory'] ) && is_array( $raw_sku['inventory'] ) ) {
+							foreach ( $raw_sku['inventory'] as $inv ) {
+								if ( ! empty( $inv['warehouse_id'] ) ) {
+									$clean_inv[] = [
+										'warehouse_id' => (string) $inv['warehouse_id'],
+										'quantity'     => (int) ( $inv['quantity'] ?? 0 ),
+									];
+								}
+							}
+						} elseif ( ! empty( $default_warehouse_id ) ) {
+							$clean_inv[] = [
+								'warehouse_id' => $default_warehouse_id,
+								'quantity'     => (int) ( $raw_sku['stock_infos'][0]['available_stock'] ?? 100 ),
+							];
+						}
+						if ( ! empty( $clean_inv ) ) {
+							$clean_sku['inventory'] = $clean_inv;
+						}
+
+						// Sales attributes
+						$s_attrs     = (array) ( $raw_sku['sales_attributes'] ?? [] );
+						$clean_attrs = [];
+						foreach ( $s_attrs as $a_idx => $attr ) {
+							$attr_entry = [
+								'id'         => (string) ( $attr['id'] ?? $default_attr_id ),
+								'name'       => (string) ( $attr['name'] ?? $default_attr_name ),
+								'value_id'   => (string) ( $attr['value_id'] ?? '' ),
+								'value_name' => (string) ( $attr['value_name'] ?? $opt_name ),
+							];
+							if ( $a_idx === 0 ) {
+								if ( ! empty( $resolved_img_uri ) ) {
+									$attr_entry['sku_img'] = [ 'uri' => $resolved_img_uri ];
+								} elseif ( ! empty( $attr['sku_img']['uri'] ) ) {
+									$attr_entry['sku_img'] = [ 'uri' => (string) $attr['sku_img']['uri'] ];
+								}
+							}
+							$clean_attrs[] = $attr_entry;
+						}
+						if ( empty( $clean_attrs ) ) {
+							$attr_entry = [
+								'id'         => $default_attr_id,
+								'name'       => $default_attr_name,
+								'value_name' => $opt_name,
+							];
+							if ( ! empty( $resolved_img_uri ) ) {
+								$attr_entry['sku_img'] = [ 'uri' => $resolved_img_uri ];
+							}
+							$clean_attrs[] = $attr_entry;
+						}
+						$clean_sku['sales_attributes'] = $clean_attrs;
+
+						$rebuilt_skus[] = $clean_sku;
+					} else {
+						// New variant on TikTok Shop
+						$variants_added++;
+						$skus_structure_changed = true;
+						$new_sku_price          = $plan_price > 0 ? (string) round( $plan_price ) : $default_price;
+						$resolved_img_uri       = isset( $var_map[ $lookup_key ] ) ? $var_map[ $lookup_key ] : ( ! empty( $plan_img ) ? $plan_img : '' );
+
+						$new_sku = [
+							'price' => [
+								'amount'   => $new_sku_price,
+								'currency' => $default_currency,
+							],
+						];
+						if ( ! empty( $default_warehouse_id ) ) {
+							$new_sku['inventory'] = [
+								[
+									'warehouse_id' => $default_warehouse_id,
+									'quantity'     => 100,
+								],
+							];
+						}
+						$attr_entry = [
+							'name'       => $default_attr_name,
+							'value_name' => $opt_name,
+						];
+						if ( ! empty( $default_attr_id ) ) {
+							$attr_entry['id'] = $default_attr_id;
+						}
+						if ( ! empty( $resolved_img_uri ) ) {
+							$attr_entry['sku_img'] = [ 'uri' => $resolved_img_uri ];
+							$variants_updated++;
+						} elseif ( ! empty( $default_sku_img ) ) {
+							$attr_entry['sku_img'] = $default_sku_img;
+						}
+						$new_sku['sales_attributes'] = [ $attr_entry ];
+
+						$rebuilt_skus[] = $new_sku;
+					}
+				}
+
+				if ( count( $rebuilt_skus ) !== count( $existing_skus_by_opt ) ) {
+					$skus_structure_changed = true;
+				}
+
+				if ( ! empty( $rebuilt_skus ) && ( $skus_structure_changed || $variants_updated > 0 || ! empty( $sku_price_updates ) ) ) {
+					$partial_payload['skus'] = $rebuilt_skus;
+				}
+			} elseif ( ! empty( $var_map ) && ! empty( $src['skus'] ) ) {
+				// Legacy variant_images path
+				$updated_skus = [];
 				foreach ( $src['skus'] as $sku ) {
 					$sku_entry = [
 						'id' => (string) ( $sku['id'] ?? '' ),
@@ -2009,43 +2441,6 @@ class Exacoat_TikTok_Client {
 					if ( ! empty( $sku['seller_sku'] ) ) {
 						$sku_entry['seller_sku'] = (string) $sku['seller_sku'];
 					}
-					if ( ! empty( $sku['price'] ) ) {
-						$price_amt = (string) ( $sku['price']['tax_exclusive_price'] ?? $sku['price']['sale_price'] ?? $sku['price']['amount'] ?? '' );
-						$currency  = (string) ( $sku['price']['currency'] ?? 'IDR' );
-						if ( $price_amt !== '' ) {
-							$sku_entry['price'] = [
-								'amount'   => $price_amt,
-								'currency' => $currency,
-							];
-						}
-					}
-
-					// Preserve inventory
-					$inv_list = [];
-					if ( ! empty( $sku['inventory'] ) && is_array( $sku['inventory'] ) ) {
-						foreach ( $sku['inventory'] as $inv ) {
-							if ( ! empty( $inv['warehouse_id'] ) ) {
-								$inv_list[] = [
-									'warehouse_id' => (string) $inv['warehouse_id'],
-									'quantity'     => (int) ( $inv['quantity'] ?? 0 ),
-								];
-							}
-						}
-					} elseif ( ! empty( $sku['stock_infos'] ) && is_array( $sku['stock_infos'] ) ) {
-						foreach ( $sku['stock_infos'] as $st ) {
-							if ( ! empty( $st['warehouse_id'] ) ) {
-								$inv_list[] = [
-									'warehouse_id' => (string) $st['warehouse_id'],
-									'quantity'     => (int) ( $st['available_stock'] ?? 0 ),
-								];
-							}
-						}
-					}
-					if ( ! empty( $inv_list ) ) {
-						$sku_entry['inventory'] = $inv_list;
-					}
-
-					// Map sales_attributes with updated sku_img
 					$sales_attrs = [];
 					foreach ( (array) ( $sku['sales_attributes'] ?? [] ) as $a_idx => $attr ) {
 						$clean_attr = [
@@ -2057,7 +2452,7 @@ class Exacoat_TikTok_Client {
 						$val_lookup = strtolower( trim( $clean_attr['value_name'] ) );
 						if ( $a_idx === 0 && isset( $var_map[ $val_lookup ] ) ) {
 							$clean_attr['sku_img'] = [ 'uri' => $var_map[ $val_lookup ] ];
-							$matched_opts[ $val_lookup ] = true;
+							$variants_updated++;
 						} elseif ( ! empty( $attr['sku_img']['uri'] ) ) {
 							$clean_attr['sku_img'] = [ 'uri' => (string) $attr['sku_img']['uri'] ];
 						}
@@ -2066,42 +2461,70 @@ class Exacoat_TikTok_Client {
 					if ( ! empty( $sales_attrs ) ) {
 						$sku_entry['sales_attributes'] = $sales_attrs;
 					}
-
 					$updated_skus[] = $sku_entry;
 				}
-
-				if ( ! empty( $matched_opts ) ) {
+				if ( $variants_updated > 0 ) {
 					$partial_payload['skus'] = $updated_skus;
-					$variants_updated        = count( $matched_opts );
 				}
 			}
 		}
 
-		// 4. Execute non-destructive partial_edit on TikTok Shop
-		$edit_res = self::call_api( "/product/202309/products/{$product_id}/partial_edit", 'POST', [], $partial_payload );
-
-		if ( $edit_res['success'] ) {
-			if ( ! empty( $cover_image_id ) ) {
-				$cover_updated = true;
-			}
-		} else {
-			$err_msg = $edit_res['error'] ?? 'TikTok partial_edit request failed.';
-			$errors[] = $err_msg;
-			if ( class_exists( 'Exacoat_Logger' ) ) {
-				Exacoat_Logger::log( 'error', 'tiktok_inject_images', 'partial_edit failed: ' . $err_msg, [
-					'product_id' => $product_id,
-					'payload'    => $partial_payload,
-					'res'        => $edit_res,
-				]);
+		// 5. Update SKU prices via dedicated endpoint if needed
+		if ( ! empty( $sku_price_updates ) ) {
+			$price_res = self::call_api( "/product/202309/products/{$product_id}/prices/update", 'POST', [], [
+				'skus' => $sku_price_updates,
+			]);
+			if ( $price_res['success'] ) {
+				$prices_updated = count( $sku_price_updates );
 			}
 		}
 
-		$overall_success = $cover_updated || $variants_updated > 0;
+		// 6. Execute non-destructive partial_edit on TikTok Shop for title, images, and SKUs
+		if ( ! empty( $partial_payload ) ) {
+			$edit_res = self::call_api( "/product/202309/products/{$product_id}/partial_edit", 'POST', [], $partial_payload );
+
+			if ( $edit_res['success'] ) {
+				if ( ! empty( $cover_image_id ) ) {
+					$cover_updated = true;
+				}
+				if ( ! empty( $partial_payload['title'] ) ) {
+					$title_updated = true;
+				}
+				if ( $prices_updated === 0 && ! empty( $sku_price_updates ) ) {
+					$prices_updated = count( $sku_price_updates );
+				}
+			} else {
+				$err_msg  = $edit_res['error'] ?? 'TikTok partial_edit request failed.';
+				$errors[] = $err_msg;
+				if ( class_exists( 'Exacoat_Logger' ) ) {
+					Exacoat_Logger::log( 'error', 'tiktok_inject_images', 'partial_edit failed: ' . $err_msg, [
+						'product_id' => $product_id,
+						'payload'    => $partial_payload,
+						'res'        => $edit_res,
+					]);
+				}
+			}
+		}
+
+		$overall_success = $cover_updated || $title_updated || $variants_updated > 0 || $variants_added > 0 || $prices_updated > 0 || $variants_reordered;
 		$summary_parts   = [];
-		$summary_parts[] = 'Cover: ' . ( $cover_updated ? 'Updated' : 'Unchanged' );
-		$summary_parts[] = "{$gallery_preserved_count} gallery photos preserved";
+		if ( $title_updated ) {
+			$summary_parts[] = 'title updated';
+		}
+		if ( $cover_updated ) {
+			$summary_parts[] = sprintf( 'cover updated (%d gallery photos preserved)', $gallery_preserved_count );
+		}
 		if ( $variants_updated > 0 ) {
-			$summary_parts[] = "{$variants_updated} variant photos updated";
+			$summary_parts[] = sprintf( '%d variant photos updated', $variants_updated );
+		}
+		if ( $variants_added > 0 ) {
+			$summary_parts[] = sprintf( '%d new variants added (stock 100)', $variants_added );
+		}
+		if ( $variants_reordered ) {
+			$summary_parts[] = 'variant order updated';
+		}
+		if ( $prices_updated > 0 ) {
+			$summary_parts[] = sprintf( '%d variant prices updated', $prices_updated );
 		}
 
 		return new \WP_REST_Response([
@@ -2109,15 +2532,19 @@ class Exacoat_TikTok_Client {
 			'item_id'                 => $product_id,
 			'product_id'              => $product_id,
 			'cover_updated'           => $cover_updated,
+			'title_updated'           => $title_updated,
+			'item_name'               => $title_updated ? $new_title : $existing_title,
 			'gallery_preserved_count' => $gallery_preserved_count,
 			'variants_updated'        => $variants_updated,
-			'variants_added'          => 0,
-			'variants_reordered'      => false,
-			'prices_updated'          => 0,
+			'variants_added'          => $variants_added,
+			'variants_reordered'      => $variants_reordered,
+			'prices_updated'          => $prices_updated,
 			'seller_centre_url'       => "https://seller-id.tiktok.com/product/edit/{$product_id}",
 			'errors'                  => $errors,
 			'error'                   => ! $overall_success ? implode( ' | ', $errors ) : null,
-			'message'                 => 'TikTok Shop update complete (' . implode( ', ', $summary_parts ) . ').',
+			'message'                 => $overall_success
+				? ( ! empty( $summary_parts ) ? 'Successfully updated TikTok Shop listing: ' . implode( ', ', $summary_parts ) . '.' : 'TikTok Shop listing is up to date.' )
+				: ( ! empty( $errors ) ? implode( '; ', $errors ) : 'Update failed.' ),
 		], $overall_success ? 200 : 400 );
 	}
 }

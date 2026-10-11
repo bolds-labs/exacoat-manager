@@ -23,6 +23,8 @@ interface MultiChannelRevenueChartProps {
   timeline: DailyFinancialPoint[];
   selectedChannels: FinancialChannel[];
   totalRevenue: number;
+  totalCleanRevenue?: number;
+  totalPlatformFees?: number;
   totalBuyerPaid?: number;
 }
 
@@ -30,9 +32,11 @@ export const MultiChannelRevenueChart: React.FC<MultiChannelRevenueChartProps> =
   timeline,
   selectedChannels,
   totalRevenue,
+  totalCleanRevenue,
+  totalPlatformFees,
   totalBuyerPaid,
 }) => {
-  const [chartMode, setChartMode] = useState<'channels' | 'stacked' | 'total'>('channels');
+  const [chartMode, setChartMode] = useState<'channels' | 'stacked' | 'clean'>('channels');
   const [granularity, setGranularity] = useState<FinancialGranularity>('daily');
 
   const hasWebstore = selectedChannels.includes('webstore');
@@ -57,11 +61,11 @@ export const MultiChannelRevenueChart: React.FC<MultiChannelRevenueChartProps> =
             <div className="flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-[#f3aa18]" />
               <h3 className="text-xs font-bold uppercase tracking-wider text-white">
-                Gross Sales Horizon & Channel Inflow
+                Revenue Horizon & Platform Inflow
               </h3>
             </div>
             <p className="text-[11px] text-neutral-400 mt-0.5">
-              Continuous {granularity} gross product sales across selected channels (hover for voucher & buyer-paid details)
+              Continuous {granularity} gross sales vs clean withdrawable payouts (hover for fee deductions and escrow payout)
             </p>
           </div>
 
@@ -120,7 +124,7 @@ export const MultiChannelRevenueChart: React.FC<MultiChannelRevenueChartProps> =
                     ? 'bg-white text-zinc-950 shadow-xs'
                     : 'text-neutral-400 hover:text-white'
                 )}
-                title="Individual channel gross sales curves starting at zero baseline"
+                title="Individual channel gross sales curves"
               >
                 <TrendingUp className="w-3 h-3" />
                 <span>By Channel</span>
@@ -141,28 +145,28 @@ export const MultiChannelRevenueChart: React.FC<MultiChannelRevenueChartProps> =
               </button>
               <button
                 type="button"
-                onClick={() => setChartMode('total')}
+                onClick={() => setChartMode('clean')}
                 className={clsx(
                   'px-2.5 py-1 rounded-lg transition-all cursor-pointer font-semibold flex items-center gap-1.5',
-                  chartMode === 'total'
+                  chartMode === 'clean'
                     ? 'bg-white text-zinc-950 shadow-xs'
                     : 'text-neutral-400 hover:text-white'
                 )}
-                title="Compare Gross Product Sales vs Buyer Paid Checkout Total"
+                title="Compare Gross Sales vs Clean Withdrawable Revenue"
               >
                 <BarChart2 className="w-3 h-3" />
-                <span>Gross vs Paid</span>
+                <span>Gross vs Clean</span>
               </button>
             </div>
 
             <div className="text-right pl-2 border-l border-white/[0.08] hidden sm:block">
-              <span className="text-[10px] font-mono text-neutral-400 uppercase block">Gross Horizon</span>
-              <span className="text-sm font-bold font-mono text-[#f3aa18] block">
+              <span className="text-[10px] font-mono text-neutral-400 uppercase block">Gross Sales</span>
+              <span className="text-sm font-bold font-mono text-white block">
                 {formatCurrency(totalRevenue, 'IDR')}
               </span>
-              {typeof totalBuyerPaid === 'number' && totalBuyerPaid !== totalRevenue && (
-                <span className="text-[10px] font-mono text-emerald-400 block">
-                  Paid: {formatCurrency(totalBuyerPaid, 'IDR')}
+              {typeof totalCleanRevenue === 'number' && (
+                <span className="text-[10px] font-mono text-emerald-400 block font-semibold">
+                  Clean: {formatCurrency(totalCleanRevenue, 'IDR')}
                 </span>
               )}
             </div>
@@ -192,7 +196,12 @@ export const MultiChannelRevenueChart: React.FC<MultiChannelRevenueChartProps> =
                     <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.0} />
                   </linearGradient>
 
-                  <linearGradient id="totalGrad" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="totalGrossGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#f3aa18" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="#f3aa18" stopOpacity={0.0} />
+                  </linearGradient>
+
+                  <linearGradient id="totalCleanGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
                     <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
                   </linearGradient>
@@ -222,9 +231,9 @@ export const MultiChannelRevenueChart: React.FC<MultiChannelRevenueChartProps> =
                   content={({ active, payload }) => {
                     if (active && payload && payload.length) {
                       const data = payload[0].payload as DailyFinancialPoint;
-                      const totalDiscounts = (data.totalVoucherSubsidy || 0) + (data.totalSellerDiscount || 0);
+                      const dayPlatformFees = data.totalPlatformFees || 0;
                       return (
-                        <div className="p-3.5 rounded-xl bg-zinc-950/95 border border-white/10 shadow-2xl backdrop-blur-md text-xs font-sans min-w-[240px]">
+                        <div className="p-3.5 rounded-xl bg-zinc-950/95 border border-white/10 shadow-2xl backdrop-blur-md text-xs font-sans min-w-[250px]">
                           <div className="text-[11px] font-mono font-bold text-white border-b border-white/10 pb-1.5 mb-2 flex items-center justify-between gap-4">
                             <span>{data.fullLabel || data.date}</span>
                             <span className="text-neutral-400 font-normal">
@@ -244,10 +253,10 @@ export const MultiChannelRevenueChart: React.FC<MultiChannelRevenueChartProps> =
                                     {formatCurrency(data.webstore, 'IDR')}
                                   </span>
                                 </div>
-                                {data.webstoreBuyerPaid !== data.webstore && data.webstore > 0 && (
-                                  <div className="flex items-center justify-between gap-3 text-[10px] text-neutral-400 pl-3.5">
-                                    <span>Buyer Paid:</span>
-                                    <span className="tabular-nums">{formatCurrency(data.webstoreBuyerPaid, 'IDR')}</span>
+                                {data.webstoreClean > 0 && (
+                                  <div className="flex items-center justify-between gap-3 text-[10px] text-emerald-400/90 pl-3.5">
+                                    <span>Clean Payout:</span>
+                                    <span className="tabular-nums">{formatCurrency(data.webstoreClean, 'IDR')}</span>
                                   </div>
                                 )}
                               </div>
@@ -264,10 +273,10 @@ export const MultiChannelRevenueChart: React.FC<MultiChannelRevenueChartProps> =
                                     {formatCurrency(data.shopee, 'IDR')}
                                   </span>
                                 </div>
-                                {data.shopeeBuyerPaid !== data.shopee && data.shopee > 0 && (
-                                  <div className="flex items-center justify-between gap-3 text-[10px] text-neutral-400 pl-3.5">
-                                    <span>Buyer Paid:</span>
-                                    <span className="tabular-nums">{formatCurrency(data.shopeeBuyerPaid, 'IDR')}</span>
+                                {data.shopeeClean > 0 && (
+                                  <div className="flex items-center justify-between gap-3 text-[10px] text-emerald-400/90 pl-3.5">
+                                    <span>Clean Payout:</span>
+                                    <span className="tabular-nums">{formatCurrency(data.shopeeClean, 'IDR')}</span>
                                   </div>
                                 )}
                               </div>
@@ -284,47 +293,46 @@ export const MultiChannelRevenueChart: React.FC<MultiChannelRevenueChartProps> =
                                     {formatCurrency(data.tiktok, 'IDR')}
                                   </span>
                                 </div>
-                                {data.tiktokBuyerPaid !== data.tiktok && data.tiktok > 0 && (
-                                  <div className="flex items-center justify-between gap-3 text-[10px] text-neutral-400 pl-3.5">
-                                    <span>Buyer Paid:</span>
-                                    <span className="tabular-nums">{formatCurrency(data.tiktokBuyerPaid, 'IDR')}</span>
+                                {data.tiktokClean > 0 && (
+                                  <div className="flex items-center justify-between gap-3 text-[10px] text-emerald-400/90 pl-3.5">
+                                    <span>Clean Payout:</span>
+                                    <span className="tabular-nums">{formatCurrency(data.tiktokClean, 'IDR')}</span>
                                   </div>
                                 )}
                               </div>
                             )}
 
                             <div className="pt-2 border-t border-white/10 space-y-1">
-                              <div className="flex items-center justify-between text-xs font-bold text-[#10b981]">
-                                <span>
-                                  {granularity === 'daily'
-                                    ? 'Total Day Gross:'
-                                    : granularity === 'weekly'
-                                    ? 'Total Week Gross:'
-                                    : 'Total Month Gross:'}
-                                </span>
+                              <div className="flex items-center justify-between text-xs font-bold text-white">
+                                <span>Total Gross Sales:</span>
                                 <span className="tabular-nums">
                                   {formatCurrency(data.total, 'IDR')}
                                 </span>
                               </div>
 
-                              {totalDiscounts > 0 && (
-                                <div className="flex items-center justify-between text-[10px] text-amber-400">
-                                  <span>Vouchers & Discounts:</span>
-                                  <span className="tabular-nums">-{formatCurrency(totalDiscounts, 'IDR')}</span>
+                              {dayPlatformFees > 0 && (
+                                <div className="flex items-center justify-between text-[10px] text-rose-400">
+                                  <span>Platform Fees Deducted:</span>
+                                  <span className="tabular-nums">-{formatCurrency(dayPlatformFees, 'IDR')}</span>
                                 </div>
                               )}
 
-                              {data.totalShippingAndFees > 0 && (
-                                <div className="flex items-center justify-between text-[10px] text-sky-400">
-                                  <span>Shipping & Fees:</span>
-                                  <span className="tabular-nums">+{formatCurrency(data.totalShippingAndFees, 'IDR')}</span>
-                                </div>
-                              )}
+                              <div className="flex items-center justify-between text-xs font-black text-emerald-400">
+                                <span>Clean Withdrawable Revenue:</span>
+                                <span className="tabular-nums">{formatCurrency(data.totalClean, 'IDR')}</span>
+                              </div>
 
-                              <div className="flex items-center justify-between text-[11px] font-semibold text-neutral-200">
-                                <span>Buyer Paid (Checkout):</span>
+                              <div className="flex items-center justify-between text-[10px] text-neutral-400 pt-1 border-t border-white/[0.04]">
+                                <span>Buyer Paid Total:</span>
                                 <span className="tabular-nums">{formatCurrency(data.totalBuyerPaid, 'IDR')}</span>
                               </div>
+
+                              {data.totalVoucherSubsidy > 0 && (
+                                <div className="flex items-center justify-between text-[10px] text-amber-400/90">
+                                  <span>Buyer Voucher Subsidies:</span>
+                                  <span className="tabular-nums">-{formatCurrency(data.totalVoucherSubsidy, 'IDR')}</span>
+                                </div>
+                              )}
 
                               {data.cancelledOrders > 0 && (
                                 <div className="flex items-center justify-between text-[10px] text-rose-400/90 pt-1 border-t border-white/[0.06]">
@@ -419,24 +427,23 @@ export const MultiChannelRevenueChart: React.FC<MultiChannelRevenueChartProps> =
                   </>
                 )}
 
-                {chartMode === 'total' && (
+                {chartMode === 'clean' && (
                   <>
                     <Area
                       type="monotone"
                       dataKey="total"
                       name="Gross Sales"
-                      stroke="#10b981"
+                      stroke="#f3aa18"
                       strokeWidth={2.2}
-                      fill="url(#totalGrad)"
+                      fill="url(#totalGrossGrad)"
                     />
                     <Area
                       type="monotone"
-                      dataKey="totalBuyerPaid"
-                      name="Buyer Paid"
-                      stroke="#f3aa18"
-                      strokeWidth={1.8}
-                      strokeDasharray="4 4"
-                      fillOpacity={0}
+                      dataKey="totalClean"
+                      name="Clean Withdrawable"
+                      stroke="#10b981"
+                      strokeWidth={2.2}
+                      fill="url(#totalCleanGrad)"
                     />
                   </>
                 )}
@@ -452,7 +459,7 @@ export const MultiChannelRevenueChart: React.FC<MultiChannelRevenueChartProps> =
 
       <div className="mt-3 pt-3 border-t border-white/[0.06] flex flex-wrap items-center justify-between gap-3 text-[11px] font-mono text-neutral-400">
         <div className="flex items-center gap-4 flex-wrap">
-          {chartMode !== 'total' ? (
+          {chartMode !== 'clean' ? (
             <>
               {hasWebstore && (
                 <div className="flex items-center gap-1.5">
@@ -476,12 +483,12 @@ export const MultiChannelRevenueChart: React.FC<MultiChannelRevenueChartProps> =
           ) : (
             <>
               <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-[#10b981]" />
-                <span className="text-neutral-300">Gross Product Sales</span>
+                <span className="w-2 h-2 rounded-full bg-[#f3aa18]" />
+                <span className="text-neutral-300">Gross Sales</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-[#f3aa18]" />
-                <span className="text-neutral-300">Buyer Paid (Checkout)</span>
+                <span className="w-2 h-2 rounded-full bg-[#10b981]" />
+                <span className="text-neutral-300 font-bold">Clean Withdrawable (Payout)</span>
               </div>
             </>
           )}
