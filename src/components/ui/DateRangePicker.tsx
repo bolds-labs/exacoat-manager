@@ -35,6 +35,22 @@ interface DateRangePickerProps {
   subtitle?: string;
 }
 
+const formatDateToYmd = (d: Date): string => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const parseYmdToLocalDate = (str: string | null | undefined): Date | null => {
+  if (!str) return null;
+  const parts = str.trim().split('-');
+  if (parts.length !== 3) return null;
+  const [y, m, d] = parts.map(Number);
+  if (isNaN(y) || isNaN(m) || isNaN(d)) return null;
+  return new Date(y, m - 1, d, 12, 0, 0);
+};
+
 export const DateRangePicker: React.FC<DateRangePickerProps> = ({
   preset,
   onPresetChange,
@@ -51,21 +67,21 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
 
   // Active Month View for custom calendar
   const [currentMonth, setCurrentMonth] = useState<Date>(() => {
-    return customEnd ? new Date(customEnd) : new Date();
+    return parseYmdToLocalDate(customEnd) || new Date();
   });
 
   // Selected range state inside picker
   const [rangeStart, setRangeStart] = useState<Date | null>(() => {
-    return customStart ? new Date(customStart) : null;
+    return parseYmdToLocalDate(customStart);
   });
   const [rangeEnd, setRangeEnd] = useState<Date | null>(() => {
-    return customEnd ? new Date(customEnd) : null;
+    return parseYmdToLocalDate(customEnd);
   });
   const [hoverDate, setHoverDate] = useState<Date | null>(null);
 
   useEffect(() => {
-    if (customStart) setRangeStart(new Date(customStart));
-    if (customEnd) setRangeEnd(new Date(customEnd));
+    if (customStart) setRangeStart(parseYmdToLocalDate(customStart));
+    if (customEnd) setRangeEnd(parseYmdToLocalDate(customEnd));
   }, [customStart, customEnd]);
 
   useEffect(() => {
@@ -167,8 +183,8 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
 
   const handleApply = () => {
     if (rangeStart) {
-      const startStr = rangeStart.toISOString().split('T')[0];
-      const endStr = rangeEnd ? rangeEnd.toISOString().split('T')[0] : startStr;
+      const startStr = formatDateToYmd(rangeStart);
+      const endStr = rangeEnd ? formatDateToYmd(rangeEnd) : startStr;
       onCustomChange(startStr, endStr);
       onPresetChange('custom');
       setIsOpen(false);
@@ -181,8 +197,8 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
       const start = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
       setRangeStart(start);
       setRangeEnd(now);
-      const startStr = start.toISOString().split('T')[0];
-      const endStr = now.toISOString().split('T')[0];
+      const startStr = formatDateToYmd(start);
+      const endStr = formatDateToYmd(now);
       onCustomChange(startStr, endStr);
       onPresetChange('custom');
       setIsOpen(false);

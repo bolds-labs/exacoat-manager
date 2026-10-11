@@ -218,6 +218,32 @@ export function getStoreDateKey(date: Date | number | string | null | undefined)
 }
 
 /**
+ * Resolves the start of a calendar day (00:00:00.000) in store timezone (Asia/Jakarta, UTC+7) as a UTC timestamp in ms.
+ */
+export function getStoreDayStartMs(dateInput: string | Date | number | null | undefined): number {
+  if (!dateInput) return 0;
+  const key = typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput.trim())
+    ? dateInput.trim()
+    : getStoreDateKey(dateInput);
+  if (!key) return 0;
+  const [y, m, d] = key.split('-').map(Number);
+  return Date.UTC(y, m - 1, d, 0, 0, 0, 0) - (7 * 60 * 60 * 1000);
+}
+
+/**
+ * Resolves the end of a calendar day (23:59:59.999) in store timezone (Asia/Jakarta, UTC+7) as a UTC timestamp in ms.
+ */
+export function getStoreDayEndMs(dateInput: string | Date | number | null | undefined): number {
+  if (!dateInput) return 0;
+  const key = typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput.trim())
+    ? dateInput.trim()
+    : getStoreDateKey(dateInput);
+  if (!key) return 0;
+  const [y, m, d] = key.split('-').map(Number);
+  return Date.UTC(y, m - 1, d, 23, 59, 59, 999) - (7 * 60 * 60 * 1000);
+}
+
+/**
  * Returns short date label (e.g. 'Oct 8') in store timezone (Asia/Jakarta)
  */
 export function formatStoreDateLabel(date: Date | number | string | null | undefined): string {

@@ -51,7 +51,11 @@ class Exacoat_Shipping_Tracker {
 		add_filter( 'cron_schedules', [ __CLASS__, 'register_cron_intervals' ] );
 		add_action( 'exacoat_shipping_sync_cron', [ __CLASS__, 'cron_sync_active_shipments' ] );
 		add_action( 'exacoat_hourly_shipping_sync', [ __CLASS__, 'cron_sync_active_shipments' ] );
-		if ( ! wp_next_scheduled( 'exacoat_shipping_sync_cron' ) ) {
+		if ( function_exists( 'as_has_scheduled_action' ) ) {
+			if ( ! as_has_scheduled_action( 'exacoat_shipping_sync_cron' ) ) {
+				as_schedule_recurring_action( time() + 300, 3 * HOUR_IN_SECONDS, 'exacoat_shipping_sync_cron', [], 'exacoat-shipping' );
+			}
+		} elseif ( ! wp_next_scheduled( 'exacoat_shipping_sync_cron' ) ) {
 			wp_schedule_event( time() + 300, 'three_hours', 'exacoat_shipping_sync_cron' );
 		}
 	}
@@ -976,6 +980,14 @@ class Exacoat_Shipping_Tracker {
 			$err_msg   = (string) ( $body['error'] ?? ( $body['message'] ?? "Biteship tracking returned HTTP {$status_code}" ) );
 			$err_lower = strtolower( $err_msg );
 
+			// If JNE courier, fall back to direct JNE official portal verification
+			if ( 'jne' === $biteship_courier && $order_id > 0 ) {
+				$jne_direct = self::sync_jne_direct_tracking( $order_id, $tracking_number );
+				if ( ! empty( $jne_direct['success'] ) ) {
+					return $jne_direct;
+				}
+			}
+
 			// If Biteship reports pre-allocated / not-yet-scanned waybill (code 40003001 or invalid/expired before first scan)
 			if ( 40003001 === (int) ( $body['code'] ?? 0 ) || strpos( $err_lower, 'invalid or expired' ) !== false || strpos( $err_lower, 'failed to get tracking information' ) !== false ) {
 				return [
@@ -993,6 +1005,14 @@ class Exacoat_Shipping_Tracker {
 		// Process tracking data
 		$biteship_status = strtolower( trim( (string) ( $body['status'] ?? '' ) ) );
 		$history = is_array( $body['history'] ?? null ) ? $body['history'] : [];
+
+		// If JNE returns 200 from Biteship but with empty history or pending status, try JNE direct verification
+		if ( 'jne' === $biteship_courier && empty( $history ) && $order_id > 0 ) {
+			$jne_direct = self::sync_jne_direct_tracking( $order_id, $tracking_number );
+			if ( ! empty( $jne_direct['success'] ) ) {
+				return $jne_direct;
+			}
+		}
 		$dest_addr = trim( (string) ( $body['destination']['address'] ?? '' ) );
 
 		$formatted_checkpoints = [];
@@ -1091,6 +1111,262 @@ class Exacoat_Shipping_Tracker {
 			'status'      => $biteship_status,
 			'checkpoints' => $formatted_checkpoints,
 			'raw'         => $body,
+		];
+	}
+
+	/**
+	 * Direct tracking for JNE by resolving recipient phone verification on official JNE portal
+	 */
+	public static function sync_jne_direct_tracking( int $order_id, string $tracking_number ): array {
+		$order = wc_get_order( $order_id );
+		if ( ! $order ) {
+			return [ 'success' => false, 'message' => 'Order not found' ];
+		}
+
+		$candidates = [];
+		$phone_fields = [
+			$order->get_shipping_phone(),
+			$order->get_billing_phone(),
+			$order->get_meta( '_shipping_phone' ),
+			$order->get_meta( '_billing_phone' ),
+			get_post_meta( $order_id, '_shipping_phone', true ),
+			get_post_meta( $order_id, '_billing_phone', true ),
+		];
+		foreach ( $phone_fields as $raw ) {
+			$clean = preg_replace( '/\D/', '', (string) $raw );
+			if ( strlen( $clean ) >= 5 ) {
+				$last5 = substr( $clean, -5 );
+				if ( ! in_array( $last5, $candidates, true ) ) {
+					$candidates[] = $last5;
+				}
+			}
+		}
+
+		if ( empty( $candidates ) ) {
+			return [ 'success' => false, 'message' => 'No valid recipient phone number found for JNE verification' ];
+		}
+
+		$user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+		// Step 1: GET homepage to retrieve CSRF token and initial cookies
+		$home_res = wp_remote_get( 'https://www.jne.co.id', [
+			'headers' => [
+				'User-Agent' => $user_agent,
+				'Accept'     => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+			],
+			'timeout' => 12,
+		] );
+
+		if ( is_wp_error( $home_res ) ) {
+			return [ 'success' => false, 'message' => 'JNE connection error: ' . $home_res->get_error_message() ];
+		}
+
+		$home_body = wp_remote_retrieve_body( $home_res );
+		if ( ! preg_match( '/name="_token"\s+value="([^"]+)"/', $home_body, $token_m ) ) {
+			return [ 'success' => false, 'message' => 'Failed to parse JNE CSRF token' ];
+		}
+		$token = $token_m[1];
+		$cookies = wp_remote_retrieve_cookies( $home_res );
+
+		$cookie_pairs = [];
+		foreach ( $cookies as $c ) {
+			if ( is_object( $c ) && isset( $c->name, $c->value ) ) {
+				$cookie_pairs[] = $c->name . '=' . $c->value;
+			} elseif ( is_string( $c ) ) {
+				$cookie_pairs[] = $c;
+			}
+		}
+		$cookie_header = implode( '; ', $cookie_pairs );
+
+		// Step 2: POST /tracking-package to initiate tracking session
+		$pkg_res = wp_remote_post( 'https://www.jne.co.id/tracking-package', [
+			'headers' => [
+				'User-Agent'   => $user_agent,
+				'Referer'      => 'https://www.jne.co.id/',
+				'Content-Type' => 'application/x-www-form-urlencoded',
+				'Cookie'       => $cookie_header,
+			],
+			'cookies' => $cookies,
+			'body'    => [
+				'_token'     => $token,
+				'lacak-resi' => $tracking_number,
+			],
+			'timeout' => 12,
+		] );
+
+		if ( is_wp_error( $pkg_res ) ) {
+			return [ 'success' => false, 'message' => 'JNE tracking initiation error: ' . $pkg_res->get_error_message() ];
+		}
+
+		$pkg_body = wp_remote_retrieve_body( $pkg_res );
+		$pkg_cookies = wp_remote_retrieve_cookies( $pkg_res );
+		if ( ! empty( $pkg_cookies ) ) {
+			foreach ( $pkg_cookies as $c ) {
+				if ( is_object( $c ) && isset( $c->name, $c->value ) ) {
+					$cookie_pairs[] = $c->name . '=' . $c->value;
+				}
+			}
+			$cookie_header = implode( '; ', array_unique( $cookie_pairs ) );
+		}
+
+		$modal_token = $token;
+		if ( preg_match( '/url:\s*"https:\/\/www\.jne\.co\.id\/load-verify"[\s\S]*?"_token":\s*"([^"]+)"/', $pkg_body, $mt ) ) {
+			$modal_token = $mt[1];
+		}
+
+		// Step 3: Try candidate last5 phone numbers with /load-verify
+		$verified_url = '';
+		foreach ( $candidates as $last5 ) {
+			$verify_res = wp_remote_post( 'https://www.jne.co.id/load-verify', [
+				'headers' => [
+					'User-Agent'       => $user_agent,
+					'Referer'          => 'https://www.jne.co.id/tracking-package',
+					'Content-Type'     => 'application/x-www-form-urlencoded',
+					'X-Requested-With' => 'XMLHttpRequest',
+					'Cookie'           => $cookie_header,
+				],
+				'cookies' => $cookies,
+				'body'    => [
+					'_token'  => $modal_token,
+					'resi_'   => $tracking_number,
+					'num_all' => $last5,
+				],
+				'timeout' => 12,
+			] );
+
+			if ( ! is_wp_error( $verify_res ) ) {
+				$v_body = json_decode( wp_remote_retrieve_body( $verify_res ), true );
+				if ( ! empty( $v_body['url'] ) ) {
+					$verified_url = $v_body['url'];
+					break;
+				}
+			}
+		}
+
+		if ( empty( $verified_url ) ) {
+			return [ 'success' => false, 'message' => 'JNE phone challenge verification failed or waybill not found' ];
+		}
+
+		// Step 4: GET verified detail page and parse window.allTrackingData
+		$detail_res = wp_remote_get( $verified_url, [
+			'headers' => [
+				'User-Agent' => $user_agent,
+				'Referer'    => 'https://www.jne.co.id/tracking-package',
+				'Cookie'     => $cookie_header,
+			],
+			'cookies' => $cookies,
+			'timeout' => 12,
+		] );
+
+		if ( is_wp_error( $detail_res ) ) {
+			return [ 'success' => false, 'message' => 'JNE detail page retrieval failed: ' . $detail_res->get_error_message() ];
+		}
+
+		$detail_body = wp_remote_retrieve_body( $detail_res );
+		if ( ! preg_match( '/window\.allTrackingData\s*=\s*(\{[\s\S]*?\});/', $detail_body, $dt_m ) ) {
+			return [ 'success' => false, 'message' => 'No tracking payload in JNE verified response' ];
+		}
+
+		$track_json = json_decode( $dt_m[1], true );
+		$track_info = $track_json[ $tracking_number ] ?? null;
+		if ( ! is_array( $track_info ) ) {
+			return [ 'success' => false, 'message' => 'Tracking number missing in JNE response payload' ];
+		}
+
+		// Map JNE data to Exacoat format
+		$raw_status  = strtoupper( trim( (string) ( $track_info['currentStatus'] ?? '' ) ) );
+		$history     = is_array( $track_info['history'] ?? null ) ? $track_info['history'] : [];
+		$pod_date    = trim( (string) ( $track_info['podDate'] ?? '' ) );
+		$rec_name    = trim( (string) ( $track_info['receiverName'] ?? '' ) );
+		$rec_rel     = trim( (string) ( $track_info['receiverRelationship'] ?? '' ) );
+		$dest_city   = trim( (string) ( $track_info['receiverCityDetail'] ?? ( $track_info['to'] ?? '' ) ) );
+
+		$formatted_checkpoints = [];
+		foreach ( $history as $h ) {
+			$title = trim( (string) ( $h['title'] ?? '' ) );
+			$date  = trim( (string) ( $h['date'] ?? '' ) );
+			if ( empty( $title ) && empty( $date ) ) {
+				continue;
+			}
+
+			$location = '';
+			if ( preg_match( '/\[([^\]]+)\]/', $title, $lm ) ) {
+				$location = trim( $lm[1] );
+			}
+
+			$stage = 'in_transit';
+			if ( stripos( $title, 'DELIVERED' ) !== false ) {
+				$stage = 'delivered';
+			} elseif ( stripos( $title, 'SHIPMENT RECEIVED' ) !== false || stripos( $title, 'PICKUP' ) !== false ) {
+				$stage = 'picked';
+			} elseif ( stripos( $title, 'WITH DELIVERY COURIER' ) !== false ) {
+				$stage = 'dropping_off';
+			}
+
+			$time_str = '';
+			if ( ! empty( $date ) ) {
+				$dt = DateTime::createFromFormat( 'd-m-Y H:i:s', $date );
+				$time_str = $dt ? $dt->format( 'c' ) : $date;
+			}
+
+			$formatted_checkpoints[] = [
+				'time'        => $time_str,
+				'description' => $title,
+				'location'    => self::clean_checkpoint_location( $location ?: $dest_city ),
+				'stage'       => $stage,
+			];
+		}
+
+		usort( $formatted_checkpoints, function( $a, $b ) {
+			$ta = ! empty( $a['time'] ) ? strtotime( $a['time'] ) : 0;
+			$tb = ! empty( $b['time'] ) ? strtotime( $b['time'] ) : 0;
+			return $tb <=> $ta;
+		} );
+
+		$canonical_status = ( 'DELIVERED' === $raw_status ) ? 'delivered' : 'in_transit';
+
+		// Update order metadata
+		if ( ! empty( $formatted_checkpoints ) ) {
+			$order->update_meta_data( '_exacoat_tracking_checkpoints', $formatted_checkpoints );
+			update_post_meta( $order_id, '_exacoat_tracking_checkpoints', $formatted_checkpoints );
+		}
+
+		$order->update_meta_data( '_biteship_latest_status', $canonical_status );
+		$order->update_meta_data( '_exacoat_tracking_latest_status', $canonical_status );
+		update_post_meta( $order_id, '_biteship_latest_status', $canonical_status );
+		update_post_meta( $order_id, '_exacoat_tracking_latest_status', $canonical_status );
+
+		$current_order_status = $order->get_status();
+		if ( 'delivered' === $canonical_status ) {
+			$dt = DateTime::createFromFormat( 'd-m-Y H:i:s', $pod_date );
+			$delivery_time = $dt ? $dt->format( 'Y-m-d H:i:s' ) : current_time( 'mysql' );
+
+			$order->update_meta_data( '_delivered_at', $delivery_time );
+			$order->update_meta_data( '_exacoat_delivered_at', $delivery_time );
+			$order->update_meta_data( '_biteship_delivery_time', $delivery_time );
+			$order->update_meta_data( 'delivered_time', $delivery_time );
+			update_post_meta( $order_id, '_delivered_at', $delivery_time );
+			update_post_meta( $order_id, '_exacoat_delivered_at', $delivery_time );
+			update_post_meta( $order_id, '_biteship_delivery_time', $delivery_time );
+			update_post_meta( $order_id, 'delivered_time', $delivery_time );
+
+			if ( 'completed' !== $current_order_status ) {
+				$rec_label = $rec_name ? ( $rec_rel ? "{$rec_name} ({$rec_rel})" : $rec_name ) : 'Recipient';
+				$note_text = sprintf( 'JNE Direct: Package delivered (%s). Received by %s on %s.', $tracking_number, $rec_label, $pod_date );
+				$order->update_status( 'completed', $note_text );
+			}
+		} elseif ( in_array( $current_order_status, [ 'processing', 'preparing-order', 'ready-to-ship', 'awaiting-pickup' ], true ) ) {
+			$order->update_status( 'shipped', sprintf( 'JNE Direct: Package in transit (%s).', $tracking_number ) );
+		}
+
+		$order->save();
+
+		return [
+			'success'     => true,
+			'source'      => 'jne_direct',
+			'status'      => $canonical_status,
+			'checkpoints' => $formatted_checkpoints,
+			'raw'         => $track_info,
 		];
 	}
 

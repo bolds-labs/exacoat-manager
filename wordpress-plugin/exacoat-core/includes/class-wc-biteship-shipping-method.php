@@ -87,24 +87,51 @@ if ( ! class_exists( 'WC_Biteship_Shipping_Method' ) && class_exists( 'WC_Shippi
 				return;
 			}
 
-			$destination_zip   = $package['destination']['postcode'];
+			$destination_zip   = trim( (string) $package['destination']['postcode'] );
 			$stable_cart_items = [];
-			foreach ( $package['contents'] as $item_id => $values ) {
-				$stable_cart_items[ $item_id ] = [
-					'product_id'   => $values['product_id'],
-					'variation_id' => $values['variation_id'],
-					'quantity'     => $values['quantity'],
+			foreach ( $package['contents'] as $values ) {
+				$stable_cart_items[] = [
+					'product_id'   => (int) ( $values['product_id'] ?? 0 ),
+					'variation_id' => (int) ( $values['variation_id'] ?? 0 ),
+					'quantity'     => (int) ( $values['quantity'] ?? 1 ),
 				];
 			}
-			$cart_hash     = md5( json_encode( $stable_cart_items ) . '_exacoat_v0.0.8' );
+			usort( $stable_cart_items, function( $a, $b ) {
+				$ka = $a['product_id'] . '_' . $a['variation_id'];
+				$kb = $b['product_id'] . '_' . $b['variation_id'];
+				return strcmp( $ka, $kb );
+			} );
+			$cart_hash     = md5( json_encode( $stable_cart_items ) . '_exacoat_v0.1' );
 			$transient_key = 'biteship_rates_' . $destination_zip . '_' . $cart_hash;
 
+			// Runtime in-memory cache for the current PHP execution lifecycle
+			static $runtime_cache = [];
+			if ( isset( $runtime_cache[ $transient_key ] ) ) {
+				if ( ! empty( $runtime_cache[ $transient_key ]['session'] ) && function_exists( 'WC' ) && WC()->session ) {
+					WC()->session->set( 'biteship_destination_data', $runtime_cache[ $transient_key ]['session'] );
+				}
+				foreach ( $runtime_cache[ $transient_key ]['rates'] as $rate_data ) {
+					$this->add_rate( $rate_data );
+				}
+				return;
+			}
+
+			// Check negative cache: if this postal code recently errored, don't hammer the API repeatedly in this session
+			if ( false !== get_transient( 'biteship_err_' . $destination_zip ) ) {
+				return;
+			}
+
 			if ( false !== ( $cached_rates = get_transient( $transient_key ) ) ) {
-				if ( false !== ( $cached_session = get_transient( $transient_key . '_session' ) ) ) {
+				$cached_session = get_transient( $transient_key . '_session' );
+				if ( false !== $cached_session ) {
 					if ( function_exists( 'WC' ) && WC()->session ) {
 						WC()->session->set( 'biteship_destination_data', $cached_session );
 					}
 				}
+				$runtime_cache[ $transient_key ] = [
+					'rates'   => $cached_rates,
+					'session' => $cached_session ?: null,
+				];
 				foreach ( $cached_rates as $rate_data ) {
 					$this->add_rate( $rate_data );
 				}
@@ -150,6 +177,7 @@ if ( ! class_exists( 'WC_Biteship_Shipping_Method' ) && class_exists( 'WC_Shippi
 			] );
 
 			if ( is_wp_error( $response ) ) {
+				set_transient( 'biteship_err_' . $destination_zip, 1, 5 * MINUTE_IN_SECONDS );
 				if ( function_exists( 'wc_get_logger' ) ) {
 					wc_get_logger()->error( 'Biteship API Error: ' . $response->get_error_message() );
 				}
@@ -240,8 +268,13 @@ if ( ! class_exists( 'WC_Biteship_Shipping_Method' ) && class_exists( 'WC_Shippi
 					if ( $destination_data ) {
 						set_transient( $transient_key . '_session', $destination_data, DAY_IN_SECONDS );
 					}
+					$runtime_cache[ $transient_key ] = [
+						'rates'   => $rates_to_cache,
+						'session' => $destination_data,
+					];
 				}
 			} else {
+				set_transient( 'biteship_err_' . $destination_zip, 1, 5 * MINUTE_IN_SECONDS );
 				if ( function_exists( 'WC' ) && WC()->session ) {
 					WC()->session->__unset( 'biteship_destination_data' );
 				}

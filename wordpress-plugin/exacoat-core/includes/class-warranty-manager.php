@@ -1216,6 +1216,14 @@ class Exacoat_Warranty_Manager {
 		}
 
 		$rates = [];
+		$transient_key = 'biteship_warranty_rates_' . $postcode;
+		$cached_rates  = get_transient( $transient_key );
+		if ( ! empty( $cached_rates ) && is_array( $cached_rates ) ) {
+			return new \WP_REST_Response( [
+				'success' => true,
+				'rates'   => $cached_rates,
+			], 200 );
+		}
 
 		if ( ! empty( $api_key ) ) {
 			$body = [
@@ -1267,6 +1275,10 @@ class Exacoat_Warranty_Manager {
 					}
 				}
 			}
+		}
+
+		if ( ! empty( $rates ) ) {
+			set_transient( $transient_key, $rates, 7 * DAY_IN_SECONDS );
 		}
 
 		$is_fallback = false;

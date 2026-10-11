@@ -166,6 +166,21 @@ class Exacoat_Biteship_Engine {
 			return new WP_Error( 'invalid_postcode', 'Enter a valid Indonesian postal code.', [ 'status' => 400 ] );
 		}
 
+		// 0. Cache check: 30 days persistence for static postal code lookups
+		$cached = get_transient( 'biteship_postcode_' . $postcode );
+		if ( is_array( $cached ) && ! empty( $cached['province'] ) && ! empty( $cached['city'] ) ) {
+			return rest_ensure_response( $cached );
+		}
+		$art_cached = get_transient( 'artmatter_checkout_address_' . $postcode );
+		if ( is_array( $art_cached ) && ! empty( $art_cached['province'] ) && ! empty( $art_cached['city'] ) ) {
+			return rest_ensure_response( $art_cached );
+		}
+
+		// Negative cache check (skip hammering API for bad/unresolvable postal codes)
+		if ( false !== get_transient( 'biteship_postcode_err_' . $postcode ) ) {
+			return new WP_Error( 'address_not_found', 'No address was found for this postal code.', [ 'status' => 404 ] );
+		}
+
 		$api_key = self::get_api_key();
 		if ( ! $api_key ) {
 			return new WP_Error( 'address_service_unavailable', 'Address lookup is temporarily unavailable.', [ 'status' => 503 ] );
@@ -275,10 +290,12 @@ class Exacoat_Biteship_Engine {
 		}
 
 		if ( ! $destination_data || ! $destination_data['province'] || ! $destination_data['city'] ) {
+			set_transient( 'biteship_postcode_err_' . $postcode, 1, 15 * MINUTE_IN_SECONDS );
 			return new WP_Error( 'address_not_found', 'No address was found for this postal code.', [ 'status' => 404 ] );
 		}
 
-		set_transient( 'artmatter_checkout_address_' . $postcode, $destination_data, DAY_IN_SECONDS );
+		set_transient( 'biteship_postcode_' . $postcode, $destination_data, 30 * DAY_IN_SECONDS );
+		set_transient( 'artmatter_checkout_address_' . $postcode, $destination_data, 30 * DAY_IN_SECONDS );
 		return rest_ensure_response( $destination_data );
 	}
 
