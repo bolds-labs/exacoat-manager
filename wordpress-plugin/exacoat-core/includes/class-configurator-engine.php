@@ -3621,8 +3621,9 @@ class Exacoat_Configurator_Engine {
 
 		// Trigger storefront Next.js ISR revalidation and Cloudflare cache purge
 		$reval_results = self::trigger_storefront_revalidation( [
-			'slug'     => $profile['device_slug'] ?? '',
-			'category' => $profile['category'] ?? '',
+			'product_id' => $product_id,
+			'slug'       => $profile['device_slug'] ?? '',
+			'category'   => $profile['category'] ?? '',
 		] );
 
 		return rest_ensure_response( [
@@ -3838,7 +3839,8 @@ class Exacoat_Configurator_Engine {
 
 		// Trigger storefront Next.js ISR revalidation and Cloudflare cache purge
 		$reval_results = self::trigger_storefront_revalidation( [
-			'slug' => $product->get_slug(),
+			'product_id' => $product_id,
+			'slug'       => $product->get_slug(),
 		] );
 
 		return rest_ensure_response( [
@@ -4033,7 +4035,8 @@ class Exacoat_Configurator_Engine {
 
 		// Trigger storefront Next.js ISR revalidation and Cloudflare cache purge
 		$reval_results = self::trigger_storefront_revalidation( [
-			'slug' => $new_slug,
+			'product_id' => $new_pid,
+			'slug'       => $new_slug,
 		] );
 
 		return rest_ensure_response( [
@@ -4283,28 +4286,108 @@ class Exacoat_Configurator_Engine {
 			$category_slug = (string) $cats[0];
 		}
 		self::trigger_storefront_revalidation( [
-			'slug'     => $slug,
-			'category' => $category_slug,
-			'tag'      => 'products',
+			'product_id' => $post_id,
+			'slug'       => $slug,
+			'category'   => $category_slug,
+			'tag'        => 'products',
 		] );
 	}
 
 	/**
-	 * Dual Revalidation: triggers Next.js storefront on-demand ISR revalidation and Cloudflare Edge Cache purge.
+	 * Dual Revalidation: triggers Next.js storefront on-demand ISR revalidation, LiteSpeed cache purge, and Cloudflare Edge Cache purge.
 	 */
 	public static function trigger_storefront_revalidation( array $params = [] ): array {
-		$slug      = sanitize_title( $params['slug'] ?? '' );
-		$category  = sanitize_title( $params['category'] ?? '' );
-		$tag       = sanitize_text_field( $params['tag'] ?? 'products' );
-		$path      = sanitize_text_field( $params['path'] ?? '' );
-		$purge_all = ! empty( $params['purge_everything'] );
+		$slug       = sanitize_title( $params['slug'] ?? '' );
+		$product_id = absint( $params['product_id'] ?? $params['id'] ?? 0 );
+		$category   = sanitize_title( $params['category'] ?? '' );
+		$tag        = sanitize_text_field( $params['tag'] ?? 'products' );
+		$path       = sanitize_text_field( $params['path'] ?? '' );
+		$purge_all  = ! empty( $params['purge_everything'] );
+
+		// Resolve missing slug from product_id
+		if ( ! empty( $product_id ) && empty( $slug ) ) {
+			$product_obj = wc_get_product( $product_id );
+			if ( $product_obj ) {
+				$slug = (string) $product_obj->get_slug();
+			} else {
+				$slug = (string) get_post_field( 'post_name', $product_id );
+			}
+		}
+
+		// Resolve missing product_id from slug
+		if ( empty( $product_id ) && ! empty( $slug ) ) {
+			$product_post = get_page_by_path( $slug, OBJECT, 'product' );
+			if ( $product_post && ! empty( $product_post->ID ) ) {
+				$product_id = (int) $product_post->ID;
+			} else {
+				$matched_ids = get_posts( [
+					'post_type'      => 'product',
+					'name'           => $slug,
+					'posts_per_page' => 1,
+					'fields'         => 'ids',
+					'post_status'    => 'any',
+				] );
+				if ( ! empty( $matched_ids ) ) {
+					$product_id = (int) $matched_ids[0];
+				}
+			}
+		}
+
+		// Resolve missing category from product terms
+		if ( ! empty( $product_id ) && empty( $category ) ) {
+			$cats = wp_get_post_terms( $product_id, 'product_cat', [ 'fields' => 'slugs' ] );
+			if ( ! empty( $cats ) && ! is_wp_error( $cats ) ) {
+				$category = (string) $cats[0];
+			}
+		}
 
 		$results = [
 			'nextjs'     => null,
 			'cloudflare' => null,
+			'litespeed'  => null,
 		];
 
-		// 1. Next.js storefront revalidation (targets both production exacoat.com and configured base)
+		// 1. LiteSpeed Cache Purge (flushes server REST API cache and post cache so Next.js never gets stale data)
+		$litespeed_purged = [];
+		if ( ! empty( $product_id ) ) {
+			if ( function_exists( 'do_action' ) ) {
+				do_action( 'litespeed_purge_post', $product_id );
+			}
+			if ( class_exists( '\LiteSpeed\Purge' ) ) {
+				\LiteSpeed\Purge::purge_post( $product_id );
+			}
+			$rest_id_url = rest_url( "wc/v3/products/{$product_id}" );
+			if ( function_exists( 'do_action' ) ) {
+				do_action( 'litespeed_purge_url', $rest_id_url );
+			}
+			$litespeed_purged[] = "post:{$product_id}";
+			$litespeed_purged[] = $rest_id_url;
+		}
+
+		if ( ! empty( $slug ) ) {
+			$rest_slug_url = rest_url( "wc/v3/products?slug={$slug}" );
+			if ( function_exists( 'do_action' ) ) {
+				do_action( 'litespeed_purge_url', $rest_slug_url );
+			}
+			$litespeed_purged[] = $rest_slug_url;
+		}
+
+		if ( $purge_all ) {
+			if ( function_exists( 'do_action' ) ) {
+				do_action( 'litespeed_purge_all' );
+			}
+			if ( class_exists( '\LiteSpeed\Purge' ) ) {
+				\LiteSpeed\Purge::purge_all();
+			}
+			$litespeed_purged[] = 'all';
+		}
+
+		$results['litespeed'] = [
+			'success' => true,
+			'purged'  => $litespeed_purged,
+		];
+
+		// 2. Next.js storefront revalidation (targets production exacoat.com and web.exacoat.com)
 		$targets = [
 			'https://exacoat.com',
 			defined( 'EXACOAT_STOREFRONT_URL' ) ? EXACOAT_STOREFRONT_URL : 'https://web.exacoat.com',
@@ -4314,10 +4397,12 @@ class Exacoat_Configurator_Engine {
 		$secret  = defined( 'EXACOAT_REVALIDATE_SECRET' ) ? EXACOAT_REVALIDATE_SECRET : 'exacoat_revalidate_secret_2026';
 
 		$payload = [
-			'tag'      => $tag,
-			'slug'     => $slug,
-			'category' => $category,
-			'path'     => $path,
+			'tag'        => $tag,
+			'slug'       => $slug,
+			'product_id' => $product_id,
+			'id'         => $product_id,
+			'category'   => $category,
+			'path'       => $path,
 		];
 
 		foreach ( $targets as $storefront_base ) {
@@ -4345,7 +4430,7 @@ class Exacoat_Configurator_Engine {
 			}
 		}
 
-		// 2. Cloudflare Edge Cache Purge (if credentials configured)
+		// 3. Cloudflare Edge Cache Purge (if credentials configured)
 		$zone_id = defined( 'EXA_CLOUDFLARE_ZONE_ID' ) ? EXA_CLOUDFLARE_ZONE_ID : ( defined( 'EXACOAT_CLOUDFLARE_ZONE_ID' ) ? EXACOAT_CLOUDFLARE_ZONE_ID : ( defined( 'CLOUDFLARE_ZONE_ID' ) ? CLOUDFLARE_ZONE_ID : ( defined( 'AM_CLOUDFLARE_ZONE_ID' ) ? AM_CLOUDFLARE_ZONE_ID : ( getenv( 'EXA_CLOUDFLARE_ZONE_ID' ) ?: ( class_exists( 'Exacoat_Core' ) ? Exacoat_Core::get_setting( 'cloudflare_zone_id', '' ) : '' ) ) ) ) );
 		$api_token = defined( 'EXA_CLOUDFLARE_API_TOKEN' ) ? EXA_CLOUDFLARE_API_TOKEN : ( defined( 'EXACOAT_CLOUDFLARE_API_TOKEN' ) ? EXACOAT_CLOUDFLARE_API_TOKEN : ( defined( 'CLOUDFLARE_API_TOKEN' ) ? CLOUDFLARE_API_TOKEN : ( defined( 'AM_CLOUDFLARE_API_TOKEN' ) ? AM_CLOUDFLARE_API_TOKEN : ( getenv( 'EXA_CLOUDFLARE_API_TOKEN' ) ?: ( class_exists( 'Exacoat_Core' ) ? Exacoat_Core::get_setting( 'cloudflare_api_token', '' ) : '' ) ) ) ) );
 
@@ -4356,15 +4441,36 @@ class Exacoat_Configurator_Engine {
 				$files = [
 					'https://web.exacoat.com/',
 					'https://web.exacoat.com/shop',
+					'https://web.exacoat.com/shop/',
 					'https://exacoat.com/',
+					'https://exacoat.com/shop',
 					'https://exacoat.com/shop/',
 				];
 				if ( ! empty( $slug ) ) {
 					$files[] = "https://web.exacoat.com/product/{$slug}";
+					$files[] = "https://web.exacoat.com/product/{$slug}/";
+					$files[] = "https://web.exacoat.com/products/{$slug}";
+					$files[] = "https://web.exacoat.com/products/{$slug}/";
+					$files[] = "https://web.exacoat.com/api/configurator/{$slug}";
+					$files[] = "https://web.exacoat.com/api/configurator/{$slug}/";
 					$files[] = "https://exacoat.com/product/{$slug}";
+					$files[] = "https://exacoat.com/product/{$slug}/";
+					$files[] = "https://exacoat.com/products/{$slug}";
+					$files[] = "https://exacoat.com/products/{$slug}/";
+					$files[] = "https://exacoat.com/api/configurator/{$slug}";
+					$files[] = "https://exacoat.com/api/configurator/{$slug}/";
+				}
+				if ( ! empty( $product_id ) ) {
+					$files[] = "https://web.exacoat.com/api/configurator/{$product_id}";
+					$files[] = "https://web.exacoat.com/api/configurator/{$product_id}/";
+					$files[] = "https://exacoat.com/api/configurator/{$product_id}";
+					$files[] = "https://exacoat.com/api/configurator/{$product_id}/";
 				}
 				if ( ! empty( $category ) ) {
 					$files[] = "https://web.exacoat.com/shop/{$category}";
+					$files[] = "https://web.exacoat.com/shop/{$category}/";
+					$files[] = "https://exacoat.com/shop/{$category}";
+					$files[] = "https://exacoat.com/shop/{$category}/";
 				}
 				$cf_payload = [ 'files' => array_values( array_unique( $files ) ) ];
 			}
@@ -4400,7 +4506,7 @@ class Exacoat_Configurator_Engine {
 		}
 
 		if ( class_exists( 'Exacoat_Logger' ) ) {
-			Exacoat_Logger::log( 'info', 'configurator', "Storefront revalidation triggered for slug: '{$slug}', category: '{$category}'" );
+			Exacoat_Logger::log( 'info', 'configurator', "Storefront revalidation triggered for Product #{$product_id} (slug: '{$slug}', category: '{$category}')" );
 		}
 
 		return $results;

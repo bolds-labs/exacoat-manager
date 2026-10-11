@@ -5582,6 +5582,7 @@ export interface StorefrontRevalidationResponse {
 }
 
 export async function revalidateStorefrontWebDirect(params?: {
+  product_id?: number;
   slug?: string;
   category?: string;
   tag?: string;

@@ -790,12 +790,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
     isNew?: boolean;
   } | null>(null);
 
-  // Find & Replace in URLs Modal state
-  const [showFindReplaceModal, setShowFindReplaceModal] = useState(false);
-  const [findText, setFindText] = useState('');
-  const [replaceText, setReplaceText] = useState('');
-  const [replaceScope, setReplaceScope] = useState<'all' | 'textures' | 'chassis'>('all');
-
   // Asset Integrity Audit Modal state
   const [showAssetAuditModal, setShowAssetAuditModal] = useState(false);
   const [isAuditingAssets, setIsAuditingAssets] = useState(false);
@@ -1151,8 +1145,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
           setShowTransferModal(false);
         } else if (showAssetAuditModal) {
           setShowAssetAuditModal(false);
-        } else if (showFindReplaceModal) {
-          setShowFindReplaceModal(false);
         } else if (editingTextureModal) {
           setEditingTextureModal(null);
         } else if (duplicateModal) {
@@ -1168,7 +1160,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [categoryDropdownOpen, mediaPickerConfig.isOpen, showMasterTexturesModal, showGlobalAuditModal, showTransferModal, showAssetAuditModal, showFindReplaceModal, editingTextureModal, duplicateModal, priceEditModal, selectedProductId]);
+  }, [categoryDropdownOpen, mediaPickerConfig.isOpen, showMasterTexturesModal, showGlobalAuditModal, showTransferModal, showAssetAuditModal, editingTextureModal, duplicateModal, priceEditModal, selectedProductId]);
 
   useEffect(() => {
     if (selectedProductId !== null) {
@@ -1574,6 +1566,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
   // Trigger Next.js storefront ISR revalidation and Cloudflare edge cache purge
   const handleRevalidateStorefront = async (options?: {
+    product_id?: number;
     slug?: string;
     category?: string;
     purgeAll?: boolean;
@@ -1581,6 +1574,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
     setIsRevalidatingWeb(true);
     try {
       const res = await revalidateStorefrontWebDirect({
+        product_id: options?.product_id,
         slug: options?.slug,
         category: options?.category,
         purge_everything: options?.purgeAll ?? false,
@@ -2206,178 +2200,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
     } finally {
       setTogglingConfiguratorId(null);
     }
-  };
-
-  // Find & Replace in URLs calculation and execution
-  const findMatches = useMemo(() => {
-    if (!editingProfile || !findText.trim()) return { count: 0, sampleBefore: '', sampleAfter: '' };
-    const query = findText.trim();
-    let count = 0;
-    let sampleBefore = '';
-    let sampleAfter = '';
-
-    // Check layer textures
-    (editingProfile.layers || []).forEach((layer) => {
-      Object.values(layer.assets_by_view || {}).forEach((viewAsset: any) => {
-        if (replaceScope === 'all' || replaceScope === 'textures') {
-          Object.values(viewAsset.render_texture_map || {}).forEach((url: any) => {
-            if (typeof url === 'string' && url.includes(query)) {
-              count++;
-              if (!sampleBefore) {
-                sampleBefore = url;
-                sampleAfter = url.split(query).join(replaceText);
-              }
-            }
-          });
-        }
-        if (replaceScope === 'all') {
-          ['mask_svg_url', 'shadow_png_url', 'highlight_png_url'].forEach((key) => {
-            const u = viewAsset[key];
-            if (typeof u === 'string' && u.includes(query)) {
-              count++;
-              if (!sampleBefore) {
-                sampleBefore = u;
-                sampleAfter = u.split(query).join(replaceText);
-              }
-            }
-          });
-        }
-      });
-    });
-
-    // Check views background_url (chassis)
-    if (replaceScope === 'all' || replaceScope === 'chassis') {
-      (editingProfile.views || []).forEach((view) => {
-        if (view.background_url && view.background_url.includes(query)) {
-          count++;
-          if (!sampleBefore) {
-            sampleBefore = view.background_url;
-            sampleAfter = view.background_url.split(query).join(replaceText);
-          }
-        }
-      });
-    }
-
-    return { count, sampleBefore, sampleAfter };
-  }, [editingProfile, findText, replaceText, replaceScope]);
-
-  const handleExecuteFindReplace = () => {
-    if (!editingProfile || !findText.trim()) return;
-    const query = findText.trim();
-    const replacement = replaceText;
-
-    let replacedCount = 0;
-
-    const newViews = (editingProfile.views || []).map((v) => {
-      let updatedView = { ...v };
-      if (replaceScope === 'all' || replaceScope === 'chassis') {
-        if (v.background_url && v.background_url.includes(query)) {
-          replacedCount++;
-          updatedView.background_url = v.background_url.split(query).join(replacement);
-        }
-        if (v.logo_cutout_mask_url && v.logo_cutout_mask_url.includes(query)) {
-          replacedCount++;
-          updatedView.logo_cutout_mask_url = v.logo_cutout_mask_url.split(query).join(replacement);
-        }
-        if (v.pencil_cutout_mask_url && v.pencil_cutout_mask_url.includes(query)) {
-          replacedCount++;
-          updatedView.pencil_cutout_mask_url = v.pencil_cutout_mask_url.split(query).join(replacement);
-        }
-        if (v.model_cut_mask_url && v.model_cut_mask_url.includes(query)) {
-          replacedCount++;
-          updatedView.model_cut_mask_url = v.model_cut_mask_url.split(query).join(replacement);
-        }
-        if (v.shadow_png_url && v.shadow_png_url.includes(query)) {
-          replacedCount++;
-          updatedView.shadow_png_url = v.shadow_png_url.split(query).join(replacement);
-        }
-        if (v.highlight_png_url && v.highlight_png_url.includes(query)) {
-          replacedCount++;
-          updatedView.highlight_png_url = v.highlight_png_url.split(query).join(replacement);
-        }
-      }
-      return updatedView;
-    });
-
-    const newLayers = (editingProfile.layers || []).map((layer) => {
-      const newAssetsByView: Record<string, any> = {};
-      Object.entries(layer.assets_by_view || {}).forEach(([viewId, viewAsset]: [string, any]) => {
-        const newTextureMap: Record<string, string> = {};
-        if (replaceScope === 'all' || replaceScope === 'textures') {
-          Object.entries(viewAsset.render_texture_map || {}).forEach(([slug, url]: [string, any]) => {
-            if (typeof url === 'string' && url.includes(query)) {
-              replacedCount++;
-              newTextureMap[slug] = url.split(query).join(replacement);
-            } else {
-              newTextureMap[slug] = url;
-            }
-          });
-        } else {
-          Object.assign(newTextureMap, viewAsset.render_texture_map || {});
-        }
-
-        const patchedAsset = { ...viewAsset, render_texture_map: newTextureMap };
-        if (replaceScope === 'all') {
-          if (viewAsset.mask_svg_url && viewAsset.mask_svg_url.includes(query)) {
-            replacedCount++;
-            patchedAsset.mask_svg_url = viewAsset.mask_svg_url.split(query).join(replacement);
-          }
-          if (viewAsset.logo_cutout_url && viewAsset.logo_cutout_url.includes(query)) {
-            replacedCount++;
-            patchedAsset.logo_cutout_url = viewAsset.logo_cutout_url.split(query).join(replacement);
-          }
-          if (viewAsset.pencil_cutout_url && viewAsset.pencil_cutout_url.includes(query)) {
-            replacedCount++;
-            patchedAsset.pencil_cutout_url = viewAsset.pencil_cutout_url.split(query).join(replacement);
-          }
-          if (viewAsset.model_cutout_url && viewAsset.model_cutout_url.includes(query)) {
-            replacedCount++;
-            patchedAsset.model_cutout_url = viewAsset.model_cutout_url.split(query).join(replacement);
-          }
-          if (viewAsset.shadow_png_url && viewAsset.shadow_png_url.includes(query)) {
-            replacedCount++;
-            patchedAsset.shadow_png_url = viewAsset.shadow_png_url.split(query).join(replacement);
-          }
-        }
-
-        newAssetsByView[viewId] = patchedAsset;
-      });
-
-      return {
-        ...layer,
-        assets_by_view: newAssetsByView,
-      };
-    });
-
-    let updatedCoverage = editingProfile.coverage_and_cutouts ? { ...editingProfile.coverage_and_cutouts } : undefined;
-    if (updatedCoverage && (replaceScope === 'all' || replaceScope === 'chassis')) {
-      if (updatedCoverage.logo_cutout_mask_url && updatedCoverage.logo_cutout_mask_url.includes(query)) {
-        replacedCount++;
-        updatedCoverage.logo_cutout_mask_url = updatedCoverage.logo_cutout_mask_url.split(query).join(replacement);
-      }
-      if (updatedCoverage.pencil_cutout_mask_url && updatedCoverage.pencil_cutout_mask_url.includes(query)) {
-        replacedCount++;
-        updatedCoverage.pencil_cutout_mask_url = updatedCoverage.pencil_cutout_mask_url.split(query).join(replacement);
-      }
-      if (updatedCoverage.model_cut_mask_url && updatedCoverage.model_cut_mask_url.includes(query)) {
-        replacedCount++;
-        updatedCoverage.model_cut_mask_url = updatedCoverage.model_cut_mask_url.split(query).join(replacement);
-      }
-    }
-
-    setEditingProfile({
-      ...editingProfile,
-      views: newViews,
-      layers: newLayers,
-      coverage_and_cutouts: updatedCoverage,
-    });
-
-    showToast(
-      'success',
-      'URLs Replaced',
-      `Updated ${replacedCount} image URLs replacing "${query}" with "${replacement}". Click Save Configurator to commit.`
-    );
-    setShowFindReplaceModal(false);
   };
 
   // Asset Integrity Audit Helpers & Handlers
@@ -7799,7 +7621,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Right: Find & Replace and Primary Save Action */}
+              {/* Right: Primary Save Action */}
               <div className="flex items-center gap-2.5 shrink-0">
                 <button
                   type="button"
@@ -7824,17 +7646,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       {auditReport.ghostAngles.length} ghost
                     </span>
                   )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setShowFindReplaceModal(true)}
-                  disabled={!editingProfile}
-                  className="px-3.5 py-2 text-xs font-sans font-semibold rounded-xl border border-white/10 hover:bg-white/5 text-zinc-200 hover:text-white transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
-                  title="Find and replace text across all image URLs (e.g. 17 to 18)"
-                >
-                  <Wand2 className="w-3.5 h-3.5 text-[#f3aa18]" />
-                  <span>Find & Replace in URLs</span>
                 </button>
 
                 <button
@@ -7868,6 +7679,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                   type="button"
                   onClick={() =>
                     handleRevalidateStorefront({
+                      product_id: editingProfile?.product_id,
                       slug: editingProfile?.device_slug,
                       category: editingProfile?.category,
                     })
@@ -12155,55 +11967,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 </div>
                               );
                             })()}
-
-                            {/* Engine Architecture & Find-Replace Action */}
-                            <div className="p-3 rounded-xl bg-zinc-900/60 border border-white/5 space-y-2">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-xs font-semibold text-white">Engine Architecture</span>
-                                  <InfoTooltip text="v2 Modern uses HTML5 canvas destination-in masking, universal master textures, and destination-out cutout punching." />
-                                </div>
-                                <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-lg border border-white/10 text-[11px]">
-                                  <button
-                                    type="button"
-                                    onClick={() => setEditingProfile({ ...editingProfile, configurator_version: 'v1' })}
-                                    className={clsx(
-                                      'px-2 py-0.5 rounded font-medium transition-all cursor-pointer',
-                                      (editingProfile.configurator_version || 'v1') === 'v1'
-                                        ? 'bg-amber-500 text-black font-semibold'
-                                        : 'text-zinc-400 hover:text-white'
-                                    )}
-                                  >
-                                    v1 Legacy
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setEditingProfile({ ...editingProfile, configurator_version: 'v2' })}
-                                    className={clsx(
-                                      'px-2 py-0.5 rounded font-medium transition-all cursor-pointer',
-                                      editingProfile.configurator_version === 'v2'
-                                        ? 'bg-sky-500 text-black font-semibold'
-                                        : 'text-zinc-400 hover:text-white'
-                                    )}
-                                  >
-                                    v2 Modern
-                                  </button>
-                                </div>
-                              </div>
-
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setFindText('');
-                                  setReplaceText('');
-                                  setShowFindReplaceModal(true);
-                                }}
-                                className="w-full py-2 px-3 rounded-lg bg-zinc-950 hover:bg-zinc-800 border border-white/10 text-xs font-medium text-zinc-300 hover:text-white flex items-center justify-center gap-2 cursor-pointer transition-colors mt-2"
-                              >
-                                <Wand2 className="w-3.5 h-3.5 text-[#f3aa18]" />
-                                <span>Find & Replace in URLs</span>
-                              </button>
-                            </div>
                           </div>
                         )}
                       </div>
@@ -12213,159 +11976,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
               })()
             )}
 
-            {/* 3. Find & Replace in URLs Modal */}
-            {showFindReplaceModal &&
-              createPortal(
-                <div
-                  className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
-                  onClick={() => setShowFindReplaceModal(false)}
-                >
-                  <div
-                    className="w-full max-w-lg rounded-2xl bg-zinc-950 border border-white/15 p-6 shadow-2xl space-y-5 font-sans cursor-default"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-11 h-11 rounded-xl bg-[#f3aa18]/10 border border-[#f3aa18]/30 flex items-center justify-center text-[#f3aa18] shrink-0">
-                          <Wand2 className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <h3 className="text-sm font-bold text-white">Find & Replace in Image URLs</h3>
-                          <p className="text-xs text-zinc-400 mt-0.5">
-                            Quickly rename device versions (e.g. replace "17" with "18") across all layers.
-                          </p>
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => setShowFindReplaceModal(false)}
-                        className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer"
-                      >
-                        <X className="w-5 h-5" />
-                      </button>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-xs font-bold text-zinc-300 mb-1.5">Find String</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. 17 or iphone-17-pro"
-                          value={findText}
-                          onChange={(e) => setFindText(e.target.value)}
-                          autoFocus
-                          className="w-full px-3.5 py-2 text-xs font-mono rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-zinc-300 mb-1.5">Replace With</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. 18 or iphone-18-pro"
-                          value={replaceText}
-                          onChange={(e) => setReplaceText(e.target.value)}
-                          className="w-full px-3.5 py-2 text-xs font-mono rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-zinc-300 mb-1.5">Scope</label>
-                        <div className="flex flex-wrap gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setReplaceScope('all')}
-                            className={clsx(
-                              'px-3 py-1.5 rounded-lg text-xs font-sans transition-colors cursor-pointer',
-                              replaceScope === 'all'
-                                ? 'bg-white/15 text-white font-bold'
-                                : 'text-zinc-400 hover:text-white bg-zinc-900 border border-white/5'
-                            )}
-                          >
-                            All URLs (Textures & Chassis)
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setReplaceScope('textures')}
-                            className={clsx(
-                              'px-3 py-1.5 rounded-lg text-xs font-sans transition-colors cursor-pointer',
-                              replaceScope === 'textures'
-                                ? 'bg-white/15 text-white font-bold'
-                                : 'text-zinc-400 hover:text-white bg-zinc-900 border border-white/5'
-                            )}
-                          >
-                            Finish Textures Only
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setReplaceScope('chassis')}
-                            className={clsx(
-                              'px-3 py-1.5 rounded-lg text-xs font-sans transition-colors cursor-pointer',
-                              replaceScope === 'chassis'
-                                ? 'bg-white/15 text-white font-bold'
-                                : 'text-zinc-400 hover:text-white bg-zinc-900 border border-white/5'
-                            )}
-                          >
-                            Hardware Chassis Only
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Live Match Preview */}
-                      {findText.trim() && (
-                        <div className="p-3.5 rounded-xl bg-zinc-900/80 border border-white/10 space-y-2 text-xs">
-                          <div className="flex items-center justify-between">
-                            <span className="text-zinc-400 font-medium">Matches found:</span>
-                            <span
-                              className={clsx(
-                                'font-mono font-bold px-2 py-0.5 rounded text-[11px]',
-                                findMatches.count > 0
-                                  ? 'bg-emerald-500/15 text-emerald-400'
-                                  : 'bg-zinc-800 text-zinc-500'
-                              )}
-                            >
-                              {findMatches.count} {findMatches.count === 1 ? 'URL' : 'URLs'}
-                            </span>
-                          </div>
-
-                          {findMatches.sampleBefore && (
-                            <div className="pt-2 border-t border-white/5 space-y-1 font-mono text-[11px] break-all">
-                              <p className="text-rose-400 truncate">
-                                - {findMatches.sampleBefore}
-                              </p>
-                              <p className="text-emerald-400 truncate">
-                                + {findMatches.sampleAfter}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="pt-3 border-t border-white/10 flex items-center justify-end gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setShowFindReplaceModal(false)}
-                        className="px-4 py-2 text-xs font-sans rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleExecuteFindReplace}
-                        disabled={findMatches.count === 0}
-                        className="px-5 py-2 text-xs font-sans font-bold uppercase tracking-wider rounded-xl bg-[#f3aa18] hover:bg-[#ffb72b] text-black transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-2"
-                      >
-                        <span>Replace {findMatches.count > 0 ? `All (${findMatches.count})` : ''}</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>,
-                document.body
-              )}
-
-            {/* 4. Focused Texture URL Edit Modal */}
+            {/* 3. Focused Texture URL Edit Modal */}
             {editingTextureModal &&
               createPortal(
                 <div
