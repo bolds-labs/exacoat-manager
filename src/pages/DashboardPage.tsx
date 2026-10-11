@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Order } from '../types';
-import { parseStoreDate } from '../lib/formatters';
+import { parseStoreDate, getStoreDateKey, getStoreDayStartMs } from '../lib/formatters';
 import { SalesMetricsOverview } from '../components/dashboard/SalesMetricsOverview';
 import { SalesRevenueChart } from '../components/dashboard/SalesRevenueChart';
 import { OrderStatusDistribution } from '../components/dashboard/OrderStatusDistribution';
@@ -38,23 +38,23 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
 }) => {
   const [datePreset, setDatePreset] = useState<DashboardDatePreset>('30d');
 
-  // Filter orders according to date horizon
+  // Filter orders according to date horizon strictly in store timezone (Asia/Jakarta)
   const filteredOrders = useMemo(() => {
     if (datePreset === 'all') return orders;
 
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const todayKey = getStoreDateKey(Date.now());
+    const todayStartMs = getStoreDayStartMs(todayKey);
     let startMs = 0;
 
     if (datePreset === 'today') {
-      startMs = todayStart.getTime();
+      startMs = todayStartMs;
     } else if (datePreset === '7d') {
-      startMs = todayStart.getTime() - 6 * 24 * 60 * 60 * 1000;
+      startMs = todayStartMs - 6 * 24 * 60 * 60 * 1000;
     } else if (datePreset === '30d') {
-      startMs = todayStart.getTime() - 29 * 24 * 60 * 60 * 1000;
+      startMs = todayStartMs - 29 * 24 * 60 * 60 * 1000;
     } else if (datePreset === 'this_month') {
-      const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-      startMs = firstOfMonth.getTime();
+      const [currY, currM] = todayKey.split('-').map(Number);
+      startMs = getStoreDayStartMs(`${currY}-${String(currM).padStart(2, '0')}-01`);
     }
 
     return orders.filter(o => {

@@ -20,12 +20,18 @@ import {
   fetchOrdersDirect,
   fetchShopeeOrdersDirect,
   fetchTikTokOrdersDirect,
+  syncShopeeOrdersDirect,
+  syncTikTokOrdersDirect,
   ShopeeOrder,
   TikTokOrder,
 } from '../lib/wordpressBridge';
-import { MOCK_SHOPEE_ORDERS } from '../data/mockShopeeOrders';
-import { MOCK_TIKTOK_ORDERS } from '../data/mockTikTokOrders';
-import { formatCurrency } from '../lib/formatters';
+import { 
+  formatCurrency, 
+  getStoreDateKey, 
+  getStoreDayStartMs, 
+  getStoreDayEndMs, 
+  formatStoreDateFull 
+} from '../lib/formatters';
 import { Order } from '../types';
 import {
   RefreshCw,
@@ -44,13 +50,6 @@ import { clsx } from 'clsx';
 interface ReportsPageProps {
   onNavigate?: (tab: string, filter?: string) => void;
 }
-
-const formatIsoDate = (d: Date): string => {
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
 
 export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
   // 1. Timespan horizon state
@@ -75,73 +74,134 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
   const [error, setError] = useState<string | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
 
-  // Compute start and end timestamps based on preset
+  // Compute start and end timestamps based on preset strictly in store timezone (Asia/Jakarta, UTC+7)
   const { startMs, endMs, dateLabel } = useMemo(() => {
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    const todayKey = getStoreDateKey(Date.now());
+    const todayStartMs = getStoreDayStartMs(todayKey);
+    const todayEndMs = getStoreDayEndMs(todayKey);
 
-    let start: Date;
-    let end: Date = todayEnd;
-    let label = 'Last 30 Days';
+    const [currY, currM] = todayKey.split('-').map(Number);
 
     if (datePreset === 'today') {
-      start = todayStart;
-      end = todayEnd;
-      label = 'Today';
-    } else if (datePreset === '7d') {
-      start = new Date(todayStart.getTime() - 6 * 24 * 60 * 60 * 1000);
-      label = 'Last 7 Days';
-    } else if (datePreset === '30d') {
-      start = new Date(todayStart.getTime() - 29 * 24 * 60 * 60 * 1000);
-      label = 'Last 30 Days';
-    } else if (datePreset === 'this_month') {
-      start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-      label = 'This Month';
-    } else if (datePreset === 'last_month') {
-      start = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
-      end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
-      label = 'Last Month';
-    } else if (datePreset === '90d') {
-      start = new Date(todayStart.getTime() - 89 * 24 * 60 * 60 * 1000);
-      label = 'Last 90 Days';
-    } else if (datePreset === 'year') {
-      start = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
-      label = 'This Year';
-    } else if (datePreset === 'all') {
-      start = new Date(2020, 0, 1, 0, 0, 0, 0);
-      label = 'All Time';
-    } else if (datePreset === 'custom' && customStart) {
-      start = new Date(customStart);
-      start.setHours(0, 0, 0, 0);
-      if (customEnd) {
-        end = new Date(customEnd);
-        end.setHours(23, 59, 59, 999);
-      }
-      label = `${start.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} to ${end.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
-    } else {
-      start = new Date(todayStart.getTime() - 29 * 24 * 60 * 60 * 1000);
-      label = 'Last 30 Days';
+      return {
+        startMs: todayStartMs,
+        endMs: todayEndMs,
+        dateLabel: 'Today',
+      };
+    }
+
+    if (datePreset === '7d') {
+      return {
+        startMs: todayStartMs - 6 * 24 * 60 * 60 * 1000,
+        endMs: todayEndMs,
+        dateLabel: 'Last 7 Days',
+      };
+    }
+
+    if (datePreset === '30d') {
+      return {
+        startMs: todayStartMs - 29 * 24 * 60 * 60 * 1000,
+        endMs: todayEndMs,
+        dateLabel: 'Last 30 Days',
+      };
+    }
+
+    if (datePreset === 'this_month') {
+      const monthStartKey = `${currY}-${String(currM).padStart(2, '0')}-01`;
+      return {
+        startMs: getStoreDayStartMs(monthStartKey),
+        endMs: todayEndMs,
+        dateLabel: 'This Month',
+      };
+    }
+
+    if (datePreset === 'last_month') {
+      const prevY = currM === 1 ? currY - 1 : currY;
+      const prevM = currM === 1 ? 12 : currM - 1;
+      const daysInPrevMonth = new Date(Date.UTC(currY, currM - 1, 0)).getUTCDate();
+      const lastMonthStartKey = `${prevY}-${String(prevM).padStart(2, '0')}-01`;
+      const lastMonthEndKey = `${prevY}-${String(prevM).padStart(2, '0')}-${String(daysInPrevMonth).padStart(2, '0')}`;
+      return {
+        startMs: getStoreDayStartMs(lastMonthStartKey),
+        endMs: getStoreDayEndMs(lastMonthEndKey),
+        dateLabel: 'Last Month',
+      };
+    }
+
+    if (datePreset === '90d') {
+      return {
+        startMs: todayStartMs - 89 * 24 * 60 * 60 * 1000,
+        endMs: todayEndMs,
+        dateLabel: 'Last 90 Days',
+      };
+    }
+
+    if (datePreset === 'year') {
+      const yearStartKey = `${currY}-01-01`;
+      return {
+        startMs: getStoreDayStartMs(yearStartKey),
+        endMs: todayEndMs,
+        dateLabel: 'This Year',
+      };
+    }
+
+    if (datePreset === 'all') {
+      return {
+        startMs: getStoreDayStartMs('2020-01-01'),
+        endMs: todayEndMs,
+        dateLabel: 'All Time',
+      };
+    }
+
+    if (datePreset === 'custom' && customStart) {
+      const startMsVal = getStoreDayStartMs(customStart);
+      const endMsVal = getStoreDayEndMs(customEnd || customStart);
+      const sLabel = formatStoreDateFull(startMsVal);
+      const eLabel = formatStoreDateFull(endMsVal);
+      return {
+        startMs: startMsVal,
+        endMs: endMsVal,
+        dateLabel: customStart === (customEnd || customStart) ? sLabel : `${sLabel} to ${eLabel}`,
+      };
     }
 
     return {
-      startMs: start.getTime(),
-      endMs: end.getTime(),
-      dateLabel: label,
+      startMs: todayStartMs - 29 * 24 * 60 * 60 * 1000,
+      endMs: todayEndMs,
+      dateLabel: 'Last 30 Days',
     };
   }, [datePreset, customStart, customEnd]);
 
-  // Load all channel orders concurrently
-  const loadFinancialData = useCallback(async (quiet = false) => {
+  // Load all channel orders concurrently with optional full channel API sync
+  const loadFinancialData = useCallback(async (quiet = false, syncChannels = false) => {
     if (!quiet) setIsLoading(true);
     else setIsRefreshing(true);
     setError(null);
 
     try {
+      // 1. Webstore orders
+      const webPromise = fetchOrdersDirect({ per_page: 500 });
+
+      // 2. Shopee orders: sync live from Shopee API when requested; fallback to cached orders
+      const shopeePromise = syncChannels
+        ? syncShopeeOrdersDirect(60, 500).then(res => {
+            if (res.success && Array.isArray(res.orders)) return res;
+            return fetchShopeeOrdersDirect();
+          }).catch(() => fetchShopeeOrdersDirect())
+        : fetchShopeeOrdersDirect();
+
+      // 3. TikTok orders: sync live from TikTok Shop API when requested; fallback to cached orders
+      const tiktokPromise = syncChannels
+        ? syncTikTokOrdersDirect(60, 500).then(res => {
+            if (res.success && Array.isArray(res.orders)) return res;
+            return fetchTikTokOrdersDirect();
+          }).catch(() => fetchTikTokOrdersDirect())
+        : fetchTikTokOrdersDirect();
+
       const [webRes, shpRes, ttRes] = await Promise.allSettled([
-        fetchOrdersDirect({ per_page: 500 }),
-        fetchShopeeOrdersDirect(),
-        fetchTikTokOrdersDirect(),
+        webPromise,
+        shopeePromise,
+        tiktokPromise,
       ]);
 
       // Webstore orders
@@ -151,18 +211,18 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
         setWebOrders([]);
       }
 
-      // Shopee orders (fallback to realistic mock if empty/offline)
-      if (shpRes.status === 'fulfilled' && shpRes.value.success && Array.isArray(shpRes.value.orders) && shpRes.value.orders.length > 0) {
+      // Shopee orders
+      if (shpRes.status === 'fulfilled' && shpRes.value.success && Array.isArray(shpRes.value.orders)) {
         setShopeeOrders(shpRes.value.orders);
       } else {
-        setShopeeOrders(MOCK_SHOPEE_ORDERS);
+        setShopeeOrders([]);
       }
 
-      // TikTok orders (fallback to realistic mock if empty/offline)
-      if (ttRes.status === 'fulfilled' && ttRes.value.success && Array.isArray(ttRes.value.orders) && ttRes.value.orders.length > 0) {
+      // TikTok orders
+      if (ttRes.status === 'fulfilled' && ttRes.value.success && Array.isArray(ttRes.value.orders)) {
         setTikTokOrders(ttRes.value.orders);
       } else {
-        setTikTokOrders(MOCK_TIKTOK_ORDERS);
+        setTikTokOrders([]);
       }
 
       setLastRefreshedAt(new Date());
@@ -247,13 +307,13 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
           )}
           <button
             type="button"
-            onClick={() => loadFinancialData(true)}
+            onClick={() => loadFinancialData(true, true)}
             disabled={isLoading || isRefreshing}
             className="min-h-11 px-3.5 rounded-xl border border-white/10 bg-[#121316] text-neutral-200 hover:bg-white/[0.06] hover:text-white text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer shadow-xs disabled:opacity-50"
-            title="Refresh multi-channel financial ledger"
+            title="Sync live Shopee and TikTok Shop APIs and refresh multi-channel financial ledger"
           >
             <RefreshCw className={clsx('w-3.5 h-3.5', (isLoading || isRefreshing) && 'animate-spin text-[#f3aa18]')} />
-            <span>Refresh</span>
+            <span>{isRefreshing ? 'Syncing...' : 'Refresh'}</span>
           </button>
         </div>
       </header>

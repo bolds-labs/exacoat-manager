@@ -26,7 +26,7 @@ export const MultiChannelRevenueChart: React.FC<MultiChannelRevenueChartProps> =
   selectedChannels,
   totalRevenue,
 }) => {
-  const [chartMode, setChartMode] = useState<'stacked' | 'total'>('stacked');
+  const [chartMode, setChartMode] = useState<'channels' | 'stacked' | 'total'>('channels');
   const [granularity, setGranularity] = useState<FinancialGranularity>('daily');
 
   const hasWebstore = selectedChannels.includes('webstore');
@@ -108,8 +108,22 @@ export const MultiChannelRevenueChart: React.FC<MultiChannelRevenueChartProps> =
               )}
             </div>
 
-            {/* View Mode Switcher: Stacked vs Total */}
+            {/* View Mode Switcher: By Channel vs Stacked vs Total */}
             <div className="p-1 rounded-xl bg-[#090a0d] border border-white/[0.08] flex items-center gap-1 font-mono text-[11px]">
+              <button
+                type="button"
+                onClick={() => setChartMode('channels')}
+                className={clsx(
+                  'px-2.5 py-1 rounded-lg transition-all cursor-pointer font-semibold flex items-center gap-1.5',
+                  chartMode === 'channels'
+                    ? 'bg-white text-zinc-950 shadow-xs'
+                    : 'text-neutral-400 hover:text-white'
+                )}
+                title="Individual channel curves starting at zero baseline"
+              >
+                <TrendingUp className="w-3 h-3" />
+                <span>By Channel</span>
+              </button>
               <button
                 type="button"
                 onClick={() => setChartMode('stacked')}
@@ -119,9 +133,10 @@ export const MultiChannelRevenueChart: React.FC<MultiChannelRevenueChartProps> =
                     ? 'bg-white text-zinc-950 shadow-xs'
                     : 'text-neutral-400 hover:text-white'
                 )}
+                title="Cumulative stacked area breakdown"
               >
                 <Layers className="w-3 h-3" />
-                <span>By Channel</span>
+                <span>Stacked</span>
               </button>
               <button
                 type="button"
@@ -132,6 +147,7 @@ export const MultiChannelRevenueChart: React.FC<MultiChannelRevenueChartProps> =
                     ? 'bg-white text-zinc-950 shadow-xs'
                     : 'text-neutral-400 hover:text-white'
                 )}
+                title="Combined total net inflow curve"
               >
                 <BarChart2 className="w-3 h-3" />
                 <span>Total Net</span>
@@ -271,7 +287,45 @@ export const MultiChannelRevenueChart: React.FC<MultiChannelRevenueChartProps> =
                   }}
                 />
 
-                {chartMode === 'stacked' ? (
+                {chartMode === 'channels' && (
+                  <>
+                    {hasWebstore && (
+                      <Area
+                        type="monotone"
+                        dataKey="webstore"
+                        name="Webstore"
+                        stroke="#f3aa18"
+                        strokeWidth={2}
+                        fill="url(#webstoreGrad)"
+                        fillOpacity={0.15}
+                      />
+                    )}
+                    {hasShopee && (
+                      <Area
+                        type="monotone"
+                        dataKey="shopee"
+                        name="Shopee"
+                        stroke="#ee4d2d"
+                        strokeWidth={2}
+                        fill="url(#shopeeGrad)"
+                        fillOpacity={0.15}
+                      />
+                    )}
+                    {hasTikTok && (
+                      <Area
+                        type="monotone"
+                        dataKey="tiktok"
+                        name="TikTok"
+                        stroke="#06b6d4"
+                        strokeWidth={2}
+                        fill="url(#tiktokGrad)"
+                        fillOpacity={0.15}
+                      />
+                    )}
+                  </>
+                )}
+
+                {chartMode === 'stacked' && (
                   <>
                     {hasWebstore && (
                       <Area
@@ -307,7 +361,9 @@ export const MultiChannelRevenueChart: React.FC<MultiChannelRevenueChartProps> =
                       />
                     )}
                   </>
-                ) : (
+                )}
+
+                {chartMode === 'total' && (
                   <Area
                     type="monotone"
                     dataKey="total"

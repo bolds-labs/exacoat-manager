@@ -8,7 +8,9 @@ import {
   getStoreDateKey,
   formatStoreDateFull,
   generateContinuousDays,
-  parseStoreDate
+  parseStoreDate,
+  getStoreDayStartMs,
+  getStoreDayEndMs
 } from '../../lib/formatters';
 import { 
   AreaChart, 
@@ -34,26 +36,27 @@ export const SalesRevenueChart: React.FC<SalesRevenueChartProps> = ({
 }) => {
   const [granularity, setGranularity] = useState<'daily' | 'weekly'>('daily');
 
-  // Compute continuous date points covering every calendar day in the horizon
+  // Compute continuous date points covering every calendar day in the horizon strictly in store timezone
   const { chartData, totalRevenue, totalDays } = useMemo(() => {
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    const todayKey = getStoreDateKey(Date.now());
+    const todayStartMs = getStoreDayStartMs(todayKey);
+    const todayEndMs = getStoreDayEndMs(todayKey);
 
     let startMs: number;
-    const endMs = todayEnd.getTime();
+    const endMs = todayEndMs;
 
     if (datePreset === 'today') {
-      startMs = todayStart.getTime();
+      startMs = todayStartMs;
     } else if (datePreset === '7d') {
-      startMs = todayStart.getTime() - 6 * 24 * 60 * 60 * 1000;
+      startMs = todayStartMs - 6 * 24 * 60 * 60 * 1000;
     } else if (datePreset === '30d') {
-      startMs = todayStart.getTime() - 29 * 24 * 60 * 60 * 1000;
+      startMs = todayStartMs - 29 * 24 * 60 * 60 * 1000;
     } else if (datePreset === 'this_month') {
-      startMs = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0).getTime();
+      const [currY, currM] = todayKey.split('-').map(Number);
+      startMs = getStoreDayStartMs(`${currY}-${String(currM).padStart(2, '0')}-01`);
     } else if (datePreset === 'all') {
       // Find earliest order date in available orders, fallback to 30 days
-      let earliest = todayStart.getTime() - 29 * 24 * 60 * 60 * 1000;
+      let earliest = todayStartMs - 29 * 24 * 60 * 60 * 1000;
       orders.forEach(o => {
         if (!o.created_at) return;
         const d = parseStoreDate(o.created_at) || new Date(o.created_at);
@@ -61,10 +64,9 @@ export const SalesRevenueChart: React.FC<SalesRevenueChartProps> = ({
           earliest = d.getTime();
         }
       });
-      const earDate = new Date(earliest);
-      startMs = new Date(earDate.getFullYear(), earDate.getMonth(), earDate.getDate(), 0, 0, 0, 0).getTime();
+      startMs = getStoreDayStartMs(earliest);
     } else {
-      startMs = todayStart.getTime() - 29 * 24 * 60 * 60 * 1000;
+      startMs = todayStartMs - 29 * 24 * 60 * 60 * 1000;
     }
 
     // Generate continuous days in store timezone so zero transaction days are NEVER skipped
