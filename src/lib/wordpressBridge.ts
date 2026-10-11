@@ -7790,10 +7790,19 @@ export interface ShopeeInjectVariantImageItem {
   image_id: string;
 }
 
+export interface ShopeeInjectVariantPlanItem {
+  option: string;
+  image_id?: string;
+  price?: number;
+  is_new?: boolean;
+  old_index?: number;
+}
+
 export interface ShopeeInjectImagesPayload {
   item_id: number;
   cover_image_id?: string;
   variant_images?: ShopeeInjectVariantImageItem[];
+  variant_plan?: ShopeeInjectVariantPlanItem[];
 }
 
 export interface ShopeeInjectImagesResult {
@@ -7802,6 +7811,9 @@ export interface ShopeeInjectImagesResult {
   cover_updated: boolean;
   gallery_preserved_count: number;
   variants_updated: number;
+  variants_added?: number;
+  variants_reordered?: boolean;
+  prices_updated?: number;
   seller_centre_url?: string;
   errors?: string[];
   message?: string;
@@ -7833,6 +7845,9 @@ export async function injectShopeeProductImagesDirect(
       cover_updated: Boolean(data?.cover_updated),
       gallery_preserved_count: Number(data?.gallery_preserved_count) || 0,
       variants_updated: Number(data?.variants_updated) || 0,
+      variants_added: Number(data?.variants_added) || 0,
+      variants_reordered: Boolean(data?.variants_reordered),
+      prices_updated: Number(data?.prices_updated) || 0,
       errors: Array.isArray(data?.errors) ? data.errors : [],
       error: data?.message || data?.error || `HTTP ${res.status}`,
     };
@@ -7843,6 +7858,9 @@ export async function injectShopeeProductImagesDirect(
       cover_updated: false,
       gallery_preserved_count: 0,
       variants_updated: 0,
+      variants_added: 0,
+      variants_reordered: false,
+      prices_updated: 0,
       error: err.message,
     };
   }

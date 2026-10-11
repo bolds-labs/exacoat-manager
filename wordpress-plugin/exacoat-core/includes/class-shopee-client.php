@@ -3162,15 +3162,16 @@ class Exacoat_Shopee_Client {
 	}
 
 	/**
-	 * REST Endpoint: Non-destructively inject cover image and variation pictures into Shopee listing
+	 * REST Endpoint: Non-destructively inject cover image, variation pictures, new variant options, ordering, and prices into Shopee listing
 	 */
 	public static function rest_inject_product_images( \WP_REST_Request $request ): \WP_REST_Response {
-		@set_time_limit( 120 );
+		@set_time_limit( 180 );
 		$body = $request->get_json_params() ?: [];
 
-		$item_id = (int) ( $body['item_id'] ?? 0 );
+		$item_id        = (int) ( $body['item_id'] ?? 0 );
 		$cover_image_id = trim( (string) ( $body['cover_image_id'] ?? '' ) );
 		$variant_images = (array) ( $body['variant_images'] ?? [] );
+		$variant_plan   = (array) ( $body['variant_plan'] ?? [] );
 
 		if ( empty( $item_id ) ) {
 			return new \WP_REST_Response([
@@ -3179,19 +3180,22 @@ class Exacoat_Shopee_Client {
 			], 400 );
 		}
 
-		if ( empty( $cover_image_id ) && empty( $variant_images ) ) {
+		if ( empty( $cover_image_id ) && empty( $variant_images ) && empty( $variant_plan ) ) {
 			return new \WP_REST_Response([
 				'success' => false,
-				'error'   => 'At least one cover_image_id or variant_images must be provided.',
+				'error'   => 'At least one cover_image_id, variant_images, or variant_plan must be provided.',
 			], 400 );
 		}
 
-		$cover_updated = false;
+		$cover_updated           = false;
 		$gallery_preserved_count = 0;
-		$variants_updated = 0;
-		$errors = [];
+		$variants_updated        = 0;
+		$variants_added          = 0;
+		$variants_reordered      = false;
+		$prices_updated          = 0;
+		$errors                  = [];
 
-		// 1. Fetch current item info to read existing images non-destructively
+		// 1. Fetch current item info to read existing images and warehouse stock info non-destructively
 		$base_res = self::call_shop_api( '/api/v2/product/get_item_base_info', 'GET', [
 			'item_id_list' => (string) $item_id,
 		]);
@@ -3214,7 +3218,7 @@ class Exacoat_Shopee_Client {
 			// Preserve existing gallery images (skipping the old primary image at index 0)
 			if ( is_array( $existing_image_ids ) ) {
 				for ( $i = 1; $i < count( $existing_image_ids ); $i++ ) {
-					$existing_id = (string) $existing_image_ids[$i];
+					$existing_id = (string) $existing_image_ids[ $i ];
 					if ( ! empty( $existing_id ) && $existing_id !== $cover_image_id && ! in_array( $existing_id, $new_image_ids, true ) ) {
 						$new_image_ids[] = $existing_id;
 						$gallery_preserved_count++;
@@ -3247,90 +3251,421 @@ class Exacoat_Shopee_Client {
 			}
 		}
 
-		// 3. Update variation pictures via /api/v2/product/update_tier_variation
-		if ( ! empty( $variant_images ) ) {
-			// Fetch model list to retrieve existing tier variation structure
+		// 3. Update variation pictures, new variant options, ordering, and per-variant pricing
+		if ( ! empty( $variant_images ) || ! empty( $variant_plan ) ) {
 			$model_res = self::call_shop_api( '/api/v2/product/get_model_list', 'GET', [
 				'item_id' => $item_id,
 			]);
 
 			if ( $model_res['success'] && ! empty( $model_res['response']['tier_variation'] ) ) {
 				$tier_variations = $model_res['response']['tier_variation'];
+				$existing_models = $model_res['response']['model'] ?? [];
 
 				// Build lookup map for incoming variant images (case-insensitive trimmed)
 				$var_map = [];
 				foreach ( $variant_images as $vi ) {
 					$opt_name = strtolower( trim( (string) ( $vi['option'] ?? '' ) ) );
-					$img_id = trim( (string) ( $vi['image_id'] ?? '' ) );
+					$img_id   = trim( (string) ( $vi['image_id'] ?? '' ) );
 					if ( ! empty( $opt_name ) && ! empty( $img_id ) ) {
 						$var_map[ $opt_name ] = $img_id;
 					}
 				}
 
-				// Build clean tier variation payload
-				$updated_tier_variation = [];
-				foreach ( $tier_variations as $tier_idx => $tv ) {
-					$raw_opts = $tv['option_list'] ?? $tv['options'] ?? [];
-					$opts = [];
-					foreach ( $raw_opts as $opt_entry ) {
-						$opt_name = is_array( $opt_entry ) ? ( $opt_entry['option'] ?? '' ) : (string) $opt_entry;
-						if ( empty( $opt_name ) ) {
-							continue;
-						}
-						$clean_opt = [
-							'option' => (string) $opt_name,
-						];
+				// Index existing tier 0 options by original index and by lowercase name
+				$raw_tier0_opts       = $tier_variations[0]['option_list'] ?? $tier_variations[0]['options'] ?? [];
+				$old_opts_by_index    = [];
+				$old_opts_by_key      = [];
+				$fallback_opt_img_id  = ! empty( $cover_image_id ) ? $cover_image_id : ( (string) ( $existing_image_ids[0] ?? '' ) );
+				$tier0_uses_images    = ! empty( $var_map );
 
-						// Only the first tier (tier_idx 0) supports images in Shopee
-						if ( $tier_idx === 0 ) {
-							$lookup_key = strtolower( trim( $opt_name ) );
-							if ( isset( $var_map[ $lookup_key ] ) ) {
-								$clean_opt['image'] = [
-									'image_id' => $var_map[ $lookup_key ],
-								];
-								$variants_updated++;
-							} elseif ( ! empty( $opt_entry['image']['image_id'] ) ) {
-								// Preserve existing image if no replacement provided
-								$clean_opt['image'] = [
-									'image_id' => (string) $opt_entry['image']['image_id'],
-								];
-							}
+				foreach ( $raw_tier0_opts as $old_idx => $opt_entry ) {
+					$opt_name = is_array( $opt_entry ) ? trim( (string) ( $opt_entry['option'] ?? '' ) ) : trim( (string) $opt_entry );
+					$opt_img  = is_array( $opt_entry ) ? trim( (string) ( $opt_entry['image']['image_id'] ?? '' ) ) : '';
+					if ( ! empty( $opt_img ) ) {
+						$tier0_uses_images = true;
+						if ( empty( $fallback_opt_img_id ) ) {
+							$fallback_opt_img_id = $opt_img;
 						}
-
-						$opts[] = $clean_opt;
 					}
-
-					if ( ! empty( $opts ) ) {
-						$updated_tier_variation[] = [
-							'name'        => (string) ( $tv['name'] ?? 'Varian' ),
-							'option_list' => $opts,
+					$old_opts_by_index[ (int) $old_idx ] = [
+						'option'   => $opt_name,
+						'image_id' => $opt_img,
+						'old_idx'  => (int) $old_idx,
+					];
+					if ( ! empty( $opt_name ) ) {
+						$old_opts_by_key[ strtolower( $opt_name ) ] = [
+							'option'   => $opt_name,
+							'image_id' => $opt_img,
+							'old_idx'  => (int) $old_idx,
 						];
 					}
 				}
 
-				if ( ! empty( $updated_tier_variation ) && $variants_updated > 0 ) {
-					$update_var_res = self::call_shop_api( '/api/v2/product/update_tier_variation', 'POST', [], [
+				$old_to_new_index_map = [];
+				$desired_prices_by_new_idx = [];
+				$updated_tier_variation = [];
+				$structure_changed = false;
+
+				if ( ! empty( $variant_plan ) ) {
+					$new_tier0_opts = [];
+					foreach ( array_values( $variant_plan ) as $new_idx => $plan_item ) {
+						$opt_name = trim( (string) ( $plan_item['option'] ?? '' ) );
+						if ( empty( $opt_name ) ) {
+							continue;
+						}
+						$lookup_key = strtolower( $opt_name );
+						$plan_img   = trim( (string) ( $plan_item['image_id'] ?? '' ) );
+						$plan_price = (float) ( $plan_item['price'] ?? 0 );
+
+						// Match against existing option
+						$matched_old = null;
+						if ( isset( $plan_item['old_index'] ) && is_numeric( $plan_item['old_index'] ) ) {
+							$cand_old_idx = (int) $plan_item['old_index'];
+							if ( isset( $old_opts_by_index[ $cand_old_idx ] ) && strtolower( $old_opts_by_index[ $cand_old_idx ]['option'] ) === $lookup_key ) {
+								$matched_old = $old_opts_by_index[ $cand_old_idx ];
+							}
+						}
+						if ( ! $matched_old && isset( $old_opts_by_key[ $lookup_key ] ) ) {
+							$matched_old = $old_opts_by_key[ $lookup_key ];
+						}
+
+						if ( $matched_old ) {
+							$old_idx = (int) $matched_old['old_idx'];
+							$old_to_new_index_map[ $old_idx ] = $new_idx;
+							if ( $old_idx !== $new_idx ) {
+								$structure_changed  = true;
+								$variants_reordered = true;
+							}
+						} else {
+							$structure_changed = true;
+						}
+
+						$resolved_img_id = '';
+						if ( isset( $var_map[ $lookup_key ] ) ) {
+							$resolved_img_id = $var_map[ $lookup_key ];
+							$variants_updated++;
+						} elseif ( ! empty( $plan_img ) ) {
+							$resolved_img_id = $plan_img;
+							if ( ! $matched_old || $plan_img !== $matched_old['image_id'] ) {
+								$variants_updated++;
+							}
+						} elseif ( $matched_old && ! empty( $matched_old['image_id'] ) ) {
+							$resolved_img_id = $matched_old['image_id'];
+						} elseif ( $tier0_uses_images && ! empty( $fallback_opt_img_id ) ) {
+							$resolved_img_id = $fallback_opt_img_id;
+						}
+
+						$clean_opt = [
+							'option' => $opt_name,
+						];
+						if ( ! empty( $resolved_img_id ) ) {
+							$clean_opt['image'] = [
+								'image_id' => $resolved_img_id,
+							];
+						}
+
+						$new_tier0_opts[] = $clean_opt;
+						if ( $plan_price > 0 ) {
+							$desired_prices_by_new_idx[ $new_idx ] = $plan_price;
+						}
+					}
+
+					if ( count( $new_tier0_opts ) !== count( $old_opts_by_index ) ) {
+						$structure_changed = true;
+					}
+
+					if ( ! empty( $new_tier0_opts ) ) {
+						$updated_tier_variation[] = [
+							'name'        => (string) ( $tier_variations[0]['name'] ?? 'Warna' ),
+							'option_list' => $new_tier0_opts,
+						];
+					}
+
+					// Preserve any secondary tiers (tier_idx >= 1)
+					for ( $t_idx = 1; $t_idx < count( $tier_variations ); $t_idx++ ) {
+						$tv       = $tier_variations[ $t_idx ];
+						$raw_opts = $tv['option_list'] ?? $tv['options'] ?? [];
+						$opts     = [];
+						foreach ( $raw_opts as $opt_entry ) {
+							$o_name = is_array( $opt_entry ) ? ( $opt_entry['option'] ?? '' ) : (string) $opt_entry;
+							if ( ! empty( $o_name ) ) {
+								$opts[] = [ 'option' => (string) $o_name ];
+							}
+						}
+						if ( ! empty( $opts ) ) {
+							$updated_tier_variation[] = [
+								'name'        => (string) ( $tv['name'] ?? 'Varian' ),
+								'option_list' => $opts,
+							];
+						}
+					}
+				} else {
+					// Legacy path: only variant_images provided without variant_plan
+					foreach ( $tier_variations as $tier_idx => $tv ) {
+						$raw_opts = $tv['option_list'] ?? $tv['options'] ?? [];
+						$opts     = [];
+						foreach ( $raw_opts as $opt_Idx => $opt_entry ) {
+							$opt_name = is_array( $opt_entry ) ? ( $opt_entry['option'] ?? '' ) : (string) $opt_entry;
+							if ( empty( $opt_name ) ) {
+								continue;
+							}
+							$clean_opt = [
+								'option' => (string) $opt_name,
+							];
+							if ( $tier_idx === 0 ) {
+								$old_to_new_index_map[ (int) $opt_Idx ] = (int) $opt_Idx;
+								$lookup_key = strtolower( trim( $opt_name ) );
+								if ( isset( $var_map[ $lookup_key ] ) ) {
+									$clean_opt['image'] = [
+										'image_id' => $var_map[ $lookup_key ],
+									];
+									$variants_updated++;
+								} elseif ( ! empty( $opt_entry['image']['image_id'] ) ) {
+									$clean_opt['image'] = [
+										'image_id' => (string) $opt_entry['image']['image_id'],
+									];
+								}
+							}
+							$opts[] = $clean_opt;
+						}
+						if ( ! empty( $opts ) ) {
+							$updated_tier_variation[] = [
+								'name'        => (string) ( $tv['name'] ?? 'Varian' ),
+								'option_list' => $opts,
+							];
+						}
+					}
+				}
+
+				// 3a. Call update_tier_variation when images, option order, or option count changed
+				if ( ! empty( $updated_tier_variation ) && ( $variants_updated > 0 || $structure_changed ) ) {
+					$remap_model_list = [];
+					foreach ( $existing_models as $em ) {
+						$em_id   = (int) ( $em['model_id'] ?? 0 );
+						$em_tier = array_values( array_map( 'intval', (array) ( $em['tier_index'] ?? [] ) ) );
+						if ( $em_id > 0 && ! empty( $em_tier ) ) {
+							$old_t0 = $em_tier[0];
+							if ( isset( $old_to_new_index_map[ $old_t0 ] ) ) {
+								$em_tier[0]         = $old_to_new_index_map[ $old_t0 ];
+								$remap_model_list[] = [
+									'model_id'   => $em_id,
+									'tier_index' => $em_tier,
+								];
+							}
+						}
+					}
+
+					$utv_payload = [
 						'item_id'        => $item_id,
 						'tier_variation' => $updated_tier_variation,
-					]);
+					];
+					if ( $structure_changed && ! empty( $remap_model_list ) ) {
+						$utv_payload['model_list'] = $remap_model_list;
+					}
+
+					$update_var_res = self::call_shop_api( '/api/v2/product/update_tier_variation', 'POST', [], $utv_payload );
 
 					if ( ! $update_var_res['success'] ) {
-						// Retry once after 2 seconds
 						sleep( 2 );
-						$update_var_res = self::call_shop_api( '/api/v2/product/update_tier_variation', 'POST', [], [
+						$update_var_res = self::call_shop_api( '/api/v2/product/update_tier_variation', 'POST', [], $utv_payload );
+					}
+
+					// Fallback: if Shopee rejected model_list or required model_list, try the alternate payload
+					if ( ! $update_var_res['success'] ) {
+						$alt_payload = [
 							'item_id'        => $item_id,
 							'tier_variation' => $updated_tier_variation,
-						]);
+						];
+						if ( empty( $utv_payload['model_list'] ) && ! empty( $remap_model_list ) ) {
+							$alt_payload['model_list'] = $remap_model_list;
+						}
+						$update_var_res = self::call_shop_api( '/api/v2/product/update_tier_variation', 'POST', [], $alt_payload );
 					}
 
 					if ( ! $update_var_res['success'] ) {
-						$err_msg = $update_var_res['message'] ?? $update_var_res['error'] ?? 'Failed to update tier variation images.';
+						$err_msg  = $update_var_res['message'] ?? $update_var_res['error'] ?? 'Failed to update tier variation.';
 						$errors[] = 'Variation update: ' . $err_msg;
 						if ( class_exists( 'Exacoat_Logger' ) ) {
-							Exacoat_Logger::log( 'error', 'shopee_inject_images', 'update_tier_variation images failed: ' . $err_msg, [
+							Exacoat_Logger::log( 'error', 'shopee_inject_images', 'update_tier_variation failed: ' . $err_msg, [
 								'item_id' => $item_id,
 								'res'     => $update_var_res,
 							]);
+						}
+					}
+				}
+
+				// 3b. Re-fetch live models to detect any newly added tier options without a model, and sync prices
+				if ( ! empty( $variant_plan ) ) {
+					if ( $structure_changed ) {
+						sleep( 1 );
+					}
+					$post_model_res = self::call_shop_api( '/api/v2/product/get_model_list', 'GET', [
+						'item_id' => $item_id,
+					]);
+					$live_models = ( $post_model_res['success'] && ! empty( $post_model_res['response']['model'] ) )
+						? $post_model_res['response']['model']
+						: $existing_models;
+
+					$covered_t0_indices = [];
+					$default_model_price = 189000;
+					foreach ( $live_models as $lm ) {
+						$lm_tier = array_values( array_map( 'intval', (array) ( $lm['tier_index'] ?? [] ) ) );
+						if ( isset( $lm_tier[0] ) ) {
+							$covered_t0_indices[ $lm_tier[0] ] = true;
+						}
+						$lm_price = (float) ( $lm['price_info'][0]['original_price'] ?? 0 );
+						if ( $lm_price > 0 ) {
+							$default_model_price = $lm_price;
+						}
+					}
+
+					$total_new_tier0_count = ! empty( $updated_tier_variation[0]['option_list'] )
+						? count( $updated_tier_variation[0]['option_list'] )
+						: 0;
+
+					$missing_t0_indices = [];
+					for ( $idx = 0; $idx < $total_new_tier0_count; $idx++ ) {
+						if ( empty( $covered_t0_indices[ $idx ] ) ) {
+							$missing_t0_indices[] = $idx;
+						}
+					}
+
+					// Create models for newly added variant options with fixed initial stock = 100
+					if ( ! empty( $missing_t0_indices ) ) {
+						// Resolve warehouse location_id
+						$detected_location_id = '';
+						if ( ! empty( $src['stock_info_v2']['seller_stock'] ) && is_array( $src['stock_info_v2']['seller_stock'] ) ) {
+							foreach ( $src['stock_info_v2']['seller_stock'] as $ss ) {
+								if ( ! empty( $ss['location_id'] ) && $ss['location_id'] !== '-' ) {
+									$detected_location_id = (string) $ss['location_id'];
+									break;
+								}
+							}
+						}
+						if ( empty( $detected_location_id ) && ! empty( $live_models ) ) {
+							foreach ( $live_models as $sm ) {
+								if ( ! empty( $sm['stock_info_v2']['seller_stock'] ) && is_array( $sm['stock_info_v2']['seller_stock'] ) ) {
+									foreach ( $sm['stock_info_v2']['seller_stock'] as $ss ) {
+										if ( ! empty( $ss['location_id'] ) && $ss['location_id'] !== '-' ) {
+											$detected_location_id = (string) $ss['location_id'];
+											break 2;
+										}
+									}
+								}
+							}
+						}
+						if ( empty( $detected_location_id ) ) {
+							$wh_res = self::call_shop_api( '/api/v2/shop/get_warehouse_detail', 'GET' );
+							if ( ! empty( $wh_res['response'] ) ) {
+								$wh_data       = $wh_res['response'];
+								$wh_candidates = $wh_data['warehouse_list'] ?? $wh_data['warehouse_detail_list'] ?? ( isset( $wh_data[0] ) ? $wh_data : [] );
+								foreach ( (array) $wh_candidates as $wh ) {
+									if ( ! empty( $wh['location_id'] ) && $wh['location_id'] !== '-' ) {
+										$detected_location_id = (string) $wh['location_id'];
+										break;
+									}
+								}
+							}
+						}
+
+						$seller_stock_entry = [ 'stock' => 100 ];
+						if ( ! empty( $detected_location_id ) ) {
+							$seller_stock_entry['location_id'] = $detected_location_id;
+						}
+
+						$models_to_add = [];
+						foreach ( $missing_t0_indices as $m_idx ) {
+							$m_price = $desired_prices_by_new_idx[ $m_idx ] ?? $default_model_price;
+							if ( $m_price <= 0 ) {
+								$m_price = $default_model_price;
+							}
+							$models_to_add[] = [
+								'tier_index'     => [ (int) $m_idx ],
+								'original_price' => (float) $m_price,
+								'seller_stock'   => [ $seller_stock_entry ],
+							];
+						}
+
+						$add_model_res = self::call_shop_api( '/api/v2/product/add_model', 'POST', [], [
+							'item_id'    => $item_id,
+							'model_list' => $models_to_add,
+						]);
+
+						if ( ! $add_model_res['success'] ) {
+							sleep( 2 );
+							$add_model_res = self::call_shop_api( '/api/v2/product/add_model', 'POST', [], [
+								'item_id'    => $item_id,
+								'model_list' => $models_to_add,
+							]);
+						}
+
+						if ( $add_model_res['success'] ) {
+							$variants_added = count( $models_to_add );
+							// Refresh live models after adding new models
+							$refresh_models_res = self::call_shop_api( '/api/v2/product/get_model_list', 'GET', [
+								'item_id' => $item_id,
+							]);
+							if ( $refresh_models_res['success'] && ! empty( $refresh_models_res['response']['model'] ) ) {
+								$live_models = $refresh_models_res['response']['model'];
+							}
+						} else {
+							$err_msg  = $add_model_res['message'] ?? $add_model_res['error'] ?? 'Failed to create models for new variants.';
+							$errors[] = 'Add new variant models: ' . $err_msg;
+							if ( class_exists( 'Exacoat_Logger' ) ) {
+								Exacoat_Logger::log( 'error', 'shopee_inject_images', 'add_model failed: ' . $err_msg, [
+									'item_id'       => $item_id,
+									'models_to_add' => $models_to_add,
+									'res'           => $add_model_res,
+								]);
+							}
+						}
+					}
+
+					// 3c. Sync per-variant prices for any model whose desired price differs from live price
+					if ( ! empty( $desired_prices_by_new_idx ) && ! empty( $live_models ) ) {
+						$price_list_to_update = [];
+						foreach ( $live_models as $lm ) {
+							$lm_id   = (int) ( $lm['model_id'] ?? 0 );
+							$lm_tier = array_values( array_map( 'intval', (array) ( $lm['tier_index'] ?? [] ) ) );
+							if ( $lm_id <= 0 || ! isset( $lm_tier[0] ) ) {
+								continue;
+							}
+							$t0_idx = $lm_tier[0];
+							if ( ! isset( $desired_prices_by_new_idx[ $t0_idx ] ) ) {
+								continue;
+							}
+							$target_price  = (float) $desired_prices_by_new_idx[ $t0_idx ];
+							$current_price = (float) ( $lm['price_info'][0]['original_price'] ?? 0 );
+							if ( $target_price > 0 && abs( $current_price - $target_price ) >= 1 ) {
+								$price_list_to_update[] = [
+									'model_id'       => $lm_id,
+									'original_price' => $target_price,
+								];
+							}
+						}
+
+						if ( ! empty( $price_list_to_update ) ) {
+							$price_chunks = array_chunk( $price_list_to_update, 50 );
+							foreach ( $price_chunks as $p_chunk ) {
+								$price_res = self::call_shop_api( '/api/v2/product/update_price', 'POST', [], [
+									'item_id'    => $item_id,
+									'price_list' => $p_chunk,
+								]);
+								if ( $price_res['success'] ) {
+									$prices_updated += count( $p_chunk );
+								} else {
+									$err_msg  = $price_res['message'] ?? $price_res['error'] ?? 'Failed to update variant prices.';
+									$errors[] = 'Price update: ' . $err_msg;
+									if ( class_exists( 'Exacoat_Logger' ) ) {
+										Exacoat_Logger::log( 'error', 'shopee_inject_images', 'update_price failed: ' . $err_msg, [
+											'item_id'    => $item_id,
+											'price_list' => $p_chunk,
+											'res'        => $price_res,
+										]);
+									}
+								}
+							}
+							delete_transient( '_shopee_price_' . $item_id );
 						}
 					}
 				}
@@ -3345,26 +3680,50 @@ class Exacoat_Shopee_Client {
 			Exacoat_Logger::log(
 				$all_success ? 'info' : 'warning',
 				'shopee_inject_images',
-				sprintf( 'Image injection on Shopee #%d: cover=%s, gallery_kept=%d, variants=%d, errors=%s',
+				sprintf(
+					'Image & variant injection on Shopee #%d: cover=%s, gallery_kept=%d, var_imgs=%d, var_added=%d, reordered=%s, prices_updated=%d, errors=%s',
 					$item_id,
 					$cover_updated ? 'yes' : 'no',
 					$gallery_preserved_count,
 					$variants_updated,
+					$variants_added,
+					$variants_reordered ? 'yes' : 'no',
+					$prices_updated,
 					! empty( $errors ) ? implode( '; ', $errors ) : 'none'
 				)
 			);
 		}
 
+		$summary_parts = [];
+		if ( $cover_updated ) {
+			$summary_parts[] = sprintf( 'cover updated (%d gallery images preserved)', $gallery_preserved_count );
+		}
+		if ( $variants_updated > 0 ) {
+			$summary_parts[] = sprintf( '%d variant photos injected', $variants_updated );
+		}
+		if ( $variants_added > 0 ) {
+			$summary_parts[] = sprintf( '%d new variants created (stock 100)', $variants_added );
+		}
+		if ( $variants_reordered ) {
+			$summary_parts[] = 'variant order updated';
+		}
+		if ( $prices_updated > 0 ) {
+			$summary_parts[] = sprintf( '%d variant prices updated', $prices_updated );
+		}
+
 		return new \WP_REST_Response([
-			'success'                 => $all_success || $cover_updated || $variants_updated > 0,
+			'success'                 => $all_success || $cover_updated || $variants_updated > 0 || $variants_added > 0 || $prices_updated > 0 || $variants_reordered,
 			'item_id'                 => $item_id,
 			'cover_updated'           => $cover_updated,
 			'gallery_preserved_count' => $gallery_preserved_count,
 			'variants_updated'        => $variants_updated,
+			'variants_added'          => $variants_added,
+			'variants_reordered'      => $variants_reordered,
+			'prices_updated'          => $prices_updated,
 			'seller_centre_url'       => "https://seller.shopee.co.id/portal/product/{$item_id}",
 			'errors'                  => $errors,
 			'message'                 => $all_success
-				? sprintf( 'Successfully injected images: cover updated, %d variants updated, %d gallery images preserved.', $variants_updated, $gallery_preserved_count )
+				? ( ! empty( $summary_parts ) ? 'Successfully updated Shopee listing: ' . implode( ', ', $summary_parts ) . '.' : 'Shopee listing is up to date.' )
 				: implode( '; ', $errors ),
 		], $all_success ? 200 : 207 );
 	}

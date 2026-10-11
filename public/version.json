@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.175",
+  "version": "0.1.176",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.175.zip?v=0.1.175",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.176.zip?v=0.1.176",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-10-11T12:47:04.363Z",
+  "last_updated": "2026-10-11T13:05:11.630Z",
   "sections": {
-    "changelog": "### Version 0.1.175\n- Enforce support@exacoat.com as sender for contact inquiry customer confirmation emails\n- Add support for custom from_email and from_name overrides in ZeptoMail and wp_mail delivery pipeline"
+    "changelog": "### Version 0.1.176\n- Enforce support@exacoat.com as sender for contact inquiry customer confirmation emails\n- Add support for custom from_email and from_name overrides in ZeptoMail and wp_mail delivery pipeline"
   }
 }

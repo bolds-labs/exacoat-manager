@@ -3,6 +3,7 @@ import { Modal } from '../ui/Modal';
 import {
   ShopeeListingItem,
   ShopeeInjectImagesResult,
+  ShopeeInjectVariantPlanItem,
   fetchShopeeProductPreviewDirect,
   uploadShopeeMediaImageDirect,
   injectShopeeProductImagesDirect,
@@ -34,7 +35,6 @@ import {
   AlertCircle,
   CheckCircle2,
   RefreshCw,
-  Layers,
   ShieldCheck,
   ExternalLink,
   Image as ImageIcon,
@@ -47,6 +47,12 @@ import {
   Save,
   Star,
   Sparkles,
+  Plus,
+  ArrowUp,
+  ArrowDown,
+  ChevronsUp,
+  Trash2,
+  Coins,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -63,12 +69,37 @@ interface DetectedVariantOption {
   selected: boolean;
   currentImageId?: string;
   currentImageUrl?: string;
+  price: number;
+  originalPrice?: number;
+  isNew?: boolean;
+  oldIndex?: number;
+  modelId?: number;
 }
+
+type VariantInsertPlacement = 'after_signature' | 'top' | 'bottom';
 
 const STORAGE_CUSTOM_BG_KEY = 'exacoat_marketplace_custom_bg';
 const STORAGE_BG_TYPE_KEY = 'exacoat_marketplace_bg_type';
 const DEFAULT_MARKETPLACE_BG_URL =
   'https://media.exacoat.com/wp-content/uploads/Marketplace-Product-Background-Plain.png';
+
+function matchFinishByNameOrSlug(optName: string, finishes: GlobalFinish[]): GlobalFinish | undefined {
+  const clean = optName.toLowerCase().trim();
+  if (!clean) return undefined;
+  const normalizedPlus = clean.replace(/\+/g, '-plus').replace(/\s+/g, '-');
+  return finishes.find((f) => {
+    const fName = f.name.toLowerCase().trim();
+    const fSlug = (f.slug || '').toLowerCase().trim();
+    const fId = (f.id || '').toLowerCase().trim();
+    return (
+      fName === clean ||
+      fSlug === clean ||
+      fId === clean ||
+      fSlug === normalizedPlus ||
+      fId === normalizedPlus
+    );
+  });
+}
 
 export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> = ({
   isOpen,
@@ -134,9 +165,13 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
   const [headlineText, setHeadlineText] = useState<string>('');
   const [subBadgeText, setSubBadgeText] = useState<string>('Model Cut');
 
-  // Variant Images Settings
+  // Variant Images, Ordering, & Pricing Settings
   const [updateVariants, setUpdateVariants] = useState<boolean>(true);
   const [detectedVariants, setDetectedVariants] = useState<DetectedVariantOption[]>([]);
+  const [standardBasePrice, setStandardBasePrice] = useState<number>(149000);
+  const [insertPlacement, setInsertPlacement] = useState<VariantInsertPlacement>('after_signature');
+  const [customVariantName, setCustomVariantName] = useState<string>('');
+  const [customVariantPrice, setCustomVariantPrice] = useState<string>('');
 
   // Preview State
   const [activePreviewType, setActivePreviewType] = useState<'cover' | 'variant'>('cover');
@@ -295,6 +330,8 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
       setDeviceProfile(null);
       setSelectedProfileId('');
       setDetectedVariants([]);
+      setCustomVariantName('');
+      setCustomVariantPrice('');
       setInjectionResult(null);
       setInjectionError(null);
       setInjectionProgress(null);
@@ -365,29 +402,83 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
             loadFullProfile(fallbackKey);
           }
 
-          // Process and match variants from tier_variation
+          // Process and match variants from tier_variation + models
           const tier0 = previewRes.tier_variation && previewRes.tier_variation[0];
           const rawOptions = (tier0 as any)?.options || (tier0 as any)?.option_list || [];
-          if (Array.isArray(rawOptions) && rawOptions.length > 0) {
-            const mapped: DetectedVariantOption[] = rawOptions.map((opt: any) => {
-              const optName: string = typeof opt === 'string' ? opt : (opt.option || opt.name || '');
-              const cleanOptName = optName.toLowerCase().trim();
+          const previewModels = Array.isArray(previewRes.models) ? previewRes.models : [];
 
-              // Match against global finishes
-              const matchedFinish = loadedFinishes.find((f) => {
-                const fName = f.name.toLowerCase().trim();
-                const fSlug = (f.slug || '').toLowerCase().trim();
-                return fName === cleanOptName || fSlug === cleanOptName;
-              });
+          if (Array.isArray(rawOptions) && rawOptions.length > 0) {
+            const standardPrices: number[] = [];
+            const allModelPrices: number[] = [];
+
+            const prelim = rawOptions.map((opt: any, idx: number) => {
+              const optName: string = typeof opt === 'string' ? opt : (opt.option || opt.name || '');
+              const matchedFinish = matchFinishByNameOrSlug(optName, loadedFinishes);
+              const matchedModel = previewModels.find(
+                (m) => Array.isArray(m.tier_index) && Number(m.tier_index[0]) === idx
+              );
+              const modelPrice = Number(
+                matchedModel?.original_price || matchedModel?.current_price || 0
+              );
+
+              if (modelPrice > 0) {
+                allModelPrices.push(modelPrice);
+                const finishExtra = Number(matchedFinish?.extra_price || 0);
+                if (finishExtra === 0) {
+                  standardPrices.push(modelPrice);
+                }
+              }
 
               return {
-                option: optName,
+                opt,
+                idx,
+                optName,
                 matchedFinish,
-                selected: Boolean(matchedFinish),
-                currentImageId: typeof opt !== 'string' ? (opt.image?.image_id || opt.image_id) : undefined,
-                currentImageUrl: typeof opt !== 'string' ? (opt.image?.image_url || opt.image_url) : undefined,
+                matchedModel,
+                modelPrice,
               };
             });
+
+            // Auto-detect Standard Base Price (most common standard finish price, or minimum model price)
+            let detectedBase = detectedCoverage === 'model_360' ? 189000 : 149000;
+            if (standardPrices.length > 0) {
+              const freq = new Map<number, number>();
+              let bestCount = 0;
+              for (const p of standardPrices) {
+                const c = (freq.get(p) || 0) + 1;
+                freq.set(p, c);
+                if (c > bestCount) {
+                  bestCount = c;
+                  detectedBase = p;
+                }
+              }
+            } else if (allModelPrices.length > 0) {
+              detectedBase = Math.min(...allModelPrices);
+            }
+            setStandardBasePrice(detectedBase);
+
+            const mapped: DetectedVariantOption[] = prelim.map(
+              ({ opt, idx, optName, matchedFinish, matchedModel, modelPrice }) => {
+                const finishExtra = Number(matchedFinish?.extra_price || 0);
+                const resolvedPrice =
+                  modelPrice > 0 ? modelPrice : detectedBase + finishExtra;
+
+                return {
+                  option: optName,
+                  matchedFinish,
+                  selected: Boolean(matchedFinish),
+                  currentImageId:
+                    typeof opt !== 'string' ? (opt.image?.image_id || opt.image_id) : undefined,
+                  currentImageUrl:
+                    typeof opt !== 'string' ? (opt.image?.image_url || opt.image_url) : undefined,
+                  price: resolvedPrice,
+                  originalPrice: modelPrice > 0 ? modelPrice : undefined,
+                  isNew: false,
+                  oldIndex: idx,
+                  modelId: matchedModel?.model_id,
+                };
+              }
+            );
             setDetectedVariants(mapped);
           }
         } else {
@@ -426,6 +517,208 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
 
   const handleSelectAllVariants = (select: boolean) => {
     setDetectedVariants((prev) => prev.map((v) => ({ ...v, selected: select })));
+  };
+
+  // Compute active Global Finishes that are NOT yet on this Shopee listing
+  const missingFinishes = useMemo(() => {
+    const existingSet = new Set(
+      detectedVariants.map((v) => v.option.toLowerCase().trim())
+    );
+    const existingSlugSet = new Set(
+      detectedVariants
+        .map((v) => v.matchedFinish?.slug?.toLowerCase().trim())
+        .filter(Boolean) as string[]
+    );
+
+    return allFinishes
+      .filter((f) => {
+        if (f.is_active === false) return false;
+        // Skip "Everything" bundle skin unless user adds it manually
+        if (f.slug === 'everything' || f.id === 'everything') return false;
+        const fName = f.name.toLowerCase().trim();
+        const fSlug = (f.slug || '').toLowerCase().trim();
+        return !existingSet.has(fName) && !existingSlugSet.has(fSlug);
+      })
+      .sort((a, b) => {
+        const extraA = Number(a.extra_price || 0);
+        const extraB = Number(b.extra_price || 0);
+        if (extraA !== extraB) return extraB - extraA;
+        return a.name.localeCompare(b.name);
+      });
+  }, [allFinishes, detectedVariants]);
+
+  // Helper to compute insertion index inside detectedVariants based on insertPlacement
+  const resolveInsertIndex = (
+    list: DetectedVariantOption[],
+    placement: VariantInsertPlacement
+  ): number => {
+    if (placement === 'top') return 0;
+    if (placement === 'bottom') return list.length;
+
+    // 'after_signature': insert right after the last Signature/Limited/Surcharge variant
+    let lastSignatureIdx = -1;
+    for (let i = 0; i < list.length; i++) {
+      const f = list[i].matchedFinish;
+      const isSpecial =
+        Number(f?.extra_price || 0) > 0 ||
+        Boolean(f?.group && /signature|limited/i.test(f.group)) ||
+        (list[i].price > standardBasePrice && standardBasePrice > 0);
+      if (isSpecial) {
+        lastSignatureIdx = i;
+      }
+    }
+    return lastSignatureIdx >= 0 ? lastSignatureIdx + 1 : 0;
+  };
+
+  // Add a Global Finish as a new Shopee variant option
+  const handleAddFinishVariant = (finish: GlobalFinish) => {
+    const extra = Number(finish.extra_price || 0);
+    const calculatedPrice = standardBasePrice + extra;
+
+    setDetectedVariants((prev) => {
+      if (prev.some((v) => v.option.toLowerCase().trim() === finish.name.toLowerCase().trim())) {
+        return prev;
+      }
+      const newEntry: DetectedVariantOption = {
+        option: finish.name,
+        matchedFinish: finish,
+        selected: true,
+        price: calculatedPrice,
+        isNew: true,
+      };
+      const targetIdx = resolveInsertIndex(prev, insertPlacement);
+      const next = [...prev];
+      next.splice(targetIdx, 0, newEntry);
+      return next;
+    });
+
+    setActivePreviewType('variant');
+    setPreviewFinishId(finish.id);
+    showToast(
+      'success',
+      `Added ${finish.name}`,
+      `Queued at Rp ${calculatedPrice.toLocaleString('id-ID')} (initial stock: 100).`
+    );
+  };
+
+  // Add all missing Signature / Limited finishes (extra_price > 0) in one click
+  const handleAddAllMissingSpecialFinishes = () => {
+    const specials = missingFinishes.filter((f) => Number(f.extra_price || 0) > 0);
+    if (specials.length === 0) return;
+
+    setDetectedVariants((prev) => {
+      let next = [...prev];
+      let insertIdx = resolveInsertIndex(next, insertPlacement);
+
+      for (const finish of specials) {
+        if (next.some((v) => v.option.toLowerCase().trim() === finish.name.toLowerCase().trim())) {
+          continue;
+        }
+        const extra = Number(finish.extra_price || 0);
+        const newEntry: DetectedVariantOption = {
+          option: finish.name,
+          matchedFinish: finish,
+          selected: true,
+          price: standardBasePrice + extra,
+          isNew: true,
+        };
+        next.splice(insertIdx, 0, newEntry);
+        insertIdx++;
+      }
+      return next;
+    });
+
+    showToast(
+      'success',
+      `Added ${specials.length} Special Finishes`,
+      `Added ${specials.map((s) => s.name).join(', ')} with automatic surcharge pricing.`
+    );
+  };
+
+  // Add a custom variant name
+  const handleAddCustomVariant = () => {
+    const trimmed = customVariantName.trim();
+    if (!trimmed) {
+      showToast('warning', 'Variant Name Required', 'Enter a variant option name first.');
+      return;
+    }
+    if (detectedVariants.some((v) => v.option.toLowerCase().trim() === trimmed.toLowerCase())) {
+      showToast('warning', 'Duplicate Variant', `"${trimmed}" already exists in the variant list.`);
+      return;
+    }
+
+    const matchedFinish = matchFinishByNameOrSlug(trimmed, allFinishes);
+    const finishExtra = Number(matchedFinish?.extra_price || 0);
+    const parsedCustomPrice = Number(customVariantPrice.replace(/[^0-9]/g, ''));
+    const finalPrice =
+      parsedCustomPrice > 0 ? parsedCustomPrice : standardBasePrice + finishExtra;
+
+    setDetectedVariants((prev) => {
+      const newEntry: DetectedVariantOption = {
+        option: trimmed,
+        matchedFinish,
+        selected: Boolean(matchedFinish),
+        price: finalPrice,
+        isNew: true,
+      };
+      const targetIdx = resolveInsertIndex(prev, insertPlacement);
+      const next = [...prev];
+      next.splice(targetIdx, 0, newEntry);
+      return next;
+    });
+
+    setCustomVariantName('');
+    setCustomVariantPrice('');
+    showToast('success', `Added "${trimmed}"`, `Price set to Rp ${finalPrice.toLocaleString('id-ID')}.`);
+  };
+
+  // Reorder variant in list
+  const handleMoveVariant = (index: number, direction: 'up' | 'down' | 'top') => {
+    setDetectedVariants((prev) => {
+      if (index < 0 || index >= prev.length) return prev;
+      const targetIdx =
+        direction === 'top' ? 0 : direction === 'up' ? index - 1 : index + 1;
+      if (targetIdx < 0 || targetIdx >= prev.length || targetIdx === index) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(index, 1);
+      next.splice(targetIdx, 0, moved);
+      return next;
+    });
+  };
+
+  // Remove a newly added variant before saving
+  const handleRemoveNewVariant = (optName: string) => {
+    setDetectedVariants((prev) => prev.filter((v) => !(v.isNew && v.option === optName)));
+  };
+
+  // Update individual variant price
+  const handleVariantPriceChange = (optName: string, rawPrice: string) => {
+    const numeric = Number(rawPrice.replace(/[^0-9]/g, '')) || 0;
+    setDetectedVariants((prev) =>
+      prev.map((v) => (v.option === optName ? { ...v, price: numeric } : v))
+    );
+  };
+
+  // Sync all variant prices from Standard Base Price + Finish Surcharge
+  const handleRecalculateAllPricesFromBase = () => {
+    if (standardBasePrice <= 0) {
+      showToast('warning', 'Invalid Base Price', 'Please enter a valid Standard Base Price first.');
+      return;
+    }
+    setDetectedVariants((prev) =>
+      prev.map((v) => {
+        const extra = Number(v.matchedFinish?.extra_price || 0);
+        return {
+          ...v,
+          price: standardBasePrice + extra,
+        };
+      })
+    );
+    showToast(
+      'success',
+      'Prices Synchronized',
+      `Applied Rp ${standardBasePrice.toLocaleString('id-ID')} base + finish surcharges across all ${detectedVariants.length} variants.`
+    );
   };
 
   // Save current Cover & Variant positions to the matched device profile
@@ -580,21 +873,41 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
     buildRenderConfig,
   ]);
 
-  // Execute Complete Image Injection Pipeline
+  // Summary metrics for variant modifications
+  const selectedVariantsCount = detectedVariants.filter((v) => v.selected).length;
+  const newVariantsCount = detectedVariants.filter((v) => v.isNew).length;
+  const hasReorderedVariants = detectedVariants.some(
+    (v, idx) => !v.isNew && v.oldIndex !== undefined && v.oldIndex !== idx
+  );
+  const changedPricesCount = detectedVariants.filter(
+    (v) =>
+      v.price > 0 &&
+      (v.isNew || (v.originalPrice !== undefined && Math.abs(v.price - v.originalPrice) >= 1))
+  ).length;
+  const hasVariantStructureOrPriceChanges =
+    newVariantsCount > 0 || hasReorderedVariants || changedPricesCount > 0;
+
+  // Execute Complete Image & Variant Injection Pipeline
   const handleStartInjection = async () => {
     if (!item || !deviceProfile) {
       showToast('error', 'Device Profile Missing', 'Please select a valid device profile first.');
       return;
     }
 
-    if (!updateCover && !updateVariants) {
-      showToast('warning', 'Nothing Selected', 'Please enable either Primary Cover or Variant Options.');
-      return;
-    }
+    const selectedVariantsList = detectedVariants.filter(
+      (v) => (updateVariants && v.selected && v.matchedFinish) || (v.isNew && v.matchedFinish)
+    );
 
-    const selectedVariantsList = detectedVariants.filter((v) => v.selected && v.matchedFinish);
-    if (updateVariants && selectedVariantsList.length === 0) {
-      showToast('warning', 'No Variants Selected', 'Please select at least 1 variant to inject.');
+    if (
+      !updateCover &&
+      selectedVariantsList.length === 0 &&
+      !hasVariantStructureOrPriceChanges
+    ) {
+      showToast(
+        'warning',
+        'Nothing Selected',
+        'Please enable Primary Cover, select Variant Photos, or add/reorder/reprice variants.'
+      );
       return;
     }
 
@@ -603,7 +916,7 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
     setInjectionResult(null);
 
     const totalSteps =
-      (updateCover ? 1 : 0) + (updateVariants ? selectedVariantsList.length : 0) + 1;
+      (updateCover ? 1 : 0) + selectedVariantsList.length + 1;
     let completedSteps = 0;
 
     let uploadedCoverImageId: string | undefined = undefined;
@@ -651,68 +964,90 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
         uploadedCoverImageId = uploadCoverRes.image_id;
       }
 
-      // Step 2: Render and Upload Each Selected Variant
-      if (updateVariants) {
-        for (let idx = 0; idx < selectedVariantsList.length; idx++) {
-          const v = selectedVariantsList[idx];
-          completedSteps++;
+      // Step 2: Render and Upload Each Selected / Newly Added Variant
+      for (let idx = 0; idx < selectedVariantsList.length; idx++) {
+        const v = selectedVariantsList[idx];
+        completedSteps++;
 
-          setInjectionProgress({
-            current: completedSteps,
-            total: totalSteps,
-            stage: `Variant ${idx + 1} of ${selectedVariantsList.length}`,
-            details: `Rendering & uploading ${v.option}...`,
+        setInjectionProgress({
+          current: completedSteps,
+          total: totalSteps,
+          stage: `Variant ${idx + 1} of ${selectedVariantsList.length}`,
+          details: `Rendering & uploading ${v.option}...`,
+        });
+
+        const variantFinish = v.matchedFinish || allFinishes[0];
+        const variantConfig = buildRenderConfig('variant', variantFinish.id);
+        if (!variantConfig) continue;
+
+        const variantBlob = await generateMarketplaceImageBlob(variantConfig);
+        const slug = variantFinish.slug || variantFinish.id || `variant-${idx + 1}`;
+        const variantFile = new File([variantBlob], `shopee-variant-${slug}.jpg`, {
+          type: 'image/jpeg',
+        });
+
+        const uploadVarRes = await uploadShopeeMediaImageDirect({
+          file: variantFile,
+          filename: `shopee-variant-${slug}.jpg`,
+        });
+
+        if (uploadVarRes.success && uploadVarRes.image_id) {
+          uploadedVariantImages.push({
+            option: v.option,
+            image_id: uploadVarRes.image_id,
           });
-
-          const variantFinish = v.matchedFinish || allFinishes[0];
-          const variantConfig = buildRenderConfig('variant', variantFinish.id);
-          if (!variantConfig) continue;
-
-          const variantBlob = await generateMarketplaceImageBlob(variantConfig);
-          const slug = variantFinish.slug || variantFinish.id || `variant-${idx + 1}`;
-          const variantFile = new File([variantBlob], `shopee-variant-${slug}.jpg`, {
-            type: 'image/jpeg',
-          });
-
-          const uploadVarRes = await uploadShopeeMediaImageDirect({
-            file: variantFile,
-            filename: `shopee-variant-${slug}.jpg`,
-          });
-
-          if (uploadVarRes.success && uploadVarRes.image_id) {
-            uploadedVariantImages.push({
-              option: v.option,
-              image_id: uploadVarRes.image_id,
-            });
-          } else {
-            console.warn(`[Shopee Injection] Variant upload failed for ${v.option}:`, uploadVarRes.error);
-          }
+        } else {
+          console.warn(`[Shopee Injection] Variant upload failed for ${v.option}:`, uploadVarRes.error);
         }
       }
 
-      // Step 3: Inject Images into Shopee Listing (Non-Destructive)
+      // Step 3: Build Complete Variant Plan (Order + Images + Prices + New Options)
       completedSteps++;
       setInjectionProgress({
         current: completedSteps,
         total: totalSteps,
-        stage: 'Finalizing Injection',
-        details: 'Updating Shopee product listing with preserved gallery images...',
+        stage: 'Finalizing Shopee Update',
+        details: 'Syncing cover, variant options, ordering, and prices to Shopee...',
       });
+
+      const uploadedMap = new Map(
+        uploadedVariantImages.map((u) => [u.option.toLowerCase().trim(), u.image_id])
+      );
+
+      const variantPlan: ShopeeInjectVariantPlanItem[] = detectedVariants.map((v) => ({
+        option: v.option,
+        image_id: uploadedMap.get(v.option.toLowerCase().trim()) || v.currentImageId || undefined,
+        price: Number(v.price) > 0 ? Number(v.price) : undefined,
+        is_new: Boolean(v.isNew),
+        old_index: v.oldIndex,
+      }));
 
       const injectRes = await injectShopeeProductImagesDirect({
         item_id: item.item_id,
         cover_image_id: uploadedCoverImageId,
         variant_images: uploadedVariantImages,
+        variant_plan: variantPlan,
       });
 
       if (injectRes.success) {
         setInjectionResult(injectRes);
-        showToast('success', 'Injection Complete', injectRes.message || 'Images injected successfully.');
+        // Mark newly added variants and updated prices as committed in UI state
+        setDetectedVariants((prev) =>
+          prev.map((v, idx) => ({
+            ...v,
+            isNew: false,
+            oldIndex: idx,
+            originalPrice: v.price,
+            currentImageId:
+              uploadedMap.get(v.option.toLowerCase().trim()) || v.currentImageId,
+          }))
+        );
+        showToast('success', 'Shopee Listing Updated', injectRes.message || 'Images and variants updated.');
         if (onSuccess) {
           onSuccess(injectRes);
         }
       } else {
-        setInjectionError(injectRes.error || injectRes.message || 'Shopee rejected image injection.');
+        setInjectionError(injectRes.error || injectRes.message || 'Shopee rejected listing update.');
         showToast('error', 'Injection Failed', injectRes.error || 'Failed to update Shopee listing.');
       }
     } catch (err: any) {
@@ -724,8 +1059,6 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
       setInjectionProgress(null);
     }
   };
-
-  const selectedVariantsCount = detectedVariants.filter((v) => v.selected).length;
 
   return (
     <Modal
@@ -805,7 +1138,7 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
                   <div className="text-[11px] font-medium text-zinc-400 mb-2 flex items-center justify-between">
                     <span>Current Shopee Photos ({productPreview.images.length})</span>
                     <span className="text-[10px] text-zinc-500">
-                      Photo #1 will be replaced; photos #2–#{productPreview.images.length} preserved
+                      Photo #1 will be replaced; photos #2 to #{productPreview.images.length} preserved
                     </span>
                   </div>
                   <div className="flex gap-2 overflow-x-auto pb-1">
@@ -1343,9 +1676,9 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
                   )}
                 </div>
 
-                {/* 4. Variant Options List & Selection */}
-                <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800 space-y-3">
-                  <div className="flex items-center justify-between">
+                {/* 4. Variant Options, Missing Finishes, Placement & Pricing */}
+                <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800 space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <label className="text-xs font-bold text-zinc-200 flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
@@ -1353,116 +1686,390 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
                         onChange={(e) => setUpdateVariants(e.target.checked)}
                         className="rounded border-zinc-700 text-[#f3aa18] focus:ring-[#f3aa18]"
                       />
-                      <span>Inject Variant Option Photos</span>
+                      <span>Inject Variant Option Photos, Add Finishes & Sync Prices</span>
                     </label>
 
-                    {updateVariants && (
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleSelectAllVariants(true)}
-                          className="text-[11px] text-[#f3aa18] hover:underline cursor-pointer"
-                        >
-                          Select All
-                        </button>
-                        <span className="text-zinc-600">•</span>
-                        <button
-                          type="button"
-                          onClick={() => handleSelectAllVariants(false)}
-                          className="text-[11px] text-zinc-400 hover:underline cursor-pointer"
-                        >
-                          Deselect All
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleSelectAllVariants(true)}
+                        className="text-[11px] text-[#f3aa18] hover:underline cursor-pointer"
+                      >
+                        Select All Photos
+                      </button>
+                      <span className="text-zinc-600">•</span>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectAllVariants(false)}
+                        className="text-[11px] text-zinc-400 hover:underline cursor-pointer"
+                      >
+                        Deselect Photos
+                      </button>
+                    </div>
                   </div>
 
-                  {updateVariants && (
-                    <div className="space-y-2 pt-2 border-t border-zinc-800">
-                      <div className="flex items-center justify-between text-[11px] text-zinc-400">
-                        <span>
-                          {selectedVariantsCount} of {detectedVariants.length} variants selected
+                  {/* Base Price & Bulk Price Calculator Bar */}
+                  <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 space-y-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 text-[11px] font-bold text-zinc-200">
+                        <Coins className="w-3.5 h-3.5 text-[#f3aa18]" />
+                        <span>Variant Pricing & Standard Base Price</span>
+                      </div>
+                      <span className="text-[10px] text-zinc-400">
+                        Signature & Limited skins auto-add their finish surcharge (e.g. +Rp 30.000)
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-700 rounded-lg px-2.5 py-1.5">
+                        <span className="text-[10px] font-semibold text-zinc-400">
+                          Standard Base (Rp):
                         </span>
-                        <span className="text-[10px] text-zinc-500">
-                          Click row to select/deselect; preview in canvas on right
+                        <input
+                          type="number"
+                          step={1000}
+                          value={standardBasePrice || ''}
+                          onChange={(e) =>
+                            setStandardBasePrice(Math.max(0, Number(e.target.value) || 0))
+                          }
+                          className="w-24 bg-transparent text-xs font-mono font-bold text-zinc-100 focus:outline-none"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleRecalculateAllPricesFromBase}
+                        className="min-h-[34px] px-3 py-1.5 rounded-lg bg-[#f3aa18]/15 hover:bg-[#f3aa18]/25 border border-[#f3aa18]/40 text-[#f3aa18] text-[11px] font-bold transition cursor-pointer"
+                      >
+                        Sync All Prices from Base + Surcharge
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Add Missing Finishes & Placement Panel */}
+                  <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 text-[11px] font-bold text-zinc-200">
+                        <Plus className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Add Missing Finishes to Shopee Listing</span>
+                        <span className="text-[10px] font-normal text-zinc-400">
+                          (Initial Stock: 100)
                         </span>
                       </div>
 
-                      <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1">
-                        {detectedVariants.map((v) => {
-                          const isMatched = Boolean(v.matchedFinish);
-                          return (
-                            <div
-                              key={v.option}
-                              className={clsx(
-                                'px-3 py-2 rounded-lg border text-xs flex items-center justify-between transition cursor-pointer select-none',
-                                v.selected
-                                  ? 'bg-zinc-950 border-[#f3aa18]/40 text-zinc-100'
-                                  : 'bg-zinc-950/60 border-zinc-800 text-zinc-500'
-                              )}
-                              onClick={() => handleToggleVariant(v.option)}
-                            >
-                              <div className="flex items-center gap-2.5 truncate">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleToggleVariant(v.option);
-                                  }}
-                                  className="text-zinc-400 hover:text-zinc-200"
-                                >
-                                  {v.selected ? (
-                                    <CheckSquare className="w-4 h-4 text-[#f3aa18]" />
-                                  ) : (
-                                    <Square className="w-4 h-4 text-zinc-600" />
-                                  )}
-                                </button>
-
-                                {v.matchedFinish && (
-                                  <div
-                                    className="w-4 h-4 rounded-full border border-black/40 shrink-0"
-                                    style={{
-                                      backgroundColor: v.matchedFinish.color_hex || '#333',
-                                      backgroundImage: v.matchedFinish.thumbnail
-                                        ? `url(${v.matchedFinish.thumbnail})`
-                                        : undefined,
-                                      backgroundSize: 'cover',
-                                    }}
-                                  />
-                                )}
-
-                                <span className="font-medium truncate">{v.option}</span>
-
-                                {!isMatched && (
-                                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">
-                                    No direct finish match
-                                  </span>
-                                )}
-                              </div>
-
-                              <div className="flex items-center gap-2 shrink-0">
-                                {isMatched && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setActivePreviewType('variant');
-                                      setPreviewFinishId(v.matchedFinish!.id);
-                                    }}
-                                    className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-medium flex items-center gap-1 cursor-pointer"
-                                    title="Preview this variant on canvas"
-                                  >
-                                    <Eye className="w-3 h-3" />
-                                    <span>Preview</span>
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-zinc-400">Insert at:</span>
+                        <select
+                          value={insertPlacement}
+                          onChange={(e) =>
+                            setInsertPlacement(e.target.value as VariantInsertPlacement)
+                          }
+                          className="px-2 py-1 rounded-lg bg-zinc-900 border border-zinc-700 text-[11px] text-zinc-200 focus:outline-none focus:border-[#f3aa18]"
+                        >
+                          <option value="after_signature">After Signature skins</option>
+                          <option value="top">Top of variant list (#1)</option>
+                          <option value="bottom">Bottom of variant list</option>
+                        </select>
                       </div>
                     </div>
-                  )}
+
+                    {missingFinishes.length > 0 ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] text-zinc-400">
+                            Click a missing finish below to insert it with auto-calculated price:
+                          </span>
+                          {missingFinishes.some((f) => Number(f.extra_price || 0) > 0) && (
+                            <button
+                              type="button"
+                              onClick={handleAddAllMissingSpecialFinishes}
+                              className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold transition cursor-pointer shrink-0"
+                            >
+                              + Add All Missing Signature / Limited (
+                              {missingFinishes.filter((f) => Number(f.extra_price || 0) > 0).length}
+                              )
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1">
+                          {missingFinishes.map((f) => {
+                            const extra = Number(f.extra_price || 0);
+                            const autoPrice = standardBasePrice + extra;
+                            return (
+                              <button
+                                key={f.id}
+                                type="button"
+                                onClick={() => handleAddFinishVariant(f)}
+                                className={clsx(
+                                  'px-2.5 py-1.5 rounded-lg border text-[11px] font-medium flex items-center gap-1.5 transition cursor-pointer',
+                                  extra > 0
+                                    ? 'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/35 text-amber-200'
+                                    : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-zinc-200'
+                                )}
+                                title={`Insert ${f.name} at Rp ${autoPrice.toLocaleString('id-ID')} (Stock: 100)`}
+                              >
+                                <div
+                                  className="w-3.5 h-3.5 rounded-full border border-black/40 shrink-0"
+                                  style={{
+                                    backgroundColor: f.color_hex || '#333',
+                                    backgroundImage: f.thumbnail ? `url(${f.thumbnail})` : undefined,
+                                    backgroundSize: 'cover',
+                                  }}
+                                />
+                                <span className="font-semibold">{f.name}</span>
+                                <span className="text-[9px] font-mono opacity-80">
+                                  Rp {(autoPrice / 1000).toFixed(0)}k
+                                </span>
+                                <Plus className="w-3 h-3 text-emerald-400 shrink-0" />
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-emerald-400">
+                        All active Global Finishes are already present in the variant list below.
+                      </p>
+                    )}
+
+                    {/* Custom Variant Input */}
+                    <div className="pt-2 border-t border-zinc-800/80 flex flex-wrap items-center gap-2">
+                      <input
+                        type="text"
+                        value={customVariantName}
+                        onChange={(e) => setCustomVariantName(e.target.value)}
+                        placeholder="Custom variant name (e.g. Titanium+)"
+                        className="flex-1 min-w-[160px] px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-xs text-zinc-100 focus:outline-none focus:border-[#f3aa18]"
+                      />
+                      <input
+                        type="number"
+                        step={1000}
+                        value={customVariantPrice}
+                        onChange={(e) => setCustomVariantPrice(e.target.value)}
+                        placeholder={`Price (default ${standardBasePrice})`}
+                        className="w-36 px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-xs font-mono text-zinc-100 focus:outline-none focus:border-[#f3aa18]"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddCustomVariant}
+                        className="min-h-[32px] px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5 text-[#f3aa18]" />
+                        <span>Add Custom</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Variant List with Reordering & Editable Prices */}
+                  <div className="space-y-2 pt-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-zinc-400">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span>
+                          {selectedVariantsCount} of {detectedVariants.length} photos queued
+                        </span>
+                        {newVariantsCount > 0 && (
+                          <span className="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold">
+                            +{newVariantsCount} New
+                          </span>
+                        )}
+                        {hasReorderedVariants && (
+                          <span className="px-2 py-0.5 rounded bg-blue-500/15 border border-blue-500/30 text-blue-300 text-[10px] font-bold">
+                            Reordered
+                          </span>
+                        )}
+                        {changedPricesCount > 0 && (
+                          <span className="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-bold">
+                            {changedPricesCount} Price Updates
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-zinc-500">
+                        Use arrows to reorder; edit Rp price per variant
+                      </span>
+                    </div>
+
+                    <div className="max-h-80 overflow-y-auto space-y-1.5 pr-1">
+                      {detectedVariants.map((v, idx) => {
+                        const isMatched = Boolean(v.matchedFinish);
+                        const finishExtra = Number(v.matchedFinish?.extra_price || 0);
+                        const isPriceModified =
+                          !v.isNew &&
+                          v.originalPrice !== undefined &&
+                          Math.abs(v.price - v.originalPrice) >= 1;
+                        const isMoved =
+                          !v.isNew && v.oldIndex !== undefined && v.oldIndex !== idx;
+
+                        return (
+                          <div
+                            key={`${v.option}-${idx}`}
+                            className={clsx(
+                              'px-2.5 py-2 rounded-lg border text-xs flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 transition select-none',
+                              v.isNew
+                                ? 'bg-emerald-950/25 border-emerald-500/40 text-zinc-100'
+                                : v.selected && updateVariants
+                                ? 'bg-zinc-950 border-[#f3aa18]/40 text-zinc-100'
+                                : 'bg-zinc-950/60 border-zinc-800 text-zinc-400'
+                            )}
+                          >
+                            {/* Left: Index, Checkbox, Swatch, Option Name & Badges */}
+                            <div
+                              className="flex items-center gap-2 min-w-0 flex-1 cursor-pointer"
+                              onClick={() => handleToggleVariant(v.option)}
+                            >
+                              <span className="w-6 text-center font-mono text-[10px] text-zinc-500 shrink-0">
+                                #{idx + 1}
+                              </span>
+
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleVariant(v.option);
+                                }}
+                                className="text-zinc-400 hover:text-zinc-200 shrink-0"
+                                title="Toggle rendering & uploading photo for this variant"
+                              >
+                                {v.selected ? (
+                                  <CheckSquare className="w-4 h-4 text-[#f3aa18]" />
+                                ) : (
+                                  <Square className="w-4 h-4 text-zinc-600" />
+                                )}
+                              </button>
+
+                              {v.matchedFinish && (
+                                <div
+                                  className="w-4 h-4 rounded-full border border-black/40 shrink-0"
+                                  style={{
+                                    backgroundColor: v.matchedFinish.color_hex || '#333',
+                                    backgroundImage: v.matchedFinish.thumbnail
+                                      ? `url(${v.matchedFinish.thumbnail})`
+                                      : undefined,
+                                    backgroundSize: 'cover',
+                                  }}
+                                />
+                              )}
+
+                              <span className="font-semibold truncate">{v.option}</span>
+
+                              {v.isNew && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold shrink-0">
+                                  NEW
+                                </span>
+                              )}
+
+                              {isMoved && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/15 border border-blue-500/30 text-blue-300 font-mono shrink-0">
+                                  was #{v.oldIndex! + 1}
+                                </span>
+                              )}
+
+                              {finishExtra > 0 && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 font-mono shrink-0">
+                                  +{(finishExtra / 1000).toFixed(0)}k
+                                </span>
+                              )}
+
+                              {!isMatched && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 shrink-0">
+                                  Custom
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Right: Price Input, Reorder Controls, Preview & Delete */}
+                            <div
+                              className="flex items-center gap-1.5 shrink-0"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {/* Per-Variant Price Input */}
+                              <div
+                                className={clsx(
+                                  'flex items-center gap-1 px-2 py-1 rounded border text-[11px] font-mono',
+                                  isPriceModified || v.isNew
+                                    ? 'bg-amber-500/10 border-amber-500/40 text-amber-200'
+                                    : 'bg-zinc-900 border-zinc-800 text-zinc-200'
+                                )}
+                                title={
+                                  v.originalPrice
+                                    ? `Current Shopee price: Rp ${v.originalPrice.toLocaleString('id-ID')}`
+                                    : 'New variant price'
+                                }
+                              >
+                                <span className="text-[9px] text-zinc-500">Rp</span>
+                                <input
+                                  type="number"
+                                  step={1000}
+                                  value={v.price || ''}
+                                  onChange={(e) =>
+                                    handleVariantPriceChange(v.option, e.target.value)
+                                  }
+                                  className="w-20 bg-transparent text-[11px] font-mono font-semibold focus:outline-none text-right"
+                                />
+                              </div>
+
+                              {/* Reorder Buttons */}
+                              <div className="flex items-center bg-zinc-900 rounded border border-zinc-800 p-0.5">
+                                <button
+                                  type="button"
+                                  disabled={idx === 0}
+                                  onClick={() => handleMoveVariant(idx, 'top')}
+                                  className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 disabled:opacity-30 cursor-pointer"
+                                  title="Move to top (#1)"
+                                >
+                                  <ChevronsUp className="w-3 h-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={idx === 0}
+                                  onClick={() => handleMoveVariant(idx, 'up')}
+                                  className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 disabled:opacity-30 cursor-pointer"
+                                  title="Move up"
+                                >
+                                  <ArrowUp className="w-3 h-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={idx === detectedVariants.length - 1}
+                                  onClick={() => handleMoveVariant(idx, 'down')}
+                                  className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 disabled:opacity-30 cursor-pointer"
+                                  title="Move down"
+                                >
+                                  <ArrowDown className="w-3 h-3" />
+                                </button>
+                              </div>
+
+                              {isMatched && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActivePreviewType('variant');
+                                    setPreviewFinishId(v.matchedFinish!.id);
+                                  }}
+                                  className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-medium flex items-center gap-1 cursor-pointer"
+                                  title="Preview this variant on canvas"
+                                >
+                                  <Eye className="w-3 h-3" />
+                                  <span className="hidden sm:inline">Preview</span>
+                                </button>
+                              )}
+
+                              {v.isNew && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveNewVariant(v.option)}
+                                  className="p-1.5 rounded bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 cursor-pointer"
+                                  title="Remove newly added variant"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1576,11 +2183,16 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
                     <div className="flex items-start gap-2.5">
                       <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
                       <div className="space-y-1">
-                        <p className="font-bold text-emerald-200">Image Injection Complete</p>
+                        <p className="font-bold text-emerald-200">Shopee Listing Update Complete</p>
                         <p className="text-[11px] text-emerald-300/90 leading-relaxed">
-                          Primary cover updated: {injectionResult.cover_updated ? 'Yes' : 'No'}.
-                          Gallery preserved: {injectionResult.gallery_preserved_count} photos kept intact.
-                          Variant photos updated: {injectionResult.variants_updated}.
+                          Primary cover updated: {injectionResult.cover_updated ? 'Yes' : 'No'}.{' '}
+                          Gallery preserved: {injectionResult.gallery_preserved_count} photos kept intact.{' '}
+                          Variant photos injected: {injectionResult.variants_updated}.{' '}
+                          {Number(injectionResult.variants_added) > 0 &&
+                            `New variants created (stock 100): ${injectionResult.variants_added}. `}
+                          {injectionResult.variants_reordered && 'Variant order updated. '}
+                          {Number(injectionResult.prices_updated) > 0 &&
+                            `Variant prices updated: ${injectionResult.prices_updated}.`}
                         </p>
                       </div>
                     </div>
@@ -1615,13 +2227,16 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
                     {isInjecting ? (
                       <>
                         <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>Injecting Images into Shopee...</span>
+                        <span>Updating Shopee Listing...</span>
                       </>
                     ) : (
                       <>
                         <Upload className="w-4 h-4" />
                         <span>
-                          Start Auto-Injection ({updateCover ? 1 : 0} Cover + {updateVariants ? selectedVariantsCount : 0} Variants)
+                          Start Auto-Injection ({updateCover ? 1 : 0} Cover +{' '}
+                          {updateVariants ? selectedVariantsCount : newVariantsCount} Photos
+                          {newVariantsCount > 0 ? ` • +${newVariantsCount} New` : ''}
+                          {changedPricesCount > 0 ? ` • ${changedPricesCount} Prices` : ''})
                         </span>
                       </>
                     )}
