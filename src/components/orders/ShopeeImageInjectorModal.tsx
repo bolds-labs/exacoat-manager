@@ -186,6 +186,11 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
   const [customVariantName, setCustomVariantName] = useState<string>('');
   const [customVariantPrice, setCustomVariantPrice] = useState<string>('');
 
+  // Editable Listing Title State
+  const [originalItemName, setOriginalItemName] = useState<string>('');
+  const [editedItemName, setEditedItemName] = useState<string>('');
+  const [isSavingTitleOnly, setIsSavingTitleOnly] = useState<boolean>(false);
+
   // Preview State
   const [activePreviewType, setActivePreviewType] = useState<'cover' | 'variant'>('cover');
   const [previewFinishId, setPreviewFinishId] = useState<string>('swarm');
@@ -340,6 +345,9 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
     if (!isOpen || (!item && !tiktokItem)) {
       // Reset state on close
       setProductPreview(null);
+      setOriginalItemName('');
+      setEditedItemName('');
+      setIsSavingTitleOnly(false);
       setDeviceProfile(null);
       setSelectedProfileId('');
       setDetectedVariants([]);
@@ -423,8 +431,12 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
         if (effectivePreview) {
           setProductPreview(effectivePreview);
 
+          const initialTitle = effectivePreview.item_name || fallbackListingName || '';
+          setOriginalItemName(initialTitle);
+          setEditedItemName(initialTitle);
+
           // Detect coverage from listing title
-          const title = (effectivePreview.item_name || fallbackListingName).toLowerCase();
+          const title = initialTitle.toLowerCase();
           const detectedCoverage = title.includes('360') ? 'model_360' : 'model_cut';
           setCoverage(detectedCoverage);
           setSubBadgeText(detectedCoverage === 'model_360' ? 'Model 360' : 'Model Cut');
@@ -939,31 +951,94 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
   const hasVariantStructureOrPriceChanges =
     newVariantsCount > 0 || hasReorderedVariants || changedPricesCount > 0;
 
-  // Execute Complete Image & Variant Injection Pipeline (supports coverOnlyOverride for 1-click primary cover update)
-  const handleStartInjection = async (coverOnlyOverride?: boolean) => {
+  // Title modification status
+  const isTitleModified =
+    Boolean(editedItemName.trim()) &&
+    Boolean(originalItemName) &&
+    editedItemName.trim() !== originalItemName.trim();
+
+  // Save listing title immediately without touching images or variants
+  const handleSaveTitleOnly = async () => {
+    if (!isTitleModified) return;
+    setIsSavingTitleOnly(true);
+    try {
+      const trimmed = editedItemName.trim();
+      let res: ShopeeInjectImagesResult;
+      if (isTikTok && tiktokItem) {
+        res = await injectTikTokProductImagesDirect({
+          product_id: tiktokItem.id,
+          item_name: trimmed,
+        });
+      } else {
+        res = await injectShopeeProductImagesDirect({
+          item_id: item!.item_id,
+          item_name: trimmed,
+        });
+      }
+
+      if (res.success) {
+        setOriginalItemName(trimmed);
+        showToast(
+          'success',
+          'Title Updated',
+          res.message || `Listing title updated on ${channelLabel}.`
+        );
+        if (onSuccess) onSuccess(res);
+      } else {
+        showToast(
+          'error',
+          'Title Update Failed',
+          res.error || res.message || `Failed to update title on ${channelLabel}.`
+        );
+      }
+    } catch (err: any) {
+      showToast('error', 'Error', err.message || 'Network error updating title.');
+    } finally {
+      setIsSavingTitleOnly(false);
+    }
+  };
+
+  // Execute Complete Image & Variant Injection Pipeline (supports: 'cover_only', 'metadata_only', or 'full')
+  const handleStartInjection = async (
+    modeInput?: 'cover_only' | 'metadata_only' | 'full' | boolean
+  ) => {
     if ((!item && !tiktokItem) || !deviceProfile) {
       showToast('error', 'Device Profile Missing', 'Please select a valid device profile first.');
       return;
     }
 
-    const isCoverOnly = coverOnlyOverride === true || !updateVariants;
-    const shouldUploadCover = isCoverOnly ? true : updateCover;
+    let mode: 'cover_only' | 'metadata_only' | 'full' = 'full';
+    if (modeInput === true || modeInput === 'cover_only') {
+      mode = 'cover_only';
+    } else if (modeInput === 'metadata_only') {
+      mode = 'metadata_only';
+    } else if (modeInput === false || modeInput === 'full') {
+      mode = 'full';
+    } else if (!updateVariants) {
+      mode = 'cover_only';
+    }
 
-    const selectedVariantsList = isCoverOnly
-      ? []
-      : detectedVariants.filter(
-          (v) => (updateVariants && v.selected && v.matchedFinish) || (v.isNew && v.matchedFinish)
-        );
+    const isMetadataOnly = mode === 'metadata_only';
+    const isCoverOnly = mode === 'cover_only';
+    const shouldUploadCover = isMetadataOnly ? false : isCoverOnly ? true : updateCover;
+
+    const selectedVariantsList =
+      isCoverOnly || isMetadataOnly
+        ? []
+        : detectedVariants.filter(
+            (v) => (updateVariants && v.selected && v.matchedFinish) || (v.isNew && v.matchedFinish)
+          );
 
     if (
       !shouldUploadCover &&
       selectedVariantsList.length === 0 &&
-      (isCoverOnly || !hasVariantStructureOrPriceChanges)
+      !hasVariantStructureOrPriceChanges &&
+      !isTitleModified
     ) {
       showToast(
         'warning',
-        'Nothing Selected',
-        'Please enable Primary Cover, select Variant Photos, or add/reorder/reprice variants.'
+        'Nothing to Update',
+        'Please enable Primary Cover, select Variant Photos, edit the Title, or modify Variant Prices/Order.'
       );
       return;
     }
@@ -1001,7 +1076,7 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
         })
         .catch(() => {});
 
-      // Step 1: Render and Upload Primary Cover
+      // Step 1: Render and Upload Primary Cover (skipped in metadata-only mode)
       if (shouldUploadCover) {
         completedSteps++;
         setInjectionProgress({
@@ -1049,8 +1124,8 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
         uploadedCoverImageId = uploadCoverRes.image_id;
       }
 
-      // Step 2: Render and Upload Each Selected / Newly Added Variant (skipped in Cover-Only mode)
-      if (!isCoverOnly) {
+      // Step 2: Render and Upload Each Selected / Newly Added Variant (skipped in Cover-Only and Metadata-Only mode)
+      if (!isCoverOnly && !isMetadataOnly) {
         for (let idx = 0; idx < selectedVariantsList.length; idx++) {
           const v = selectedVariantsList[idx];
           completedSteps++;
@@ -1103,7 +1178,9 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
         current: completedSteps,
         total: totalSteps,
         stage: `Finalizing ${channelLabel} Update`,
-        details: isCoverOnly
+        details: isMetadataOnly
+          ? `Syncing title, prices, and variant order to ${channelLabel} (no photo upload)...`
+          : isCoverOnly
           ? `Updating primary cover image on ${channelLabel} (preserving gallery & variants)...`
           : `Syncing cover, variant options, ordering, and prices to ${channelLabel}...`,
       });
@@ -1112,36 +1189,44 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
         uploadedVariantImages.map((u) => [u.option.toLowerCase().trim(), u.image_id])
       );
 
+      const trimmedItemName = isTitleModified ? editedItemName.trim() : undefined;
+
+      const variantPlan: ShopeeInjectVariantPlanItem[] | undefined = isCoverOnly
+        ? undefined
+        : detectedVariants.map((v) => ({
+            option: v.option,
+            image_id:
+              uploadedMap.get(v.option.toLowerCase().trim()) || v.currentImageId || undefined,
+            price: Number(v.price) > 0 ? Number(v.price) : undefined,
+            is_new: Boolean(v.isNew),
+            old_index: v.oldIndex,
+          }));
+
       let injectRes: ShopeeInjectImagesResult;
 
       if (isTikTok && tiktokItem) {
         injectRes = await injectTikTokProductImagesDirect({
           product_id: tiktokItem.id,
+          item_name: trimmedItemName,
           cover_image_id: uploadedCoverImageId,
-          variant_images: isCoverOnly ? undefined : uploadedVariantImages,
+          variant_images: isCoverOnly || isMetadataOnly ? undefined : uploadedVariantImages,
+          variant_plan: variantPlan,
         });
       } else {
-        const variantPlan: ShopeeInjectVariantPlanItem[] | undefined = isCoverOnly
-          ? undefined
-          : detectedVariants.map((v) => ({
-              option: v.option,
-              image_id:
-                uploadedMap.get(v.option.toLowerCase().trim()) || v.currentImageId || undefined,
-              price: Number(v.price) > 0 ? Number(v.price) : undefined,
-              is_new: Boolean(v.isNew),
-              old_index: v.oldIndex,
-            }));
-
         injectRes = await injectShopeeProductImagesDirect({
           item_id: item!.item_id,
+          item_name: trimmedItemName,
           cover_image_id: uploadedCoverImageId,
-          variant_images: isCoverOnly ? undefined : uploadedVariantImages,
+          variant_images: isCoverOnly || isMetadataOnly ? undefined : uploadedVariantImages,
           variant_plan: variantPlan,
         });
       }
 
       if (injectRes.success) {
         setInjectionResult(injectRes);
+        if (trimmedItemName) {
+          setOriginalItemName(trimmedItemName);
+        }
         if (!isCoverOnly) {
           // Mark newly added variants and updated prices as committed in UI state
           setDetectedVariants((prev) =>
@@ -1159,9 +1244,11 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
           'success',
           `${channelLabel} Listing Updated`,
           injectRes.message ||
-            (isCoverOnly
+            (isMetadataOnly
+              ? 'Listing title, prices, and variant order updated with zero image uploads.'
+              : isCoverOnly
               ? 'Primary cover image updated with zero variant changes.'
-              : 'Images and variants updated.')
+              : 'Images, title, and variants updated successfully.')
         );
         if (onSuccess) {
           onSuccess(injectRes);
@@ -1236,22 +1323,21 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
             {/* Target Product Summary Bar */}
             <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#f3aa18]/20 text-[#f3aa18] border border-[#f3aa18]/30">
-                      ID: {isTikTok ? tiktokItem?.id : item?.item_id}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#f3aa18]/20 text-[#f3aa18] border border-[#f3aa18]/30">
+                    ID: {isTikTok ? tiktokItem?.id : item?.item_id}
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-zinc-800 text-zinc-300 border border-zinc-700">
+                    Status:{' '}
+                    {productPreview?.item_status ||
+                      (isTikTok ? tiktokItem?.status : item?.item_status) ||
+                      'NORMAL'}
+                  </span>
+                  {isTitleModified && (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse">
+                      Title Modified
                     </span>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-zinc-800 text-zinc-300 border border-zinc-700">
-                      Status:{' '}
-                      {productPreview?.item_status ||
-                        (isTikTok ? tiktokItem?.status : item?.item_status) ||
-                        'NORMAL'}
-                    </span>
-                  </div>
-                  <h3 className="text-sm font-bold text-zinc-100 line-clamp-1">
-                    {productPreview?.item_name ||
-                      (isTikTok ? tiktokItem?.title : item?.item_name)}
-                  </h3>
+                  )}
                 </div>
 
                 {(productPreview?.seller_centre_url || item?.seller_centre_url) && (
@@ -1259,12 +1345,83 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
                     href={productPreview?.seller_centre_url || item?.seller_centre_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="min-h-[44px] px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium flex items-center gap-1.5 transition cursor-pointer"
+                    className="min-h-[36px] px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium flex items-center gap-1.5 transition cursor-pointer"
                   >
                     <span>Seller Centre</span>
                     <ExternalLink className="w-3.5 h-3.5" />
                   </a>
                 )}
+              </div>
+
+              {/* Editable Product Title Input */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-[11px] font-semibold text-zinc-300 flex items-center gap-1.5">
+                    <span>Listing Title ({channelLabel}):</span>
+                    {isTitleModified && (
+                      <span className="text-[10px] text-amber-400 font-normal">
+                        (Unsaved changes)
+                      </span>
+                    )}
+                  </label>
+                  <div className="flex items-center gap-2 text-[10px] text-zinc-500">
+                    <span>
+                      {editedItemName.length} / {isTikTok ? 255 : 120} chars
+                    </span>
+                    {isTitleModified && (
+                      <>
+                        <span>•</span>
+                        <button
+                          type="button"
+                          onClick={() => setEditedItemName(originalItemName)}
+                          className="text-zinc-400 hover:text-zinc-200 underline cursor-pointer"
+                        >
+                          Reset
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      maxLength={isTikTok ? 255 : 120}
+                      value={editedItemName}
+                      onChange={(e) => setEditedItemName(e.target.value)}
+                      placeholder={`Enter ${channelLabel} product listing title...`}
+                      className={clsx(
+                        'w-full px-3 py-2 rounded-lg text-xs font-medium focus:outline-none transition',
+                        isTitleModified
+                          ? 'bg-amber-500/10 border border-amber-500/50 text-amber-100 focus:border-amber-400'
+                          : 'bg-zinc-950 border border-zinc-700 text-zinc-200 focus:border-[#f3aa18]'
+                      )}
+                    />
+                  </div>
+
+                  {isTitleModified && (
+                    <button
+                      type="button"
+                      onClick={handleSaveTitleOnly}
+                      disabled={isSavingTitleOnly || isInjecting || !editedItemName.trim()}
+                      className="min-h-[36px] px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-zinc-950 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0"
+                      title="Save listing title to marketplace immediately without uploading images"
+                    >
+                      {isSavingTitleOnly ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Saving Title...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Save Title</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Existing Photos Strip */}
@@ -1866,9 +2023,7 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
                         className="rounded border-zinc-700 text-[#f3aa18] focus:ring-[#f3aa18]"
                       />
                       <span>
-                        {isTikTok
-                          ? 'Inject Variant Option Photos'
-                          : 'Inject Variant Option Photos, Add Finishes & Sync Prices'}
+                        Inject Variant Option Photos, Add Finishes & Sync Prices
                       </span>
                     </label>
 
@@ -1911,162 +2066,169 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
                     </div>
                   ) : (
                     <>
-                      {/* Base Price & Bulk Price Calculator Bar (Shopee) */}
-                      {!isTikTok && (
-                        <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 space-y-2.5">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="flex items-center gap-1.5 text-[11px] font-bold text-zinc-200">
-                              <Coins className="w-3.5 h-3.5 text-[#f3aa18]" />
-                              <span>Variant Pricing & Standard Base Price</span>
-                            </div>
-                            <span className="text-[10px] text-zinc-400">
-                              Signature & Limited skins auto-add their finish surcharge (e.g. +Rp 30.000)
-                            </span>
+                      {/* Base Price & Bulk Price Calculator Bar */}
+                      <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 space-y-2.5">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 text-[11px] font-bold text-zinc-200">
+                            <Coins className="w-3.5 h-3.5 text-[#f3aa18]" />
+                            <span>Variant Pricing & Standard Base Price</span>
                           </div>
-
-                          <div className="flex flex-wrap items-center gap-2">
-                            <div className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-700 rounded-lg px-2.5 py-1.5">
-                              <span className="text-[10px] font-semibold text-zinc-400">
-                                Standard Base (Rp):
-                              </span>
-                              <input
-                                type="number"
-                                step={1000}
-                                value={standardBasePrice || ''}
-                                onChange={(e) =>
-                                  setStandardBasePrice(Math.max(0, Number(e.target.value) || 0))
-                                }
-                                className="w-24 bg-transparent text-xs font-mono font-bold text-zinc-100 focus:outline-none"
-                              />
-                            </div>
-
-                            <button
-                              type="button"
-                              onClick={handleRecalculateAllPricesFromBase}
-                              className="min-h-[34px] px-3 py-1.5 rounded-lg bg-[#f3aa18]/15 hover:bg-[#f3aa18]/25 border border-[#f3aa18]/40 text-[#f3aa18] text-[11px] font-bold transition cursor-pointer"
-                            >
-                              Sync All Prices from Base + Surcharge
-                            </button>
-                          </div>
+                          <span className="text-[10px] text-zinc-400">
+                            Signature & Limited skins auto-add their finish surcharge (e.g. +Rp 30.000)
+                          </span>
                         </div>
-                      )}
 
-                      {/* Add Missing Finishes & Placement Panel (Shopee) */}
-                      {!isTikTok && (
-                        <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 space-y-3">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="flex items-center gap-1.5 text-[11px] font-bold text-zinc-200">
-                              <Plus className="w-3.5 h-3.5 text-emerald-400" />
-                              <span>Add Missing Finishes to Shopee Listing</span>
-                              <span className="text-[10px] font-normal text-zinc-400">
-                                (Initial Stock: 100)
-                              </span>
-                            </div>
-
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[10px] text-zinc-400">Insert at:</span>
-                              <select
-                                value={insertPlacement}
-                                onChange={(e) =>
-                                  setInsertPlacement(e.target.value as VariantInsertPlacement)
-                                }
-                                className="px-2 py-1 rounded-lg bg-zinc-900 border border-zinc-700 text-[11px] text-zinc-200 focus:outline-none focus:border-[#f3aa18]"
-                              >
-                                <option value="after_signature">After Signature skins</option>
-                                <option value="top">Top of variant list (#1)</option>
-                                <option value="bottom">Bottom of variant list</option>
-                              </select>
-                            </div>
-                          </div>
-
-                          {missingFinishes.length > 0 ? (
-                            <div className="space-y-2">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-[10px] text-zinc-400">
-                                  Click a missing finish below to insert it with auto-calculated price:
-                                </span>
-                                {missingFinishes.some((f) => Number(f.extra_price || 0) > 0) && (
-                                  <button
-                                    type="button"
-                                    onClick={handleAddAllMissingSpecialFinishes}
-                                    className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold transition cursor-pointer shrink-0"
-                                  >
-                                    + Add All Missing Signature / Limited (
-                                    {missingFinishes.filter((f) => Number(f.extra_price || 0) > 0).length}
-                                    )
-                                  </button>
-                                )}
-                              </div>
-
-                              <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1">
-                                {missingFinishes.map((f) => {
-                                  const extra = Number(f.extra_price || 0);
-                                  const autoPrice = standardBasePrice + extra;
-                                  return (
-                                    <button
-                                      key={f.id}
-                                      type="button"
-                                      onClick={() => handleAddFinishVariant(f)}
-                                      className={clsx(
-                                        'px-2.5 py-1.5 rounded-lg border text-[11px] font-medium flex items-center gap-1.5 transition cursor-pointer',
-                                        extra > 0
-                                          ? 'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/35 text-amber-200'
-                                          : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-zinc-200'
-                                      )}
-                                      title={`Insert ${f.name} at Rp ${autoPrice.toLocaleString('id-ID')} (Stock: 100)`}
-                                    >
-                                      <div
-                                        className="w-3.5 h-3.5 rounded-full border border-black/40 shrink-0"
-                                        style={{
-                                          backgroundColor: f.color_hex || '#333',
-                                          backgroundImage: f.thumbnail ? `url(${f.thumbnail})` : undefined,
-                                          backgroundSize: 'cover',
-                                        }}
-                                      />
-                                      <span className="font-semibold">{f.name}</span>
-                                      <span className="text-[9px] font-mono opacity-80">
-                                        Rp {(autoPrice / 1000).toFixed(0)}k
-                                      </span>
-                                      <Plus className="w-3 h-3 text-emerald-400 shrink-0" />
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          ) : (
-                            <p className="text-[11px] text-emerald-400">
-                              All active Global Finishes are already present in the variant list below.
-                            </p>
-                          )}
-
-                          {/* Custom Variant Input */}
-                          <div className="pt-2 border-t border-zinc-800/80 flex flex-wrap items-center gap-2">
-                            <input
-                              type="text"
-                              value={customVariantName}
-                              onChange={(e) => setCustomVariantName(e.target.value)}
-                              placeholder="Custom variant name (e.g. Titanium+)"
-                              className="flex-1 min-w-[160px] px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-xs text-zinc-100 focus:outline-none focus:border-[#f3aa18]"
-                            />
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-700 rounded-lg px-2.5 py-1.5">
+                            <span className="text-[10px] font-semibold text-zinc-400">
+                              Standard Base (Rp):
+                            </span>
                             <input
                               type="number"
                               step={1000}
-                              value={customVariantPrice}
-                              onChange={(e) => setCustomVariantPrice(e.target.value)}
-                              placeholder={`Price (default ${standardBasePrice})`}
-                              className="w-36 px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-xs font-mono text-zinc-100 focus:outline-none focus:border-[#f3aa18]"
+                              value={standardBasePrice || ''}
+                              onChange={(e) =>
+                                setStandardBasePrice(Math.max(0, Number(e.target.value) || 0))
+                              }
+                              className="w-24 bg-transparent text-xs font-mono font-bold text-zinc-100 focus:outline-none"
                             />
-                            <button
-                              type="button"
-                              onClick={handleAddCustomVariant}
-                              className="min-h-[32px] px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={handleRecalculateAllPricesFromBase}
+                            className="min-h-[34px] px-3 py-1.5 rounded-lg bg-[#f3aa18]/15 hover:bg-[#f3aa18]/25 border border-[#f3aa18]/40 text-[#f3aa18] text-[11px] font-bold transition cursor-pointer"
+                          >
+                            Sync All Prices from Base + Surcharge
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleStartInjection('metadata_only')}
+                            disabled={isInjecting || isLoadingInitialData}
+                            className="min-h-[34px] px-3 py-1.5 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/40 text-blue-300 text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer"
+                            title="Save modified variant prices and ordering to marketplace without uploading images"
+                          >
+                            <Save className="w-3.5 h-3.5" />
+                            <span>Save Prices & Variant Order (No Photos)</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Add Missing Finishes & Placement Panel */}
+                      <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 text-[11px] font-bold text-zinc-200">
+                            <Plus className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Add Missing Finishes to {channelLabel} Listing</span>
+                            <span className="text-[10px] font-normal text-zinc-400">
+                              (Initial Stock: 100)
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] text-zinc-400">Insert at:</span>
+                            <select
+                              value={insertPlacement}
+                              onChange={(e) =>
+                                setInsertPlacement(e.target.value as VariantInsertPlacement)
+                              }
+                              className="px-2 py-1 rounded-lg bg-zinc-900 border border-zinc-700 text-[11px] text-zinc-200 focus:outline-none focus:border-[#f3aa18]"
                             >
-                              <Plus className="w-3.5 h-3.5 text-[#f3aa18]" />
-                              <span>Add Custom</span>
-                            </button>
+                              <option value="after_signature">After Signature skins</option>
+                              <option value="top">Top of variant list (#1)</option>
+                              <option value="bottom">Bottom of variant list</option>
+                            </select>
                           </div>
                         </div>
-                      )}
+
+                        {missingFinishes.length > 0 ? (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[10px] text-zinc-400">
+                                Click a missing finish below to insert it with auto-calculated price:
+                              </span>
+                              {missingFinishes.some((f) => Number(f.extra_price || 0) > 0) && (
+                                <button
+                                  type="button"
+                                  onClick={handleAddAllMissingSpecialFinishes}
+                                  className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold transition cursor-pointer shrink-0"
+                                >
+                                  + Add All Missing Signature / Limited (
+                                  {missingFinishes.filter((f) => Number(f.extra_price || 0) > 0).length}
+                                  )
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1">
+                              {missingFinishes.map((f) => {
+                                const extra = Number(f.extra_price || 0);
+                                const autoPrice = standardBasePrice + extra;
+                                return (
+                                  <button
+                                    key={f.id}
+                                    type="button"
+                                    onClick={() => handleAddFinishVariant(f)}
+                                    className={clsx(
+                                      'px-2.5 py-1.5 rounded-lg border text-[11px] font-medium flex items-center gap-1.5 transition cursor-pointer',
+                                      extra > 0
+                                        ? 'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/35 text-amber-200'
+                                        : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-zinc-200'
+                                    )}
+                                    title={`Insert ${f.name} at Rp ${autoPrice.toLocaleString('id-ID')} (Stock: 100)`}
+                                  >
+                                    <div
+                                      className="w-3.5 h-3.5 rounded-full border border-black/40 shrink-0"
+                                      style={{
+                                        backgroundColor: f.color_hex || '#333',
+                                        backgroundImage: f.thumbnail ? `url(${f.thumbnail})` : undefined,
+                                        backgroundSize: 'cover',
+                                      }}
+                                    />
+                                    <span className="font-semibold">{f.name}</span>
+                                    <span className="text-[9px] font-mono opacity-80">
+                                      Rp {(autoPrice / 1000).toFixed(0)}k
+                                    </span>
+                                    <Plus className="w-3 h-3 text-emerald-400 shrink-0" />
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-emerald-400">
+                            All active Global Finishes are already present in the variant list below.
+                          </p>
+                        )}
+
+                        {/* Custom Variant Input */}
+                        <div className="pt-2 border-t border-zinc-800/80 flex flex-wrap items-center gap-2">
+                          <input
+                            type="text"
+                            value={customVariantName}
+                            onChange={(e) => setCustomVariantName(e.target.value)}
+                            placeholder="Custom variant name (e.g. Titanium+)"
+                            className="flex-1 min-w-[160px] px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-xs text-zinc-100 focus:outline-none focus:border-[#f3aa18]"
+                          />
+                          <input
+                            type="number"
+                            step={1000}
+                            value={customVariantPrice}
+                            onChange={(e) => setCustomVariantPrice(e.target.value)}
+                            placeholder={`Price (default ${standardBasePrice})`}
+                            className="w-36 px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-xs font-mono text-zinc-100 focus:outline-none focus:border-[#f3aa18]"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleAddCustomVariant}
+                            className="min-h-[32px] px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5 text-[#f3aa18]" />
+                            <span>Add Custom</span>
+                          </button>
+                        </div>
+                      </div>
 
                       {/* Variant List with Reordering & Editable Prices */}
                       <div className="space-y-2 pt-1">
@@ -2091,11 +2253,9 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
                               </span>
                             )}
                           </div>
-                          {!isTikTok && (
-                            <span className="text-[10px] text-zinc-500">
-                              Use arrows to reorder; edit Rp price per variant
-                            </span>
-                          )}
+                          <span className="text-[10px] text-zinc-500">
+                            Use arrows to reorder; edit Rp price per variant
+                          </span>
                         </div>
 
                         <div className="max-h-80 overflow-y-auto space-y-1.5 pr-1">
@@ -2133,8 +2293,8 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
                                   <button
                                     type="button"
                                     onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleToggleVariant(v.option);
+                                       e.stopPropagation();
+                                       handleToggleVariant(v.option);
                                     }}
                                     className="text-zinc-400 hover:text-zinc-200 shrink-0"
                                     title="Toggle rendering & uploading photo for this variant"
@@ -2191,66 +2351,62 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
                                   className="flex items-center gap-1.5 shrink-0"
                                   onClick={(e) => e.stopPropagation()}
                                 >
-                                  {!isTikTok && (
-                                    <>
-                                      {/* Per-Variant Price Input */}
-                                      <div
-                                        className={clsx(
-                                          'flex items-center gap-1 px-2 py-1 rounded border text-[11px] font-mono',
-                                          isPriceModified || v.isNew
-                                            ? 'bg-amber-500/10 border-amber-500/40 text-amber-200'
-                                            : 'bg-zinc-900 border-zinc-800 text-zinc-200'
-                                        )}
-                                        title={
-                                          v.originalPrice
-                                            ? `Current Shopee price: Rp ${v.originalPrice.toLocaleString('id-ID')}`
-                                            : 'New variant price'
-                                        }
-                                      >
-                                        <span className="text-[9px] text-zinc-500">Rp</span>
-                                        <input
-                                          type="number"
-                                          step={1000}
-                                          value={v.price || ''}
-                                          onChange={(e) =>
-                                            handleVariantPriceChange(v.option, e.target.value)
-                                          }
-                                          className="w-20 bg-transparent text-[11px] font-mono font-semibold focus:outline-none text-right"
-                                        />
-                                      </div>
+                                  {/* Per-Variant Price Input */}
+                                  <div
+                                    className={clsx(
+                                      'flex items-center gap-1 px-2 py-1 rounded border text-[11px] font-mono',
+                                      isPriceModified || v.isNew
+                                        ? 'bg-amber-500/10 border-amber-500/40 text-amber-200'
+                                        : 'bg-zinc-900 border-zinc-800 text-zinc-200'
+                                    )}
+                                    title={
+                                      v.originalPrice
+                                        ? `Current price: Rp ${v.originalPrice.toLocaleString('id-ID')}`
+                                        : 'New variant price'
+                                    }
+                                  >
+                                    <span className="text-[9px] text-zinc-500">Rp</span>
+                                    <input
+                                      type="number"
+                                      step={1000}
+                                      value={v.price || ''}
+                                      onChange={(e) =>
+                                        handleVariantPriceChange(v.option, e.target.value)
+                                      }
+                                      className="w-20 bg-transparent text-[11px] font-mono font-semibold focus:outline-none text-right"
+                                    />
+                                  </div>
 
-                                      {/* Reorder Buttons */}
-                                      <div className="flex items-center bg-zinc-900 rounded border border-zinc-800 p-0.5">
-                                        <button
-                                          type="button"
-                                          disabled={idx === 0}
-                                          onClick={() => handleMoveVariant(idx, 'top')}
-                                          className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 disabled:opacity-30 cursor-pointer"
-                                          title="Move to top (#1)"
-                                        >
-                                          <ChevronsUp className="w-3 h-3" />
-                                        </button>
-                                        <button
-                                          type="button"
-                                          disabled={idx === 0}
-                                          onClick={() => handleMoveVariant(idx, 'up')}
-                                          className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 disabled:opacity-30 cursor-pointer"
-                                          title="Move up"
-                                        >
-                                          <ArrowUp className="w-3 h-3" />
-                                        </button>
-                                        <button
-                                          type="button"
-                                          disabled={idx === detectedVariants.length - 1}
-                                          onClick={() => handleMoveVariant(idx, 'down')}
-                                          className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 disabled:opacity-30 cursor-pointer"
-                                          title="Move down"
-                                        >
-                                          <ArrowDown className="w-3 h-3" />
-                                        </button>
-                                      </div>
-                                    </>
-                                  )}
+                                  {/* Reorder Buttons */}
+                                  <div className="flex items-center bg-zinc-900 rounded border border-zinc-800 p-0.5">
+                                    <button
+                                      type="button"
+                                      disabled={idx === 0}
+                                      onClick={() => handleMoveVariant(idx, 'top')}
+                                      className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 disabled:opacity-30 cursor-pointer"
+                                      title="Move to top (#1)"
+                                    >
+                                      <ChevronsUp className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={idx === 0}
+                                      onClick={() => handleMoveVariant(idx, 'up')}
+                                      className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 disabled:opacity-30 cursor-pointer"
+                                      title="Move up"
+                                    >
+                                      <ArrowUp className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={idx === detectedVariants.length - 1}
+                                      onClick={() => handleMoveVariant(idx, 'down')}
+                                      className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 disabled:opacity-30 cursor-pointer"
+                                      title="Move down"
+                                    >
+                                      <ArrowDown className="w-3 h-3" />
+                                    </button>
+                                  </div>
 
                                   {isMatched && (
                                     <button
@@ -2431,10 +2587,45 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
 
                 {/* Action Controls */}
                 <div className="space-y-2 pt-2">
+                  {/* Save Title, Prices & Variant Order Only (Skip Image Upload) */}
+                  <button
+                    type="button"
+                    onClick={() => handleStartInjection('metadata_only')}
+                    disabled={
+                      isInjecting ||
+                      isLoadingInitialData ||
+                      (!hasVariantStructureOrPriceChanges && !isTitleModified)
+                    }
+                    className={clsx(
+                      'w-full min-h-[44px] px-4 py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-md',
+                      isInjecting || (!hasVariantStructureOrPriceChanges && !isTitleModified)
+                        ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700/50'
+                        : 'bg-blue-600/20 hover:bg-blue-600/30 text-blue-200 border border-blue-500/40 hover:border-blue-500/60'
+                    )}
+                  >
+                    {isInjecting && injectionProgress?.stage.includes('Finalizing') ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin text-blue-400" />
+                        <span>Saving to {channelLabel}...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4 text-blue-400" />
+                        <span>
+                          Save Title, Prices & Variant Order Only (Skip Image Upload)
+                          {isTitleModified && ' • Title'}
+                          {changedPricesCount > 0 && ` • ${changedPricesCount} Prices`}
+                          {newVariantsCount > 0 && ` • +${newVariantsCount} New`}
+                          {hasReorderedVariants && ' • Reordered'}
+                        </span>
+                      </>
+                    )}
+                  </button>
+
                   {/* Primary 1-Click Cover Image Only Button */}
                   <button
                     type="button"
-                    onClick={() => handleStartInjection(true)}
+                    onClick={() => handleStartInjection('cover_only')}
                     disabled={isInjecting || isLoadingInitialData || !deviceProfile}
                     className={clsx(
                       'w-full min-h-[44px] px-4 py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-md',
@@ -2464,7 +2655,7 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
                   {updateVariants && (
                     <button
                       type="button"
-                      onClick={() => handleStartInjection(false)}
+                      onClick={() => handleStartInjection('full')}
                       disabled={isInjecting || isLoadingInitialData || !deviceProfile}
                       className={clsx(
                         'w-full min-h-[44px] px-4 py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-md',
@@ -2484,12 +2675,8 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
                           <span>
                             Inject Cover + Variants ({updateCover ? 1 : 0} Cover +{' '}
                             {selectedVariantsCount} Photos
-                            {!isTikTok && newVariantsCount > 0
-                              ? ` • +${newVariantsCount} New`
-                              : ''}
-                            {!isTikTok && changedPricesCount > 0
-                              ? ` • ${changedPricesCount} Prices`
-                              : ''}
+                            {newVariantsCount > 0 ? ` • +${newVariantsCount} New` : ''}
+                            {changedPricesCount > 0 ? ` • ${changedPricesCount} Prices` : ''}
                             )
                           </span>
                         </>
