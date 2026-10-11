@@ -9,7 +9,7 @@
   "requires_php": "7.4",
   "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.172.zip?v=0.1.172",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-10-11T10:57:14.431Z",
+  "last_updated": "2026-10-11T10:58:25.649Z",
   "sections": {
     "changelog": "### Version 0.1.172\n- Enforce support@exacoat.com as sender for contact inquiry customer confirmation emails\n- Add support for custom from_email and from_name overrides in ZeptoMail and wp_mail delivery pipeline"
   }

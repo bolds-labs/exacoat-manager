@@ -107,12 +107,19 @@ class Exacoat_Biteship_Engine {
 	}
 
 	public static function get_api_key() {
+		if ( class_exists( 'Exacoat_Shipping_Tracker' ) && method_exists( 'Exacoat_Shipping_Tracker', 'get_biteship_api_key' ) ) {
+			$tracker_key = Exacoat_Shipping_Tracker::get_biteship_api_key();
+			if ( ! empty( $tracker_key ) ) {
+				return $tracker_key;
+			}
+		}
+
 		if ( defined( 'BITESHIP_API_KEY' ) && BITESHIP_API_KEY ) {
 			return trim( BITESHIP_API_KEY );
 		}
 
 		global $wpdb;
-		if ( isset( $wpdb ) && $wpdb instanceof wpdb ) {
+		if ( ! empty( $wpdb ) && is_object( $wpdb ) && ! empty( $wpdb->options ) ) {
 			$raw = $wpdb->get_var( "SELECT option_value FROM {$wpdb->options} WHERE option_name LIKE 'woocommerce_biteship_shipping_%_settings' ORDER BY option_id DESC LIMIT 1" );
 			if ( $raw ) {
 				$opts = maybe_unserialize( $raw );
@@ -122,30 +129,28 @@ class Exacoat_Biteship_Engine {
 			}
 		}
 
-		if ( ! class_exists( 'WC_Shipping_Zones' ) ) {
-			return '';
-		}
+		if ( class_exists( 'WC_Shipping_Zones' ) ) {
+			self::shipping_init();
+			$zone_ids = [ 0 ];
+			foreach ( WC_Shipping_Zones::get_zones() as $zone ) {
+				$zone_ids[] = absint( $zone['zone_id'] ?? $zone['id'] ?? 0 );
+			}
 
-		self::shipping_init();
-		$zone_ids = [ 0 ];
-		foreach ( WC_Shipping_Zones::get_zones() as $zone ) {
-			$zone_ids[] = absint( $zone['zone_id'] ?? $zone['id'] ?? 0 );
-		}
-
-		foreach ( array_unique( $zone_ids ) as $zone_id ) {
-			$zone = new WC_Shipping_Zone( $zone_id );
-			foreach ( $zone->get_shipping_methods( true ) as $method ) {
-				if ( 'biteship_shipping' !== $method->id ) {
-					continue;
-				}
-				$api_key = trim( (string) $method->get_option( 'api_key', '' ) );
-				if ( $api_key ) {
-					return $api_key;
+			foreach ( array_unique( $zone_ids ) as $zone_id ) {
+				$zone = new WC_Shipping_Zone( $zone_id );
+				foreach ( $zone->get_shipping_methods( true ) as $method ) {
+					if ( 'biteship_shipping' !== $method->id ) {
+						continue;
+					}
+					$api_key = trim( (string) $method->get_option( 'api_key', '' ) );
+					if ( $api_key ) {
+						return $api_key;
+					}
 				}
 			}
 		}
 
-		return '';
+		return 'biteship_live.eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiRXhhY29hdCIsInVzZXJJZCI6IjY2ZDM1NmE0OWEyOGQzMDAxMjUyN2Q1NCIsImlhdCI6MTc1ODQ1MTM5Mn0.zAWrMuQusXZc8_V0AyJCRO09Yig4n9uUjqza4E5lXag';
 	}
 
 	public static function get_origin_zip() {
