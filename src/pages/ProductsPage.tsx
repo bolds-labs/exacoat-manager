@@ -24,7 +24,7 @@ const formatIDR = (val: number | string | null | undefined): string => {
   return formatCurrency(val, 'IDR');
 };
 import { ShopeeProductDuplicatorModal } from '../components/orders/ShopeeProductDuplicatorModal';
-import { ShopeeImageInjectorModal } from '../components/orders/ShopeeImageInjectorModal';
+import { useMarketplaceInjection } from '../context/MarketplaceInjectionContext';
 import { ProductImageManagerModal } from '../components/products/ProductImageManagerModal';
 import { ProductSeoModal } from '../components/products/ProductSeoModal';
 import { BatchSeoModal } from '../components/products/BatchSeoModal';
@@ -458,10 +458,8 @@ export const ProductsPage: React.FC = () => {
   const [isShopeeDuplicatorOpen, setIsShopeeDuplicatorOpen] = useState(false);
   const [duplicatorInitialIdOrUrl, setDuplicatorInitialIdOrUrl] = useState<string | undefined>(undefined);
 
-  // Shopee / TikTok Image Injector Modal State
-  const [isShopeeImageInjectorOpen, setIsShopeeImageInjectorOpen] = useState(false);
-  const [imageInjectorTargetItem, setImageInjectorTargetItem] = useState<ShopeeListingItem | null>(null);
-  const [imageInjectorTargetTikTokItem, setImageInjectorTargetTikTokItem] = useState<TikTokListingItem | null>(null);
+  // Marketplace Image Injector Context
+  const { openInjectorModal } = useMarketplaceInjection();
 
   // Delete Confirmation Modal State
   const [productToDelete, setProductToDelete] = useState<{
@@ -816,16 +814,20 @@ export const ProductsPage: React.FC = () => {
 
   // Open Image Injector for a specific Shopee listing
   const handleOpenShopeeImageInjector = (item: ShopeeListingItem) => {
-    setImageInjectorTargetTikTokItem(null);
-    setImageInjectorTargetItem(item);
-    setIsShopeeImageInjectorOpen(true);
+    openInjectorModal({
+      item,
+      channel: 'shopee',
+      onSuccess: () => loadShopeeProducts(),
+    });
   };
 
   // Open Image Injector for a specific TikTok listing
   const handleOpenTikTokImageInjector = (item: TikTokListingItem) => {
-    setImageInjectorTargetItem(null);
-    setImageInjectorTargetTikTokItem(item);
-    setIsShopeeImageInjectorOpen(true);
+    openInjectorModal({
+      tiktokItem: item,
+      channel: 'tiktok',
+      onSuccess: () => loadTikTokProducts(),
+    });
   };
 
   // Helper to extract reliable price for Shopee items
@@ -2267,25 +2269,6 @@ export const ProductsPage: React.FC = () => {
         initialUrlOrId={duplicatorInitialIdOrUrl}
       />
 
-      {/* Shopee / TikTok Image Injector Modal */}
-      <ShopeeImageInjectorModal
-        isOpen={isShopeeImageInjectorOpen}
-        onClose={() => {
-          setIsShopeeImageInjectorOpen(false);
-          setImageInjectorTargetItem(null);
-          setImageInjectorTargetTikTokItem(null);
-        }}
-        item={imageInjectorTargetItem}
-        tiktokItem={imageInjectorTargetTikTokItem}
-        channel={imageInjectorTargetTikTokItem ? 'tiktok' : 'shopee'}
-        onSuccess={() => {
-          if (imageInjectorTargetTikTokItem) {
-            loadTikTokProducts();
-          } else {
-            loadShopeeProducts();
-          }
-        }}
-      />
 
       {/* Webstore Product SEO & Short Description Modal */}
       <ProductSeoModal

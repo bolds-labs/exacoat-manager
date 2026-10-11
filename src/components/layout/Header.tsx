@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { NavItemKey } from './Sidebar';
 import { useTheme } from '../../context/ThemeContext';
+import { TopBarInjectionWidget } from './TopBarInjectionWidget';
 
 const pageTitles: Record<NavItemKey, string> = {
   dashboard: 'Dashboard',
@@ -93,6 +94,8 @@ export const Header: React.FC<HeaderProps> = ({
           </kbd>
         </button>
       </div>
+
+      <TopBarInjectionWidget />
 
       <div className="flex items-center gap-1.5 shrink-0">
         <button

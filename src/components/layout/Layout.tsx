@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAuth } from '../../context/AuthContext';
+import { useMarketplaceInjection } from '../../context/MarketplaceInjectionContext';
+import { ShopeeImageInjectorModal } from '../orders/ShopeeImageInjectorModal';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -36,6 +38,7 @@ export const Layout: React.FC<LayoutProps> = ({
   dbStatus,
 }) => {
   const { user } = useAuth();
+  const { isModalOpen, modalParams, closeInjectorModal, activeJob } = useMarketplaceInjection();
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
 
@@ -200,6 +203,16 @@ export const Layout: React.FC<LayoutProps> = ({
         isOpen={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}
         onNavigateTab={onTabChange}
+      />
+
+      {/* Global Marketplace Image Injector Modal */}
+      <ShopeeImageInjectorModal
+        isOpen={isModalOpen}
+        onClose={closeInjectorModal}
+        item={modalParams?.item ?? activeJob?.shopeeItem ?? null}
+        tiktokItem={modalParams?.tiktokItem ?? activeJob?.tiktokItem ?? null}
+        channel={modalParams?.channel ?? activeJob?.channel}
+        onSuccess={modalParams?.onSuccess}
       />
     </div>
   );

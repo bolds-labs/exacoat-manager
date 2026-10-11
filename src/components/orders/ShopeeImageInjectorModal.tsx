@@ -33,6 +33,7 @@ import {
   resolveInitialActiveLayerIds,
 } from '../../lib/marketplaceCanvasRenderer';
 import { useToast } from '../../context/ToastContext';
+import { useMarketplaceInjection } from '../../context/MarketplaceInjectionContext';
 import {
   Upload,
   Check,
@@ -57,6 +58,7 @@ import {
   ChevronsUp,
   Trash2,
   Coins,
+  Minimize2,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -197,7 +199,15 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isRenderingPreview, setIsRenderingPreview] = useState<boolean>(false);
 
-  // Injection Execution State
+  // Injection Execution State & Background Job Tracking
+  const {
+    activeJob,
+    startJob,
+    updateJobProgress,
+    completeJob,
+    failJob,
+  } = useMarketplaceInjection();
+
   const [isInjecting, setIsInjecting] = useState<boolean>(false);
   const [injectionProgress, setInjectionProgress] = useState<{
     current: number;
@@ -207,6 +217,35 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
   } | null>(null);
   const [injectionResult, setInjectionResult] = useState<ShopeeInjectImagesResult | null>(null);
   const [injectionError, setInjectionError] = useState<string | null>(null);
+
+  const currentItemId = isTikTok ? (tiktokItem?.id ?? '') : (item?.item_id ?? '');
+  const isCurrentJobActive =
+    Boolean(currentItemId) &&
+    activeJob?.itemId === currentItemId &&
+    activeJob?.status === 'running';
+  const isCurrentJobCompleted =
+    Boolean(currentItemId) &&
+    activeJob?.itemId === currentItemId &&
+    activeJob?.status === 'completed';
+  const isCurrentJobFailed =
+    Boolean(currentItemId) &&
+    activeJob?.itemId === currentItemId &&
+    activeJob?.status === 'failed';
+
+  const isCurrentlyInjecting = isInjecting || isCurrentJobActive;
+  const effectiveProgress =
+    injectionProgress ||
+    (isCurrentJobActive && activeJob
+      ? {
+          current: activeJob.currentStep,
+          total: activeJob.totalSteps,
+          stage: activeJob.stage,
+          details: activeJob.details,
+        }
+      : null);
+  const effectiveResult = injectionResult || (isCurrentJobCompleted ? activeJob?.result ?? null : null);
+  const effectiveError = injectionError || (isCurrentJobFailed ? activeJob?.error ?? null : null);
+
 
   // Close profile dropdown when clicking outside
   useEffect(() => {
@@ -343,6 +382,10 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
   // Load initial product preview and profiles upon opening modal
   useEffect(() => {
     if (!isOpen || (!item && !tiktokItem)) {
+      if (isInjecting || (activeJob && activeJob.status === 'running')) {
+        // Do not reset state if an injection task is actively running in the background
+        return;
+      }
       // Reset state on close
       setProductPreview(null);
       setOriginalItemName('');
@@ -356,6 +399,11 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
       setInjectionResult(null);
       setInjectionError(null);
       setInjectionProgress(null);
+      return;
+    }
+
+    // If modal is re-opened while an active background injection job is running for this item, keep state intact
+    if (isCurrentJobActive && deviceProfile) {
       return;
     }
 
@@ -1047,8 +1095,24 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
     setInjectionError(null);
     setInjectionResult(null);
 
+    const targetItemId = isTikTok ? (tiktokItem?.id ?? '') : (item?.item_id ?? '');
+    const targetItemTitle =
+      editedItemName.trim() ||
+      originalItemName ||
+      (isTikTok ? tiktokItem?.title : item?.item_name) ||
+      `${channelLabel} Listing`;
+
     const totalSteps = (shouldUploadCover ? 1 : 0) + selectedVariantsList.length + 1;
     let completedSteps = 0;
+
+    const jobId = startJob({
+      channel: activeChannel,
+      itemId: targetItemId,
+      itemTitle: targetItemTitle,
+      totalSteps,
+      shopeeItem: item,
+      tiktokItem,
+    });
 
     let uploadedCoverImageId: string | undefined = undefined;
     const uploadedVariantImages: Array<{ option: string; image_id: string }> = [];
@@ -1079,12 +1143,14 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
       // Step 1: Render and Upload Primary Cover (skipped in metadata-only mode)
       if (shouldUploadCover) {
         completedSteps++;
+        const renderDetails = `Rendering 1500x1500px cover with ${coverFinishId}...`;
         setInjectionProgress({
           current: completedSteps,
           total: totalSteps,
           stage: 'Primary Cover Image',
-          details: `Rendering 1500x1500px cover with ${coverFinishId}...`,
+          details: renderDetails,
         });
+        updateJobProgress(jobId, completedSteps, totalSteps, 'Primary Cover Image', renderDetails);
 
         const coverConfig = buildRenderConfig('cover', coverFinishId);
         if (!coverConfig) throw new Error('Failed to generate cover image configuration.');
@@ -1096,12 +1162,14 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
           { type: 'image/jpeg' }
         );
 
+        const uploadDetails = `Uploading primary cover image to ${channelLabel}...`;
         setInjectionProgress({
           current: completedSteps,
           total: totalSteps,
           stage: 'Primary Cover Image',
-          details: `Uploading primary cover image to ${channelLabel}...`,
+          details: uploadDetails,
         });
+        updateJobProgress(jobId, completedSteps, totalSteps, 'Primary Cover Image', uploadDetails);
 
         const uploadCoverRes = isTikTok
           ? await uploadTikTokMediaImageDirect({
@@ -1129,13 +1197,16 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
         for (let idx = 0; idx < selectedVariantsList.length; idx++) {
           const v = selectedVariantsList[idx];
           completedSteps++;
+          const varStage = `Variant ${idx + 1} of ${selectedVariantsList.length}`;
+          const varDetails = `Rendering & uploading ${v.option}...`;
 
           setInjectionProgress({
             current: completedSteps,
             total: totalSteps,
-            stage: `Variant ${idx + 1} of ${selectedVariantsList.length}`,
-            details: `Rendering & uploading ${v.option}...`,
+            stage: varStage,
+            details: varDetails,
           });
+          updateJobProgress(jobId, completedSteps, totalSteps, varStage, varDetails);
 
           const variantFinish = v.matchedFinish || allFinishes[0];
           const variantConfig = buildRenderConfig('variant', variantFinish.id);
@@ -1174,16 +1245,20 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
 
       // Step 3: Commit Update to Marketplace Listing
       completedSteps++;
+      const finalizeStage = `Finalizing ${channelLabel} Update`;
+      const finalizeDetails = isMetadataOnly
+        ? `Syncing title, prices, and variant order to ${channelLabel} (no photo upload)...`
+        : isCoverOnly
+        ? `Updating primary cover image on ${channelLabel} (preserving gallery & variants)...`
+        : `Syncing cover, variant options, ordering, and prices to ${channelLabel}...`;
+
       setInjectionProgress({
         current: completedSteps,
         total: totalSteps,
-        stage: `Finalizing ${channelLabel} Update`,
-        details: isMetadataOnly
-          ? `Syncing title, prices, and variant order to ${channelLabel} (no photo upload)...`
-          : isCoverOnly
-          ? `Updating primary cover image on ${channelLabel} (preserving gallery & variants)...`
-          : `Syncing cover, variant options, ordering, and prices to ${channelLabel}...`,
+        stage: finalizeStage,
+        details: finalizeDetails,
       });
+      updateJobProgress(jobId, completedSteps, totalSteps, finalizeStage, finalizeDetails);
 
       const uploadedMap = new Map(
         uploadedVariantImages.map((u) => [u.option.toLowerCase().trim(), u.image_id])
@@ -1223,6 +1298,7 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
       }
 
       if (injectRes.success) {
+        completeJob(jobId, injectRes);
         setInjectionResult(injectRes);
         if (trimmedItemName) {
           setOriginalItemName(trimmedItemName);
@@ -1240,33 +1316,20 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
             }))
           );
         }
-        showToast(
-          'success',
-          `${channelLabel} Listing Updated`,
-          injectRes.message ||
-            (isMetadataOnly
-              ? 'Listing title, prices, and variant order updated with zero image uploads.'
-              : isCoverOnly
-              ? 'Primary cover image updated with zero variant changes.'
-              : 'Images, title, and variants updated successfully.')
-        );
         if (onSuccess) {
           onSuccess(injectRes);
         }
       } else {
-        setInjectionError(
-          injectRes.error || injectRes.message || `${channelLabel} rejected listing update.`
-        );
-        showToast(
-          'error',
-          'Injection Failed',
-          injectRes.error || `Failed to update ${channelLabel} listing.`
-        );
+        const errorMsg =
+          injectRes.error || injectRes.message || `${channelLabel} rejected listing update.`;
+        failJob(jobId, errorMsg);
+        setInjectionError(errorMsg);
       }
     } catch (err: any) {
       console.error(`[${channelLabel} Injection] Pipeline error:`, err);
-      setInjectionError(err.message || 'An unexpected error occurred during image injection.');
-      showToast('error', 'Injection Error', err.message || 'Failed to complete image injection.');
+      const errorMsg = err.message || 'An unexpected error occurred during image injection.';
+      failJob(jobId, errorMsg);
+      setInjectionError(errorMsg);
     } finally {
       setIsInjecting(false);
       setInjectionProgress(null);
@@ -1278,6 +1341,19 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
       isOpen={isOpen}
       onClose={onClose}
       maxWidth="6xl"
+      headerActions={
+        isCurrentlyInjecting ? (
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 text-xs font-semibold border border-amber-500/30 flex items-center gap-1.5 transition cursor-pointer"
+            title="Minimize modal to run in background. Progress tracks on top bar."
+          >
+            <Minimize2 className="w-3.5 h-3.5" />
+            <span>Run in Background</span>
+          </button>
+        ) : undefined
+      }
       title={
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-[#f3aa18]/20 border border-[#f3aa18]/30 flex items-center justify-center text-[#f3aa18]">
@@ -2510,15 +2586,15 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
                 </div>
 
                 {/* Progress Card during Injection */}
-                {isInjecting && injectionProgress && (
-                  <div className="p-4 rounded-xl bg-zinc-900 border border-[#f3aa18]/40 space-y-3 shadow-lg">
+                {isCurrentlyInjecting && effectiveProgress && (
+                  <div className="p-4 rounded-xl bg-zinc-900 border border-[#f3aa18]/40 space-y-3 shadow-lg animate-fadeIn">
                     <div className="flex items-center justify-between text-xs font-bold">
                       <span className="text-[#f3aa18] flex items-center gap-1.5">
                         <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        {injectionProgress.stage}
+                        {effectiveProgress.stage}
                       </span>
                       <span className="font-mono text-zinc-300">
-                        {Math.round((injectionProgress.current / injectionProgress.total) * 100)}%
+                        {Math.round((effectiveProgress.current / effectiveProgress.total) * 100)}%
                       </span>
                     </div>
 
@@ -2526,30 +2602,41 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
                       <div
                         className="h-full bg-[#f3aa18] transition-all duration-200"
                         style={{
-                          width: `${(injectionProgress.current / injectionProgress.total) * 100}%`,
+                          width: `${(effectiveProgress.current / effectiveProgress.total) * 100}%`,
                         }}
                       />
                     </div>
 
                     <p className="text-[11px] text-zinc-400 truncate">
-                      {injectionProgress.details}
+                      {effectiveProgress.details}
                     </p>
+
+                    {/* Dedicated button to minimize and continue in background */}
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="w-full mt-1 py-2 px-3 rounded-lg bg-[#f3aa18]/15 hover:bg-[#f3aa18]/25 text-[#f3aa18] border border-[#f3aa18]/30 hover:border-[#f3aa18]/50 text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                      title="Minimize modal and continue running in background. Live progress will be displayed on the top bar."
+                    >
+                      <Minimize2 className="w-3.5 h-3.5" />
+                      <span>Run in Background (Progress on Top Bar)</span>
+                    </button>
                   </div>
                 )}
 
                 {/* Error Banner */}
-                {injectionError && (
+                {effectiveError && (
                   <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs space-y-1">
                     <div className="flex items-center gap-1.5 font-bold text-rose-200">
                       <AlertCircle className="w-4 h-4" />
                       <span>Injection Failed</span>
                     </div>
-                    <p className="text-[11px] leading-relaxed text-rose-300/90">{injectionError}</p>
+                    <p className="text-[11px] leading-relaxed text-rose-300/90">{effectiveError}</p>
                   </div>
                 )}
 
                 {/* Success Banner */}
-                {injectionResult && (
+                {effectiveResult && (
                   <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs space-y-3">
                     <div className="flex items-start gap-2.5">
                       <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
@@ -2558,22 +2645,22 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
                           {channelLabel} Listing Update Complete
                         </p>
                         <p className="text-[11px] text-emerald-300/90 leading-relaxed">
-                          Primary cover updated: {injectionResult.cover_updated ? 'Yes' : 'No'}.{' '}
-                          Gallery preserved: {injectionResult.gallery_preserved_count} photos kept intact.{' '}
-                          {Number(injectionResult.variants_updated) > 0 &&
-                            `Variant photos injected: ${injectionResult.variants_updated}. `}
-                          {Number(injectionResult.variants_added) > 0 &&
-                            `New variants created (stock 100): ${injectionResult.variants_added}. `}
-                          {injectionResult.variants_reordered && 'Variant order updated. '}
-                          {Number(injectionResult.prices_updated) > 0 &&
-                            `Variant prices updated: ${injectionResult.prices_updated}.`}
+                          Primary cover updated: {effectiveResult.cover_updated ? 'Yes' : 'No'}.{' '}
+                          Gallery preserved: {effectiveResult.gallery_preserved_count} photos kept intact.{' '}
+                          {Number(effectiveResult.variants_updated) > 0 &&
+                            `Variant photos injected: ${effectiveResult.variants_updated}. `}
+                          {Number(effectiveResult.variants_added) > 0 &&
+                            `New variants created (stock 100): ${effectiveResult.variants_added}. `}
+                          {effectiveResult.variants_reordered && 'Variant order updated. '}
+                          {Number(effectiveResult.prices_updated) > 0 &&
+                            `Variant prices updated: ${effectiveResult.prices_updated}.`}
                         </p>
                       </div>
                     </div>
 
-                    {injectionResult.seller_centre_url && (
+                    {effectiveResult.seller_centre_url && (
                       <a
-                        href={injectionResult.seller_centre_url}
+                        href={effectiveResult.seller_centre_url}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="min-h-[44px] w-full px-4 py-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border border-emerald-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
@@ -2592,18 +2679,18 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
                     type="button"
                     onClick={() => handleStartInjection('metadata_only')}
                     disabled={
-                      isInjecting ||
+                      isCurrentlyInjecting ||
                       isLoadingInitialData ||
                       (!hasVariantStructureOrPriceChanges && !isTitleModified)
                     }
                     className={clsx(
                       'w-full min-h-[44px] px-4 py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-md',
-                      isInjecting || (!hasVariantStructureOrPriceChanges && !isTitleModified)
+                      isCurrentlyInjecting || (!hasVariantStructureOrPriceChanges && !isTitleModified)
                         ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700/50'
                         : 'bg-blue-600/20 hover:bg-blue-600/30 text-blue-200 border border-blue-500/40 hover:border-blue-500/60'
                     )}
                   >
-                    {isInjecting && injectionProgress?.stage.includes('Finalizing') ? (
+                    {isCurrentlyInjecting && effectiveProgress?.stage.includes('Finalizing') ? (
                       <>
                         <RefreshCw className="w-4 h-4 animate-spin text-blue-400" />
                         <span>Saving to {channelLabel}...</span>
@@ -2626,17 +2713,17 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
                   <button
                     type="button"
                     onClick={() => handleStartInjection('cover_only')}
-                    disabled={isInjecting || isLoadingInitialData || !deviceProfile}
+                    disabled={isCurrentlyInjecting || isLoadingInitialData || !deviceProfile}
                     className={clsx(
                       'w-full min-h-[44px] px-4 py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-md',
-                      isInjecting || !deviceProfile
+                      isCurrentlyInjecting || !deviceProfile
                         ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
                         : !updateVariants
                         ? 'bg-[#f3aa18] hover:bg-[#e09b15] text-zinc-950'
                         : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border border-emerald-500/40'
                     )}
                   >
-                    {isInjecting && !updateVariants ? (
+                    {isCurrentlyInjecting && !updateVariants ? (
                       <>
                         <RefreshCw className="w-4 h-4 animate-spin" />
                         <span>Uploading Primary Cover to {channelLabel}...</span>
@@ -2656,15 +2743,15 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
                     <button
                       type="button"
                       onClick={() => handleStartInjection('full')}
-                      disabled={isInjecting || isLoadingInitialData || !deviceProfile}
+                      disabled={isCurrentlyInjecting || isLoadingInitialData || !deviceProfile}
                       className={clsx(
                         'w-full min-h-[44px] px-4 py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-md',
-                        isInjecting || !deviceProfile
+                        isCurrentlyInjecting || !deviceProfile
                           ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
                           : 'bg-[#f3aa18] hover:bg-[#e09b15] text-zinc-950'
                       )}
                     >
-                      {isInjecting ? (
+                      {isCurrentlyInjecting ? (
                         <>
                           <RefreshCw className="w-4 h-4 animate-spin" />
                           <span>Updating {channelLabel} Listing...</span>
@@ -2684,14 +2771,25 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
                     </button>
                   )}
 
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    disabled={isInjecting}
-                    className="w-full min-h-[44px] px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-xs font-medium transition cursor-pointer"
-                  >
-                    {injectionResult ? 'Done & Close' : 'Cancel'}
-                  </button>
+                  {isCurrentlyInjecting ? (
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="w-full min-h-[44px] px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-amber-300 hover:text-amber-200 border border-amber-500/30 text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-2"
+                      title="Close modal and continue tracking progress in the top bar"
+                    >
+                      <Minimize2 className="w-4 h-4" />
+                      <span>Minimize & Run in Background</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="w-full min-h-[44px] px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-xs font-medium transition cursor-pointer"
+                    >
+                      {effectiveResult ? 'Done & Close' : 'Cancel'}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

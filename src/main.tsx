@@ -5,6 +5,7 @@ import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ConfirmProvider } from './context/ConfirmContext';
+import { MarketplaceInjectionProvider } from './context/MarketplaceInjectionContext';
 import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
@@ -13,7 +14,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <ToastProvider>
         <ConfirmProvider>
           <AuthProvider>
-            <App />
+            <MarketplaceInjectionProvider>
+              <App />
+            </MarketplaceInjectionProvider>
           </AuthProvider>
         </ConfirmProvider>
       </ToastProvider>
