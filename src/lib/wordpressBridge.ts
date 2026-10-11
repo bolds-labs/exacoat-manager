@@ -3336,8 +3336,24 @@ export async function syncOrderTrackingDirect(orderId: number | string): Promise
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ order_id: Number(orderId) }),
     });
-    const data = await res.json();
-    return data;
+    const text = await res.text();
+    if (!text || !text.trim()) {
+      return {
+        success: false,
+        error: `Empty response from server (HTTP ${res.status})`,
+        message: `Empty response from server (HTTP ${res.status})`,
+      };
+    }
+    try {
+      const data = JSON.parse(text);
+      return data;
+    } catch {
+      return {
+        success: false,
+        error: `Invalid JSON response from server (HTTP ${res.status})`,
+        message: `Invalid JSON response from server (HTTP ${res.status})`,
+      };
+    }
   } catch (err: any) {
     return { success: false, error: err.message, message: err.message };
   }

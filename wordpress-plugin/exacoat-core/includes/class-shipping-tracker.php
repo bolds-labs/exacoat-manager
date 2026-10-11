@@ -537,48 +537,59 @@ class Exacoat_Shipping_Tracker {
 	 * Get Biteship API Secret Key with dynamic multi-source fallback
 	 */
 	public static function get_biteship_api_key(): string {
+		static $is_resolving = false;
+		if ( $is_resolving ) {
+			return 'biteship_live.eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiRXhhY29hdCIsInVzZXJJZCI6IjY2ZDM1NmE0OWEyOGQzMDAxMjUyN2Q1NCIsImlhdCI6MTc1ODQ1MTM5Mn0.zAWrMuQusXZc8_V0AyJCRO09Yig4n9uUjqza4E5lXag';
+		}
+		$is_resolving = true;
+
 		$key = '';
 
-		// 1. Check Biteship Shipping Method instance if active
-		if ( class_exists( 'Exacoat_Biteship_Engine' ) && method_exists( 'Exacoat_Biteship_Engine', 'get_api_key' ) ) {
-			$key = Exacoat_Biteship_Engine::get_api_key();
-		}
+		try {
+			// 1. Check Biteship Shipping Method instance if active
+			if ( class_exists( 'Exacoat_Biteship_Engine' ) && method_exists( 'Exacoat_Biteship_Engine', 'get_api_key' ) ) {
+				$key = Exacoat_Biteship_Engine::get_api_key();
+			}
 
-		// 2. Check Plugin Settings
-		if ( empty( $key ) && class_exists( 'Exacoat_Core' ) ) {
-			$settings = Exacoat_Core::get_settings();
-			$key = trim( (string) ( $settings['biteship_api_key'] ?? '' ) );
-		}
+			// 2. Check Plugin Settings
+			if ( empty( $key ) && class_exists( 'Exacoat_Core' ) ) {
+				$settings = Exacoat_Core::get_settings();
+				$key = trim( (string) ( $settings['biteship_api_key'] ?? '' ) );
+			}
 
-		// 3. Check PHP Constant
-		if ( empty( $key ) && defined( 'BITESHIP_API_KEY' ) ) {
-			$key = trim( (string) BITESHIP_API_KEY );
-		}
+			// 3. Check PHP Constant
+			if ( empty( $key ) && defined( 'BITESHIP_API_KEY' ) ) {
+				$key = trim( (string) BITESHIP_API_KEY );
+			}
 
-		// 4. Check wp_options for woocommerce_biteship_shipping_%_settings
-		if ( empty( $key ) ) {
-			global $wpdb;
-			if ( ! empty( $wpdb ) && is_object( $wpdb ) && ! empty( $wpdb->options ) ) {
-				$opt_val = $wpdb->get_var( "SELECT option_value FROM {$wpdb->options} WHERE option_name LIKE 'woocommerce_biteship_shipping_%_settings' ORDER BY option_id DESC LIMIT 1" );
-				if ( ! empty( $opt_val ) ) {
-					$parsed = maybe_unserialize( $opt_val );
-					if ( is_array( $parsed ) && ! empty( $parsed['api_key'] ) ) {
-						$key = trim( (string) $parsed['api_key'] );
+			// 4. Check wp_options for woocommerce_biteship_shipping_%_settings
+			if ( empty( $key ) ) {
+				global $wpdb;
+				if ( ! empty( $wpdb ) && is_object( $wpdb ) && ! empty( $wpdb->options ) ) {
+					$opt_val = $wpdb->get_var( "SELECT option_value FROM {$wpdb->options} WHERE option_name LIKE 'woocommerce_biteship_shipping_%_settings' ORDER BY option_id DESC LIMIT 1" );
+					if ( ! empty( $opt_val ) ) {
+						$parsed = maybe_unserialize( $opt_val );
+						if ( is_array( $parsed ) && ! empty( $parsed['api_key'] ) ) {
+							$key = trim( (string) $parsed['api_key'] );
+						}
 					}
 				}
 			}
-		}
 
-		// Guard: If the key is only 24 hex characters (Biteship token ID, e.g. 68cfd6c09b89f1001134ffa2) without JWT signature,
-		// or if key is empty, fallback to the validated production live token.
-		if ( empty( $key ) || ( strlen( $key ) === 24 && ctype_xdigit( $key ) ) || strpos( $key, 'biteship_live.' ) === false ) {
-			$fallback = 'biteship_live.eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiRXhhY29hdCIsInVzZXJJZCI6IjY2ZDM1NmE0OWEyOGQzMDAxMjUyN2Q1NCIsImlhdCI6MTc1ODQ1MTM5Mn0.zAWrMuQusXZc8_V0AyJCRO09Yig4n9uUjqza4E5lXag';
-			if ( empty( $key ) || ( strlen( $key ) === 24 && ctype_xdigit( $key ) ) ) {
-				return $fallback;
+			// Guard: If key is only 24 hex characters or empty, fallback to production live token
+			if ( empty( $key ) || ( strlen( $key ) === 24 && ctype_xdigit( $key ) ) || strpos( $key, 'biteship_live.' ) === false ) {
+				$fallback = 'biteship_live.eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiRXhhY29hdCIsInVzZXJJZCI6IjY2ZDM1NmE0OWEyOGQzMDAxMjUyN2Q1NCIsImlhdCI6MTc1ODQ1MTM5Mn0.zAWrMuQusXZc8_V0AyJCRO09Yig4n9uUjqza4E5lXag';
+				if ( empty( $key ) || ( strlen( $key ) === 24 && ctype_xdigit( $key ) ) ) {
+					$is_resolving = false;
+					return $fallback;
+				}
 			}
+		} catch ( Throwable $e ) {
+			// Fallback on error
 		}
 
-		return $key;
+		$is_resolving = false;
+		return $key ?: 'biteship_live.eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiRXhhY29hdCIsInVzZXJJZCI6IjY2ZDM1NmE0OWEyOGQzMDAxMjUyN2Q1NCIsImlhdCI6MTc1ODQ1MTM5Mn0.zAWrMuQusXZc8_V0AyJCRO09Yig4n9uUjqza4E5lXag';
 	}
 
 	/**
@@ -1091,6 +1102,7 @@ class Exacoat_Shipping_Tracker {
 					update_post_meta( $order_id, 'delivered_time', $del_formatted );
 				}
 
+			try {
 				if ( 'completed' !== $current_status ) {
 					$note_text = sprintf( 'Biteship: Package delivered by courier %s (%s). %s', $carrier_label, $tracking_number, $latest_note );
 					$order->update_status( 'completed', $note_text );
@@ -1102,7 +1114,11 @@ class Exacoat_Shipping_Tracker {
 				}
 			}
 
-			$order->save();
+			try {
+				$order->save();
+			} catch ( Throwable $e ) {
+				// Avoid blocking tracking return if order save fails
+			}
 		}
 
 		return [
@@ -1166,17 +1182,23 @@ class Exacoat_Shipping_Tracker {
 			return [ 'success' => false, 'message' => 'Failed to parse JNE CSRF token' ];
 		}
 		$token = $token_m[1];
-		$cookies = wp_remote_retrieve_cookies( $home_res );
-
-		$cookie_pairs = [];
-		foreach ( $cookies as $c ) {
+		$cookie_map = [];
+		foreach ( wp_remote_retrieve_cookies( $home_res ) as $c ) {
 			if ( is_object( $c ) && isset( $c->name, $c->value ) ) {
-				$cookie_pairs[] = $c->name . '=' . $c->value;
-			} elseif ( is_string( $c ) ) {
-				$cookie_pairs[] = $c;
+				$cookie_map[ $c->name ] = $c->value;
+			} elseif ( is_string( $c ) && strpos( $c, '=' ) !== false ) {
+				list( $k, $v ) = explode( '=', $c, 2 );
+				$cookie_map[ trim( $k ) ] = trim( $v );
 			}
 		}
-		$cookie_header = implode( '; ', $cookie_pairs );
+
+		$format_cookie_header = function( array $map ): string {
+			$pairs = [];
+			foreach ( $map as $k => $v ) {
+				$pairs[] = $k . '=' . $v;
+			}
+			return implode( '; ', $pairs );
+		};
 
 		// Step 2: POST /tracking-package to initiate tracking session
 		$pkg_res = wp_remote_post( 'https://www.jne.co.id/tracking-package', [
@@ -1184,9 +1206,8 @@ class Exacoat_Shipping_Tracker {
 				'User-Agent'   => $user_agent,
 				'Referer'      => 'https://www.jne.co.id/',
 				'Content-Type' => 'application/x-www-form-urlencoded',
-				'Cookie'       => $cookie_header,
+				'Cookie'       => $format_cookie_header( $cookie_map ),
 			],
-			'cookies' => $cookies,
 			'body'    => [
 				'_token'     => $token,
 				'lacak-resi' => $tracking_number,
@@ -1199,14 +1220,10 @@ class Exacoat_Shipping_Tracker {
 		}
 
 		$pkg_body = wp_remote_retrieve_body( $pkg_res );
-		$pkg_cookies = wp_remote_retrieve_cookies( $pkg_res );
-		if ( ! empty( $pkg_cookies ) ) {
-			foreach ( $pkg_cookies as $c ) {
-				if ( is_object( $c ) && isset( $c->name, $c->value ) ) {
-					$cookie_pairs[] = $c->name . '=' . $c->value;
-				}
+		foreach ( wp_remote_retrieve_cookies( $pkg_res ) as $c ) {
+			if ( is_object( $c ) && isset( $c->name, $c->value ) ) {
+				$cookie_map[ $c->name ] = $c->value;
 			}
-			$cookie_header = implode( '; ', array_unique( $cookie_pairs ) );
 		}
 
 		$modal_token = $token;
@@ -1223,9 +1240,8 @@ class Exacoat_Shipping_Tracker {
 					'Referer'          => 'https://www.jne.co.id/tracking-package',
 					'Content-Type'     => 'application/x-www-form-urlencoded',
 					'X-Requested-With' => 'XMLHttpRequest',
-					'Cookie'           => $cookie_header,
+					'Cookie'           => $format_cookie_header( $cookie_map ),
 				],
-				'cookies' => $cookies,
 				'body'    => [
 					'_token'  => $modal_token,
 					'resi_'   => $tracking_number,
@@ -1235,6 +1251,11 @@ class Exacoat_Shipping_Tracker {
 			] );
 
 			if ( ! is_wp_error( $verify_res ) ) {
+				foreach ( wp_remote_retrieve_cookies( $verify_res ) as $c ) {
+					if ( is_object( $c ) && isset( $c->name, $c->value ) ) {
+						$cookie_map[ $c->name ] = $c->value;
+					}
+				}
 				$v_body = json_decode( wp_remote_retrieve_body( $verify_res ), true );
 				if ( ! empty( $v_body['url'] ) ) {
 					$verified_url = $v_body['url'];
@@ -1252,9 +1273,8 @@ class Exacoat_Shipping_Tracker {
 			'headers' => [
 				'User-Agent' => $user_agent,
 				'Referer'    => 'https://www.jne.co.id/tracking-package',
-				'Cookie'     => $cookie_header,
+				'Cookie'     => $format_cookie_header( $cookie_map ),
 			],
-			'cookies' => $cookies,
 			'timeout' => 12,
 		] );
 
@@ -1350,16 +1370,20 @@ class Exacoat_Shipping_Tracker {
 			update_post_meta( $order_id, '_biteship_delivery_time', $delivery_time );
 			update_post_meta( $order_id, 'delivered_time', $delivery_time );
 
-			if ( 'completed' !== $current_order_status ) {
-				$rec_label = $rec_name ? ( $rec_rel ? "{$rec_name} ({$rec_rel})" : $rec_name ) : 'Recipient';
-				$note_text = sprintf( 'JNE Direct: Package delivered (%s). Received by %s on %s.', $tracking_number, $rec_label, $pod_date );
-				$order->update_status( 'completed', $note_text );
+		try {
+			if ( 'delivered' === $canonical_status ) {
+				if ( 'completed' !== $current_order_status ) {
+					$rec_label = $rec_name ? ( $rec_rel ? "{$rec_name} ({$rec_rel})" : $rec_name ) : 'Recipient';
+					$note_text = sprintf( 'JNE Direct: Package delivered (%s). Received by %s on %s.', $tracking_number, $rec_label, $pod_date );
+					$order->update_status( 'completed', $note_text );
+				}
+			} elseif ( in_array( $current_order_status, [ 'processing', 'preparing-order', 'ready-to-ship', 'awaiting-pickup' ], true ) ) {
+				$order->update_status( 'shipped', sprintf( 'JNE Direct: Package in transit (%s).', $tracking_number ) );
 			}
-		} elseif ( in_array( $current_order_status, [ 'processing', 'preparing-order', 'ready-to-ship', 'awaiting-pickup' ], true ) ) {
-			$order->update_status( 'shipped', sprintf( 'JNE Direct: Package in transit (%s).', $tracking_number ) );
+			$order->save();
+		} catch ( Throwable $e ) {
+			// Avoid blocking tracking response if email/notification hooks fail
 		}
-
-		$order->save();
 
 		return [
 			'success'     => true,
@@ -2579,31 +2603,52 @@ class Exacoat_Shipping_Tracker {
 	 * REST: On-demand sync order tracking directly from manager or client
 	 */
 	public static function rest_sync_order_tracking( WP_REST_Request $request ) {
-		$order_id = (int) ( $request->get_param( 'order_id' ) ?? $request->get_param( 'orderId' ) ?? 0 );
-		if ( $order_id <= 0 ) {
-			return new WP_REST_Response( [ 'success' => false, 'message' => 'Invalid order ID' ], 400 );
-		}
+		try {
+			$raw_id   = $request->get_param( 'order_id' ) ?? $request->get_param( 'orderId' ) ?? 0;
+			$order_id = is_numeric( $raw_id ) ? (int) $raw_id : (int) ltrim( (string) $raw_id, '#' );
+			if ( $order_id <= 0 ) {
+				return new WP_REST_Response( [ 'success' => false, 'message' => 'Invalid order ID' ], 400 );
+			}
 
-		$result = self::sync_order_tracking( $order_id );
-		$order  = wc_get_order( $order_id );
+			$order = wc_get_order( $order_id );
+			if ( ! $order && function_exists( 'wc_get_orders' ) ) {
+				$matched_orders = wc_get_orders( [ 'order_number' => (string) $order_id, 'limit' => 1 ] );
+				if ( ! empty( $matched_orders ) ) {
+					$order    = $matched_orders[0];
+					$order_id = $order->get_id();
+				}
+			}
 
-		if ( ! empty( $result['success'] ) && $order ) {
-			$status = $order->get_status();
+			if ( ! $order ) {
+				return new WP_REST_Response( [ 'success' => false, 'message' => 'Order not found' ], 200 );
+			}
+
+			$result = self::sync_order_tracking( $order_id );
+			$order  = wc_get_order( $order_id );
+
+			if ( ! empty( $result['success'] ) && $order ) {
+				$status = $order->get_status();
+				return new WP_REST_Response( [
+					'success'       => true,
+					'order_id'      => $order_id,
+					'status'        => $status,
+					'status_label'  => wc_get_order_status_name( $status ),
+					'checkpoints'   => $result['checkpoints'] ?? [],
+					'latest_status' => $result['status'] ?? ( $order->get_meta( '_trackingmore_latest_status' ) ?: ( $order->get_meta( '_exacoat_tracking_latest_status' ) ?: ( $order->get_meta( '_artmatter_trackingmore_latest_status' ) ?: '' ) ) ),
+					'source'        => $result['source'] ?? 'tracking',
+				], 200 );
+			}
+
 			return new WP_REST_Response( [
-				'success'       => true,
-				'order_id'      => $order_id,
-				'status'        => $status,
-				'status_label'  => wc_get_order_status_name( $status ),
-				'checkpoints'   => $result['checkpoints'] ?? [],
-				'latest_status' => $result['status'] ?? ( $order->get_meta( '_trackingmore_latest_status' ) ?: ( $order->get_meta( '_exacoat_tracking_latest_status' ) ?: ( $order->get_meta( '_artmatter_trackingmore_latest_status' ) ?: '' ) ) ),
-				'source'        => $result['source'] ?? 'tracking',
+				'success' => false,
+				'message' => $result['message'] ?? 'Failed syncing tracking',
+			], 200 );
+		} catch ( Throwable $e ) {
+			return new WP_REST_Response( [
+				'success' => false,
+				'message' => 'Tracking sync exception: ' . $e->getMessage(),
 			], 200 );
 		}
-
-		return new WP_REST_Response( [
-			'success' => false,
-			'message' => $result['message'] ?? 'Failed syncing tracking',
-		], 200 );
 	}
 
 	/**

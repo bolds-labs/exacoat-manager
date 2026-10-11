@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Enforce support@exacoat.com as sender for contact inquiry customer confirmation emails\n- Add support for custom from_email and from_name overrides in ZeptoMail and wp_mail delivery pipeline`,
+      changelog: `### Version ${version}\n- Fix mutual recursion loop in Biteship API key resolution causing empty responses during tracking sync\n- Harden JNE direct tracking session cookies and phone challenge verification\n- Wrap REST tracking endpoints in defensive exception handling to guarantee valid JSON responses\n- Prevent Unexpected end of JSON input errors on manager tracking client`,
     },
   };
 
