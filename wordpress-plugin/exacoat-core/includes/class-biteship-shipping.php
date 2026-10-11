@@ -107,6 +107,21 @@ class Exacoat_Biteship_Engine {
 	}
 
 	public static function get_api_key() {
+		if ( defined( 'BITESHIP_API_KEY' ) && BITESHIP_API_KEY ) {
+			return trim( BITESHIP_API_KEY );
+		}
+
+		global $wpdb;
+		if ( isset( $wpdb ) && $wpdb instanceof wpdb ) {
+			$raw = $wpdb->get_var( "SELECT option_value FROM {$wpdb->options} WHERE option_name LIKE 'woocommerce_biteship_shipping_%_settings' ORDER BY option_id DESC LIMIT 1" );
+			if ( $raw ) {
+				$opts = maybe_unserialize( $raw );
+				if ( is_array( $opts ) && ! empty( $opts['api_key'] ) ) {
+					return trim( (string) $opts['api_key'] );
+				}
+			}
+		}
+
 		if ( ! class_exists( 'WC_Shipping_Zones' ) ) {
 			return '';
 		}
@@ -114,13 +129,13 @@ class Exacoat_Biteship_Engine {
 		self::shipping_init();
 		$zone_ids = [ 0 ];
 		foreach ( WC_Shipping_Zones::get_zones() as $zone ) {
-			$zone_ids[] = absint( $zone['zone_id'] ?? 0 );
+			$zone_ids[] = absint( $zone['zone_id'] ?? $zone['id'] ?? 0 );
 		}
 
 		foreach ( array_unique( $zone_ids ) as $zone_id ) {
 			$zone = new WC_Shipping_Zone( $zone_id );
 			foreach ( $zone->get_shipping_methods( true ) as $method ) {
-				if ( 'biteship_shipping' !== $method->id || 'yes' !== $method->enabled ) {
+				if ( 'biteship_shipping' !== $method->id ) {
 					continue;
 				}
 				$api_key = trim( (string) $method->get_option( 'api_key', '' ) );
@@ -134,6 +149,21 @@ class Exacoat_Biteship_Engine {
 	}
 
 	public static function get_origin_zip() {
+		if ( defined( 'BITESHIP_ORIGIN_ZIP' ) && BITESHIP_ORIGIN_ZIP ) {
+			return trim( BITESHIP_ORIGIN_ZIP );
+		}
+
+		global $wpdb;
+		if ( isset( $wpdb ) && $wpdb instanceof wpdb ) {
+			$raw = $wpdb->get_var( "SELECT option_value FROM {$wpdb->options} WHERE option_name LIKE 'woocommerce_biteship_shipping_%_settings' ORDER BY option_id DESC LIMIT 1" );
+			if ( $raw ) {
+				$opts = maybe_unserialize( $raw );
+				if ( is_array( $opts ) && ! empty( $opts['origin_zip'] ) ) {
+					return trim( (string) $opts['origin_zip'] );
+				}
+			}
+		}
+
 		if ( ! class_exists( 'WC_Shipping_Zones' ) ) {
 			return '17142';
 		}
@@ -141,13 +171,13 @@ class Exacoat_Biteship_Engine {
 		self::shipping_init();
 		$zone_ids = [ 0 ];
 		foreach ( WC_Shipping_Zones::get_zones() as $zone ) {
-			$zone_ids[] = absint( $zone['zone_id'] ?? 0 );
+			$zone_ids[] = absint( $zone['zone_id'] ?? $zone['id'] ?? 0 );
 		}
 
 		foreach ( array_unique( $zone_ids ) as $zone_id ) {
 			$zone = new WC_Shipping_Zone( $zone_id );
 			foreach ( $zone->get_shipping_methods( true ) as $method ) {
-				if ( 'biteship_shipping' !== $method->id || 'yes' !== $method->enabled ) {
+				if ( 'biteship_shipping' !== $method->id ) {
 					continue;
 				}
 				$origin_zip = trim( (string) $method->get_option( 'origin_zip', '17142' ) );
