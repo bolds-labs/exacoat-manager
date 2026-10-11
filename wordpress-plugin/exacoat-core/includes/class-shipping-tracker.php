@@ -1079,42 +1079,41 @@ class Exacoat_Shipping_Tracker {
 			// Status transition:
 			// If Biteship reports 'delivered', transition order to 'completed' (Delivered)
 			$current_status = $order->get_status();
-			if ( 'delivered' === $biteship_status ) {
-				$delivery_time = '';
-				foreach ( $formatted_checkpoints as $cp ) {
-					if ( ( $cp['stage'] ?? '' ) === 'delivered' && ! empty( $cp['time'] ) ) {
-						$delivery_time = $cp['time'];
-						break;
+			try {
+				if ( 'delivered' === $biteship_status ) {
+					$delivery_time = '';
+					foreach ( $formatted_checkpoints as $cp ) {
+						if ( ( $cp['stage'] ?? '' ) === 'delivered' && ! empty( $cp['time'] ) ) {
+							$delivery_time = $cp['time'];
+							break;
+						}
+					}
+					if ( empty( $delivery_time ) && ! empty( $formatted_checkpoints[0]['time'] ) ) {
+						$delivery_time = $formatted_checkpoints[0]['time'];
+					}
+					if ( ! empty( $delivery_time ) ) {
+						$del_formatted = date( 'Y-m-d H:i:s', strtotime( $delivery_time ) );
+						$order->update_meta_data( '_delivered_at', $del_formatted );
+						$order->update_meta_data( '_exacoat_delivered_at', $del_formatted );
+						$order->update_meta_data( '_biteship_delivery_time', $del_formatted );
+						$order->update_meta_data( 'delivered_time', $del_formatted );
+						update_post_meta( $order_id, '_delivered_at', $del_formatted );
+						update_post_meta( $order_id, '_exacoat_delivered_at', $del_formatted );
+						update_post_meta( $order_id, '_biteship_delivery_time', $del_formatted );
+						update_post_meta( $order_id, 'delivered_time', $del_formatted );
+					}
+
+					if ( 'completed' !== $current_status ) {
+						$note_text = sprintf( 'Biteship: Package delivered by courier %s (%s). %s', $carrier_label, $tracking_number, $latest_note );
+						$order->update_status( 'completed', $note_text );
+					}
+				} elseif ( in_array( $biteship_status, [ 'picked', 'dropping_off', 'droppingoff', 'picking_up', 'in_transit' ], true ) ) {
+					if ( in_array( $current_status, [ 'processing', 'preparing-order', 'ready-to-ship', 'awaiting-pickup' ], true ) ) {
+						$note_text = sprintf( 'Biteship: Package in transit with courier %s (%s).', $carrier_label, $tracking_number );
+						$order->update_status( 'shipped', $note_text );
 					}
 				}
-				if ( empty( $delivery_time ) && ! empty( $formatted_checkpoints[0]['time'] ) ) {
-					$delivery_time = $formatted_checkpoints[0]['time'];
-				}
-				if ( ! empty( $delivery_time ) ) {
-					$del_formatted = date( 'Y-m-d H:i:s', strtotime( $delivery_time ) );
-					$order->update_meta_data( '_delivered_at', $del_formatted );
-					$order->update_meta_data( '_exacoat_delivered_at', $del_formatted );
-					$order->update_meta_data( '_biteship_delivery_time', $del_formatted );
-					$order->update_meta_data( 'delivered_time', $del_formatted );
-					update_post_meta( $order_id, '_delivered_at', $del_formatted );
-					update_post_meta( $order_id, '_exacoat_delivered_at', $del_formatted );
-					update_post_meta( $order_id, '_biteship_delivery_time', $del_formatted );
-					update_post_meta( $order_id, 'delivered_time', $del_formatted );
-				}
 
-			try {
-				if ( 'completed' !== $current_status ) {
-					$note_text = sprintf( 'Biteship: Package delivered by courier %s (%s). %s', $carrier_label, $tracking_number, $latest_note );
-					$order->update_status( 'completed', $note_text );
-				}
-			} elseif ( in_array( $biteship_status, [ 'picked', 'dropping_off', 'droppingoff', 'picking_up', 'in_transit' ], true ) ) {
-				if ( in_array( $current_status, [ 'processing', 'preparing-order', 'ready-to-ship', 'awaiting-pickup' ], true ) ) {
-					$note_text = sprintf( 'Biteship: Package in transit with courier %s (%s).', $carrier_label, $tracking_number );
-					$order->update_status( 'shipped', $note_text );
-				}
-			}
-
-			try {
 				$order->save();
 			} catch ( Throwable $e ) {
 				// Avoid blocking tracking return if order save fails
@@ -1357,21 +1356,20 @@ class Exacoat_Shipping_Tracker {
 		update_post_meta( $order_id, '_exacoat_tracking_latest_status', $canonical_status );
 
 		$current_order_status = $order->get_status();
-		if ( 'delivered' === $canonical_status ) {
-			$dt = DateTime::createFromFormat( 'd-m-Y H:i:s', $pod_date );
-			$delivery_time = $dt ? $dt->format( 'Y-m-d H:i:s' ) : current_time( 'mysql' );
-
-			$order->update_meta_data( '_delivered_at', $delivery_time );
-			$order->update_meta_data( '_exacoat_delivered_at', $delivery_time );
-			$order->update_meta_data( '_biteship_delivery_time', $delivery_time );
-			$order->update_meta_data( 'delivered_time', $delivery_time );
-			update_post_meta( $order_id, '_delivered_at', $delivery_time );
-			update_post_meta( $order_id, '_exacoat_delivered_at', $delivery_time );
-			update_post_meta( $order_id, '_biteship_delivery_time', $delivery_time );
-			update_post_meta( $order_id, 'delivered_time', $delivery_time );
-
 		try {
 			if ( 'delivered' === $canonical_status ) {
+				$dt = DateTime::createFromFormat( 'd-m-Y H:i:s', $pod_date );
+				$delivery_time = $dt ? $dt->format( 'Y-m-d H:i:s' ) : current_time( 'mysql' );
+
+				$order->update_meta_data( '_delivered_at', $delivery_time );
+				$order->update_meta_data( '_exacoat_delivered_at', $delivery_time );
+				$order->update_meta_data( '_biteship_delivery_time', $delivery_time );
+				$order->update_meta_data( 'delivered_time', $delivery_time );
+				update_post_meta( $order_id, '_delivered_at', $delivery_time );
+				update_post_meta( $order_id, '_exacoat_delivered_at', $delivery_time );
+				update_post_meta( $order_id, '_biteship_delivery_time', $delivery_time );
+				update_post_meta( $order_id, 'delivered_time', $delivery_time );
+
 				if ( 'completed' !== $current_order_status ) {
 					$rec_label = $rec_name ? ( $rec_rel ? "{$rec_name} ({$rec_rel})" : $rec_name ) : 'Recipient';
 					$note_text = sprintf( 'JNE Direct: Package delivered (%s). Received by %s on %s.', $tracking_number, $rec_label, $pod_date );
