@@ -521,6 +521,15 @@ function drawVariantDeviceSubheader(
       fontSize -= 1;
       ctx.font = `700 ${fontSize}px "Plus Jakarta Sans", sans-serif`;
     }
+    ctx.save();
+    ctx.shadowColor = 'rgba(255, 255, 255, 0.95)';
+    ctx.shadowBlur = 10;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.lineWidth = 4;
+    ctx.lineJoin = 'round';
+    ctx.strokeText(cleanDeviceTitle, centerX, currentY);
+    ctx.restore();
+
     ctx.fillStyle = '#18181b';
     ctx.fillText(cleanDeviceTitle, centerX, currentY);
     currentY += 32;
@@ -528,7 +537,16 @@ function drawVariantDeviceSubheader(
 
   if (cleanSubText) {
     ctx.font = '500 20px "Plus Jakarta Sans", sans-serif';
-    ctx.fillStyle = 'rgba(24, 24, 27, 0.62)';
+    ctx.save();
+    ctx.shadowColor = 'rgba(255, 255, 255, 0.95)';
+    ctx.shadowBlur = 8;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+    ctx.lineWidth = 3.5;
+    ctx.lineJoin = 'round';
+    ctx.strokeText(cleanSubText, centerX, currentY);
+    ctx.restore();
+
+    ctx.fillStyle = 'rgba(24, 24, 27, 0.68)';
     ctx.fillText(cleanSubText, centerX, currentY);
   }
 
@@ -712,6 +730,13 @@ function drawLeftHeadlineBlock(
     const badgeR = badgeH / 2; // Full rounded capsule!
 
     pathRoundedRect(ctx, x, currentY, badgeW, badgeH, badgeR);
+    ctx.save();
+    ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+    ctx.fill();
+    ctx.restore();
+
     ctx.strokeStyle = '#18181b';
     ctx.lineWidth = 2.5;
     ctx.stroke();
@@ -724,27 +749,54 @@ function drawLeftHeadlineBlock(
     currentY += badgeH + badgeGap;
   }
 
-  // 2. Bold Headline Text with subtle blurred ambient shadow / halo (not hard outline)
+  // 2. Bold Headline Text with prominent multi-layer luminous glow & crisp outline for thumbnail legibility
   if (lines.length > 0) {
     ctx.font = `900 ${fontSize}px "${fontFamily}", "Plus Jakarta Sans", sans-serif`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
 
+    const glowTint =
+      highlightColor && highlightColor.toLowerCase() !== '#d2d2d2'
+        ? highlightColor
+        : 'rgba(255, 255, 255, 0.96)';
+
     for (const line of lines) {
-      // Soft blurred shadow halo behind the text (no hard outline)
+      // Pass 1: Wide ambient outer glow halo so dark letters separate from dark device skins
       ctx.save();
-      ctx.shadowColor = highlightColor || 'rgba(210, 210, 210, 0.85)';
-      ctx.shadowBlur = 18;
+      ctx.shadowColor = glowTint;
+      ctx.shadowBlur = 32;
       ctx.shadowOffsetX = 0;
       ctx.shadowOffsetY = 0;
-
-      // Soft subtle stroke with blurred shadow
-      ctx.strokeStyle = 'rgba(220, 220, 225, 0.45)';
-      ctx.lineWidth = 4;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.62)';
+      ctx.lineWidth = 15;
       ctx.lineJoin = 'round';
+      ctx.miterLimit = 2;
       ctx.strokeText(line, x, currentY);
       ctx.restore();
 
+      // Pass 2: Medium-tight luminous halo for strong contrast when scaled down in product lists
+      ctx.save();
+      ctx.shadowColor = glowTint;
+      ctx.shadowBlur = 16;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+      ctx.strokeStyle = 'rgba(248, 250, 252, 0.88)';
+      ctx.lineWidth = 10;
+      ctx.lineJoin = 'round';
+      ctx.miterLimit = 2;
+      ctx.strokeText(line, x, currentY);
+      ctx.restore();
+
+      // Pass 3: Crisp bright outline stroke around the letterforms
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+      ctx.lineWidth = 6.5;
+      ctx.lineJoin = 'round';
+      ctx.miterLimit = 2;
+      ctx.strokeText(line, x, currentY);
+      ctx.restore();
+
+      // Pass 4: Solid extra-bold foreground glyph fill
       ctx.fillStyle = '#09090b';
       ctx.fillText(line, x, currentY);
       currentY += lineHeight;
