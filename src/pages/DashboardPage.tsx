@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Order } from '../types';
+import { parseStoreDate } from '../lib/formatters';
 import { SalesMetricsOverview } from '../components/dashboard/SalesMetricsOverview';
 import { SalesRevenueChart } from '../components/dashboard/SalesRevenueChart';
 import { OrderStatusDistribution } from '../components/dashboard/OrderStatusDistribution';
@@ -42,23 +43,24 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
     if (datePreset === 'all') return orders;
 
     const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
     let startMs = 0;
 
     if (datePreset === 'today') {
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      startMs = today.getTime();
+      startMs = todayStart.getTime();
     } else if (datePreset === '7d') {
-      startMs = now.getTime() - 7 * 24 * 60 * 60 * 1000;
+      startMs = todayStart.getTime() - 6 * 24 * 60 * 60 * 1000;
     } else if (datePreset === '30d') {
-      startMs = now.getTime() - 30 * 24 * 60 * 60 * 1000;
+      startMs = todayStart.getTime() - 29 * 24 * 60 * 60 * 1000;
     } else if (datePreset === 'this_month') {
-      const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
       startMs = firstOfMonth.getTime();
     }
 
     return orders.filter(o => {
       if (!o.created_at) return true;
-      const t = new Date(o.created_at).getTime();
+      const d = parseStoreDate(o.created_at) || new Date(o.created_at);
+      const t = d.getTime();
       return isNaN(t) || t >= startMs;
     });
   }, [orders, datePreset]);
@@ -132,7 +134,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       {/* 2. Visual Analytics Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-stretch">
         <div className="lg:col-span-2">
-          <SalesRevenueChart orders={filteredOrders} />
+          <SalesRevenueChart orders={filteredOrders} datePreset={datePreset} />
         </div>
         <div className="lg:col-span-1">
           <OrderStatusDistribution 

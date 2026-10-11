@@ -1,7 +1,15 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { GlassCard } from '../ui/GlassCard';
 import { Order } from '../../types';
-import { formatCurrency, formatDate, convertToIdr, isRevenueOrder } from '../../lib/formatters';
+import { 
+  formatCurrency, 
+  convertToIdr, 
+  isRevenueOrder,
+  getStoreDateKey,
+  formatStoreDateFull,
+  generateContinuousDays,
+  parseStoreDate
+} from '../../lib/formatters';
 import { 
   AreaChart, 
   Area, 
@@ -11,43 +19,149 @@ import {
   ResponsiveContainer,
   CartesianGrid
 } from 'recharts';
-import { TrendingUp, Calendar } from 'lucide-react';
+import { TrendingUp } from 'lucide-react';
+import { clsx } from 'clsx';
+import { DashboardDatePreset } from '../../pages/DashboardPage';
 
 interface SalesRevenueChartProps {
   orders: Order[];
+  datePreset?: DashboardDatePreset;
 }
 
-export const SalesRevenueChart: React.FC<SalesRevenueChartProps> = ({ orders }) => {
-  // Aggregate daily revenue and order volume in base currency (IDR)
-  const chartData = useMemo(() => {
-    const map: Record<string, { date: string; label: string; revenue: number; orders: number }> = {};
+export const SalesRevenueChart: React.FC<SalesRevenueChartProps> = ({ 
+  orders,
+  datePreset = '30d' 
+}) => {
+  const [granularity, setGranularity] = useState<'daily' | 'weekly'>('daily');
 
-    orders.forEach(order => {
-      // Strictly exclude cancelled, refunded, failed orders from revenue
-      if (!isRevenueOrder(order)) return;
+  // Compute continuous date points covering every calendar day in the horizon
+  const { chartData, totalRevenue, totalDays } = useMemo(() => {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-      const d = order.created_at ? new Date(order.created_at) : new Date();
-      const key = d.toISOString().split('T')[0];
-      const label = d.toLocaleDateString('default', { month: 'short', day: 'numeric' });
+    let startMs: number;
+    const endMs = todayEnd.getTime();
 
-      if (!map[key]) {
-        map[key] = { date: key, label, revenue: 0, orders: 0 };
-      }
-      const orderRevenue = (order as any).total_idr || convertToIdr(order.total, order.currency);
-      map[key].revenue += orderRevenue;
-      map[key].orders += 1;
+    if (datePreset === 'today') {
+      startMs = todayStart.getTime();
+    } else if (datePreset === '7d') {
+      startMs = todayStart.getTime() - 6 * 24 * 60 * 60 * 1000;
+    } else if (datePreset === '30d') {
+      startMs = todayStart.getTime() - 29 * 24 * 60 * 60 * 1000;
+    } else if (datePreset === 'this_month') {
+      startMs = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0).getTime();
+    } else if (datePreset === 'all') {
+      // Find earliest order date in available orders, fallback to 30 days
+      let earliest = todayStart.getTime() - 29 * 24 * 60 * 60 * 1000;
+      orders.forEach(o => {
+        if (!o.created_at) return;
+        const d = parseStoreDate(o.created_at) || new Date(o.created_at);
+        if (d && !isNaN(d.getTime()) && d.getTime() < earliest) {
+          earliest = d.getTime();
+        }
+      });
+      const earDate = new Date(earliest);
+      startMs = new Date(earDate.getFullYear(), earDate.getMonth(), earDate.getDate(), 0, 0, 0, 0).getTime();
+    } else {
+      startMs = todayStart.getTime() - 29 * 24 * 60 * 60 * 1000;
+    }
+
+    // Generate continuous days in store timezone so zero transaction days are NEVER skipped
+    const continuousDays = generateContinuousDays(startMs, endMs);
+    const map: Record<string, { date: string; label: string; fullLabel: string; revenue: number; orders: number }> = {};
+
+    continuousDays.forEach(d => {
+      map[d.key] = {
+        date: d.key,
+        label: d.label,
+        fullLabel: formatStoreDateFull(d.timestamp),
+        revenue: 0,
+        orders: 0,
+      };
     });
 
-    const sorted = Object.values(map).sort((a, b) => a.date.localeCompare(b.date));
-    return sorted.slice(-14); // Last 14 active days
-  }, [orders]);
+    // Ingest confirmed paid orders into corresponding day key
+    orders.forEach(order => {
+      if (!isRevenueOrder(order)) return;
+
+      const key = getStoreDateKey(order.created_at);
+      if (!key) return;
+
+      const orderRevenue = (order as any).total_idr || convertToIdr(order.total, order.currency);
+
+      if (map[key]) {
+        map[key].revenue += orderRevenue;
+        map[key].orders += 1;
+      }
+    });
+
+    const dailyPoints = Object.values(map).sort((a, b) => a.date.localeCompare(b.date));
+    const calculatedTotalRevenue = dailyPoints.reduce((acc, d) => acc + d.revenue, 0);
+
+    // If weekly granularity is chosen and date span is sufficiently long, aggregate points by week
+    if (granularity === 'weekly' && continuousDays.length > 7) {
+      const weeklyMap: Record<string, { date: string; label: string; fullLabel: string; revenue: number; orders: number }> = {};
+
+      dailyPoints.forEach(point => {
+        const [yearStr, monthStr, dayStr] = point.date.split('-');
+        const d = new Date(Date.UTC(Number(yearStr), Number(monthStr) - 1, Number(dayStr), 12, 0, 0));
+
+        const dayOfWeek = d.getUTCDay();
+        const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+        const monday = new Date(d);
+        monday.setUTCDate(d.getUTCDate() + diffToMonday);
+
+        const sunday = new Date(monday);
+        sunday.setUTCDate(monday.getUTCDate() + 6);
+
+        const monYear = monday.getUTCFullYear();
+        const monMonth = String(monday.getUTCMonth() + 1).padStart(2, '0');
+        const monDay = String(monday.getUTCDate()).padStart(2, '0');
+        const weekKey = `${monYear}-${monMonth}-${monDay}`;
+
+        const monLabel = monday.toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' });
+        const sunLabel = sunday.toLocaleDateString('en-US', {
+          timeZone: 'UTC',
+          month: monday.getUTCMonth() === sunday.getUTCMonth() ? undefined : 'short',
+          day: 'numeric',
+        });
+        const weekRangeLabel = `${monLabel} - ${sunLabel}`;
+
+        if (!weeklyMap[weekKey]) {
+          weeklyMap[weekKey] = {
+            date: weekKey,
+            label: monLabel,
+            fullLabel: weekRangeLabel,
+            revenue: 0,
+            orders: 0,
+          };
+        }
+
+        weeklyMap[weekKey].revenue += point.revenue;
+        weeklyMap[weekKey].orders += point.orders;
+      });
+
+      const weeklyPoints = Object.values(weeklyMap).sort((a, b) => a.date.localeCompare(b.date));
+      return {
+        chartData: weeklyPoints,
+        totalRevenue: calculatedTotalRevenue,
+        totalDays: continuousDays.length,
+      };
+    }
+
+    return {
+      chartData: dailyPoints,
+      totalRevenue: calculatedTotalRevenue,
+      totalDays: continuousDays.length,
+    };
+  }, [orders, datePreset, granularity]);
 
   const currency = 'IDR';
-  const totalRevenue = chartData.reduce((acc, d) => acc + d.revenue, 0);
 
   return (
     <GlassCard className="p-5 flex flex-col justify-between font-sans h-full">
-      <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-white/[0.06] pb-3 mb-4">
         <div>
           <div className="flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-[#f3aa18]" />
@@ -56,14 +170,49 @@ export const SalesRevenueChart: React.FC<SalesRevenueChartProps> = ({ orders }) 
             </h3>
           </div>
           <p className="text-[11px] text-neutral-400 mt-0.5">
-            Daily performance from current orders window
+            Continuous {granularity} timeline from orders window (no transaction days shown as Rp 0)
           </p>
         </div>
-        <div className="text-right">
-          <span className="text-[10px] font-mono text-neutral-500 uppercase block">Window Total</span>
-          <span className="text-sm font-bold font-mono text-[#f3aa18]">
-            {formatCurrency(totalRevenue, currency)}
-          </span>
+
+        <div className="flex items-center gap-3 self-start sm:self-auto">
+          {/* Granularity switch: Daily vs Weekly when span allows */}
+          {totalDays > 7 && (
+            <div className="p-1 rounded-xl bg-[#090a0d] border border-white/[0.08] flex items-center gap-1 font-mono text-[11px]">
+              <button
+                type="button"
+                onClick={() => setGranularity('daily')}
+                className={clsx(
+                  'px-2.5 py-1 rounded-lg transition-all cursor-pointer font-semibold',
+                  granularity === 'daily'
+                    ? 'bg-[#f3aa18] text-zinc-950 shadow-xs'
+                    : 'text-neutral-400 hover:text-white'
+                )}
+                title="View every calendar day"
+              >
+                Daily
+              </button>
+              <button
+                type="button"
+                onClick={() => setGranularity('weekly')}
+                className={clsx(
+                  'px-2.5 py-1 rounded-lg transition-all cursor-pointer font-semibold',
+                  granularity === 'weekly'
+                    ? 'bg-[#f3aa18] text-zinc-950 shadow-xs'
+                    : 'text-neutral-400 hover:text-white'
+                )}
+                title="Group into weekly totals"
+              >
+                Weekly
+              </button>
+            </div>
+          )}
+
+          <div className="text-right pl-2 sm:border-l sm:border-white/[0.08]">
+            <span className="text-[10px] font-mono text-neutral-500 uppercase block">Window Total</span>
+            <span className="text-sm font-bold font-mono text-[#f3aa18]">
+              {formatCurrency(totalRevenue, currency)}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -83,9 +232,14 @@ export const SalesRevenueChart: React.FC<SalesRevenueChartProps> = ({ orders }) 
                 tick={{ fill: '#71717a', fontSize: 10, fontFamily: 'monospace' }}
                 axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
                 tickLine={false}
+                interval="preserveStartEnd"
+                minTickGap={24}
               />
               <YAxis 
+                domain={[0, 'auto']}
                 tick={{ fill: '#71717a', fontSize: 10, fontFamily: 'monospace' }}
+                axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                tickLine={false}
                 tickFormatter={(v) => {
                   if (v >= 1000000) return `Rp ${(v / 1000000).toFixed(1)}M`;
                   if (v >= 1000) return `Rp ${(v / 1000).toFixed(0)}k`;
@@ -97,8 +251,8 @@ export const SalesRevenueChart: React.FC<SalesRevenueChartProps> = ({ orders }) 
                   if (active && payload && payload.length) {
                     const data = payload[0].payload;
                     return (
-                      <div className="p-2.5 rounded-xl bg-zinc-950/95 border border-white/10 shadow-xl backdrop-blur-md text-xs font-sans">
-                        <p className="text-neutral-400 text-[10px] font-mono mb-1">{data.date}</p>
+                      <div className="p-2.5 rounded-xl bg-zinc-950/95 border border-white/10 shadow-xl backdrop-blur-md text-xs font-sans min-w-[170px]">
+                        <p className="text-neutral-400 text-[10px] font-mono mb-1">{data.fullLabel || data.date}</p>
                         <p className="text-[#f3aa18] font-bold font-mono text-sm">
                           {formatCurrency(data.revenue, currency)}
                         </p>

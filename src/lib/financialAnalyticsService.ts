@@ -1,8 +1,18 @@
 import { Order } from '../types';
 import { ShopeeOrder, TikTokOrder } from './wordpressBridge';
-import { convertToIdr, isRevenueOrder } from './formatters';
+import { 
+  convertToIdr, 
+  isRevenueOrder,
+  getStoreDateKey,
+  formatStoreDateLabel,
+  formatStoreDateFull,
+  generateContinuousDays,
+  parseStoreDate,
+  STORE_TIMEZONE
+} from './formatters';
 
 export type FinancialChannel = 'webstore' | 'shopee' | 'tiktok';
+export type FinancialGranularity = 'daily' | 'weekly' | 'monthly';
 
 export interface UnifiedOrderItem {
   name: string;
@@ -48,6 +58,7 @@ export interface ChannelMetrics {
 export interface DailyFinancialPoint {
   date: string;
   label: string;
+  fullLabel?: string;
   webstore: number;
   shopee: number;
   tiktok: number;
@@ -126,7 +137,7 @@ export function normalizeWebstoreOrder(order: Order): UnifiedFinancialRecord {
   const refundedIdr = convertToIdr(refunded, order.currency || 'IDR');
   const netIdr = isPaid ? Math.max(0, grossIdr - refundedIdr) : 0;
 
-  const createdDate = order.created_at ? new Date(order.created_at) : new Date();
+  const createdDate = order.created_at ? (parseStoreDate(order.created_at) || new Date(order.created_at)) : new Date();
   const timestamp = !isNaN(createdDate.getTime()) ? createdDate.getTime() : Date.now();
 
   const items: UnifiedOrderItem[] = (order.items || order.line_items || []).map(item => ({
@@ -148,8 +159,8 @@ export function normalizeWebstoreOrder(order: Order): UnifiedFinancialRecord {
     orderNumber: order.order_number || String(order.id),
     channel: 'webstore',
     timestamp,
-    dateIso: createdDate.toISOString().split('T')[0],
-    dateFormatted: createdDate.toLocaleDateString('default', { month: 'short', day: 'numeric', year: 'numeric' }),
+    dateIso: getStoreDateKey(timestamp),
+    dateFormatted: formatStoreDateFull(timestamp),
     grossRevenue: isPaid ? grossIdr : 0,
     netRevenue: netIdr,
     refundedAmount: refundedIdr,
@@ -193,9 +204,8 @@ export function normalizeShopeeOrder(order: ShopeeOrder): UnifiedFinancialRecord
   const net = isPaid ? gross : 0;
 
   const timestamp = order.create_timestamp ? order.create_timestamp * 1000 : (
-    order.create_time ? new Date(order.create_time).getTime() : Date.now()
+    order.create_time ? (parseStoreDate(order.create_time)?.getTime() || new Date(order.create_time).getTime()) : Date.now()
   );
-  const dateObj = new Date(timestamp);
 
   const items: UnifiedOrderItem[] = (order.items || []).map(item => ({
     name: [item.item_name, item.model_name].filter(Boolean).join(' - ') || 'Shopee Item',
@@ -212,8 +222,8 @@ export function normalizeShopeeOrder(order: ShopeeOrder): UnifiedFinancialRecord
     orderNumber: order.order_sn,
     channel: 'shopee',
     timestamp,
-    dateIso: dateObj.toISOString().split('T')[0],
-    dateFormatted: dateObj.toLocaleDateString('default', { month: 'short', day: 'numeric', year: 'numeric' }),
+    dateIso: getStoreDateKey(timestamp),
+    dateFormatted: formatStoreDateFull(timestamp),
     grossRevenue: isPaid ? gross : 0,
     netRevenue: net,
     refundedAmount: isRefunded ? gross : 0,
@@ -256,9 +266,8 @@ export function normalizeTikTokOrder(order: TikTokOrder): UnifiedFinancialRecord
   const net = isPaid ? gross : 0;
 
   const timestamp = order.create_timestamp ? order.create_timestamp * 1000 : (
-    order.create_time ? new Date(order.create_time).getTime() : Date.now()
+    order.create_time ? (parseStoreDate(order.create_time)?.getTime() || new Date(order.create_time).getTime()) : Date.now()
   );
-  const dateObj = new Date(timestamp);
 
   const items: UnifiedOrderItem[] = (order.items || []).map(item => ({
     name: [item.item_name, item.sku_name].filter(Boolean).join(' - ') || 'TikTok Item',
@@ -275,8 +284,8 @@ export function normalizeTikTokOrder(order: TikTokOrder): UnifiedFinancialRecord
     orderNumber: order.order_sn || order.order_id,
     channel: 'tiktok',
     timestamp,
-    dateIso: dateObj.toISOString().split('T')[0],
-    dateFormatted: dateObj.toLocaleDateString('default', { month: 'short', day: 'numeric', year: 'numeric' }),
+    dateIso: getStoreDateKey(timestamp),
+    dateFormatted: formatStoreDateFull(timestamp),
     grossRevenue: isPaid ? gross : 0,
     netRevenue: net,
     refundedAmount: isRefunded ? gross : 0,
@@ -361,6 +370,35 @@ export function aggregateFinancialMetrics(
   const dailyMap: Record<string, DailyFinancialPoint> = {};
   const productMap: Record<string, TopFinancialProduct> = {};
 
+  // Determine effective range for timeline generation
+  // For 'all' or wide horizons, prevent generating thousands of unused past days before any order occurred
+  let effectiveStartMs = startMs;
+  if (filtered.length > 0) {
+    const earliestOrderTime = filtered[0].timestamp;
+    if (earliestOrderTime > startMs && (earliestOrderTime - startMs) > 180 * 24 * 60 * 60 * 1000) {
+      // Anchor 7 days before earliest order to show initial baseline
+      effectiveStartMs = Math.max(startMs, earliestOrderTime - 7 * 24 * 60 * 60 * 1000);
+    }
+  } else if (endMs - startMs > 180 * 24 * 60 * 60 * 1000) {
+    // If no orders and horizon is huge, show last 30 days window
+    effectiveStartMs = endMs - 30 * 24 * 60 * 60 * 1000;
+  }
+
+  // Pre-populate continuous days in timeline so zero-transaction days are NEVER skipped
+  const continuousDays = generateContinuousDays(effectiveStartMs, endMs);
+  continuousDays.forEach(d => {
+    dailyMap[d.key] = {
+      date: d.key,
+      label: d.label,
+      fullLabel: formatStoreDateFull(d.timestamp),
+      webstore: 0,
+      shopee: 0,
+      tiktok: 0,
+      total: 0,
+      orders: 0,
+    };
+  });
+
   filtered.forEach(rec => {
     totalGross += rec.grossRevenue;
     totalNet += rec.netRevenue;
@@ -380,7 +418,8 @@ export function aggregateFinancialMetrics(
     if (!dailyMap[dKey]) {
       dailyMap[dKey] = {
         date: dKey,
-        label: new Date(rec.timestamp).toLocaleDateString('default', { month: 'short', day: 'numeric' }),
+        label: formatStoreDateLabel(rec.timestamp),
+        fullLabel: formatStoreDateFull(rec.timestamp),
         webstore: 0,
         shopee: 0,
         tiktok: 0,
@@ -423,7 +462,7 @@ export function aggregateFinancialMetrics(
 
   const aov = totalOrders > 0 ? Math.round(totalNet / totalOrders) : 0;
 
-  // Timeline points sorted chronologically
+  // Timeline points sorted chronologically with continuous dates
   const timeline = Object.values(dailyMap).sort((a, b) => a.date.localeCompare(b.date));
 
   // Top products sorted by revenue desc
@@ -444,6 +483,105 @@ export function aggregateFinancialMetrics(
     filteredRecords: filtered.slice().reverse(), // Newest first for ledger display
     primaryCurrency: 'IDR',
   };
+}
+
+/**
+ * Aggregates daily financial timeline points into weekly or monthly periods
+ */
+export function aggregateTimelineByGranularity(
+  dailyTimeline: DailyFinancialPoint[],
+  granularity: FinancialGranularity
+): DailyFinancialPoint[] {
+  if (granularity === 'daily' || dailyTimeline.length === 0) {
+    return dailyTimeline;
+  }
+
+  if (granularity === 'weekly') {
+    const weeklyMap: Record<string, DailyFinancialPoint> = {};
+
+    dailyTimeline.forEach(point => {
+      const [yearStr, monthStr, dayStr] = point.date.split('-');
+      const d = new Date(Date.UTC(Number(yearStr), Number(monthStr) - 1, Number(dayStr), 12, 0, 0));
+      
+      const dayOfWeek = d.getUTCDay(); // 0 is Sunday, 1 is Monday...
+      const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      const monday = new Date(d);
+      monday.setUTCDate(d.getUTCDate() + diffToMonday);
+
+      const sunday = new Date(monday);
+      sunday.setUTCDate(monday.getUTCDate() + 6);
+
+      const monYear = monday.getUTCFullYear();
+      const monMonth = String(monday.getUTCMonth() + 1).padStart(2, '0');
+      const monDay = String(monday.getUTCDate()).padStart(2, '0');
+      const weekKey = `${monYear}-${monMonth}-${monDay}`;
+
+      const monLabel = monday.toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' });
+      const sunLabel = sunday.toLocaleDateString('en-US', {
+        timeZone: 'UTC',
+        month: monday.getUTCMonth() === sunday.getUTCMonth() ? undefined : 'short',
+        day: 'numeric',
+      });
+      const weekRangeLabel = `${monLabel} - ${sunLabel}`;
+
+      if (!weeklyMap[weekKey]) {
+        weeklyMap[weekKey] = {
+          date: weekKey,
+          label: monLabel,
+          fullLabel: weekRangeLabel,
+          webstore: 0,
+          shopee: 0,
+          tiktok: 0,
+          total: 0,
+          orders: 0,
+        };
+      }
+
+      weeklyMap[weekKey].webstore += point.webstore;
+      weeklyMap[weekKey].shopee += point.shopee;
+      weeklyMap[weekKey].tiktok += point.tiktok;
+      weeklyMap[weekKey].total += point.total;
+      weeklyMap[weekKey].orders += point.orders;
+    });
+
+    return Object.values(weeklyMap).sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  if (granularity === 'monthly') {
+    const monthlyMap: Record<string, DailyFinancialPoint> = {};
+
+    dailyTimeline.forEach(point => {
+      const [yearStr, monthStr] = point.date.split('-');
+      const monthKey = `${yearStr}-${monthStr}`;
+
+      const d = new Date(Date.UTC(Number(yearStr), Number(monthStr) - 1, 1, 12, 0, 0));
+      const monthLabel = d.toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short' });
+      const fullMonthLabel = d.toLocaleDateString('en-US', { timeZone: 'UTC', month: 'long', year: 'numeric' });
+
+      if (!monthlyMap[monthKey]) {
+        monthlyMap[monthKey] = {
+          date: monthKey,
+          label: monthLabel,
+          fullLabel: fullMonthLabel,
+          webstore: 0,
+          shopee: 0,
+          tiktok: 0,
+          total: 0,
+          orders: 0,
+        };
+      }
+
+      monthlyMap[monthKey].webstore += point.webstore;
+      monthlyMap[monthKey].shopee += point.shopee;
+      monthlyMap[monthKey].tiktok += point.tiktok;
+      monthlyMap[monthKey].total += point.total;
+      monthlyMap[monthKey].orders += point.orders;
+    });
+
+    return Object.values(monthlyMap).sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  return dailyTimeline;
 }
 
 /**

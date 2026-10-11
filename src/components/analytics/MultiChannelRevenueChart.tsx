@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { DailyFinancialPoint, FinancialChannel } from '../../lib/financialAnalyticsService';
+import React, { useState, useMemo } from 'react';
+import { DailyFinancialPoint, FinancialChannel, FinancialGranularity, aggregateTimelineByGranularity } from '../../lib/financialAnalyticsService';
 import { GlassCard } from '../ui/GlassCard';
 import { formatCurrency } from '../../lib/formatters';
 import {
@@ -12,7 +12,7 @@ import {
   CartesianGrid,
   Legend,
 } from 'recharts';
-import { TrendingUp, Layers, BarChart2 } from 'lucide-react';
+import { TrendingUp, Layers, BarChart2, Calendar } from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface MultiChannelRevenueChartProps {
@@ -27,10 +27,16 @@ export const MultiChannelRevenueChart: React.FC<MultiChannelRevenueChartProps> =
   totalRevenue,
 }) => {
   const [chartMode, setChartMode] = useState<'stacked' | 'total'>('stacked');
+  const [granularity, setGranularity] = useState<FinancialGranularity>('daily');
 
   const hasWebstore = selectedChannels.includes('webstore');
   const hasShopee = selectedChannels.includes('shopee');
   const hasTikTok = selectedChannels.includes('tiktok');
+
+  // Aggregated data according to active granularity (Daily / Weekly / Monthly)
+  const chartPoints = useMemo(() => {
+    return aggregateTimelineByGranularity(timeline, granularity);
+  }, [timeline, granularity]);
 
   // Format compact currency for YAxis
   const formatYAxis = (val: number) => {
@@ -42,8 +48,8 @@ export const MultiChannelRevenueChart: React.FC<MultiChannelRevenueChartProps> =
   return (
     <GlassCard className="p-5 flex flex-col justify-between font-sans h-full">
       <div>
-        {/* Header and Mode Toggle */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-white/[0.06] pb-3 mb-4">
+        {/* Header, Mode Toggle, and Granularity Switcher */}
+        <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 border-b border-white/[0.06] pb-3 mb-4">
           <div>
             <div className="flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-[#f3aa18]" />
@@ -52,12 +58,57 @@ export const MultiChannelRevenueChart: React.FC<MultiChannelRevenueChartProps> =
               </h3>
             </div>
             <p className="text-[11px] text-neutral-400 mt-0.5">
-              Daily incoming net revenue across selected sales channels
+              Continuous {granularity} incoming net revenue across selected sales channels
             </p>
           </div>
 
-          <div className="flex items-center gap-3 self-start sm:self-auto">
-            {/* View Mode Switcher */}
+          <div className="flex flex-wrap items-center gap-2.5 self-start xl:self-auto">
+            {/* Granularity Switcher: Daily / Weekly / Monthly */}
+            <div className="p-1 rounded-xl bg-[#090a0d] border border-white/[0.08] flex items-center gap-1 font-mono text-[11px]">
+              <button
+                type="button"
+                onClick={() => setGranularity('daily')}
+                className={clsx(
+                  'px-2.5 py-1 rounded-lg transition-all cursor-pointer font-semibold',
+                  granularity === 'daily'
+                    ? 'bg-[#f3aa18] text-zinc-950 shadow-xs'
+                    : 'text-neutral-400 hover:text-white'
+                )}
+                title="View every calendar day (including days with zero transactions)"
+              >
+                Daily
+              </button>
+              <button
+                type="button"
+                onClick={() => setGranularity('weekly')}
+                className={clsx(
+                  'px-2.5 py-1 rounded-lg transition-all cursor-pointer font-semibold',
+                  granularity === 'weekly'
+                    ? 'bg-[#f3aa18] text-zinc-950 shadow-xs'
+                    : 'text-neutral-400 hover:text-white'
+                )}
+                title="Group into weekly totals"
+              >
+                Weekly
+              </button>
+              {timeline.length >= 25 && (
+                <button
+                  type="button"
+                  onClick={() => setGranularity('monthly')}
+                  className={clsx(
+                    'px-2.5 py-1 rounded-lg transition-all cursor-pointer font-semibold',
+                    granularity === 'monthly'
+                      ? 'bg-[#f3aa18] text-zinc-950 shadow-xs'
+                      : 'text-neutral-400 hover:text-white'
+                  )}
+                  title="Group into monthly totals"
+                >
+                  Monthly
+                </button>
+              )}
+            </div>
+
+            {/* View Mode Switcher: Stacked vs Total */}
             <div className="p-1 rounded-xl bg-[#090a0d] border border-white/[0.08] flex items-center gap-1 font-mono text-[11px]">
               <button
                 type="button"
@@ -87,7 +138,7 @@ export const MultiChannelRevenueChart: React.FC<MultiChannelRevenueChartProps> =
               </button>
             </div>
 
-            <div className="text-right pl-2 border-l border-white/[0.08] hidden md:block">
+            <div className="text-right pl-2 border-l border-white/[0.08] hidden sm:block">
               <span className="text-[10px] font-mono text-neutral-400 uppercase block">Selected Horizon</span>
               <span className="text-sm font-bold font-mono text-[#f3aa18]">
                 {formatCurrency(totalRevenue, 'IDR')}
@@ -98,10 +149,10 @@ export const MultiChannelRevenueChart: React.FC<MultiChannelRevenueChartProps> =
 
         {/* Chart Area */}
         <div className="w-full h-72 sm:h-80">
-          {timeline.length > 0 ? (
+          {chartPoints.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
-                data={timeline}
+                data={chartPoints}
                 margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
               >
                 <defs>
@@ -137,9 +188,12 @@ export const MultiChannelRevenueChart: React.FC<MultiChannelRevenueChartProps> =
                   tick={{ fill: '#71717a', fontSize: 10, fontFamily: 'monospace' }}
                   axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
                   tickLine={false}
+                  interval="preserveStartEnd"
+                  minTickGap={28}
                 />
 
                 <YAxis
+                  domain={[0, 'auto']}
                   tick={{ fill: '#71717a', fontSize: 10, fontFamily: 'monospace' }}
                   tickFormatter={formatYAxis}
                   axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
@@ -154,7 +208,7 @@ export const MultiChannelRevenueChart: React.FC<MultiChannelRevenueChartProps> =
                       return (
                         <div className="p-3 rounded-xl bg-zinc-950/95 border border-white/10 shadow-2xl backdrop-blur-md text-xs font-sans min-w-[200px]">
                           <div className="text-[11px] font-mono font-bold text-white border-b border-white/10 pb-1.5 mb-2 flex items-center justify-between">
-                            <span>{data.date}</span>
+                            <span>{data.fullLabel || data.date}</span>
                             <span className="text-neutral-400 font-normal">
                               {data.orders} {data.orders === 1 ? 'order' : 'orders'}
                             </span>
@@ -198,7 +252,13 @@ export const MultiChannelRevenueChart: React.FC<MultiChannelRevenueChartProps> =
                             )}
 
                             <div className="pt-2 border-t border-white/10 flex items-center justify-between text-xs font-bold text-[#10b981]">
-                              <span>Total Day Net:</span>
+                              <span>
+                                {granularity === 'daily'
+                                  ? 'Total Day Net:'
+                                  : granularity === 'weekly'
+                                  ? 'Total Week Net:'
+                                  : 'Total Month Net:'}
+                              </span>
                               <span className="tabular-nums">
                                 {formatCurrency(data.total, 'IDR')}
                               </span>
@@ -291,7 +351,7 @@ export const MultiChannelRevenueChart: React.FC<MultiChannelRevenueChartProps> =
         </div>
 
         <span className="text-[10px] text-neutral-500">
-          Showing {timeline.length} ledger days in window
+          Showing {chartPoints.length} {granularity === 'daily' ? 'calendar days' : granularity === 'weekly' ? 'calendar weeks' : 'calendar months'} in horizon (0-transaction days included)
         </span>
       </div>
     </GlassCard>

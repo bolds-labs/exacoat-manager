@@ -194,6 +194,116 @@ export function formatTimeAgo(dateString: string | null | undefined): string {
   }
 }
 
+/**
+ * Returns a standardized YYYY-MM-DD date key in store timezone (Asia/Jakarta)
+ */
+export function getStoreDateKey(date: Date | number | string | null | undefined): string {
+  if (!date) return '';
+  let d: Date | null = null;
+  if (typeof date === 'number') {
+    d = new Date(date);
+  } else if (date instanceof Date) {
+    d = date;
+  } else {
+    d = parseStoreDate(date) || new Date(date);
+  }
+  if (!d || isNaN(d.getTime())) return '';
+
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: STORE_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d);
+}
+
+/**
+ * Returns short date label (e.g. 'Oct 8') in store timezone (Asia/Jakarta)
+ */
+export function formatStoreDateLabel(date: Date | number | string | null | undefined): string {
+  if (!date) return '';
+  let d: Date | null = null;
+  if (typeof date === 'number') {
+    d = new Date(date);
+  } else if (date instanceof Date) {
+    d = date;
+  } else {
+    d = parseStoreDate(date) || new Date(date);
+  }
+  if (!d || isNaN(d.getTime())) return '';
+
+  return d.toLocaleDateString('en-US', {
+    timeZone: STORE_TIMEZONE,
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+/**
+ * Returns full date label (e.g. 'Oct 8, 2026') in store timezone (Asia/Jakarta)
+ */
+export function formatStoreDateFull(date: Date | number | string | null | undefined): string {
+  if (!date) return '';
+  let d: Date | null = null;
+  if (typeof date === 'number') {
+    d = new Date(date);
+  } else if (date instanceof Date) {
+    d = date;
+  } else {
+    d = parseStoreDate(date) || new Date(date);
+  }
+  if (!d || isNaN(d.getTime())) return '';
+
+  return d.toLocaleDateString('en-US', {
+    timeZone: STORE_TIMEZONE,
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+/**
+ * Generates continuous calendar day keys and labels between two timestamps in store timezone
+ */
+export function generateContinuousDays(
+  startMs: number,
+  endMs: number
+): Array<{ key: string; label: string; timestamp: number }> {
+  if (startMs > endMs) return [];
+
+  const startKey = getStoreDateKey(startMs);
+  const endKey = getStoreDateKey(endMs);
+  if (!startKey || !endKey) return [];
+
+  const [sY, sM, sD] = startKey.split('-').map(Number);
+  const [eY, eM, eD] = endKey.split('-').map(Number);
+
+  const cur = new Date(Date.UTC(sY, sM - 1, sD, 12, 0, 0));
+  const endUtc = new Date(Date.UTC(eY, eM - 1, eD, 12, 0, 0));
+
+  const result: Array<{ key: string; label: string; timestamp: number }> = [];
+
+  while (cur <= endUtc) {
+    const y = cur.getUTCFullYear();
+    const m = String(cur.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(cur.getUTCDate()).padStart(2, '0');
+    const key = `${y}-${m}-${day}`;
+
+    const label = cur.toLocaleDateString('en-US', {
+      timeZone: 'UTC',
+      month: 'short',
+      day: 'numeric',
+    });
+
+    const dayTimestamp = new Date(`${key}T12:00:00+07:00`).getTime();
+
+    result.push({ key, label, timestamp: dayTimestamp });
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+
+  return result;
+}
+
 // ==========================================
 // BADGE & STATUS METADATA HELPERS
 // ==========================================

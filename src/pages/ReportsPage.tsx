@@ -78,44 +78,49 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
   // Compute start and end timestamps based on preset
   const { startMs, endMs, dateLabel } = useMemo(() => {
     const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
     let start: Date;
-    let end: Date = new Date();
+    let end: Date = todayEnd;
     let label = 'Last 30 Days';
 
     if (datePreset === 'today') {
-      start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      start = todayStart;
+      end = todayEnd;
       label = 'Today';
     } else if (datePreset === '7d') {
-      start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      start = new Date(todayStart.getTime() - 6 * 24 * 60 * 60 * 1000);
       label = 'Last 7 Days';
     } else if (datePreset === '30d') {
-      start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      start = new Date(todayStart.getTime() - 29 * 24 * 60 * 60 * 1000);
       label = 'Last 30 Days';
     } else if (datePreset === 'this_month') {
-      start = new Date(now.getFullYear(), now.getMonth(), 1);
+      start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
       label = 'This Month';
     } else if (datePreset === 'last_month') {
-      start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      start = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
       end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
       label = 'Last Month';
     } else if (datePreset === '90d') {
-      start = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      start = new Date(todayStart.getTime() - 89 * 24 * 60 * 60 * 1000);
       label = 'Last 90 Days';
     } else if (datePreset === 'year') {
-      start = new Date(now.getFullYear(), 0, 1);
+      start = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
       label = 'This Year';
     } else if (datePreset === 'all') {
-      start = new Date(2020, 0, 1);
+      start = new Date(2020, 0, 1, 0, 0, 0, 0);
       label = 'All Time';
     } else if (datePreset === 'custom' && customStart) {
       start = new Date(customStart);
+      start.setHours(0, 0, 0, 0);
       if (customEnd) {
         end = new Date(customEnd);
         end.setHours(23, 59, 59, 999);
       }
       label = `${start.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} to ${end.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
     } else {
-      start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      start = new Date(todayStart.getTime() - 29 * 24 * 60 * 60 * 1000);
       label = 'Last 30 Days';
     }
 
