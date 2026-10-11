@@ -434,6 +434,10 @@ class Exacoat_Biteship_Engine {
 	}
 }
 
+if ( ! class_exists( 'Artmatter_Biteship_Engine' ) && class_exists( 'Exacoat_Biteship_Engine' ) ) {
+	class_alias( 'Exacoat_Biteship_Engine', 'Artmatter_Biteship_Engine' );
+}
+
 }
 
 

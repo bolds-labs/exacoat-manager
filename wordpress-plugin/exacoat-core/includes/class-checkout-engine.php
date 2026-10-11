@@ -427,11 +427,14 @@ class Exacoat_Checkout_Engine {
 		if ( 'ID' !== $country || ! preg_match( '/^\d{5}$/', $postcode ) ) {
 			return new WP_Error( 'invalid_postcode', 'Enter a valid Indonesian postal code.', [ 'status' => 400 ] );
 		}
-		if ( ! class_exists( 'Artmatter_Biteship_Engine' ) ) {
+		if ( ! class_exists( 'Exacoat_Biteship_Engine' ) && ! class_exists( 'Artmatter_Biteship_Engine' ) ) {
 			return new WP_Error( 'address_service_unavailable', 'Address lookup is temporarily unavailable.', [ 'status' => 503 ] );
 		}
 
-		$cached = get_transient( 'artmatter_checkout_address_' . $postcode );
+		$cached = get_transient( 'biteship_postcode_' . $postcode );
+		if ( ! is_array( $cached ) || empty( $cached['subdistrict'] ) ) {
+			$cached = get_transient( 'artmatter_checkout_address_' . $postcode );
+		}
 		if ( is_array( $cached ) && ! empty( $cached['subdistrict'] ) ) {
 			return rest_ensure_response( $cached );
 		}
@@ -445,6 +448,9 @@ class Exacoat_Checkout_Engine {
 		}
 		set_transient( $limit_key, $request_count + 1, 10 * MINUTE_IN_SECONDS );
 
+		if ( class_exists( 'Exacoat_Biteship_Engine' ) ) {
+			return Exacoat_Biteship_Engine::resolve_postcode( $postcode );
+		}
 		return Artmatter_Biteship_Engine::resolve_postcode( $postcode );
 	}
 
