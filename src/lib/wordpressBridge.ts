@@ -205,6 +205,7 @@ export interface ShopeeOrderItem {
   model_name: string;
   quantity: number;
   price: number;
+  original_price?: number;
   image_url: string;
   item_sku?: string;
   model_sku?: string;
@@ -231,6 +232,11 @@ export interface ShopeeOrder {
   buyer_username: string;
   buyer_user_id: number;
   total_amount: number;
+  gross_amount?: number;
+  original_amount?: number;
+  buyer_paid_amount?: number;
+  seller_discount?: number;
+  platform_voucher_subsidy?: number;
   currency: string;
   shipping_carrier: string;
   tracking_number: string;
@@ -332,6 +338,10 @@ export interface TikTokOrderItem {
   sku_name: string;
   quantity: number;
   price: number;
+  sale_price?: number;
+  original_price?: number;
+  seller_discount?: number;
+  platform_discount?: number;
   image_url: string;
 }
 
@@ -345,6 +355,15 @@ export interface TikTokOrder {
   buyer_username: string;
   buyer_uid?: string;
   total_amount: number;
+  gross_amount?: number;
+  original_amount?: number;
+  buyer_paid_amount?: number;
+  buyer_subtotal?: number;
+  seller_discount?: number;
+  platform_discount?: number;
+  platform_voucher_subsidy?: number;
+  shipping_fee?: number;
+  buyer_service_fee?: number;
   currency: string;
   shipping_carrier: string;
   tracking_number: string;

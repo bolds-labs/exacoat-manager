@@ -37,7 +37,7 @@ export const SalesRevenueChart: React.FC<SalesRevenueChartProps> = ({
   const [granularity, setGranularity] = useState<'daily' | 'weekly'>('daily');
 
   // Compute continuous date points covering every calendar day in the horizon strictly in store timezone
-  const { chartData, totalRevenue, totalDays } = useMemo(() => {
+  const { chartData, totalRevenue, totalBuyerPaid, totalDays } = useMemo(() => {
     const todayKey = getStoreDateKey(Date.now());
     const todayStartMs = getStoreDayStartMs(todayKey);
     const todayEndMs = getStoreDayEndMs(todayKey);
@@ -71,7 +71,7 @@ export const SalesRevenueChart: React.FC<SalesRevenueChartProps> = ({
 
     // Generate continuous days in store timezone so zero transaction days are NEVER skipped
     const continuousDays = generateContinuousDays(startMs, endMs);
-    const map: Record<string, { date: string; label: string; fullLabel: string; revenue: number; orders: number }> = {};
+    const map: Record<string, { date: string; label: string; fullLabel: string; revenue: number; buyerPaid: number; orders: number }> = {};
 
     continuousDays.forEach(d => {
       map[d.key] = {
@@ -79,6 +79,7 @@ export const SalesRevenueChart: React.FC<SalesRevenueChartProps> = ({
         label: d.label,
         fullLabel: formatStoreDateFull(d.timestamp),
         revenue: 0,
+        buyerPaid: 0,
         orders: 0,
       };
     });
@@ -90,20 +91,30 @@ export const SalesRevenueChart: React.FC<SalesRevenueChartProps> = ({
       const key = getStoreDateKey(order.created_at);
       if (!key) return;
 
-      const orderRevenue = (order as any).total_idr || convertToIdr(order.total, order.currency);
+      const buyerPaidIdr = Number((order as any).total_idr) || convertToIdr(order.total, order.currency);
+      const rawSubtotal = Number((order as any).subtotal) > 0
+        ? convertToIdr((order as any).subtotal, order.currency)
+        : 0;
+      const itemsGross = (order.items || []).reduce((s, it) => {
+        const lineSub = Number((it as any).subtotal || it.total || 0);
+        return s + (lineSub > 0 ? convertToIdr(lineSub, order.currency) : 0);
+      }, 0);
+      const grossRevenue = Math.max(rawSubtotal, itemsGross, buyerPaidIdr);
 
       if (map[key]) {
-        map[key].revenue += orderRevenue;
+        map[key].revenue += grossRevenue;
+        map[key].buyerPaid += buyerPaidIdr;
         map[key].orders += 1;
       }
     });
 
     const dailyPoints = Object.values(map).sort((a, b) => a.date.localeCompare(b.date));
     const calculatedTotalRevenue = dailyPoints.reduce((acc, d) => acc + d.revenue, 0);
+    const calculatedTotalBuyerPaid = dailyPoints.reduce((acc, d) => acc + d.buyerPaid, 0);
 
     // If weekly granularity is chosen and date span is sufficiently long, aggregate points by week
     if (granularity === 'weekly' && continuousDays.length > 7) {
-      const weeklyMap: Record<string, { date: string; label: string; fullLabel: string; revenue: number; orders: number }> = {};
+      const weeklyMap: Record<string, { date: string; label: string; fullLabel: string; revenue: number; buyerPaid: number; orders: number }> = {};
 
       dailyPoints.forEach(point => {
         const [yearStr, monthStr, dayStr] = point.date.split('-');
@@ -136,11 +147,13 @@ export const SalesRevenueChart: React.FC<SalesRevenueChartProps> = ({
             label: monLabel,
             fullLabel: weekRangeLabel,
             revenue: 0,
+            buyerPaid: 0,
             orders: 0,
           };
         }
 
         weeklyMap[weekKey].revenue += point.revenue;
+        weeklyMap[weekKey].buyerPaid += point.buyerPaid;
         weeklyMap[weekKey].orders += point.orders;
       });
 
@@ -148,6 +161,7 @@ export const SalesRevenueChart: React.FC<SalesRevenueChartProps> = ({
       return {
         chartData: weeklyPoints,
         totalRevenue: calculatedTotalRevenue,
+        totalBuyerPaid: calculatedTotalBuyerPaid,
         totalDays: continuousDays.length,
       };
     }
@@ -155,6 +169,7 @@ export const SalesRevenueChart: React.FC<SalesRevenueChartProps> = ({
     return {
       chartData: dailyPoints,
       totalRevenue: calculatedTotalRevenue,
+      totalBuyerPaid: calculatedTotalBuyerPaid,
       totalDays: continuousDays.length,
     };
   }, [orders, datePreset, granularity]);
@@ -168,7 +183,7 @@ export const SalesRevenueChart: React.FC<SalesRevenueChartProps> = ({
           <div className="flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-[#f3aa18]" />
             <h3 className="text-xs font-bold uppercase tracking-wider text-white">
-              Revenue & Order Volume
+              Gross Sales & Order Volume
             </h3>
           </div>
           <p className="text-[11px] text-neutral-400 mt-0.5">
@@ -210,9 +225,12 @@ export const SalesRevenueChart: React.FC<SalesRevenueChartProps> = ({
           )}
 
           <div className="text-right pl-2 sm:border-l sm:border-white/[0.08]">
-            <span className="text-[10px] font-mono text-neutral-500 uppercase block">Window Total</span>
-            <span className="text-sm font-bold font-mono text-[#f3aa18]">
+            <span className="text-[10px] font-mono text-neutral-500 uppercase block">Window Gross</span>
+            <span className="text-sm font-bold font-mono text-[#f3aa18] block">
               {formatCurrency(totalRevenue, currency)}
+            </span>
+            <span className="text-[10px] font-mono text-neutral-400 block">
+              Paid: {formatCurrency(totalBuyerPaid, currency)}
             </span>
           </div>
         </div>
@@ -253,10 +271,13 @@ export const SalesRevenueChart: React.FC<SalesRevenueChartProps> = ({
                   if (active && payload && payload.length) {
                     const data = payload[0].payload;
                     return (
-                      <div className="p-2.5 rounded-xl bg-zinc-950/95 border border-white/10 shadow-xl backdrop-blur-md text-xs font-sans min-w-[170px]">
+                      <div className="p-2.5 rounded-xl bg-zinc-950/95 border border-white/10 shadow-xl backdrop-blur-md text-xs font-sans min-w-[180px]">
                         <p className="text-neutral-400 text-[10px] font-mono mb-1">{data.fullLabel || data.date}</p>
                         <p className="text-[#f3aa18] font-bold font-mono text-sm">
                           {formatCurrency(data.revenue, currency)}
+                        </p>
+                        <p className="text-neutral-400 text-[10px] font-mono mt-0.5">
+                          Paid: {formatCurrency(data.buyerPaid, currency)}
                         </p>
                         <p className="text-white text-[11px] mt-0.5">
                           {data.orders} Order{data.orders !== 1 ? 's' : ''}

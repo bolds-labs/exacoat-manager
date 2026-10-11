@@ -592,18 +592,26 @@ class Exacoat_Shopee_Client {
 		$claim_info = self::check_existing_claim( $sn );
 
 		$items = [];
+		$items_subtotal = 0.0;
+		$original_subtotal = 0.0;
 		foreach ( ( $ord['item_list'] ?? [] ) as $item ) {
 			$var_name = trim( $item['model_name'] ?? '' );
 			$prod_name = trim( $item['item_name'] ?? 'Exacoat Skin' );
 			$item_note = trim( (string) ( $item['order_item_note'] ?? ( $item['item_note'] ?? ( $item['note'] ?? '' ) ) ) );
+			$qty = (int) ( $item['model_quantity_purchased'] ?? 1 );
+			$disc_price = (float) ( $item['model_discounted_price'] ?? $item['model_original_price'] ?? 0 );
+			$orig_price = (float) ( $item['model_original_price'] ?? $disc_price );
+			$items_subtotal += $disc_price * $qty;
+			$original_subtotal += $orig_price * $qty;
 
 			$items[] = [
 				'item_id'          => $item['item_id'] ?? 0,
 				'item_name'        => $prod_name,
 				'model_id'         => $item['model_id'] ?? 0,
 				'model_name'       => $var_name,
-				'quantity'         => (int) ( $item['model_quantity_purchased'] ?? 1 ),
-				'price'            => (float) ( $item['model_discounted_price'] ?? $item['model_original_price'] ?? 0 ),
+				'quantity'         => $qty,
+				'price'            => $disc_price,
+				'original_price'   => $orig_price,
 				'image_url'        => $item['image_info']['image_url'] ?? '',
 				'note'             => $item_note,
 				'item_note'        => $item_note,
@@ -611,6 +619,12 @@ class Exacoat_Shopee_Client {
 				'buyer_note'       => $item['buyer_note'] ?? '',
 			];
 		}
+
+		$buyer_total_amount = (float) ( $ord['total_amount'] ?? 0 );
+		$gross_amount = $items_subtotal > 0 ? $items_subtotal : $buyer_total_amount;
+		$original_amount = $original_subtotal > 0 ? $original_subtotal : $gross_amount;
+		$seller_discount = max( 0.0, $original_amount - $gross_amount );
+		$platform_voucher_subsidy = $buyer_total_amount > 0 ? max( 0.0, $gross_amount - $buyer_total_amount ) : 0.0;
 
 		$rec = $ord['recipient_address'] ?? [];
 		$package = ( $ord['package_list'] ?? [] )[0] ?? [];
@@ -682,7 +696,12 @@ class Exacoat_Shopee_Client {
 			'ship_by_timestamp'        => $ship_by_ts,
 			'buyer_username'           => $ord['buyer_username'] ?? 'Shopee Customer',
 			'buyer_user_id'            => $ord['buyer_user_id'] ?? 0,
-			'total_amount'             => (float) ( $ord['total_amount'] ?? 0 ),
+			'total_amount'             => $buyer_total_amount,
+			'gross_amount'             => $gross_amount,
+			'original_amount'          => $original_amount,
+			'buyer_paid_amount'        => $buyer_total_amount,
+			'seller_discount'          => $seller_discount,
+			'platform_voucher_subsidy' => $platform_voucher_subsidy,
 			'currency'                 => 'IDR',
 			'shipping_carrier'         => $ord['shipping_carrier'] ?? ( $package['shipping_carrier'] ?? 'SPX / J&T' ),
 			'tracking_number'          => $tracking_num,

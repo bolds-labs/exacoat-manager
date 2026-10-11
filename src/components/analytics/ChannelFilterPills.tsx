@@ -130,14 +130,14 @@ export const ChannelFilterPills: React.FC<ChannelFilterPillsProps> = ({
             </div>
 
             {/* Metric pill */}
-            {metrics && metrics.netRevenue > 0 && (
+            {metrics && metrics.grossRevenue > 0 && (
               <span
                 className={clsx(
                   'text-[10px] font-mono px-1.5 py-0.5 rounded-md tabular-nums border border-white/[0.06]',
                   isSelected ? 'bg-white/10 text-white' : 'bg-white/[0.04] text-neutral-400'
                 )}
               >
-                {formatCurrency(metrics.netRevenue, 'IDR')}
+                {formatCurrency(metrics.grossRevenue, 'IDR')}
               </span>
             )}
           </button>

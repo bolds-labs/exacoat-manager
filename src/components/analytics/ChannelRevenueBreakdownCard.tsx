@@ -2,7 +2,7 @@ import React from 'react';
 import { FinancialChannel, ChannelMetrics } from '../../lib/financialAnalyticsService';
 import { GlassCard } from '../ui/GlassCard';
 import { formatCurrency } from '../../lib/formatters';
-import { Globe, ShoppingBag, Store, TrendingUp, Layers } from 'lucide-react';
+import { Globe, ShoppingBag, Store, Layers } from 'lucide-react';
 import { clsx } from 'clsx';
 
 interface ChannelRevenueBreakdownCardProps {
@@ -56,16 +56,17 @@ export const ChannelRevenueBreakdownCard: React.FC<ChannelRevenueBreakdownCardPr
     },
   ];
 
-  const safeTotal = totalNetRevenue > 0 ? totalNetRevenue : 1;
+  const totalGross = channels.reduce((sum, ch) => sum + (breakdown[ch.id]?.grossRevenue || 0), 0) || totalNetRevenue;
+  const safeTotal = totalGross > 0 ? totalGross : 1;
 
   return (
-    <GlassCard className="p-5 flex flex-col justify-between font-sans">
+    <GlassCard className="p-5 flex flex-col justify-between font-sans h-full">
       <div>
         <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 mb-4">
           <div className="flex items-center gap-2">
             <Layers className="w-4 h-4 text-[#f3aa18]" />
             <h3 className="text-xs font-bold uppercase tracking-wider text-white">
-              Channel Contribution & Split
+              Channel Gross Sales & Reconciliation
             </h3>
           </div>
           <span className="text-[11px] font-mono text-neutral-400">
@@ -73,12 +74,11 @@ export const ChannelRevenueBreakdownCard: React.FC<ChannelRevenueBreakdownCardPr
           </span>
         </div>
 
-        {/* Stacked Percentage Bar */}
-        <div className="space-y-2 mb-5">
+        <div className="space-y-2 mb-4">
           <div className="h-3 w-full bg-white/[0.06] rounded-full overflow-hidden flex">
             {channels.map(ch => {
               const metric = breakdown[ch.id];
-              const pct = totalNetRevenue > 0 ? (metric.netRevenue / safeTotal) * 100 : 0;
+              const pct = totalGross > 0 ? (metric.grossRevenue / safeTotal) * 100 : 0;
               if (pct <= 0) return null;
 
               return (
@@ -92,11 +92,10 @@ export const ChannelRevenueBreakdownCard: React.FC<ChannelRevenueBreakdownCardPr
             })}
           </div>
 
-          {/* Bar Legend */}
           <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-neutral-400">
             {channels.map(ch => {
               const metric = breakdown[ch.id];
-              const pct = totalNetRevenue > 0 ? Math.round((metric.netRevenue / safeTotal) * 100) : 0;
+              const pct = totalGross > 0 ? Math.round((metric.grossRevenue / safeTotal) * 100) : 0;
               return (
                 <div key={ch.id} className="flex items-center gap-1.5">
                   <span className={clsx('w-2 h-2 rounded-full', ch.barColor)} />
@@ -108,8 +107,7 @@ export const ChannelRevenueBreakdownCard: React.FC<ChannelRevenueBreakdownCardPr
           </div>
         </div>
 
-        {/* Channel Detail Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="space-y-3">
           {channels.map(ch => {
             const metric = breakdown[ch.id];
             const Icon = ch.icon;
@@ -127,32 +125,95 @@ export const ChannelRevenueBreakdownCard: React.FC<ChannelRevenueBreakdownCardPr
                 )}
                 title={`Click to focus solely on ${ch.name}`}
               >
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-1.5">
                   <div className="flex items-center gap-2">
                     <Icon className={clsx('w-4 h-4', ch.accentColor)} />
                     <span className="text-xs font-bold text-white tracking-tight">
                       {ch.name}
                     </span>
                   </div>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/[0.06] text-neutral-300 border border-white/[0.06]">
-                    {metric.percentageOfTotal}%
-                  </span>
-                </div>
-
-                <div className="my-1">
-                  <div className="text-base font-black font-mono tracking-tight text-white tabular-nums">
-                    {formatCurrency(metric.netRevenue, 'IDR')}
-                  </div>
-                  <div className="text-[10px] text-neutral-400 font-mono mt-0.5">
-                    {metric.ordersCount} {metric.ordersCount === 1 ? 'order' : 'orders'} · {metric.unitsSold} units
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-mono text-neutral-400">
+                      {metric.ordersCount} {metric.ordersCount === 1 ? 'order' : 'orders'} · {metric.unitsSold} units
+                    </span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/[0.06] text-neutral-300 border border-white/[0.06]">
+                      {metric.percentageOfTotal}%
+                    </span>
                   </div>
                 </div>
 
-                <div className="pt-2 mt-2 border-t border-white/[0.06] flex items-center justify-between text-[10px] font-mono text-neutral-400">
-                  <span>AOV:</span>
-                  <span className="font-semibold text-neutral-200 tabular-nums">
-                    {formatCurrency(metric.aov, 'IDR')}
-                  </span>
+                <div className="flex items-baseline justify-between my-1">
+                  <div>
+                    <span className="text-[10px] font-mono uppercase text-neutral-400 block">
+                      Gross Sales (Product)
+                    </span>
+                    <div className="text-base font-black font-mono tracking-tight text-white tabular-nums">
+                      {formatCurrency(metric.grossRevenue, 'IDR')}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] font-mono uppercase text-neutral-400 block">
+                      Buyer Paid (Checkout)
+                    </span>
+                    <div className="text-xs font-bold font-mono text-emerald-400 tabular-nums">
+                      {formatCurrency(metric.buyerPaidAmount, 'IDR')}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2 mt-1.5 border-t border-white/[0.06] space-y-1 text-[10px] font-mono text-neutral-400">
+                  {metric.platformSubsidy > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span>Platform Vouchers / Subsidies:</span>
+                      <span className="text-amber-400 tabular-nums">
+                        -{formatCurrency(metric.platformSubsidy, 'IDR')}
+                      </span>
+                    </div>
+                  )}
+
+                  {metric.sellerDiscount > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span>Seller Discounts / Coupons:</span>
+                      <span className="text-amber-400 tabular-nums">
+                        -{formatCurrency(metric.sellerDiscount, 'IDR')}
+                      </span>
+                    </div>
+                  )}
+
+                  {metric.shippingAndFees > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span>Shipping & Buyer Fees:</span>
+                      <span className="text-sky-400 tabular-nums">
+                        +{formatCurrency(metric.shippingAndFees, 'IDR')}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between">
+                    <span>AOV (Gross / Paid):</span>
+                    <span className="font-semibold text-neutral-200 tabular-nums">
+                      {formatCurrency(metric.aov, 'IDR')} / {formatCurrency(metric.buyerPaidAov, 'IDR')}
+                    </span>
+                  </div>
+
+                  {metric.cancelledOrdersCount > 0 && (
+                    <div className="pt-1 border-t border-white/[0.04] space-y-0.5 text-neutral-500">
+                      <div className="flex items-center justify-between">
+                        <span>Cancelled / Unpaid (Excl.):</span>
+                        <span className="text-rose-400/90 tabular-nums">
+                          {metric.cancelledOrdersCount} ({formatCurrency(metric.cancelledGrossRevenue, 'IDR')})
+                        </span>
+                      </div>
+                      {metric.paidThenCancelledCount > 0 && (
+                        <div className="flex items-center justify-between text-neutral-400">
+                          <span>Gross + Paid-then-Cancelled ({metric.ordersCount + metric.paidThenCancelledCount}):</span>
+                          <span className="text-neutral-200 font-semibold tabular-nums">
+                            {formatCurrency(metric.grossRevenue + metric.paidThenCancelledGross, 'IDR')}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             );

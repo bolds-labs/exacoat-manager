@@ -390,11 +390,11 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
             className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 font-sans"
             aria-label="Executive financial metrics"
           >
-            {/* 1. Gross Revenue */}
-            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[130px]">
+            {/* 1. Gross Product Sales */}
+            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[130px] border-[#f3aa18]/25 bg-[#f3aa18]/[0.02]">
               <div className="flex items-center justify-between">
                 <CardEyebrow>Gross Sales</CardEyebrow>
-                <div className="p-2 rounded-xl bg-white/[0.04] group-hover:bg-[#f3aa18]/10 text-neutral-400 group-hover:text-[#f3aa18] transition-colors border border-white/[0.06]">
+                <div className="p-2 rounded-xl bg-[#f3aa18]/10 text-[#f3aa18] transition-colors border border-[#f3aa18]/20">
                   <DollarSign className="w-4 h-4" />
                 </div>
               </div>
@@ -403,50 +403,59 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
                   {formatCurrency(summary.totalGrossRevenue, summary.primaryCurrency)}
                 </p>
                 <p className="text-[10px] font-mono text-neutral-400 mt-0.5">
-                  Before refunds & deductions
+                  {summary.totalPaidThenCancelledGross > 0
+                    ? `Incl. paid-cancelled (${summary.totalOrders + summary.totalPaidThenCancelledOrders}): ${formatCurrency(
+                        summary.totalGrossRevenue + summary.totalPaidThenCancelledGross,
+                        summary.primaryCurrency
+                      )}`
+                    : 'Product sales before platform vouchers'}
                 </p>
               </div>
             </GlassCard>
 
-            {/* 2. Retained Net Revenue */}
+            {/* 2. Buyer Paid (Out-of-Pocket Checkout Total) */}
             <GlassCard className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[130px] border-emerald-500/25 bg-emerald-500/[0.02]">
               <div className="flex items-center justify-between">
-                <CardEyebrow>Retained Net</CardEyebrow>
+                <CardEyebrow>Buyer Paid</CardEyebrow>
                 <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 transition-colors border border-emerald-500/20">
                   <CreditCard className="w-4 h-4" />
                 </div>
               </div>
               <div className="mt-2">
                 <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-emerald-400 tabular-nums">
-                  {formatCurrency(summary.totalNetRevenue, summary.primaryCurrency)}
+                  {formatCurrency(summary.totalBuyerPaid, summary.primaryCurrency)}
                 </p>
                 <p className="text-[10px] font-mono text-neutral-400 mt-0.5">
-                  {summary.totalRefunded > 0
-                    ? `${formatCurrency(summary.totalRefunded, summary.primaryCurrency)} deducted`
-                    : 'Zero cancellations in window'}
+                  {summary.totalShippingAndFees > 0
+                    ? `Includes +${formatCurrency(summary.totalShippingAndFees, summary.primaryCurrency)} ship & fees`
+                    : 'Out-of-pocket buyer checkout total'}
                 </p>
               </div>
             </GlassCard>
 
-            {/* 3. Average Order Value (AOV) */}
+            {/* 3. Platform Vouchers & Seller Discounts */}
             <GlassCard className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[130px]">
               <div className="flex items-center justify-between">
-                <CardEyebrow>Avg Order Value</CardEyebrow>
+                <CardEyebrow>Vouchers & Promos</CardEyebrow>
                 <div className="p-2 rounded-xl bg-white/[0.04] group-hover:bg-amber-500/10 text-neutral-400 group-hover:text-amber-400 transition-colors border border-white/[0.06]">
-                  <TrendingUp className="w-4 h-4" />
+                  <Layers className="w-4 h-4" />
                 </div>
               </div>
               <div className="mt-2">
-                <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-white tabular-nums">
-                  {formatCurrency(summary.averageOrderValue, summary.primaryCurrency)}
+                <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-amber-400 tabular-nums">
+                  {formatCurrency(
+                    summary.totalPlatformSubsidy + summary.totalSellerDiscount,
+                    summary.primaryCurrency
+                  )}
                 </p>
                 <p className="text-[10px] font-mono text-neutral-400 mt-0.5">
-                  Net spend per checkout
+                  Platform: {formatCurrency(summary.totalPlatformSubsidy, summary.primaryCurrency)} · Promo:{' '}
+                  {formatCurrency(summary.totalSellerDiscount, summary.primaryCurrency)}
                 </p>
               </div>
             </GlassCard>
 
-            {/* 4. Total Orders Volume */}
+            {/* 4. Total Paid Orders & Cancelled Info */}
             <GlassCard className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[130px]">
               <div className="flex items-center justify-between">
                 <CardEyebrow>Paid Orders</CardEyebrow>
@@ -459,27 +468,31 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
                   {summary.totalOrders.toLocaleString()}
                 </p>
                 <p className="text-[10px] font-mono text-neutral-400 mt-0.5">
-                  Across {selectedChannels.length} active {selectedChannels.length === 1 ? 'channel' : 'channels'}
+                  {summary.totalCancelledOrders > 0
+                    ? `Excl. ${summary.totalCancelledOrders} cancelled (${formatCurrency(
+                        summary.totalCancelledGross,
+                        summary.primaryCurrency
+                      )})`
+                    : `${summary.totalUnitsSold.toLocaleString()} units across ${selectedChannels.length} channels`}
                 </p>
               </div>
             </GlassCard>
 
-            {/* 5. Total Units Sold */}
-            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[130px]">
+            {/* 5. Average Order Value & Units Sold */}
+            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[130px] col-span-2 sm:col-span-1">
               <div className="flex items-center justify-between">
-                <CardEyebrow>Units Sold</CardEyebrow>
+                <CardEyebrow>Avg Order Value</CardEyebrow>
                 <div className="p-2 rounded-xl bg-white/[0.04] group-hover:bg-purple-500/10 text-neutral-400 group-hover:text-purple-400 transition-colors border border-white/[0.06]">
-                  <Package className="w-4 h-4" />
+                  <TrendingUp className="w-4 h-4" />
                 </div>
               </div>
               <div className="mt-2">
                 <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-white tabular-nums">
-                  {summary.totalUnitsSold.toLocaleString()}
+                  {formatCurrency(summary.averageOrderValue, summary.primaryCurrency)}
                 </p>
                 <p className="text-[10px] font-mono text-neutral-400 mt-0.5">
-                  {summary.totalOrders > 0
-                    ? `${(summary.totalUnitsSold / summary.totalOrders).toFixed(1)} skins per order`
-                    : 'Precision skins delivered'}
+                  {summary.totalUnitsSold.toLocaleString()} units · Paid AOV:{' '}
+                  {formatCurrency(summary.averageBuyerPaidValue, summary.primaryCurrency)}
                 </p>
               </div>
             </GlassCard>
@@ -491,13 +504,14 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
               <MultiChannelRevenueChart
                 timeline={summary.timeline}
                 selectedChannels={selectedChannels}
-                totalRevenue={summary.totalNetRevenue}
+                totalRevenue={summary.totalGrossRevenue}
+                totalBuyerPaid={summary.totalBuyerPaid}
               />
             </div>
             <div className="lg:col-span-1">
               <ChannelRevenueBreakdownCard
                 breakdown={summary.channelBreakdown}
-                totalNetRevenue={summary.totalNetRevenue}
+                totalNetRevenue={summary.totalGrossRevenue}
                 selectedChannels={selectedChannels}
                 onSelectChannelOnly={handleSelectChannelOnly}
               />
@@ -508,7 +522,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
           <section>
             <TopFinancialProductsCard
               products={summary.topProducts}
-              totalNetRevenue={summary.totalNetRevenue}
+              totalNetRevenue={summary.totalGrossRevenue}
               primaryCurrency={summary.primaryCurrency}
             />
           </section>
@@ -517,6 +531,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
           <section>
             <FinancialLedgerTable
               records={summary.filteredRecords}
+              allWindowRecords={summary.allWindowRecords}
               onExportCsv={handleExportCsv}
               primaryCurrency={summary.primaryCurrency}
             />

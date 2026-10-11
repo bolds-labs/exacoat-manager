@@ -25,7 +25,10 @@ export const SalesMetricsOverview: React.FC<SalesMetricsOverviewProps> = ({
 }) => {
   // Aggregate sales by currency (excluding cancelled, refunded, failed orders)
   const currencyTotals: Record<string, { total: number; count: number }> = {};
-  let totalRevenueIdr = 0;
+  let totalGrossRevenueIdr = 0;
+  let totalBuyerPaidIdr = 0;
+  let totalDiscountIdr = 0;
+  let revenueOrdersCount = 0;
   let totalUnits = 0;
   let processingCount = 0;
   let readyToShipCount = 0;
@@ -37,14 +40,29 @@ export const SalesMetricsOverview: React.FC<SalesMetricsOverviewProps> = ({
     const val = Number(order.total) || 0;
 
     if (isRev) {
+      revenueOrdersCount += 1;
       if (!currencyTotals[curr]) {
         currencyTotals[curr] = { total: 0, count: 0 };
       }
       currencyTotals[curr].total += val;
       currencyTotals[curr].count += 1;
 
-      const idrVal = (order as any).total_idr || convertToIdr(order.total, order.currency);
-      totalRevenueIdr += idrVal;
+      const buyerPaidIdr = Number((order as any).total_idr) || convertToIdr(order.total, order.currency);
+      const rawSubtotal = Number((order as any).subtotal) > 0
+        ? convertToIdr((order as any).subtotal, order.currency)
+        : 0;
+      const itemsGross = (order.items || []).reduce((s, it) => {
+        const lineSub = Number((it as any).subtotal || it.total || 0);
+        return s + (lineSub > 0 ? convertToIdr(lineSub, order.currency) : 0);
+      }, 0);
+      const grossIdr = Math.max(rawSubtotal, itemsGross, buyerPaidIdr);
+      const discountIdr = Number((order as any).discount_total) > 0
+        ? convertToIdr((order as any).discount_total, order.currency)
+        : Math.max(0, grossIdr - buyerPaidIdr);
+
+      totalGrossRevenueIdr += grossIdr;
+      totalBuyerPaidIdr += buyerPaidIdr;
+      totalDiscountIdr += discountIdr;
     }
 
     if (isRev) {
@@ -60,11 +78,11 @@ export const SalesMetricsOverview: React.FC<SalesMetricsOverviewProps> = ({
 
   const currencies = Object.keys(currencyTotals);
   const primaryCurrency = 'IDR';
-  const primaryTotal = totalRevenueIdr;
+  const primaryTotal = totalGrossRevenueIdr;
   const foreignCurrencies = currencies.filter(c => c !== 'IDR');
 
   const totalOrdersCount = orders.length;
-  const aov = totalOrdersCount > 0 ? Math.round(primaryTotal / totalOrdersCount) : 0;
+  const aov = revenueOrdersCount > 0 ? Math.round(primaryTotal / revenueOrdersCount) : 0;
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 font-sans">
@@ -79,6 +97,10 @@ export const SalesMetricsOverview: React.FC<SalesMetricsOverviewProps> = ({
         <div className="mt-2">
           <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-zinc-900 dark:text-white">
             {formatCurrency(primaryTotal, primaryCurrency)}
+          </p>
+          <p className="text-[10px] font-mono text-zinc-500 dark:text-neutral-400 mt-0.5">
+            Paid: {formatCurrency(totalBuyerPaidIdr, primaryCurrency)}
+            {totalDiscountIdr > 0 ? ` • Promos: -${formatCurrency(totalDiscountIdr, primaryCurrency)}` : ''}
           </p>
           {foreignCurrencies.length > 0 && (
             <p className="text-[10px] font-mono text-zinc-500 dark:text-neutral-400 mt-0.5">

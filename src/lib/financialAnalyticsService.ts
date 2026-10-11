@@ -1,14 +1,13 @@
 import { Order } from '../types';
 import { ShopeeOrder, TikTokOrder } from './wordpressBridge';
-import { 
-  convertToIdr, 
-  isRevenueOrder,
+import {
+  convertToIdr,
   getStoreDateKey,
   formatStoreDateLabel,
   formatStoreDateFull,
+  formatDateTime,
   generateContinuousDays,
   parseStoreDate,
-  STORE_TIMEZONE
 } from './formatters';
 
 export type FinancialChannel = 'webstore' | 'shopee' | 'tiktok';
@@ -18,6 +17,8 @@ export interface UnifiedOrderItem {
   name: string;
   quantity: number;
   price: number;
+  originalPrice?: number;
+  salePrice?: number;
   sku?: string;
   imageUrl?: string;
 }
@@ -29,19 +30,30 @@ export interface UnifiedFinancialRecord {
   timestamp: number;
   dateIso: string;
   dateFormatted: string;
+  dateTimeFormatted: string;
+  payTimeFormatted?: string;
   grossRevenue: number;
+  potentialGrossRevenue: number;
+  originalProductPrice: number;
+  sellerDiscount: number;
+  platformSubsidy: number;
+  shippingAndFees: number;
+  buyerPaidAmount: number;
+  potentialBuyerPaidAmount: number;
   netRevenue: number;
   refundedAmount: number;
   currency: string;
   status: string;
   statusNormalized: 'paid' | 'pending' | 'cancelled' | 'refunded';
   isPaid: boolean;
+  hadPayTime: boolean;
   itemsCount: number;
   items: UnifiedOrderItem[];
   customerName: string;
   customerEmail?: string;
   customerCity?: string;
   paymentMethod?: string;
+  couponCodes?: string[];
 }
 
 export interface ChannelMetrics {
@@ -49,10 +61,19 @@ export interface ChannelMetrics {
   label: string;
   grossRevenue: number;
   netRevenue: number;
+  buyerPaidAmount: number;
+  platformSubsidy: number;
+  sellerDiscount: number;
+  shippingAndFees: number;
   ordersCount: number;
   unitsSold: number;
   aov: number;
+  buyerPaidAov: number;
   percentageOfTotal: number;
+  cancelledOrdersCount: number;
+  cancelledGrossRevenue: number;
+  paidThenCancelledCount: number;
+  paidThenCancelledGross: number;
 }
 
 export interface DailyFinancialPoint {
@@ -63,7 +84,16 @@ export interface DailyFinancialPoint {
   shopee: number;
   tiktok: number;
   total: number;
+  webstoreBuyerPaid: number;
+  shopeeBuyerPaid: number;
+  tiktokBuyerPaid: number;
+  totalBuyerPaid: number;
+  totalVoucherSubsidy: number;
+  totalSellerDiscount: number;
+  totalShippingAndFees: number;
   orders: number;
+  cancelledOrders: number;
+  cancelledGross: number;
 }
 
 export interface TopFinancialProduct {
@@ -78,28 +108,34 @@ export interface TopFinancialProduct {
 export interface FinancialAnalyticsSummary {
   totalGrossRevenue: number;
   totalNetRevenue: number;
+  totalBuyerPaid: number;
+  totalPlatformSubsidy: number;
+  totalSellerDiscount: number;
+  totalShippingAndFees: number;
   totalRefunded: number;
   totalOrders: number;
   totalUnitsSold: number;
   averageOrderValue: number;
+  averageBuyerPaidValue: number;
+  totalCancelledOrders: number;
+  totalCancelledGross: number;
+  totalPaidThenCancelledOrders: number;
+  totalPaidThenCancelledGross: number;
   channelBreakdown: Record<FinancialChannel, ChannelMetrics>;
   timeline: DailyFinancialPoint[];
   topProducts: TopFinancialProduct[];
   filteredRecords: UnifiedFinancialRecord[];
+  allWindowRecords: UnifiedFinancialRecord[];
   primaryCurrency: string;
 }
 
-/**
- * Normalizes a WooCommerce webstore order into a unified financial record
- */
 export function normalizeWebstoreOrder(order: Order): UnifiedFinancialRecord {
   const st = String(order.status || '').replace('wc-', '').toLowerCase().trim();
-  
+
   const isCancelledOrFailed = ['cancelled', 'failed', 'trash', 'draft', 'checkout-draft', 'auto-draft'].includes(st);
   const isRefunded = ['refunded'].includes(st);
   const isPendingPayment = ['pending', 'on-hold'].includes(st);
 
-  // Confirmed paid statuses in WooCommerce / Exacoat ERP
   const isConfirmedPaidStatus = [
     'processing',
     'completed',
@@ -118,9 +154,8 @@ export function normalizeWebstoreOrder(order: Order): UnifiedFinancialRecord {
     'delivered',
   ].includes(st);
 
-  // Order is paid only if status is a confirmed paid fulfillment status or has explicit date_paid,
-  // and is NOT cancelled, failed, pending payment, or refunded
-  const isPaid = !isCancelledOrFailed && !isRefunded && !isPendingPayment && (isConfirmedPaidStatus || Boolean(order.date_paid));
+  const hadPayTime = Boolean(order.date_paid);
+  const isPaid = !isCancelledOrFailed && !isRefunded && !isPendingPayment && (isConfirmedPaidStatus || hadPayTime);
 
   let statusNormalized: 'paid' | 'pending' | 'cancelled' | 'refunded' = 'paid';
   if (isCancelledOrFailed) {
@@ -131,27 +166,50 @@ export function normalizeWebstoreOrder(order: Order): UnifiedFinancialRecord {
     statusNormalized = 'pending';
   }
 
-  const gross = Number(order.total) || 0;
-  const grossIdr = (order as any).total_idr || convertToIdr(gross, order.currency || 'IDR');
-  const refunded = Number(order.total_refunded) || 0;
-  const refundedIdr = convertToIdr(refunded, order.currency || 'IDR');
+  const rawTotal = Number(order.total) || 0;
+  const buyerPaidIdr = Number((order as any).total_idr) || convertToIdr(rawTotal, order.currency || 'IDR');
+  const fxMultiplier = rawTotal > 0 && buyerPaidIdr > 0 ? buyerPaidIdr / rawTotal : 0;
+  const toOrderIdr = (val: number) =>
+    fxMultiplier > 0 ? Math.round(val * fxMultiplier) : convertToIdr(val, order.currency || 'IDR');
+
+  const rawSubtotal = Number(order.subtotal) || 0;
+  const rawDiscount = Number(order.discount_total) || 0;
+  const rawShipping = Number(order.shipping_total) || 0;
+  const rawFee = Number(order.fee_total) || 0;
+
+  const items: UnifiedOrderItem[] = (order.items || order.line_items || []).map(item => {
+    const qty = Number(item.quantity) || 1;
+    const rawItemUnit = Number(item.price) || (Number(item.subtotal) ? Number(item.subtotal) / qty : Number(item.total) / qty) || 0;
+    const unitPriceIdr = toOrderIdr(rawItemUnit);
+    return {
+      name: item.name || 'Custom Skin',
+      quantity: qty,
+      price: unitPriceIdr,
+      originalPrice: unitPriceIdr,
+      salePrice: item.total ? toOrderIdr(Number(item.total) / qty) : unitPriceIdr,
+      sku: item.sku || '',
+      imageUrl: item.image_url || '',
+    };
+  });
+
+  const itemsSubtotalIdr = items.reduce((acc, it) => acc + it.price * it.quantity, 0);
+  const productSubtotalIdr = rawSubtotal > 0 ? toOrderIdr(rawSubtotal) : (itemsSubtotalIdr > 0 ? itemsSubtotalIdr : buyerPaidIdr);
+  const sellerDiscountIdr = toOrderIdr(rawDiscount + (rawFee < 0 ? Math.abs(rawFee) : 0));
+  const shippingAndFeesIdr = toOrderIdr(rawShipping + (rawFee > 0 ? rawFee : 0));
+  const refundedIdr = toOrderIdr(Number(order.total_refunded) || 0);
+
+  const potentialGross = productSubtotalIdr > 0 ? productSubtotalIdr : buyerPaidIdr;
+  const grossIdr = isPaid ? potentialGross : 0;
   const netIdr = isPaid ? Math.max(0, grossIdr - refundedIdr) : 0;
 
   const createdDate = order.created_at ? (parseStoreDate(order.created_at) || new Date(order.created_at)) : new Date();
   const timestamp = !isNaN(createdDate.getTime()) ? createdDate.getTime() : Date.now();
 
-  const items: UnifiedOrderItem[] = (order.items || order.line_items || []).map(item => ({
-    name: item.name || 'Custom Skin',
-    quantity: item.quantity || 1,
-    price: Number(item.price || item.total) || 0,
-    sku: item.sku || '',
-    imageUrl: item.image_url || '',
-  }));
-
   const totalItemsCount = order.item_count || items.reduce((acc, it) => acc + it.quantity, 0) || 1;
 
-  const customerName = order.customer_name || 
-    [order.billing?.first_name, order.billing?.last_name].filter(Boolean).join(' ') || 
+  const customerName =
+    order.customer_name ||
+    [order.billing?.first_name, order.billing?.last_name].filter(Boolean).join(' ') ||
     'Webstore Customer';
 
   return {
@@ -161,35 +219,43 @@ export function normalizeWebstoreOrder(order: Order): UnifiedFinancialRecord {
     timestamp,
     dateIso: getStoreDateKey(timestamp),
     dateFormatted: formatStoreDateFull(timestamp),
-    grossRevenue: isPaid ? grossIdr : 0,
+    dateTimeFormatted: order.created_at ? formatDateTime(order.created_at) : formatStoreDateFull(timestamp),
+    payTimeFormatted: order.date_paid ? formatDateTime(order.date_paid) : undefined,
+    grossRevenue: grossIdr,
+    potentialGrossRevenue: potentialGross,
+    originalProductPrice: potentialGross,
+    sellerDiscount: isPaid ? sellerDiscountIdr : 0,
+    platformSubsidy: 0,
+    shippingAndFees: isPaid ? shippingAndFeesIdr : 0,
+    buyerPaidAmount: isPaid ? buyerPaidIdr : 0,
+    potentialBuyerPaidAmount: buyerPaidIdr,
     netRevenue: netIdr,
     refundedAmount: refundedIdr,
     currency: 'IDR',
     status: st,
     statusNormalized,
     isPaid,
+    hadPayTime,
     itemsCount: totalItemsCount,
     items,
     customerName,
     customerEmail: order.customer_email || order.billing?.email,
     customerCity: order.shipping?.city || order.billing?.city,
     paymentMethod: order.payment_method_title || order.payment_method || 'Online Payment',
+    couponCodes: order.coupon_codes || [],
   };
 }
 
-/**
- * Normalizes a Shopee order into a unified financial record
- */
 export function normalizeShopeeOrder(order: ShopeeOrder): UnifiedFinancialRecord {
   const st = String(order.order_status || '').toUpperCase().trim();
-  
+
   const isCancelled = ['CANCELLED', 'IN_CANCEL'].includes(st);
   const isRefunded = ['TO_RETURN', 'REFUNDED'].includes(st);
   const isUnpaid = ['UNPAID'].includes(st);
   const isPaidStatus = ['READY_TO_SHIP', 'PROCESSED', 'SHIPPED', 'COMPLETED', 'TO_CONFIRM_RECEIVE'].includes(st);
 
-  // Shopee order is paid only if status is verified paid or has pay_time, and not cancelled/unpaid/refunded
-  const isPaid = !isCancelled && !isUnpaid && !isRefunded && (isPaidStatus || Boolean(order.pay_time));
+  const hadPayTime = Boolean(order.pay_time);
+  const isPaid = !isCancelled && !isUnpaid && !isRefunded && (isPaidStatus || hadPayTime);
 
   let statusNormalized: 'paid' | 'pending' | 'cancelled' | 'refunded' = 'paid';
   if (isCancelled) {
@@ -200,20 +266,42 @@ export function normalizeShopeeOrder(order: ShopeeOrder): UnifiedFinancialRecord
     statusNormalized = 'pending';
   }
 
-  const gross = Number(order.total_amount) || 0;
-  const net = isPaid ? gross : 0;
+  const items: UnifiedOrderItem[] = (order.items || []).map(item => {
+    const discPrice = Number(item.price) || 0;
+    const origPrice = Number(item.original_price) || discPrice;
+    return {
+      name: [item.item_name, item.model_name].filter(Boolean).join(' - ') || 'Shopee Item',
+      quantity: Number(item.quantity) || 1,
+      price: discPrice,
+      originalPrice: origPrice,
+      salePrice: discPrice,
+      sku: item.model_sku || item.item_sku || '',
+      imageUrl: item.image_url || '',
+    };
+  });
 
-  const timestamp = order.create_timestamp ? order.create_timestamp * 1000 : (
-    order.create_time ? (parseStoreDate(order.create_time)?.getTime() || new Date(order.create_time).getTime()) : Date.now()
-  );
+  // In Shopee Open API v2, item.price (model_discounted_price) is the seller product selling price
+  // before Shopee-subsidized platform vouchers and coins are deducted into order.total_amount.
+  const itemsSubtotal = items.reduce((acc, it) => acc + it.price * it.quantity, 0);
+  const originalSubtotal = items.reduce((acc, it) => acc + (it.originalPrice || it.price) * it.quantity, 0);
+  const rawBuyerPaid = Number(order.buyer_paid_amount ?? order.total_amount) || 0;
 
-  const items: UnifiedOrderItem[] = (order.items || []).map(item => ({
-    name: [item.item_name, item.model_name].filter(Boolean).join(' - ') || 'Shopee Item',
-    quantity: item.quantity || 1,
-    price: Number(item.price) || 0,
-    sku: item.model_sku || item.item_sku || '',
-    imageUrl: item.image_url || '',
-  }));
+  const potentialGross = Number(order.gross_amount) || (itemsSubtotal > 0 ? itemsSubtotal : rawBuyerPaid);
+  const potentialBuyerPaid = rawBuyerPaid > 0 ? rawBuyerPaid : (isPaid ? potentialGross : 0);
+  const sellerDiscountVal = Number(order.seller_discount) || Math.max(0, originalSubtotal - potentialGross);
+  const platformSubsidyVal =
+    Number(order.platform_voucher_subsidy) ||
+    (potentialBuyerPaid > 0 ? Math.max(0, potentialGross - potentialBuyerPaid) : 0);
+  const shippingAndFeesVal = potentialBuyerPaid > potentialGross ? potentialBuyerPaid - potentialGross : 0;
+
+  const gross = isPaid ? potentialGross : 0;
+  const net = isPaid ? potentialGross : 0;
+
+  const timestamp = order.create_timestamp
+    ? order.create_timestamp * 1000
+    : order.create_time
+    ? parseStoreDate(order.create_time)?.getTime() || new Date(order.create_time).getTime()
+    : Date.now();
 
   const totalItemsCount = items.reduce((acc, it) => acc + it.quantity, 0) || 1;
 
@@ -224,34 +312,41 @@ export function normalizeShopeeOrder(order: ShopeeOrder): UnifiedFinancialRecord
     timestamp,
     dateIso: getStoreDateKey(timestamp),
     dateFormatted: formatStoreDateFull(timestamp),
-    grossRevenue: isPaid ? gross : 0,
+    dateTimeFormatted: order.create_time ? formatDateTime(order.create_time) : formatStoreDateFull(timestamp),
+    payTimeFormatted: order.pay_time ? formatDateTime(order.pay_time) : undefined,
+    grossRevenue: gross,
+    potentialGrossRevenue: potentialGross,
+    originalProductPrice: originalSubtotal > 0 ? originalSubtotal : potentialGross,
+    sellerDiscount: isPaid ? sellerDiscountVal : 0,
+    platformSubsidy: isPaid ? platformSubsidyVal : 0,
+    shippingAndFees: isPaid ? shippingAndFeesVal : 0,
+    buyerPaidAmount: isPaid ? potentialBuyerPaid : 0,
+    potentialBuyerPaidAmount: potentialBuyerPaid,
     netRevenue: net,
-    refundedAmount: isRefunded ? gross : 0,
+    refundedAmount: isRefunded ? potentialGross : 0,
     currency: order.currency || 'IDR',
     status: st,
     statusNormalized,
     isPaid,
+    hadPayTime,
     itemsCount: totalItemsCount,
     items,
     customerName: order.recipient_name || order.buyer_username || 'Shopee Customer',
     customerCity: order.recipient_city,
-    paymentMethod: 'ShopeePay / COD',
+    paymentMethod: order.pay_time ? 'ShopeePay / Online' : 'COD / Shopee',
   };
 }
 
-/**
- * Normalizes a TikTok Shop order into a unified financial record
- */
 export function normalizeTikTokOrder(order: TikTokOrder): UnifiedFinancialRecord {
   const st = String(order.order_status || '').toUpperCase().trim();
-  
+
   const isCancelled = ['CANCELLED'].includes(st);
   const isRefunded = ['REFUNDED', 'RETURNED'].includes(st);
   const isUnpaid = ['UNPAID'].includes(st);
   const isPaidStatus = ['AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'].includes(st);
 
-  // TikTok order is paid only if status confirmed paid or has pay_time, and not cancelled/unpaid/refunded
-  const isPaid = !isCancelled && !isUnpaid && !isRefunded && (isPaidStatus || Boolean(order.pay_time));
+  const hadPayTime = Boolean(order.pay_time);
+  const isPaid = !isCancelled && !isUnpaid && !isRefunded && (isPaidStatus || hadPayTime);
 
   let statusNormalized: 'paid' | 'pending' | 'cancelled' | 'refunded' = 'paid';
   if (isCancelled) {
@@ -262,22 +357,53 @@ export function normalizeTikTokOrder(order: TikTokOrder): UnifiedFinancialRecord
     statusNormalized = 'pending';
   }
 
-  const gross = Number(order.total_amount) || 0;
-  const net = isPaid ? gross : 0;
+  const items: UnifiedOrderItem[] = (order.items || []).map(item => {
+    const qty = Number(item.quantity) || 1;
+    const itemPrice = Number(item.price) || 0;
+    const origPrice = Number(item.original_price) || itemPrice;
+    const salePrice = Number(item.sale_price) || itemPrice;
+    return {
+      name: [item.item_name, item.sku_name].filter(Boolean).join(' - ') || 'TikTok Item',
+      quantity: qty,
+      price: itemPrice,
+      originalPrice: origPrice,
+      salePrice,
+      sku: item.sku_id || '',
+      imageUrl: item.image_url || '',
+    };
+  });
 
-  const timestamp = order.create_timestamp ? order.create_timestamp * 1000 : (
-    order.create_time ? (parseStoreDate(order.create_time)?.getTime() || new Date(order.create_time).getTime()) : Date.now()
-  );
+  const itemsSubtotal = items.reduce((acc, it) => acc + it.price * it.quantity, 0);
+  const originalSubtotal = items.reduce((acc, it) => acc + (it.originalPrice || it.price) * it.quantity, 0);
+  const rawBuyerPaid = Number(order.buyer_paid_amount ?? order.total_amount) || 0;
 
-  const items: UnifiedOrderItem[] = (order.items || []).map(item => ({
-    name: [item.item_name, item.sku_name].filter(Boolean).join(' - ') || 'TikTok Item',
-    quantity: item.quantity || 1,
-    price: Number(item.price) || 0,
-    sku: item.sku_id || '',
-    imageUrl: item.image_url || '',
-  }));
+  const potentialGross = Number(order.gross_amount) || (itemsSubtotal > 0 ? itemsSubtotal : rawBuyerPaid);
+  const potentialBuyerPaid = rawBuyerPaid > 0 ? rawBuyerPaid : (isPaid ? potentialGross : 0);
+
+  const explicitSellerDisc = Number(order.seller_discount) || Math.max(0, originalSubtotal - potentialGross);
+  const explicitPlatDisc =
+    Number(order.platform_voucher_subsidy ?? order.platform_discount) ||
+    (potentialGross > potentialBuyerPaid ? potentialGross - potentialBuyerPaid : 0);
+  const explicitShipAndFees =
+    (Number(order.shipping_fee) || 0) + (Number(order.buyer_service_fee) || 0) ||
+    (potentialBuyerPaid > potentialGross ? potentialBuyerPaid - potentialGross : 0);
+
+  const gross = isPaid ? potentialGross : 0;
+  const net = isPaid ? potentialGross : 0;
+
+  const timestamp = order.create_timestamp
+    ? order.create_timestamp * 1000
+    : order.create_time
+    ? parseStoreDate(order.create_time)?.getTime() || new Date(order.create_time).getTime()
+    : Date.now();
 
   const totalItemsCount = items.reduce((acc, it) => acc + it.quantity, 0) || 1;
+
+  // Guard against legacy cached 1970 pay_time strings from dividing seconds by 1000
+  const validPayTime =
+    order.pay_time && !String(order.pay_time).startsWith('1970-')
+      ? formatDateTime(order.pay_time)
+      : undefined;
 
   return {
     id: `tt-${order.order_id || order.order_sn}`,
@@ -286,13 +412,23 @@ export function normalizeTikTokOrder(order: TikTokOrder): UnifiedFinancialRecord
     timestamp,
     dateIso: getStoreDateKey(timestamp),
     dateFormatted: formatStoreDateFull(timestamp),
-    grossRevenue: isPaid ? gross : 0,
+    dateTimeFormatted: order.create_time ? formatDateTime(order.create_time) : formatStoreDateFull(timestamp),
+    payTimeFormatted: validPayTime,
+    grossRevenue: gross,
+    potentialGrossRevenue: potentialGross,
+    originalProductPrice: originalSubtotal > 0 ? originalSubtotal : potentialGross,
+    sellerDiscount: isPaid ? explicitSellerDisc : 0,
+    platformSubsidy: isPaid ? explicitPlatDisc : 0,
+    shippingAndFees: isPaid ? explicitShipAndFees : 0,
+    buyerPaidAmount: isPaid ? potentialBuyerPaid : 0,
+    potentialBuyerPaidAmount: potentialBuyerPaid,
     netRevenue: net,
-    refundedAmount: isRefunded ? gross : 0,
+    refundedAmount: isRefunded ? potentialGross : 0,
     currency: order.currency || 'IDR',
     status: st,
     statusNormalized,
     isPaid,
+    hadPayTime,
     itemsCount: totalItemsCount,
     items,
     customerName: order.recipient_name || order.buyer_username || 'TikTok Buyer',
@@ -301,90 +437,78 @@ export function normalizeTikTokOrder(order: TikTokOrder): UnifiedFinancialRecord
   };
 }
 
-/**
- * Aggregates all financial records according to selected channels and timespan horizon.
- * Strictly excludes cancelled orders and any order that has not been paid.
- */
 export function aggregateFinancialMetrics(
   records: UnifiedFinancialRecord[],
   selectedChannels: FinancialChannel[] | 'all',
   startMs: number,
   endMs: number
 ): FinancialAnalyticsSummary {
-  // 1. Filter by timespan, channel, and strict payment validity
   const isAllChannels = selectedChannels === 'all' || selectedChannels.length === 3;
   const channelSet = new Set(isAllChannels ? ['webstore', 'shopee', 'tiktok'] : selectedChannels);
 
-  const filtered = records.filter(rec => {
-    // Channel filter
+  const inWindowRecords = records.filter(rec => {
     if (!channelSet.has(rec.channel)) return false;
-    // Timespan filter
     if (rec.timestamp < startMs || rec.timestamp > endMs) return false;
-    // Strict rule: do not include 'cancelled' status order or any order that hasn't been paid!
-    if (!rec.isPaid || rec.statusNormalized !== 'paid') return false;
     return true;
   });
 
-  // Sort chronological for calculations
-  filtered.sort((a, b) => a.timestamp - b.timestamp);
+  inWindowRecords.sort((a, b) => a.timestamp - b.timestamp);
+
+  const filtered = inWindowRecords.filter(rec => rec.isPaid && rec.statusNormalized === 'paid');
 
   let totalGross = 0;
   let totalNet = 0;
+  let totalBuyerPaid = 0;
+  let totalPlatformSubsidy = 0;
+  let totalSellerDiscount = 0;
+  let totalShippingAndFees = 0;
   let totalRefunded = 0;
   let totalOrders = 0;
   let totalUnits = 0;
+  let totalCancelledOrders = 0;
+  let totalCancelledGross = 0;
+  let totalPaidThenCancelledOrders = 0;
+  let totalPaidThenCancelledGross = 0;
+
+  const createEmptyChannelMetrics = (channel: FinancialChannel, label: string): ChannelMetrics => ({
+    channel,
+    label,
+    grossRevenue: 0,
+    netRevenue: 0,
+    buyerPaidAmount: 0,
+    platformSubsidy: 0,
+    sellerDiscount: 0,
+    shippingAndFees: 0,
+    ordersCount: 0,
+    unitsSold: 0,
+    aov: 0,
+    buyerPaidAov: 0,
+    percentageOfTotal: 0,
+    cancelledOrdersCount: 0,
+    cancelledGrossRevenue: 0,
+    paidThenCancelledCount: 0,
+    paidThenCancelledGross: 0,
+  });
 
   const breakdown: Record<FinancialChannel, ChannelMetrics> = {
-    webstore: {
-      channel: 'webstore',
-      label: 'Webstore (Direct)',
-      grossRevenue: 0,
-      netRevenue: 0,
-      ordersCount: 0,
-      unitsSold: 0,
-      aov: 0,
-      percentageOfTotal: 0,
-    },
-    shopee: {
-      channel: 'shopee',
-      label: 'Shopee Official',
-      grossRevenue: 0,
-      netRevenue: 0,
-      ordersCount: 0,
-      unitsSold: 0,
-      aov: 0,
-      percentageOfTotal: 0,
-    },
-    tiktok: {
-      channel: 'tiktok',
-      label: 'TikTok Shop',
-      grossRevenue: 0,
-      netRevenue: 0,
-      ordersCount: 0,
-      unitsSold: 0,
-      aov: 0,
-      percentageOfTotal: 0,
-    },
+    webstore: createEmptyChannelMetrics('webstore', 'Webstore (Direct)'),
+    shopee: createEmptyChannelMetrics('shopee', 'Shopee Official'),
+    tiktok: createEmptyChannelMetrics('tiktok', 'TikTok Shop'),
   };
 
   const dailyMap: Record<string, DailyFinancialPoint> = {};
   const productMap: Record<string, TopFinancialProduct> = {};
 
-  // Determine effective range for timeline generation
-  // For 'all' or wide horizons, prevent generating thousands of unused past days before any order occurred
   let effectiveStartMs = startMs;
-  if (filtered.length > 0) {
-    const earliestOrderTime = filtered[0].timestamp;
-    if (earliestOrderTime > startMs && (earliestOrderTime - startMs) > 180 * 24 * 60 * 60 * 1000) {
-      // Anchor 7 days before earliest order to show initial baseline
+  if (inWindowRecords.length > 0) {
+    const earliestOrderTime = inWindowRecords[0].timestamp;
+    if (earliestOrderTime > startMs && earliestOrderTime - startMs > 180 * 24 * 60 * 60 * 1000) {
       effectiveStartMs = Math.max(startMs, earliestOrderTime - 7 * 24 * 60 * 60 * 1000);
     }
   } else if (endMs - startMs > 180 * 24 * 60 * 60 * 1000) {
-    // If no orders and horizon is huge, show last 30 days window
     effectiveStartMs = endMs - 30 * 24 * 60 * 60 * 1000;
   }
 
-  // Pre-populate continuous days in timeline so zero-transaction days are NEVER skipped
   const continuousDays = generateContinuousDays(effectiveStartMs, endMs);
   continuousDays.forEach(d => {
     dailyMap[d.key] = {
@@ -395,26 +519,23 @@ export function aggregateFinancialMetrics(
       shopee: 0,
       tiktok: 0,
       total: 0,
+      webstoreBuyerPaid: 0,
+      shopeeBuyerPaid: 0,
+      tiktokBuyerPaid: 0,
+      totalBuyerPaid: 0,
+      totalVoucherSubsidy: 0,
+      totalSellerDiscount: 0,
+      totalShippingAndFees: 0,
       orders: 0,
+      cancelledOrders: 0,
+      cancelledGross: 0,
     };
   });
 
-  filtered.forEach(rec => {
-    totalGross += rec.grossRevenue;
-    totalNet += rec.netRevenue;
-    totalRefunded += rec.refundedAmount;
-    totalOrders += 1;
-    totalUnits += rec.itemsCount;
-
-    // Channel-specific
+  inWindowRecords.forEach(rec => {
     const ch = rec.channel;
-    breakdown[ch].grossRevenue += rec.grossRevenue;
-    breakdown[ch].netRevenue += rec.netRevenue;
-    breakdown[ch].ordersCount += 1;
-    breakdown[ch].unitsSold += rec.itemsCount;
-
-    // Timeline aggregation by date
     const dKey = rec.dateIso;
+
     if (!dailyMap[dKey]) {
       dailyMap[dKey] = {
         date: dKey,
@@ -424,14 +545,66 @@ export function aggregateFinancialMetrics(
         shopee: 0,
         tiktok: 0,
         total: 0,
+        webstoreBuyerPaid: 0,
+        shopeeBuyerPaid: 0,
+        tiktokBuyerPaid: 0,
+        totalBuyerPaid: 0,
+        totalVoucherSubsidy: 0,
+        totalSellerDiscount: 0,
+        totalShippingAndFees: 0,
         orders: 0,
+        cancelledOrders: 0,
+        cancelledGross: 0,
       };
     }
-    dailyMap[dKey][ch] += rec.netRevenue;
-    dailyMap[dKey].total += rec.netRevenue;
+
+    if (!rec.isPaid || rec.statusNormalized !== 'paid') {
+      totalCancelledOrders += 1;
+      totalCancelledGross += rec.potentialGrossRevenue;
+      breakdown[ch].cancelledOrdersCount += 1;
+      breakdown[ch].cancelledGrossRevenue += rec.potentialGrossRevenue;
+      dailyMap[dKey].cancelledOrders += 1;
+      dailyMap[dKey].cancelledGross += rec.potentialGrossRevenue;
+
+      if (rec.hadPayTime) {
+        totalPaidThenCancelledOrders += 1;
+        totalPaidThenCancelledGross += rec.potentialGrossRevenue;
+        breakdown[ch].paidThenCancelledCount += 1;
+        breakdown[ch].paidThenCancelledGross += rec.potentialGrossRevenue;
+      }
+      return;
+    }
+
+    totalGross += rec.grossRevenue;
+    totalNet += rec.netRevenue;
+    totalBuyerPaid += rec.buyerPaidAmount;
+    totalPlatformSubsidy += rec.platformSubsidy;
+    totalSellerDiscount += rec.sellerDiscount;
+    totalShippingAndFees += rec.shippingAndFees;
+    totalRefunded += rec.refundedAmount;
+    totalOrders += 1;
+    totalUnits += rec.itemsCount;
+
+    breakdown[ch].grossRevenue += rec.grossRevenue;
+    breakdown[ch].netRevenue += rec.netRevenue;
+    breakdown[ch].buyerPaidAmount += rec.buyerPaidAmount;
+    breakdown[ch].platformSubsidy += rec.platformSubsidy;
+    breakdown[ch].sellerDiscount += rec.sellerDiscount;
+    breakdown[ch].shippingAndFees += rec.shippingAndFees;
+    breakdown[ch].ordersCount += 1;
+    breakdown[ch].unitsSold += rec.itemsCount;
+
+    dailyMap[dKey][ch] += rec.grossRevenue;
+    dailyMap[dKey].total += rec.grossRevenue;
+    if (ch === 'webstore') dailyMap[dKey].webstoreBuyerPaid += rec.buyerPaidAmount;
+    if (ch === 'shopee') dailyMap[dKey].shopeeBuyerPaid += rec.buyerPaidAmount;
+    if (ch === 'tiktok') dailyMap[dKey].tiktokBuyerPaid += rec.buyerPaidAmount;
+    dailyMap[dKey].totalBuyerPaid += rec.buyerPaidAmount;
+    dailyMap[dKey].totalVoucherSubsidy += rec.platformSubsidy;
+    dailyMap[dKey].totalSellerDiscount += rec.sellerDiscount;
+    dailyMap[dKey].totalShippingAndFees += rec.shippingAndFees;
     dailyMap[dKey].orders += 1;
 
-    // Top products aggregation
     rec.items.forEach(it => {
       const pKey = it.name.trim().toLowerCase();
       if (!productMap[pKey]) {
@@ -445,27 +618,26 @@ export function aggregateFinancialMetrics(
         };
       }
       productMap[pKey].quantity += it.quantity;
-      productMap[pKey].revenue += (it.price * it.quantity);
+      productMap[pKey].revenue += it.price * it.quantity;
       if (!productMap[pKey].channels.includes(ch)) {
         productMap[pKey].channels.push(ch);
       }
     });
   });
 
-  // Calculate AOVs & percentages
-  const safeTotalNet = totalNet > 0 ? totalNet : 1;
+  const safeTotalGross = totalGross > 0 ? totalGross : 1;
   (['webstore', 'shopee', 'tiktok'] as FinancialChannel[]).forEach(ch => {
     const item = breakdown[ch];
-    item.aov = item.ordersCount > 0 ? Math.round(item.netRevenue / item.ordersCount) : 0;
-    item.percentageOfTotal = totalNet > 0 ? Math.round((item.netRevenue / safeTotalNet) * 100) : 0;
+    item.aov = item.ordersCount > 0 ? Math.round(item.grossRevenue / item.ordersCount) : 0;
+    item.buyerPaidAov = item.ordersCount > 0 ? Math.round(item.buyerPaidAmount / item.ordersCount) : 0;
+    item.percentageOfTotal = totalGross > 0 ? Math.round((item.grossRevenue / safeTotalGross) * 100) : 0;
   });
 
-  const aov = totalOrders > 0 ? Math.round(totalNet / totalOrders) : 0;
+  const aov = totalOrders > 0 ? Math.round(totalGross / totalOrders) : 0;
+  const buyerPaidAov = totalOrders > 0 ? Math.round(totalBuyerPaid / totalOrders) : 0;
 
-  // Timeline points sorted chronologically with continuous dates
   const timeline = Object.values(dailyMap).sort((a, b) => a.date.localeCompare(b.date));
 
-  // Top products sorted by revenue desc
   const topProducts = Object.values(productMap)
     .sort((a, b) => b.revenue - a.revenue || b.quantity - a.quantity)
     .slice(0, 10);
@@ -473,21 +645,28 @@ export function aggregateFinancialMetrics(
   return {
     totalGrossRevenue: totalGross,
     totalNetRevenue: totalNet,
+    totalBuyerPaid,
+    totalPlatformSubsidy,
+    totalSellerDiscount,
+    totalShippingAndFees,
     totalRefunded,
     totalOrders,
     totalUnitsSold: totalUnits,
     averageOrderValue: aov,
+    averageBuyerPaidValue: buyerPaidAov,
+    totalCancelledOrders,
+    totalCancelledGross,
+    totalPaidThenCancelledOrders,
+    totalPaidThenCancelledGross,
     channelBreakdown: breakdown,
     timeline,
     topProducts,
-    filteredRecords: filtered.slice().reverse(), // Newest first for ledger display
+    filteredRecords: filtered.slice().reverse(),
+    allWindowRecords: inWindowRecords.slice().reverse(),
     primaryCurrency: 'IDR',
   };
 }
 
-/**
- * Aggregates daily financial timeline points into weekly or monthly periods
- */
 export function aggregateTimelineByGranularity(
   dailyTimeline: DailyFinancialPoint[],
   granularity: FinancialGranularity
@@ -502,8 +681,8 @@ export function aggregateTimelineByGranularity(
     dailyTimeline.forEach(point => {
       const [yearStr, monthStr, dayStr] = point.date.split('-');
       const d = new Date(Date.UTC(Number(yearStr), Number(monthStr) - 1, Number(dayStr), 12, 0, 0));
-      
-      const dayOfWeek = d.getUTCDay(); // 0 is Sunday, 1 is Monday...
+
+      const dayOfWeek = d.getUTCDay();
       const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
       const monday = new Date(d);
       monday.setUTCDate(d.getUTCDate() + diffToMonday);
@@ -533,7 +712,16 @@ export function aggregateTimelineByGranularity(
           shopee: 0,
           tiktok: 0,
           total: 0,
+          webstoreBuyerPaid: 0,
+          shopeeBuyerPaid: 0,
+          tiktokBuyerPaid: 0,
+          totalBuyerPaid: 0,
+          totalVoucherSubsidy: 0,
+          totalSellerDiscount: 0,
+          totalShippingAndFees: 0,
           orders: 0,
+          cancelledOrders: 0,
+          cancelledGross: 0,
         };
       }
 
@@ -541,7 +729,16 @@ export function aggregateTimelineByGranularity(
       weeklyMap[weekKey].shopee += point.shopee;
       weeklyMap[weekKey].tiktok += point.tiktok;
       weeklyMap[weekKey].total += point.total;
+      weeklyMap[weekKey].webstoreBuyerPaid += point.webstoreBuyerPaid;
+      weeklyMap[weekKey].shopeeBuyerPaid += point.shopeeBuyerPaid;
+      weeklyMap[weekKey].tiktokBuyerPaid += point.tiktokBuyerPaid;
+      weeklyMap[weekKey].totalBuyerPaid += point.totalBuyerPaid;
+      weeklyMap[weekKey].totalVoucherSubsidy += point.totalVoucherSubsidy;
+      weeklyMap[weekKey].totalSellerDiscount += point.totalSellerDiscount;
+      weeklyMap[weekKey].totalShippingAndFees += point.totalShippingAndFees;
       weeklyMap[weekKey].orders += point.orders;
+      weeklyMap[weekKey].cancelledOrders += point.cancelledOrders;
+      weeklyMap[weekKey].cancelledGross += point.cancelledGross;
     });
 
     return Object.values(weeklyMap).sort((a, b) => a.date.localeCompare(b.date));
@@ -567,7 +764,16 @@ export function aggregateTimelineByGranularity(
           shopee: 0,
           tiktok: 0,
           total: 0,
+          webstoreBuyerPaid: 0,
+          shopeeBuyerPaid: 0,
+          tiktokBuyerPaid: 0,
+          totalBuyerPaid: 0,
+          totalVoucherSubsidy: 0,
+          totalSellerDiscount: 0,
+          totalShippingAndFees: 0,
           orders: 0,
+          cancelledOrders: 0,
+          cancelledGross: 0,
         };
       }
 
@@ -575,7 +781,16 @@ export function aggregateTimelineByGranularity(
       monthlyMap[monthKey].shopee += point.shopee;
       monthlyMap[monthKey].tiktok += point.tiktok;
       monthlyMap[monthKey].total += point.total;
+      monthlyMap[monthKey].webstoreBuyerPaid += point.webstoreBuyerPaid;
+      monthlyMap[monthKey].shopeeBuyerPaid += point.shopeeBuyerPaid;
+      monthlyMap[monthKey].tiktokBuyerPaid += point.tiktokBuyerPaid;
+      monthlyMap[monthKey].totalBuyerPaid += point.totalBuyerPaid;
+      monthlyMap[monthKey].totalVoucherSubsidy += point.totalVoucherSubsidy;
+      monthlyMap[monthKey].totalSellerDiscount += point.totalSellerDiscount;
+      monthlyMap[monthKey].totalShippingAndFees += point.totalShippingAndFees;
       monthlyMap[monthKey].orders += point.orders;
+      monthlyMap[monthKey].cancelledOrders += point.cancelledOrders;
+      monthlyMap[monthKey].cancelledGross += point.cancelledGross;
     });
 
     return Object.values(monthlyMap).sort((a, b) => a.date.localeCompare(b.date));
@@ -584,9 +799,6 @@ export function aggregateTimelineByGranularity(
   return dailyTimeline;
 }
 
-/**
- * Generates and triggers browser download of an official CSV financial report
- */
 export function exportFinancialReportToCsv(
   summary: FinancialAnalyticsSummary,
   dateLabel: string
@@ -601,8 +813,11 @@ export function exportFinancialReportToCsv(
     'Status',
     'Payment Method',
     'Items Count',
-    'Gross (IDR)',
-    'Net (IDR)',
+    'Gross Product Sales (IDR)',
+    'Seller Discount / Coupon (IDR)',
+    'Platform Voucher Subsidy (IDR)',
+    'Shipping & Fees (IDR)',
+    'Buyer Paid Total (IDR)',
     'Refunded (IDR)',
   ];
 
@@ -617,26 +832,35 @@ export function exportFinancialReportToCsv(
     `"${(rec.paymentMethod || '-').replace(/"/g, '""')}"`,
     rec.itemsCount,
     rec.grossRevenue,
-    rec.netRevenue,
+    rec.sellerDiscount,
+    rec.platformSubsidy,
+    rec.shippingAndFees,
+    rec.buyerPaidAmount,
     rec.refundedAmount,
   ]);
 
-  // Prepend summary rows
   const summaryBlock = [
     ['EXACOAT FINANCIAL REVENUE REPORT'],
     [`Period: ${dateLabel}`],
     [`Generated: ${new Date().toLocaleString()}`],
-    [`Total Gross Revenue (IDR): ${summary.totalGrossRevenue}`],
-    [`Total Net Revenue (IDR): ${summary.totalNetRevenue}`],
-    [`Total Orders: ${summary.totalOrders}`],
-    [`Total Units Sold: ${summary.totalUnitsSold}`],
-    [`Average Order Value (IDR): ${summary.averageOrderValue}`],
+    [`Gross Product Sales (IDR): ${summary.totalGrossRevenue}`],
+    [`Platform Voucher Subsidies (IDR): ${summary.totalPlatformSubsidy}`],
+    [`Seller Discounts / Coupons (IDR): ${summary.totalSellerDiscount}`],
+    [`Shipping & Buyer Fees (IDR): ${summary.totalShippingAndFees}`],
+    [`Buyer Paid Cash Total (IDR): ${summary.totalBuyerPaid}`],
+    [`Paid Orders: ${summary.totalOrders}`],
+    [`Units Sold: ${summary.totalUnitsSold}`],
+    [`Excluded Cancelled / Unpaid Orders: ${summary.totalCancelledOrders} (Rp ${summary.totalCancelledGross})`],
+    [`Gross Average Order Value (IDR): ${summary.averageOrderValue}`],
+    [`Buyer Paid Average Order Value (IDR): ${summary.averageBuyerPaidValue}`],
     ['------------------------------------------'],
     headers,
   ];
 
-  const csvContent = 'data:text/csv;charset=utf-8,' + 
-    summaryBlock.map(e => (Array.isArray(e) ? e.join(',') : e)).join('\n') + '\n' +
+  const csvContent =
+    'data:text/csv;charset=utf-8,' +
+    summaryBlock.map(e => (Array.isArray(e) ? e.join(',') : e)).join('\n') +
+    '\n' +
     rows.map(e => e.join(',')).join('\n');
 
   const encodedUri = encodeURI(csvContent);

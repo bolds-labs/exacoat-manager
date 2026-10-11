@@ -641,17 +641,45 @@ class Exacoat_TikTok_Client {
 		$claim_info = self::check_existing_claim( $order_id );
 
 		$items = [];
+		$items_gross_subtotal = 0.0;
+		$items_orig_subtotal = 0.0;
 		foreach ( ( $ord['line_items'] ?? ( $ord['item_list'] ?? [] ) ) as $item ) {
+			$qty           = (int) ( $item['quantity'] ?? 1 );
+			$sale_price    = (float) ( $item['sale_price'] ?? ( $item['item_price'] ?? 0 ) );
+			$orig_price    = (float) ( $item['original_price'] ?? $sale_price );
+			$seller_disc   = (float) ( $item['seller_discount'] ?? 0 );
+			$platform_disc = (float) ( $item['platform_discount'] ?? 0 );
+			$gross_price   = $orig_price > 0 ? max( $sale_price, $orig_price - $seller_disc ) : ( $sale_price + $platform_disc );
+
+			$items_gross_subtotal += $gross_price * $qty;
+			$items_orig_subtotal  += $orig_price * $qty;
+
 			$items[] = [
-				'item_id'    => (string) ( $item['id'] ?? ( $item['item_id'] ?? '' ) ),
-				'item_name'  => trim( (string) ( $item['product_name'] ?? ( $item['item_name'] ?? 'Exacoat Skin' ) ) ),
-				'sku_id'     => (string) ( $item['sku_id'] ?? '' ),
-				'sku_name'   => trim( (string) ( $item['sku_name'] ?? ( $item['model_name'] ?? '' ) ) ),
-				'quantity'   => (int) ( $item['quantity'] ?? 1 ),
-				'price'      => (float) ( $item['sale_price'] ?? ( $item['item_price'] ?? 0 ) ),
-				'image_url'  => (string) ( $item['sku_image'] ?? ( $item['image_url'] ?? '' ) ),
+				'item_id'           => (string) ( $item['id'] ?? ( $item['item_id'] ?? '' ) ),
+				'item_name'         => trim( (string) ( $item['product_name'] ?? ( $item['item_name'] ?? 'Exacoat Skin' ) ) ),
+				'sku_id'            => (string) ( $item['sku_id'] ?? '' ),
+				'sku_name'          => trim( (string) ( $item['sku_name'] ?? ( $item['model_name'] ?? '' ) ) ),
+				'quantity'          => $qty,
+				'price'             => $gross_price > 0 ? $gross_price : $sale_price,
+				'sale_price'        => $sale_price,
+				'original_price'    => $orig_price,
+				'seller_discount'   => $seller_disc,
+				'platform_discount' => $platform_disc,
+				'image_url'         => (string) ( $item['sku_image'] ?? ( $item['image_url'] ?? '' ) ),
 			];
 		}
+
+		$payment            = $ord['payment'] ?? [];
+		$buyer_total_amount = (float) ( $payment['total_amount'] ?? ( $ord['total_amount'] ?? 0 ) );
+		$orig_total_prod    = (float) ( $payment['original_total_product_price'] ?? $items_orig_subtotal );
+		$total_seller_disc  = (float) ( $payment['seller_discount'] ?? 0 );
+		$total_plat_disc    = (float) ( $payment['platform_discount'] ?? 0 );
+		$buyer_sub_total    = (float) ( $payment['sub_total'] ?? 0 );
+		$shipping_fee       = (float) ( $payment['shipping_fee'] ?? 0 );
+		$buyer_service_fee  = (float) ( $payment['buyer_service_fee'] ?? 0 );
+		$gross_amount       = $orig_total_prod > 0
+			? max( $buyer_sub_total, $orig_total_prod - $total_seller_disc )
+			: ( $items_gross_subtotal > 0 ? $items_gross_subtotal : $buyer_total_amount );
 
 		$rec = $ord['recipient_address'] ?? [];
 		$packages = $ord['packages'] ?? ( $ord['package_list'] ?? [] );
@@ -666,31 +694,45 @@ class Exacoat_TikTok_Client {
 		}
 		$ship_by_date = $ship_by_ts ? date( 'Y-m-d H:i:s', $ship_by_ts ) : null;
 
+		$paid_ts = null;
+		if ( ! empty( $ord['paid_time'] ) && is_numeric( $ord['paid_time'] ) ) {
+			$paid_ts = strlen( (string) $ord['paid_time'] ) > 10 ? (int) ( $ord['paid_time'] / 1000 ) : (int) $ord['paid_time'];
+		}
+
 		return [
-			'order_id'           => $order_id,
-			'order_sn'           => $order_id,
-			'order_status'       => $raw_status,
-			'create_time'        => ! empty( $ord['create_time'] ) ? ( function_exists( 'wp_date' ) ? wp_date( 'Y-m-d H:i:s', is_numeric( $ord['create_time'] ) && strlen( (string) $ord['create_time'] ) > 10 ? (int) ( $ord['create_time'] / 1000 ) : (int) $ord['create_time'] ) : date( 'Y-m-d H:i:s', is_numeric( $ord['create_time'] ) && strlen( (string) $ord['create_time'] ) > 10 ? (int) ( $ord['create_time'] / 1000 ) : (int) $ord['create_time'] ) ) : ( function_exists( 'wp_date' ) ? wp_date( 'Y-m-d H:i:s' ) : date( 'Y-m-d H:i:s' ) ),
-			'create_timestamp'   => ! empty( $ord['create_time'] ) && is_numeric( $ord['create_time'] ) && strlen( (string) $ord['create_time'] ) > 10 ? (int) ( $ord['create_time'] / 1000 ) : (int) ( $ord['create_time'] ?? time() ),
-			'pay_time'           => ! empty( $ord['paid_time'] ) ? ( function_exists( 'wp_date' ) ? wp_date( 'Y-m-d H:i:s', (int) ( $ord['paid_time'] / 1000 ) ) : date( 'Y-m-d H:i:s', (int) ( $ord['paid_time'] / 1000 ) ) ) : null,
-			'ship_by_date'       => $ship_by_date,
-			'ship_by_timestamp'  => $ship_by_ts,
-			'buyer_username'     => (string) ( $ord['buyer_email'] ?? ( $rec['name'] ?? 'TikTok Customer' ) ),
-			'buyer_uid'          => (string) ( $ord['buyer_uid'] ?? '' ),
-			'total_amount'       => (float) ( $ord['payment']['total_amount'] ?? ( $ord['total_amount'] ?? 0 ) ),
-			'currency'           => (string) ( $ord['payment']['currency'] ?? 'IDR' ),
-			'shipping_carrier'   => (string) ( $package['shipping_provider_name'] ?? ( $ord['shipping_provider'] ?? 'J&T / Ninja Van' ) ),
-			'tracking_number'    => (string) ( $package['tracking_number'] ?? ( $ord['tracking_number'] ?? '' ) ),
-			'package_id'         => (string) ( $package['id'] ?? ( $package['package_id'] ?? '' ) ),
-			'buyer_note'         => (string) ( $ord['buyer_message'] ?? ( $ord['note'] ?? '' ) ),
-			'recipient_name'     => (string) ( $rec['name'] ?? 'TikTok Customer' ),
-			'recipient_phone'    => (string) ( $rec['phone_number'] ?? ( $rec['phone'] ?? '' ) ),
-			'recipient_address'  => (string) ( $rec['full_address'] ?? ( $rec['address_line1'] ?? '' ) ),
-			'recipient_city'     => (string) ( $rec['district_info'][2]['address_name'] ?? ( $rec['city'] ?? '' ) ),
-			'recipient_postcode' => (string) ( $rec['postal_code'] ?? ( $rec['zipcode'] ?? '' ) ),
-			'items'              => $items,
-			'already_claimed'    => $claim_info['already_claimed'],
-			'existing_claim'     => $claim_info,
+			'order_id'                 => $order_id,
+			'order_sn'                 => $order_id,
+			'order_status'             => $raw_status,
+			'create_time'              => ! empty( $ord['create_time'] ) ? ( function_exists( 'wp_date' ) ? wp_date( 'Y-m-d H:i:s', is_numeric( $ord['create_time'] ) && strlen( (string) $ord['create_time'] ) > 10 ? (int) ( $ord['create_time'] / 1000 ) : (int) $ord['create_time'] ) : date( 'Y-m-d H:i:s', is_numeric( $ord['create_time'] ) && strlen( (string) $ord['create_time'] ) > 10 ? (int) ( $ord['create_time'] / 1000 ) : (int) $ord['create_time'] ) ) : ( function_exists( 'wp_date' ) ? wp_date( 'Y-m-d H:i:s' ) : date( 'Y-m-d H:i:s' ) ),
+			'create_timestamp'         => ! empty( $ord['create_time'] ) && is_numeric( $ord['create_time'] ) && strlen( (string) $ord['create_time'] ) > 10 ? (int) ( $ord['create_time'] / 1000 ) : (int) ( $ord['create_time'] ?? time() ),
+			'pay_time'                 => $paid_ts ? ( function_exists( 'wp_date' ) ? wp_date( 'Y-m-d H:i:s', $paid_ts ) : date( 'Y-m-d H:i:s', $paid_ts ) ) : null,
+			'ship_by_date'             => $ship_by_date,
+			'ship_by_timestamp'        => $ship_by_ts,
+			'buyer_username'           => (string) ( $ord['buyer_email'] ?? ( $rec['name'] ?? 'TikTok Customer' ) ),
+			'buyer_uid'                => (string) ( $ord['buyer_uid'] ?? '' ),
+			'total_amount'             => $buyer_total_amount,
+			'gross_amount'             => $gross_amount,
+			'original_amount'          => $orig_total_prod > 0 ? $orig_total_prod : $gross_amount,
+			'buyer_paid_amount'        => $buyer_total_amount,
+			'buyer_subtotal'           => $buyer_sub_total,
+			'seller_discount'          => $total_seller_disc,
+			'platform_discount'        => $total_plat_disc,
+			'platform_voucher_subsidy' => $total_plat_disc,
+			'shipping_fee'             => $shipping_fee,
+			'buyer_service_fee'        => $buyer_service_fee,
+			'currency'                 => (string) ( $payment['currency'] ?? 'IDR' ),
+			'shipping_carrier'         => (string) ( $package['shipping_provider_name'] ?? ( $ord['shipping_provider'] ?? 'J&T / Ninja Van' ) ),
+			'tracking_number'          => (string) ( $package['tracking_number'] ?? ( $ord['tracking_number'] ?? '' ) ),
+			'package_id'               => (string) ( $package['id'] ?? ( $package['package_id'] ?? '' ) ),
+			'buyer_note'               => (string) ( $ord['buyer_message'] ?? ( $ord['note'] ?? '' ) ),
+			'recipient_name'           => (string) ( $rec['name'] ?? 'TikTok Customer' ),
+			'recipient_phone'          => (string) ( $rec['phone_number'] ?? ( $rec['phone'] ?? '' ) ),
+			'recipient_address'        => (string) ( $rec['full_address'] ?? ( $rec['address_line1'] ?? '' ) ),
+			'recipient_city'           => (string) ( $rec['district_info'][2]['address_name'] ?? ( $rec['city'] ?? '' ) ),
+			'recipient_postcode'       => (string) ( $rec['postal_code'] ?? ( $rec['zipcode'] ?? '' ) ),
+			'items'                    => $items,
+			'already_claimed'          => $claim_info['already_claimed'],
+			'existing_claim'           => $claim_info,
 		];
 	}
 
