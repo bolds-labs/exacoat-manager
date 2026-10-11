@@ -4353,9 +4353,6 @@ class Exacoat_Configurator_Engine {
 			if ( function_exists( 'do_action' ) ) {
 				do_action( 'litespeed_purge_post', $product_id );
 			}
-			if ( class_exists( '\LiteSpeed\Purge' ) ) {
-				\LiteSpeed\Purge::purge_post( $product_id );
-			}
 			$rest_id_url = rest_url( "wc/v3/products/{$product_id}" );
 			if ( function_exists( 'do_action' ) ) {
 				do_action( 'litespeed_purge_url', $rest_id_url );
@@ -4375,9 +4372,6 @@ class Exacoat_Configurator_Engine {
 		if ( $purge_all ) {
 			if ( function_exists( 'do_action' ) ) {
 				do_action( 'litespeed_purge_all' );
-			}
-			if ( class_exists( '\LiteSpeed\Purge' ) ) {
-				\LiteSpeed\Purge::purge_all();
 			}
 			$litespeed_purged[] = 'all';
 		}
@@ -4519,8 +4513,20 @@ class Exacoat_Configurator_Engine {
 		$params = $request->get_json_params() ?: $request->get_params();
 		$results = self::trigger_storefront_revalidation( $params );
 
+		$nextjs_success = false;
+		if ( ! empty( $results['nextjs'] ) && is_array( $results['nextjs'] ) ) {
+			foreach ( $results['nextjs'] as $target_res ) {
+				if ( ! empty( $target_res['success'] ) ) {
+					$nextjs_success = true;
+					break;
+				}
+			}
+		}
+		$cf_success = ! empty( $results['cloudflare']['success'] );
+		$ls_success = ! empty( $results['litespeed']['success'] );
+
 		return rest_ensure_response( [
-			'success' => ( ! empty( $results['nextjs']['success'] ) || ! empty( $results['cloudflare']['success'] ) ),
+			'success' => ( $nextjs_success || $cf_success || $ls_success ),
 			'results' => $results,
 			'message' => 'Storefront web cache revalidation completed.',
 		] );
