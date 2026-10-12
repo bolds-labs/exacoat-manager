@@ -59,13 +59,63 @@ export function isStorePickupOrder(order: Partial<Order> | any): boolean {
   }
 
 
-  // 1. Check if checkout customer note or shipping lines explicitly specify courier delivery
+  // 1. Check Order Meta Data for store pickup tags
+  const metaList = Array.isArray(order.meta_data) ? order.meta_data : [];
+  for (const m of metaList) {
+    const k = String(m?.key || '').toLowerCase();
+    const v = String(m?.value || '').toLowerCase();
+    if (
+      (k === 'is_store_pickup' || k === '_is_store_pickup' || k === '_store_pickup') &&
+      (v === '1' || v === 'yes' || v === 'true')
+    ) {
+      return true;
+    }
+    if (
+      (k === '_shipping_method' || k === '_chosen_shipping_methods' || k === '_order_shipping_type') &&
+      (v.includes('pickup') || v.includes('local_pickup'))
+    ) {
+      return true;
+    }
+    if (k === '_biteship_courier_code' && v === 'pickup') {
+      return true;
+    }
+  }
+
+  // 2. Check destination address (if pointing to Exacoat Store / Summarecon Bekasi / Ruby Commercial)
+  const shippingCompany = String(order.shipping?.company || order.billing?.company || '').toLowerCase();
+  const shippingAddr1 = String(order.shipping?.address_1 || order.billing?.address_1 || '').toLowerCase();
+  const shippingAddr2 = String(order.shipping?.address_2 || order.billing?.address_2 || '').toLowerCase();
+  const shippingPostcode = String(order.shipping?.postcode || order.billing?.postcode || '').trim();
+
+  if (shippingCompany.includes('exacoat store') || shippingCompany.includes('store bekasi')) {
+    return true;
+  }
+  if (
+    (shippingAddr1.includes('ruby commercial') || shippingAddr1.includes('summarecon bekasi') || shippingAddr2.includes('summarecon bekasi')) &&
+    (shippingPostcode === '17142' || shippingAddr1.includes('bekasi') || shippingAddr2.includes('bekasi'))
+  ) {
+    return true;
+  }
+
+  // 3. Check Courier / Carrier info
+  const courier = String(order.tracking?.courier || '').toLowerCase().trim();
+  const carrierId = String(order.tracking?.carrier_id || '').toLowerCase().trim();
+  if (
+    courier === 'pickup' ||
+    courier === 'store pickup' ||
+    carrierId === 'pickup' ||
+    carrierId === 'local_pickup'
+  ) {
+    return true;
+  }
+
+  // 4. Check if checkout customer note or shipping lines explicitly specify courier delivery
   const customerNote = String(order.customer_note || '').toLowerCase();
   const isExplicitCourierNote = customerNote.includes('shipping courier:') ||
     customerNote.includes('jasa kirim:') ||
     customerNote.includes('courier:');
 
-  // 2. Check shipping method name & title from various WooCommerce properties
+  // 5. Check shipping method name & title from various WooCommerce properties
   const shippingMethodName = String(
     order.shipping_method_name ||
     order.shipping_method ||
@@ -85,20 +135,6 @@ export function isStorePickupOrder(order: Partial<Order> | any): boolean {
         .join(' ')
         .toLowerCase()
     : '';
-
-  // If a standard courier was explicitly selected at checkout (e.g. SICEPAT, JNE, POS), it is NOT store pickup
-  const courierBrands = ['sicepat', 'jne', 'pos', 'j&t', 'jnt', 'lion', 'tiki', 'anteraja', 'goorita', 'dhl', 'fedex', 'biteship'];
-  const hasCourierBrand = courierBrands.some(brand => 
-    shippingMethodName.includes(brand) || 
-    shippingMethodId.includes(brand) || 
-    allShippingLinesStr.includes(brand) ||
-    customerNote.includes(`courier: ${brand}`) ||
-    customerNote.includes(`courier: ${brand.toUpperCase()}`)
-  );
-
-  if (hasCourierBrand && !shippingMethodName.includes('pickup') && !shippingMethodId.includes('pickup')) {
-    return false;
-  }
 
   const pickupKeywords = [
     'local_pickup',
@@ -122,19 +158,7 @@ export function isStorePickupOrder(order: Partial<Order> | any): boolean {
     }
   }
 
-  // 3. Check Courier / Carrier info
-  const courier = String(order.tracking?.courier || '').toLowerCase().trim();
-  const carrierId = String(order.tracking?.carrier_id || '').toLowerCase().trim();
-  if (
-    courier === 'pickup' ||
-    courier === 'store pickup' ||
-    carrierId === 'pickup' ||
-    carrierId === 'local_pickup'
-  ) {
-    return true;
-  }
-
-  // 4. Check Order Customer Notes (only if NOT an explicit courier note)
+  // 6. Check Order Customer Notes (only if NOT an explicit courier note)
   if (!isExplicitCourierNote) {
     if (
       customerNote.includes('ambil di toko') ||
@@ -145,26 +169,18 @@ export function isStorePickupOrder(order: Partial<Order> | any): boolean {
     }
   }
 
-  // 5. Check Order Meta Data
-  const metaList = Array.isArray(order.meta_data) ? order.meta_data : [];
-  for (const m of metaList) {
-    const k = String(m?.key || '').toLowerCase();
-    const v = String(m?.value || '').toLowerCase();
-    if (
-      (k === 'is_store_pickup' || k === '_is_store_pickup' || k === '_store_pickup') &&
-      (v === '1' || v === 'yes' || v === 'true')
-    ) {
-      return true;
-    }
-    if (
-      (k === '_shipping_method' || k === '_chosen_shipping_methods' || k === '_order_shipping_type') &&
-      (v.includes('pickup') || v.includes('local_pickup'))
-    ) {
-      return true;
-    }
-    if (k === '_biteship_courier_code' && v === 'pickup') {
-      return true;
-    }
+  // 7. If a standard courier was explicitly selected at checkout (e.g. SICEPAT, JNE, POS), it is NOT store pickup
+  const courierBrands = ['sicepat', 'jne', 'pos', 'j&t', 'jnt', 'lion', 'tiki', 'anteraja', 'goorita', 'dhl', 'fedex', 'biteship'];
+  const hasCourierBrand = courierBrands.some(brand => 
+    shippingMethodName.includes(brand) || 
+    shippingMethodId.includes(brand) || 
+    allShippingLinesStr.includes(brand) ||
+    customerNote.includes(`courier: ${brand}`) ||
+    customerNote.includes(`courier: ${brand.toUpperCase()}`)
+  );
+
+  if (hasCourierBrand && !shippingMethodName.includes('pickup') && !shippingMethodId.includes('pickup')) {
+    return false;
   }
 
   return false;

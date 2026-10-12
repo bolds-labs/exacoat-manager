@@ -134,6 +134,14 @@ class Exacoat_Tracking_Pool {
 				'permission_callback' => [ __CLASS__, 'check_permission' ],
 			],
 		] );
+
+		register_rest_route( 'exacoat-core/v1', '/tracking-pool/return', [
+			[
+				'methods'             => \WP_REST_Server::CREATABLE,
+				'callback'            => [ __CLASS__, 'rest_return_number' ],
+				'permission_callback' => [ __CLASS__, 'check_permission' ],
+			],
+		] );
 	}
 
 	/**
@@ -324,6 +332,95 @@ class Exacoat_Tracking_Pool {
 			'deleted_count' => $deleted_count,
 			'total_pool'    => count( $new_pool ),
 			'carrier'       => $carrier,
+		];
+	}
+
+	/**
+	 * Return a tracking number back to the pool (e.g. order converted to pickup or cancelled)
+	 */
+	public static function return_tracking_number( string $raw_carrier, string $number, int $order_id = 0, string $reason = '' ): array {
+		$carrier = self::normalize_carrier( $raw_carrier );
+		if ( empty( $carrier ) ) {
+			return [ 'success' => false, 'error' => 'Invalid carrier' ];
+		}
+
+		$clean_num = trim( $number );
+		if ( empty( $clean_num ) ) {
+			return [ 'success' => false, 'error' => 'Tracking number is empty' ];
+		}
+
+		$pool_key     = self::OPTION_PREFIX_POOL . $carrier;
+		$assigned_key = self::OPTION_PREFIX_ASSIGNED . $carrier;
+
+		$pool     = get_option( $pool_key, [] );
+		$assigned = get_option( $assigned_key, [] );
+
+		if ( ! is_array( $pool ) ) $pool = [];
+		if ( ! is_array( $assigned ) ) $assigned = [];
+
+		// Prepend to pool if not already in pool
+		if ( ! in_array( $clean_num, $pool, true ) ) {
+			array_unshift( $pool, $clean_num );
+			update_option( $pool_key, array_values( $pool ), false );
+		}
+
+		// Remove from assigned ledger
+		$new_assigned  = [];
+		$removed_count = 0;
+		foreach ( $assigned as $item ) {
+			if ( is_array( $item ) && ( $item['number'] ?? '' ) === $clean_num && ( ! $order_id || (int) ( $item['order_id'] ?? 0 ) === $order_id ) ) {
+				$removed_count++;
+				continue;
+			}
+			$new_assigned[] = $item;
+		}
+		if ( $removed_count > 0 ) {
+			update_option( $assigned_key, array_values( $new_assigned ), false );
+		}
+
+		// Clear from order if order_id specified
+		if ( $order_id > 0 ) {
+			$order = wc_get_order( $order_id );
+			if ( $order ) {
+				$order->delete_meta_data( 'tracking_number' );
+				$order->delete_meta_data( '_tracking_number' );
+				$order->delete_meta_data( '_ywot_tracking_code' );
+				$order->delete_meta_data( '_ywot_carrier_id' );
+				$order->delete_meta_data( '_exacoat_tracking_number' );
+				$order->delete_meta_data( '_artmatter_tracking_number' );
+				$order->delete_meta_data( 'carrier_id' );
+				$order->delete_meta_data( '_carrier_id' );
+				$order->delete_meta_data( '_wc_shipment_tracking_items' );
+				$order->delete_meta_data( '_exacoat_tracking_note_logged_number' );
+				$order->delete_meta_data( '_exacoat_tracking_note_logged_carrier' );
+
+				delete_post_meta( $order_id, 'tracking_number' );
+				delete_post_meta( $order_id, '_tracking_number' );
+				delete_post_meta( $order_id, '_ywot_tracking_code' );
+				delete_post_meta( $order_id, '_ywot_carrier_id' );
+				delete_post_meta( $order_id, '_exacoat_tracking_number' );
+				delete_post_meta( $order_id, '_artmatter_tracking_number' );
+				delete_post_meta( $order_id, 'carrier_id' );
+				delete_post_meta( $order_id, '_carrier_id' );
+				delete_post_meta( $order_id, '_wc_shipment_tracking_items' );
+
+				if ( ! empty( $reason ) ) {
+					$order->add_order_note( sprintf( '%s tracking %s returned to pool. Reason: %s', strtoupper( $carrier ), $clean_num, $reason ) );
+				}
+				$order->save();
+			}
+		}
+
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::log( 'info', 'tracking_pool', sprintf( 'Returned %s tracking %s to pool. New pool count: %d. Reason: %s', strtoupper( $carrier ), $clean_num, count( $pool ), $reason ) );
+		}
+
+		return [
+			'success'       => true,
+			'carrier'       => $carrier,
+			'number'        => $clean_num,
+			'total_pool'    => count( $pool ),
+			'removed_from_assigned' => $removed_count,
 		];
 	}
 
@@ -522,10 +619,76 @@ class Exacoat_Tracking_Pool {
 	}
 
 	/**
+	 * Thorough check if an order is a Store Pickup (SMB) order.
+	 * Checks status, metadata, shipping address (Exacoat Store Bekasi / Ruby Commercial), shipping lines, and customer note.
+	 */
+	public static function is_store_pickup_order( $order ): bool {
+		if ( ! $order ) {
+			return false;
+		}
+		if ( is_numeric( $order ) ) {
+			$order = wc_get_order( (int) $order );
+			if ( ! $order ) {
+				return false;
+			}
+		}
+
+		$status = str_replace( 'wc-', '', $order->get_status() );
+		if ( in_array( $status, [ 'smb-ready', 'smb-picked' ], true ) ) {
+			return true;
+		}
+
+		$meta_pickup = (string) ( $order->get_meta( '_is_store_pickup' ) ?: ( $order->get_meta( 'is_store_pickup' ) ?: ( $order->get_meta( 'store_pickup' ) ?: '' ) ) );
+		if ( in_array( strtolower( trim( $meta_pickup ) ), [ 'yes', '1', 'true' ], true ) ) {
+			return true;
+		}
+
+		$shipping_company  = strtolower( trim( (string) $order->get_shipping_company() ?: (string) $order->get_billing_company() ) );
+		$shipping_addr1    = strtolower( trim( (string) $order->get_shipping_address_1() ?: (string) $order->get_billing_address_1() ) );
+		$shipping_addr2    = strtolower( trim( (string) $order->get_shipping_address_2() ?: (string) $order->get_billing_address_2() ) );
+		$shipping_postcode = trim( (string) $order->get_shipping_postcode() ?: (string) $order->get_billing_postcode() );
+
+		if ( str_contains( $shipping_company, 'exacoat store' ) || str_contains( $shipping_company, 'store bekasi' ) ) {
+			return true;
+		}
+
+		if (
+			( str_contains( $shipping_addr1, 'ruby commercial' ) || str_contains( $shipping_addr1, 'summarecon bekasi' ) || str_contains( $shipping_addr2, 'summarecon bekasi' ) ) &&
+			( '17142' === $shipping_postcode || str_contains( $shipping_addr1, 'bekasi' ) || str_contains( $shipping_addr2, 'bekasi' ) )
+		) {
+			return true;
+		}
+
+		if ( method_exists( $order, 'get_items' ) ) {
+			foreach ( $order->get_items( 'shipping' ) as $s_item ) {
+				$m_id    = strtolower( (string) $s_item->get_method_id() );
+				$m_title = strtolower( (string) $s_item->get_method_title() );
+				if ( str_contains( $m_id, 'local_pickup' ) || str_contains( $m_id, 'pickup' ) ) {
+					return true;
+				}
+				if ( str_contains( $m_title, 'pickup' ) || str_contains( $m_title, 'ambil di toko' ) || str_contains( $m_title, 'ambil sendiri' ) ) {
+					return true;
+				}
+			}
+		}
+
+		$cust_note = strtolower( (string) $order->get_customer_note() );
+		if ( str_contains( $cust_note, 'ambil di toko' ) || str_contains( $cust_note, 'ambil sendiri' ) || str_contains( $cust_note, 'store pickup' ) ) {
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
 	 * Detect Carrier from Order thoroughly
 	 */
 	public static function detect_order_carrier( $order ): string {
 		if ( ! $order ) {
+			return '';
+		}
+
+		if ( self::is_store_pickup_order( $order ) ) {
 			return '';
 		}
 
@@ -586,6 +749,11 @@ class Exacoat_Tracking_Pool {
 	public static function auto_assign_order_tracking( int $order_id ): bool {
 		$order = wc_get_order( $order_id );
 		if ( ! $order ) {
+			return false;
+		}
+
+		// Store Pickup orders must NEVER be auto-assigned courier tracking waybills
+		if ( self::is_store_pickup_order( $order ) ) {
 			return false;
 		}
 
@@ -824,6 +992,17 @@ class Exacoat_Tracking_Pool {
 			'carrier' => $carrier,
 			'history' => self::get_history( $carrier, $limit ),
 		], 200 );
+	}
+
+	public static function rest_return_number( \WP_REST_Request $request ): \WP_REST_Response {
+		$params   = $request->get_json_params() ?: $request->get_params();
+		$carrier  = sanitize_text_field( $params['carrier'] ?? '' );
+		$number   = sanitize_text_field( $params['number'] ?? '' );
+		$order_id = (int) ( $params['order_id'] ?? 0 );
+		$reason   = sanitize_text_field( $params['reason'] ?? 'Returned to pool' );
+
+		$res = self::return_tracking_number( $carrier, $number, $order_id, $reason );
+		return new \WP_REST_Response( $res, ! empty( $res['success'] ) ? 200 : 400 );
 	}
 }
 

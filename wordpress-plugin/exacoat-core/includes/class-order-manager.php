@@ -1830,6 +1830,8 @@ class Exacoat_Order_Manager {
 			$order->save();
 		}
 
+		$is_store_pickup = class_exists( 'Exacoat_Tracking_Pool' ) && Exacoat_Tracking_Pool::is_store_pickup_order( $order );
+
 		// Intelligent courier detection from Customer Note, Shipping Method, or Shipping Lines
 		$is_consolidation = ( 'yes' === (string) $order->get_meta( '_is_consolidation_order' ) ) ||
 			! empty( $order->get_meta( '_goorita_consolidated_orders' ) ) ||
@@ -1898,14 +1900,17 @@ class Exacoat_Order_Manager {
 			}
 		}
 
-		// If carrier_val was empty, use detected carrier
-		if ( ! empty( $detected_carrier ) && empty( $carrier_val ) ) {
+		if ( $is_store_pickup ) {
+			$carrier_val      = 'pickup';
+			$detected_carrier = 'pickup';
+			$detected_service = '';
+		} elseif ( ! empty( $detected_carrier ) && empty( $carrier_val ) ) {
 			$carrier_val = $detected_carrier;
 		}
 
-		// Ensure tracking number is filled from pool if order is confirmed (processing / confirmed / preparing-order) and carrier is JNE or SiCepat
+		// Ensure tracking number is filled from pool if order is confirmed (processing / confirmed / preparing-order) and carrier is JNE or SiCepat (never for store pickup)
 		$order_status_clean = str_replace( 'wc-', '', $order->get_status() );
-		if ( in_array( $order_status_clean, [ 'processing', 'confirmed', 'preparing-order', 'ready-to-ship' ], true ) && empty( $tracking_code ) && class_exists( 'Exacoat_Tracking_Pool' ) ) {
+		if ( ! $is_store_pickup && in_array( $order_status_clean, [ 'processing', 'confirmed', 'preparing-order', 'ready-to-ship' ], true ) && empty( $tracking_code ) && class_exists( 'Exacoat_Tracking_Pool' ) ) {
 			$target_c = in_array( strtolower( (string) $carrier_val ), [ 'jne', 'sicepat' ], true )
 				? strtolower( (string) $carrier_val )
 				: ( in_array( strtolower( (string) $detected_carrier ), [ 'jne', 'sicepat' ], true ) ? strtolower( (string) $detected_carrier ) : '' );
@@ -1932,12 +1937,14 @@ class Exacoat_Order_Manager {
 			'biteship'            => 'Biteship',
 			'lion'                => 'Lion Parcel',
 			'jnt'                 => 'J&T Express',
+			'pickup'              => 'Store Pickup (SMB)',
 		];
 		$carrier_key = strtolower( trim( (string) $carrier_val ) );
 		$base_carrier = $carrier_labels[ $carrier_key ] ?? ( ! empty( $carrier_val ) ? ucfirst( (string) $carrier_val ) : 'Express Courier' );
 
-		// If a specific service tier was detected (e.g. REG, BEST, etc.), format as "JNE - REG"
-		if ( ! empty( $detected_service ) ) {
+		if ( $is_store_pickup ) {
+			$carrier_display = 'Store Pickup (SMB)';
+		} elseif ( ! empty( $detected_service ) ) {
 			$prefix = ( 'jne' === $carrier_key ) ? 'JNE' : ( ( 'sicepat' === $carrier_key ) ? 'SiCepat' : ( ( 'pos' === $carrier_key ) ? 'POS' : $base_carrier ) );
 			$carrier_display = "{$prefix} - {$detected_service}";
 		} else {
@@ -1945,7 +1952,7 @@ class Exacoat_Order_Manager {
 		}
 
 		$tracking = null;
-		if ( ! empty( $tracking_code ) ) {
+		if ( ! $is_store_pickup && ! empty( $tracking_code ) ) {
 			$tracking_url = self::get_order_tracking_url( $order );
 
 			$tracking = [
@@ -2350,7 +2357,8 @@ class Exacoat_Order_Manager {
 			'coupon_codes'                  => $coupon_codes,
 			'shipping_total'                => floatval( $order->get_shipping_total() ),
 			'shipping_tax'                  => floatval( $order->get_shipping_tax() ),
-			'shipping_method_name'          => $order->get_shipping_method() ?: 'Standard Tracked Delivery',
+			'shipping_method_name'          => $is_store_pickup ? 'Store Pickup (Summarecon Bekasi)' : ( $order->get_shipping_method() ?: 'Standard Tracked Delivery' ),
+			'is_store_pickup'               => $is_store_pickup,
 			'total_tax'                     => floatval( $order->get_total_tax() ),
 			'total'                         => floatval( $order->get_total() ),
 			'total_idr'                     => $calculated_total_idr,
@@ -2380,9 +2388,9 @@ class Exacoat_Order_Manager {
 			'billing'                    => $billing,
 			'items'                      => $items_data,
 			'item_count'                 => count( $items_data ),
-			'tracking'                   => is_array( $tracking ) ? $tracking : null,
-			'detected_courier'           => $detected_carrier ?: $carrier_key ?: 'jne',
-			'shipping_courier_name'      => $carrier_display,
+			'tracking'                   => ( ! $is_store_pickup && is_array( $tracking ) ) ? $tracking : null,
+			'detected_courier'           => $is_store_pickup ? 'pickup' : ( $detected_carrier ?: $carrier_key ?: 'jne' ),
+			'shipping_courier_name'      => $is_store_pickup ? 'Store Pickup (SMB)' : $carrier_display,
 			'notes'                      => $notes_data,
 			'total_commission'           => round( $total_commissions, 2 ),
 			'total_commission_usd'       => round( $total_commissions, 2 ),
@@ -2836,14 +2844,16 @@ class Exacoat_Order_Manager {
 			str_contains( $customer_note, 'jasa kirim:' );
 
 		$meta_pickup = $order->get_meta( 'is_store_pickup' ) ?: ( $order->get_meta( '_is_store_pickup' ) ?: ( $order->get_meta( 'store_pickup' ) ?: '' ) );
-		$is_store_pickup = ! $has_courier && (
-			str_contains( $shipping_method, 'pickup' ) ||
-			str_contains( $shipping_method_id, 'local_pickup' ) ||
-			str_contains( $shipping_method, 'ambil di toko' ) ||
-			str_contains( $shipping_method, 'ambil sendiri' ) ||
-			in_array( strtolower( (string) $meta_pickup ), [ 'yes', '1', 'true' ], true ) ||
-			in_array( $clean_to, [ 'smb-ready', 'smb-picked' ], true )
-		);
+		$is_store_pickup = class_exists( 'Exacoat_Tracking_Pool' )
+			? Exacoat_Tracking_Pool::is_store_pickup_order( $order )
+			: ( ! $has_courier && (
+				str_contains( $shipping_method, 'pickup' ) ||
+				str_contains( $shipping_method_id, 'local_pickup' ) ||
+				str_contains( $shipping_method, 'ambil di toko' ) ||
+				str_contains( $shipping_method, 'ambil sendiri' ) ||
+				in_array( strtolower( (string) $meta_pickup ), [ 'yes', '1', 'true' ], true ) ||
+				in_array( $clean_to, [ 'smb-ready', 'smb-picked' ], true )
+			) );
 
 		if ( 'processing' === $clean_to ) {
 			self::send_order_confirmation_once( $order );

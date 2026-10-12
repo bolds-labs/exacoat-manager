@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Fix mutual recursion loop in Biteship API key resolution causing empty responses during tracking sync\n- Harden JNE direct tracking session cookies and phone challenge verification\n- Wrap REST tracking endpoints in defensive exception handling to guarantee valid JSON responses\n- Prevent Unexpected end of JSON input errors on manager tracking client`,
+      changelog: `### Version ${version}\n- Prevent store pickup orders from auto-allocating courier tracking numbers\n- Add tracking pool return endpoint and restore AWB numbers to pool\n- Format store pickup orders cleanly in order manager API and ERP UI\n- Guard against default courier fallback on pickup checkout`,
     },
   };
 
