@@ -28,6 +28,29 @@ class Exacoat_TikTok_Client {
 	 */
 	public static function init(): void {
 		add_action( 'rest_api_init', [ __CLASS__, 'register_routes' ] );
+		add_action( 'exacoat_tiktok_hourly_sync', [ __CLASS__, 'cron_sync_orders' ] );
+		if ( ! wp_next_scheduled( 'exacoat_tiktok_hourly_sync' ) ) {
+			wp_schedule_event( time(), 'hourly', 'exacoat_tiktok_hourly_sync' );
+		}
+	}
+
+	/**
+	 * Cron callback: Automatically sync TikTok Shop orders every hour
+	 */
+	public static function cron_sync_orders(): void {
+		$settings = self::get_settings();
+		if ( empty( $settings['access_token'] ) && empty( $settings['shop_cipher'] ) ) {
+			return;
+		}
+		$res = self::sync_orders( 15, 100 );
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::log(
+				'info',
+				'tiktok_cron',
+				sprintf( 'Automated hourly TikTok sync executed: %s orders synced', $res['count'] ?? ( $res['total_synced'] ?? 0 ) ),
+				$res
+			);
+		}
 	}
 
 	/**
@@ -900,6 +923,18 @@ class Exacoat_TikTok_Client {
 		$package = $packages[0] ?? [];
 
 		$raw_status = (string) ( $ord['status'] ?? ( $ord['order_status'] ?? 'UNKNOWN' ) );
+		$raw_status_upper = strtoupper( $raw_status );
+		$is_delivered = in_array( $raw_status_upper, [ 'COMPLETED', 'DELIVERED' ], true );
+
+		$del_raw = $ord['delivery_time'] ?? ( $ord['finish_time'] ?? ( $is_delivered ? ( $ord['update_time'] ?? null ) : null ) );
+		$delivered_ts = null;
+		if ( ! empty( $del_raw ) && is_numeric( $del_raw ) ) {
+			$delivered_ts = strlen( (string) $del_raw ) > 10 ? (int) ( $del_raw / 1000 ) : (int) $del_raw;
+		}
+		$delivered_time = $delivered_ts ? ( function_exists( 'wp_date' ) ? wp_date( 'Y-m-d H:i:s', $delivered_ts ) : date( 'Y-m-d H:i:s', $delivered_ts ) ) : ( $is_delivered ? current_time( 'mysql' ) : null );
+		if ( $is_delivered && ! $delivered_ts ) {
+			$delivered_ts = time();
+		}
 
 		$raw_due = $ord['shipping_due_time'] ?? ( $ord['rts_sla_time'] ?? ( $ord['tts_sla_time'] ?? null ) );
 		$ship_by_ts = null;
@@ -945,6 +980,9 @@ class Exacoat_TikTok_Client {
 			'recipient_city'           => (string) ( $rec['district_info'][2]['address_name'] ?? ( $rec['city'] ?? '' ) ),
 			'recipient_postcode'       => (string) ( $rec['postal_code'] ?? ( $rec['zipcode'] ?? '' ) ),
 			'items'                    => $items,
+			'is_delivered'             => $is_delivered,
+			'delivered_time'           => $delivered_time,
+			'delivered_ts'             => $delivered_ts,
 			'already_claimed'          => $claim_info['already_claimed'],
 			'existing_claim'           => $claim_info,
 		];
@@ -1009,7 +1047,10 @@ class Exacoat_TikTok_Client {
 			update_option( self::ORDERS_CACHE_KEY, $cached );
 			return true;
 		} elseif ( ! empty( $fields['order_id'] ) || ! empty( $fields['order_sn'] ) ) {
-			$cached[] = $fields;
+			array_unshift( $cached, $fields );
+			if ( count( $cached ) > 1000 ) {
+				$cached = array_slice( $cached, 0, 1000 );
+			}
 			update_option( self::ORDERS_CACHE_KEY, $cached );
 			return true;
 		}
@@ -1620,6 +1661,14 @@ class Exacoat_TikTok_Client {
 			}
 		}
 
+		// If not found in cache, attempt live fetch from TikTok Open API
+		if ( ! $found ) {
+			$live_order = self::fetch_single_order_live( $clean );
+			if ( $live_order ) {
+				$found = $live_order;
+			}
+		}
+
 		$order_id_to_verify = $found['order_id'] ?? ( $found['order_sn'] ?? $clean );
 
 		$claim_info = self::check_existing_claim( $order_id_to_verify );
@@ -1633,12 +1682,21 @@ class Exacoat_TikTok_Client {
 			]);
 		}
 
+		// If found in cache but not yet marked delivered, query live order details from TikTok API
+		if ( $found && empty( $found['is_delivered'] ) && ! in_array( strtoupper( $found['order_status'] ?? '' ), [ 'COMPLETED', 'DELIVERED' ], true ) ) {
+			$live_refresh = self::fetch_single_order_live( $order_id_to_verify );
+			if ( $live_refresh ) {
+				$found = $live_refresh;
+			}
+		}
+
 		// Query live tracking info to detect real delivery status
 		$tracking_target = $found['order_id'] ?? ( $found['order_sn'] ?? $clean );
 		$tracking        = self::get_tracking_info( $tracking_target );
 		$order_status    = $found['order_status'] ?? 'UNKNOWN';
-		$is_delivered    = ! empty( $tracking['is_delivered'] ) || in_array( strtoupper( $order_status ), [ 'COMPLETED', 'DELIVERED' ], true );
+		$is_delivered    = ! empty( $tracking['is_delivered'] ) || in_array( strtoupper( $order_status ), [ 'COMPLETED', 'DELIVERED' ], true ) || ! empty( $found['is_delivered'] );
 		$delivered_time  = $tracking['delivered_time'] ?? ( $found['delivered_time'] ?? null );
+		$delivered_ts    = $tracking['delivered_ts'] ?? ( $found['delivered_ts'] ?? null );
 
 		if ( $found ) {
 			return rest_ensure_response([
@@ -1647,6 +1705,7 @@ class Exacoat_TikTok_Client {
 				'order_status'     => $is_delivered ? 'COMPLETED' : $order_status,
 				'is_delivered'     => $is_delivered,
 				'delivered_time'   => $delivered_time,
+				'delivered_ts'     => $delivered_ts,
 				'buyer_username'   => $found['buyer_username'] ?? '',
 				'buyer_note'       => $found['buyer_note'] ?? ( $found['buyer_message'] ?? '' ),
 				'shipping_carrier' => $found['shipping_carrier'] ?? '',
@@ -1664,6 +1723,7 @@ class Exacoat_TikTok_Client {
 				'order_status'     => $is_delivered ? 'COMPLETED' : 'IN_TRANSIT',
 				'is_delivered'     => $is_delivered,
 				'delivered_time'   => $delivered_time,
+				'delivered_ts'     => $delivered_ts,
 				'already_claimed'  => false,
 			]);
 		}
@@ -1705,17 +1765,46 @@ class Exacoat_TikTok_Client {
 			);
 		}
 
-		if ( $type === 'ORDER_STATUS_CHANGE' ) {
-			$order_id = $data['order_id'] ?? '';
-			$status = $data['order_status'] ?? '';
+		// Event 1: ORDER_STATUS_CHANGE
+		if ( $type === '1' || $type === 1 || $type === 'ORDER_STATUS_CHANGE' ) {
+			$order_id = (string) ( $data['order_id'] ?? '' );
+			$status   = (string) ( $data['order_status'] ?? '' );
 			if ( ! empty( $order_id ) && ! empty( $status ) ) {
-				self::update_order_cache_field( $order_id, [ 'order_status' => $status ] );
+				$status_upper = strtoupper( $status );
+				$is_delivered = in_array( $status_upper, [ 'COMPLETED', 'DELIVERED' ], true );
+				$update_ts    = ! empty( $data['update_time'] ) ? ( (int) ( strlen( (string) $data['update_time'] ) > 10 ? $data['update_time'] / 1000 : $data['update_time'] ) ) : time();
+				$fields       = [
+					'order_status' => $status,
+				];
+				if ( $is_delivered ) {
+					$fields['is_delivered']   = true;
+					$fields['delivered_time'] = function_exists( 'wp_date' ) ? wp_date( 'Y-m-d H:i:s', $update_ts ) : date( 'Y-m-d H:i:s', $update_ts );
+					$fields['delivered_ts']   = $update_ts;
+				}
+
+				$updated = self::update_order_cache_field( $order_id, $fields );
+				if ( ! $updated ) {
+					self::fetch_single_order_live( $order_id );
+				}
 			}
-		} elseif ( $type === 'PACKAGE_UPDATE' ) {
-			$order_id = $data['order_id'] ?? '';
-			$tracking = $data['tracking_number'] ?? '';
-			if ( ! empty( $order_id ) && ! empty( $tracking ) ) {
-				self::update_order_cache_field( $order_id, [ 'tracking_number' => $tracking ] );
+		} elseif ( $type === '6' || $type === 6 || $type === 'PACKAGE_UPDATE' ) {
+			$order_id = (string) ( $data['order_id'] ?? '' );
+			$tracking = (string) ( $data['tracking_number'] ?? '' );
+			$carrier  = (string) ( $data['shipping_provider_name'] ?? ( $data['shipping_provider'] ?? '' ) );
+			if ( ! empty( $order_id ) ) {
+				$fields = [];
+				if ( ! empty( $tracking ) ) {
+					$fields['tracking_number'] = $tracking;
+				}
+				if ( ! empty( $carrier ) ) {
+					$fields['shipping_carrier'] = $carrier;
+				}
+				if ( ! empty( $fields ) ) {
+					$updated = self::update_order_cache_field( $order_id, $fields );
+					if ( ! $updated ) {
+						self::fetch_single_order_live( $order_id );
+					}
+				}
 			}
 		}
 

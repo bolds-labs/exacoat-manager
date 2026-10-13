@@ -28,6 +28,29 @@ class Exacoat_Shopee_Client {
 	 */
 	public static function init(): void {
 		add_action( 'rest_api_init', [ __CLASS__, 'register_routes' ] );
+		add_action( 'exacoat_shopee_hourly_sync', [ __CLASS__, 'cron_sync_orders' ] );
+		if ( ! wp_next_scheduled( 'exacoat_shopee_hourly_sync' ) ) {
+			wp_schedule_event( time() + 300, 'hourly', 'exacoat_shopee_hourly_sync' );
+		}
+	}
+
+	/**
+	 * Cron callback: Automatically sync Shopee orders every hour
+	 */
+	public static function cron_sync_orders(): void {
+		$settings = self::get_settings();
+		if ( empty( $settings['access_token'] ) && empty( $settings['shop_id'] ) ) {
+			return;
+		}
+		$res = self::sync_orders( 15, 100 );
+		if ( class_exists( 'Exacoat_Logger' ) ) {
+			Exacoat_Logger::log(
+				'info',
+				'shopee_cron',
+				sprintf( 'Automated hourly Shopee sync executed: %s orders synced', $res['total_synced'] ?? ( $res['count'] ?? 0 ) ),
+				$res
+			);
+		}
 	}
 
 	/**
@@ -1078,6 +1101,13 @@ class Exacoat_Shopee_Client {
 		unset( $ord );
 
 		if ( $found ) {
+			update_option( self::ORDERS_CACHE_KEY, $cached );
+			return true;
+		} elseif ( ! empty( $fields['order_sn'] ) ) {
+			array_unshift( $cached, $fields );
+			if ( count( $cached ) > 1000 ) {
+				$cached = array_slice( $cached, 0, 1000 );
+			}
 			update_option( self::ORDERS_CACHE_KEY, $cached );
 			return true;
 		}
@@ -2133,6 +2163,13 @@ class Exacoat_Shopee_Client {
 
 		// If not in cache, query Shopee Open API v2 live
 		if ( ! $found ) {
+			$live_order = self::fetch_single_order_live( $clean );
+			if ( $live_order ) {
+				$found = $live_order;
+			}
+		}
+
+		if ( ! $found ) {
 			$detail_res = self::call_shop_api( '/api/v2/order/get_order_detail', 'GET', [
 				'order_sn_list'            => $clean,
 				'response_optional_fields' => 'buyer_user_id,buyer_username,recipient_address,item_list,shipping_carrier,total_amount,pay_time,order_status,package_list,note,shipping_document_status,ship_by_date,tracking_number',
@@ -2184,6 +2221,14 @@ class Exacoat_Shopee_Client {
 					'delivered_time'   => ! empty( $package['delivery_time'] ) ? date( 'Y-m-d H:i:s', $package['delivery_time'] ) : null,
 					'delivered_ts'     => ! empty( $package['delivery_time'] ) ? (int) $package['delivery_time'] : null,
 				];
+			}
+		}
+
+		// If found in cache but not yet marked delivered, query live order details from Shopee API to check updated status
+		if ( $found && empty( $found['is_delivered'] ) && ! in_array( strtoupper( $found['order_status'] ?? '' ), [ 'COMPLETED', 'DELIVERED', 'TO_CONFIRM_RECEIVE' ], true ) ) {
+			$live_refresh = self::fetch_single_order_live( $order_sn_to_verify );
+			if ( $live_refresh ) {
+				$found = $live_refresh;
 			}
 		}
 
@@ -2303,18 +2348,32 @@ class Exacoat_Shopee_Client {
 		switch ( $code ) {
 			case 3:
 				// order_status_push: Buyer paid, shipped, completed, or cancelled
-				$order_sn = $data['ordersn'] ?? ( $data['order_sn'] ?? '' );
-				$status = $data['status'] ?? '';
+				$order_sn = (string) ( $data['ordersn'] ?? ( $data['order_sn'] ?? '' ) );
+				$status   = (string) ( $data['status'] ?? '' );
 				if ( ! empty( $order_sn ) ) {
-					self::update_order_cache_field( $order_sn, [
+					$status_upper = strtoupper( $status );
+					$is_delivered = in_array( $status_upper, [ 'COMPLETED', 'DELIVERED', 'TO_CONFIRM_RECEIVE' ], true );
+					$update_ts    = ! empty( $data['update_time'] ) ? (int) $data['update_time'] : time();
+					$fields       = [
 						'order_status' => $status,
-						'update_time'  => date( 'Y-m-d H:i:s', $data['update_time'] ?? time() ),
-					]);
+						'update_time'  => function_exists( 'wp_date' ) ? wp_date( 'Y-m-d H:i:s', $update_ts ) : date( 'Y-m-d H:i:s', $update_ts ),
+					];
+					if ( $is_delivered ) {
+						$fields['is_delivered']   = true;
+						$fields['delivered_time'] = function_exists( 'wp_date' ) ? wp_date( 'Y-m-d H:i:s', $update_ts ) : date( 'Y-m-d H:i:s', $update_ts );
+						$fields['delivered_ts']   = $update_ts;
+					}
+
+					$updated = self::update_order_cache_field( $order_sn, $fields );
+					if ( ! $updated ) {
+						self::fetch_single_order_live( $order_sn );
+					}
+
 					if ( class_exists( 'Exacoat_Logger' ) ) {
 						Exacoat_Logger::log(
 							'info',
 							'shopee_push',
-							sprintf( 'Updated order_status to %s for Order SN %s', $status, $order_sn )
+							sprintf( 'Updated order_status to %s for Order SN %s (delivered: %s)', $status, $order_sn, $is_delivered ? 'yes' : 'no' )
 						);
 					}
 				}
@@ -2323,12 +2382,15 @@ class Exacoat_Shopee_Client {
 			case 4:
 			case 24:
 				// order_trackingno_push / booking_trackingno_push: Live courier resi assigned or updated
-				$order_sn = $data['ordersn'] ?? ( $data['order_sn'] ?? '' );
-				$tracking_no = $data['tracking_no'] ?? ( $data['tracking_number'] ?? '' );
+				$order_sn = (string) ( $data['ordersn'] ?? ( $data['order_sn'] ?? '' ) );
+				$tracking_no = (string) ( $data['tracking_no'] ?? ( $data['tracking_number'] ?? '' ) );
 				if ( ! empty( $order_sn ) ) {
-					self::update_order_cache_field( $order_sn, [
+					$updated = self::update_order_cache_field( $order_sn, [
 						'tracking_number' => $tracking_no,
 					]);
+					if ( ! $updated ) {
+						self::fetch_single_order_live( $order_sn );
+					}
 					if ( class_exists( 'Exacoat_Logger' ) ) {
 						Exacoat_Logger::log(
 							'info',
