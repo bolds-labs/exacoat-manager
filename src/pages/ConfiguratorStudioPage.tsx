@@ -7040,7 +7040,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               <span className={clsx('text-[11px] font-semibold transition-colors', currentDisableLogoCutout ? 'text-amber-300' : 'text-zinc-400 group-hover:text-zinc-200')}>
                                 Disable Logo Cutout
                               </span>
-                              <InfoTooltip content="When enabled (e.g. pre-printed artwork like Burgundy), logo cutouts are disabled and buyers cannot select logo cutouts." />
+                              <InfoTooltip content="When enabled globally (e.g. pre-printed artwork with embedded logos), logo cutouts are disabled across all devices. For device-specific restrictions, use Cutouts & Coverage on the device profile." />
                             </label>
                           </div>
                         </div>
