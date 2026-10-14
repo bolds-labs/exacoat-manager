@@ -1001,6 +1001,10 @@ class Exacoat_Configurator_Engine {
 		$in_stock = isset( $params['in_stock'] ) ? (bool) $params['in_stock'] : true;
 		$is_active = isset( $params['is_active'] ) ? (bool) $params['is_active'] : true;
 		$is_custom_per_device = ! empty( $params['is_custom_per_device'] );
+		$disable_logo_cutout = ! empty( $params['disable_logo_cutout'] );
+		$disabled_cutouts = isset( $params['disabled_cutouts'] ) && is_array( $params['disabled_cutouts'] )
+			? array_values( array_map( 'sanitize_text_field', $params['disabled_cutouts'] ) )
+			: ( $disable_logo_cutout ? [ 'logo' ] : [] );
 		$order = isset( $params['order'] ) ? (int) $params['order'] : 0;
 		$badge_text = sanitize_text_field( $params['badge_text'] ?? '' );
 		$badge_color = sanitize_text_field( $params['badge_color'] ?? '' );
@@ -1033,6 +1037,12 @@ class Exacoat_Configurator_Engine {
 				$f['is_custom_per_device'] = $is_custom_per_device;
 				$f['badge_text']           = $badge_text;
 				$f['badge_color']          = $badge_color;
+				if ( isset( $params['disable_logo_cutout'] ) ) {
+					$f['disable_logo_cutout'] = (bool) $params['disable_logo_cutout'];
+				}
+				if ( isset( $params['disabled_cutouts'] ) || ! empty( $disabled_cutouts ) ) {
+					$f['disabled_cutouts'] = $disabled_cutouts;
+				}
 				if ( isset( $params['shadow_opacity'] ) ) {
 					$f['shadow_opacity']   = (float) $params['shadow_opacity'];
 				}
@@ -1068,6 +1078,8 @@ class Exacoat_Configurator_Engine {
 				'in_stock'             => $in_stock,
 				'is_active'            => $is_active,
 				'is_custom_per_device' => $is_custom_per_device,
+				'disable_logo_cutout'  => $disable_logo_cutout,
+				'disabled_cutouts'     => $disabled_cutouts,
 				'badge_text'           => $badge_text,
 				'badge_color'          => $badge_color,
 				'order'                => $order,
@@ -1243,6 +1255,15 @@ class Exacoat_Configurator_Engine {
 				}
 				if ( isset( $item['is_active'] ) ) {
 					$item['is_active'] = (bool) $item['is_active'];
+				}
+				if ( isset( $item['is_custom_per_device'] ) ) {
+					$item['is_custom_per_device'] = (bool) $item['is_custom_per_device'];
+				}
+				if ( isset( $item['disable_logo_cutout'] ) ) {
+					$item['disable_logo_cutout'] = (bool) $item['disable_logo_cutout'];
+				}
+				if ( isset( $item['disabled_cutouts'] ) && is_array( $item['disabled_cutouts'] ) ) {
+					$item['disabled_cutouts'] = array_values( array_map( 'sanitize_text_field', $item['disabled_cutouts'] ) );
 				}
 				if ( isset( $item['order'] ) ) {
 					$item['order'] = (int) $item['order'];

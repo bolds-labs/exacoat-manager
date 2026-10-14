@@ -843,6 +843,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [editingFinishStock, setEditingFinishStock] = useState<Record<string, boolean>>({});
   const [editingFinishActive, setEditingFinishActive] = useState<Record<string, boolean>>({});
   const [editingFinishCustomFlags, setEditingFinishCustomFlags] = useState<Record<string, boolean>>({});
+  const [editingFinishDisableLogoCutout, setEditingFinishDisableLogoCutout] = useState<Record<string, boolean>>({});
   const [editingFinishBadgeTexts, setEditingFinishBadgeTexts] = useState<Record<string, string>>({});
   const [editingFinishBadgeColors, setEditingFinishBadgeColors] = useState<Record<string, string>>({});
   const [editingFinishShadowOpacities, setEditingFinishShadowOpacities] = useState<Record<string, number>>({});
@@ -889,6 +890,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
     texture_url: string;
     extra_price: number;
     is_custom_per_device: boolean;
+    disable_logo_cutout: boolean;
     badge_text: string;
     badge_color: string;
     is_active: boolean;
@@ -900,6 +902,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
     texture_url: '',
     extra_price: 0,
     is_custom_per_device: false,
+    disable_logo_cutout: false,
     badge_text: '',
     badge_color: '#f3aa18',
     is_active: true,
@@ -981,6 +984,29 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [dragOverColorIdx, setDragOverColorIdx] = useState<number | null>(null);
   const [failedColorImages, setFailedColorImages] = useState<Record<string, boolean>>({});
   const [detectingColorIdx, setDetectingColorIdx] = useState<number | null>(null);
+
+  // Auto-disable logo cutout when the selected finish has disable_logo_cutout
+  useEffect(() => {
+    if (!editingProfile) return;
+    const backLayer = editingProfile.layers.find(
+      (l) => l.id.toLowerCase().includes('back') || (l.name || '').toLowerCase().includes('back')
+    );
+    const relevantFinishSlug = (backLayer && selectedLayerFinishes[backLayer.id])
+      ? selectedLayerFinishes[backLayer.id]
+      : (activeSimTestingPartId && selectedLayerFinishes[activeSimTestingPartId])
+      ? selectedLayerFinishes[activeSimTestingPartId]
+      : selectedSimFinish;
+    const relevantFinish = finishes.find(
+      (f) => (f.slug || f.id) === relevantFinishSlug || f.id === relevantFinishSlug
+    );
+    const isLogoDisabled = Boolean(
+      relevantFinish?.disable_logo_cutout ||
+      relevantFinish?.disabled_cutouts?.includes('logo')
+    );
+    if (isLogoDisabled && selectedLogoCutout) {
+      setSelectedLogoCutout(false);
+    }
+  }, [selectedLayerFinishes, activeSimTestingPartId, selectedSimFinish, finishes, editingProfile, selectedLogoCutout]);
 
   const handleUpdateColor = (
     colorIdx: number,
@@ -3770,6 +3796,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
     const isCustomDirty =
       editingFinishCustomFlags[f.id] !== undefined &&
       editingFinishCustomFlags[f.id] !== Boolean(f.is_custom_per_device);
+    const isDisableLogoCutoutDirty =
+      editingFinishDisableLogoCutout[f.id] !== undefined &&
+      editingFinishDisableLogoCutout[f.id] !== Boolean(f.disable_logo_cutout || f.disabled_cutouts?.includes('logo'));
     const isBadgeTextDirty =
       editingFinishBadgeTexts[f.id] !== undefined &&
       editingFinishBadgeTexts[f.id].trim() !== (f.badge_text || '');
@@ -3799,6 +3828,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
       isStockDirty ||
       isActiveDirty ||
       isCustomDirty ||
+      isDisableLogoCutoutDirty ||
       isBadgeTextDirty ||
       isBadgeColorDirty ||
       isShadowDirty ||
@@ -3822,6 +3852,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
     editingFinishStock,
     editingFinishActive,
     editingFinishCustomFlags,
+    editingFinishDisableLogoCutout,
     editingFinishBadgeTexts,
     editingFinishBadgeColors,
     editingFinishShadowOpacities,
@@ -3841,6 +3872,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
     setEditingFinishStock({});
     setEditingFinishActive({});
     setEditingFinishCustomFlags({});
+    setEditingFinishDisableLogoCutout({});
     setEditingFinishBadgeTexts({});
     setEditingFinishBadgeColors({});
     setEditingFinishShadowOpacities({});
@@ -3877,6 +3909,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
         const newActive = customActive !== undefined ? customActive : (f.is_active !== false);
         const customFlag = editingFinishCustomFlags[f.id];
         const newCustomFlag = customFlag !== undefined ? customFlag : Boolean(f.is_custom_per_device);
+        const customDisableLogoCutout = editingFinishDisableLogoCutout[f.id];
+        const newDisableLogoCutout = customDisableLogoCutout !== undefined ? customDisableLogoCutout : Boolean(f.disable_logo_cutout || f.disabled_cutouts?.includes('logo'));
         const customBadgeText = editingFinishBadgeTexts[f.id];
         const newBadgeText = customBadgeText !== undefined ? customBadgeText.trim() : (f.badge_text || '');
         const customBadgeColor = editingFinishBadgeColors[f.id];
@@ -3901,6 +3935,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
           in_stock: newStock,
           is_active: newActive,
           is_custom_per_device: newCustomFlag,
+          disable_logo_cutout: newDisableLogoCutout,
+          disabled_cutouts: newDisableLogoCutout ? ['logo'] : [],
           badge_text: newBadgeText,
           badge_color: newBadgeColor,
           shadow_opacity: newShadow,
@@ -3936,6 +3972,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
         setEditingFinishStock({});
         setEditingFinishActive({});
         setEditingFinishCustomFlags({});
+        setEditingFinishDisableLogoCutout({});
         setEditingFinishBadgeTexts({});
         setEditingFinishBadgeColors({});
         setEditingFinishShadowOpacities({});
@@ -3972,6 +4009,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
     const newActive = customActive !== undefined ? customActive : (finish.is_active !== false);
     const customFlag = editingFinishCustomFlags[finish.id];
     const newCustomFlag = customFlag !== undefined ? customFlag : Boolean(finish.is_custom_per_device);
+    const customDisableLogoCutout = editingFinishDisableLogoCutout[finish.id];
+    const newDisableLogoCutout = customDisableLogoCutout !== undefined ? customDisableLogoCutout : Boolean(finish.disable_logo_cutout || finish.disabled_cutouts?.includes('logo'));
     const customBadgeText = editingFinishBadgeTexts[finish.id];
     const newBadgeText = customBadgeText !== undefined ? customBadgeText.trim() : (finish.badge_text || '');
     const customBadgeColor = editingFinishBadgeColors[finish.id];
@@ -4000,6 +4039,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
         is_active: newActive,
         class_name: finish.class_name,
         is_custom_per_device: newCustomFlag,
+        disable_logo_cutout: newDisableLogoCutout,
+        disabled_cutouts: newDisableLogoCutout ? ['logo'] : [],
         badge_text: newBadgeText,
         badge_color: newBadgeColor,
         shadow_opacity: newShadow,
@@ -4026,6 +4067,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     in_stock: newStock,
                     is_active: newActive,
                     is_custom_per_device: newCustomFlag,
+                    disable_logo_cutout: newDisableLogoCutout,
+                    disabled_cutouts: newDisableLogoCutout ? ['logo'] : [],
                     badge_text: newBadgeText,
                     badge_color: newBadgeColor,
                     shadow_opacity: newShadow,
@@ -4051,6 +4094,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
         setEditingFinishStock((prev) => { const n = { ...prev }; delete n[finish.id]; return n; });
         setEditingFinishActive((prev) => { const n = { ...prev }; delete n[finish.id]; return n; });
         setEditingFinishCustomFlags((prev) => { const n = { ...prev }; delete n[finish.id]; return n; });
+        setEditingFinishDisableLogoCutout((prev) => { const n = { ...prev }; delete n[finish.id]; return n; });
         setEditingFinishBadgeTexts((prev) => { const n = { ...prev }; delete n[finish.id]; return n; });
         setEditingFinishBadgeColors((prev) => { const n = { ...prev }; delete n[finish.id]; return n; });
         setEditingFinishShadowOpacities((prev) => { const n = { ...prev }; delete n[finish.id]; return n; });
@@ -4123,6 +4167,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
         order: finishes.length,
         class_name: `cfg-${slug}`,
         is_custom_per_device: Boolean(newFinishForm.is_custom_per_device),
+        disable_logo_cutout: Boolean(newFinishForm.disable_logo_cutout),
+        disabled_cutouts: newFinishForm.disable_logo_cutout ? ['logo'] : [],
         badge_text: newFinishForm.badge_text?.trim() || '',
         badge_color: newFinishForm.badge_color?.trim() || '#f3aa18',
       });
@@ -4143,6 +4189,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
           texture_url: '',
           extra_price: 0,
           is_custom_per_device: false,
+          disable_logo_cutout: false,
           badge_text: '',
           badge_color: '#f3aa18',
           is_active: true,
@@ -5796,6 +5843,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         texture_url: '',
                         extra_price: 0,
                         is_custom_per_device: false,
+                        disable_logo_cutout: false,
                         badge_text: '',
                         badge_color: '#f3aa18',
                         is_active: true,
@@ -6211,6 +6259,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       editingFinishCustomFlags[f.id] !== undefined
                         ? editingFinishCustomFlags[f.id]
                         : Boolean(f.is_custom_per_device);
+                    const currentDisableLogoCutout =
+                      editingFinishDisableLogoCutout[f.id] !== undefined
+                        ? editingFinishDisableLogoCutout[f.id]
+                        : Boolean(f.disable_logo_cutout || f.disabled_cutouts?.includes('logo'));
                     const currentBadgeTextInput =
                       editingFinishBadgeTexts[f.id] !== undefined
                         ? editingFinishBadgeTexts[f.id]
@@ -6769,35 +6821,67 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             )}
                           </div>
 
-                          {/* Custom per device toggle switch */}
-                          <label
-                            onClick={(e) => {
-                              e.preventDefault();
-                              setEditingFinishCustomFlags((prev) => ({
-                                ...prev,
-                                [f.id]: !currentCustomFlag,
-                              }));
-                            }}
-                            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-950/80 border border-white/10 hover:border-white/20 cursor-pointer select-none transition-all shadow-inner group"
-                          >
-                            <div
-                              className={clsx(
-                                'w-7 h-4 rounded-full transition-colors relative flex items-center p-0.5 shrink-0',
-                                currentCustomFlag ? 'bg-amber-400 shadow-xs shadow-amber-400/40' : 'bg-zinc-800'
-                              )}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {/* Custom per device toggle switch */}
+                            <label
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setEditingFinishCustomFlags((prev) => ({
+                                  ...prev,
+                                  [f.id]: !currentCustomFlag,
+                                }));
+                              }}
+                              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-950/80 border border-white/10 hover:border-white/20 cursor-pointer select-none transition-all shadow-inner group"
                             >
                               <div
                                 className={clsx(
-                                  'w-3 h-3 rounded-full bg-zinc-950 transition-transform transform shadow-xs',
-                                  currentCustomFlag ? 'translate-x-3' : 'translate-x-0'
+                                  'w-7 h-4 rounded-full transition-colors relative flex items-center p-0.5 shrink-0',
+                                  currentCustomFlag ? 'bg-amber-400 shadow-xs shadow-amber-400/40' : 'bg-zinc-800'
                                 )}
-                              />
-                            </div>
-                            <span className={clsx('text-[11px] font-semibold transition-colors', currentCustomFlag ? 'text-amber-300' : 'text-zinc-400 group-hover:text-zinc-200')}>
-                              Custom per device
-                            </span>
-                            <InfoTooltip content="When enabled, this finish only appears on devices where custom artwork is uploaded in the Skins tab." />
-                          </label>
+                              >
+                                <div
+                                  className={clsx(
+                                    'w-3 h-3 rounded-full bg-zinc-950 transition-transform transform shadow-xs',
+                                    currentCustomFlag ? 'translate-x-3' : 'translate-x-0'
+                                  )}
+                                />
+                              </div>
+                              <span className={clsx('text-[11px] font-semibold transition-colors', currentCustomFlag ? 'text-amber-300' : 'text-zinc-400 group-hover:text-zinc-200')}>
+                                Custom per device
+                              </span>
+                              <InfoTooltip content="When enabled, this finish only appears on devices where custom artwork is uploaded in the Skins tab." />
+                            </label>
+
+                            {/* Disable Logo Cutout toggle switch */}
+                            <label
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setEditingFinishDisableLogoCutout((prev) => ({
+                                  ...prev,
+                                  [f.id]: !currentDisableLogoCutout,
+                                }));
+                              }}
+                              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-950/80 border border-white/10 hover:border-white/20 cursor-pointer select-none transition-all shadow-inner group"
+                            >
+                              <div
+                                className={clsx(
+                                  'w-7 h-4 rounded-full transition-colors relative flex items-center p-0.5 shrink-0',
+                                  currentDisableLogoCutout ? 'bg-amber-400 shadow-xs shadow-amber-400/40' : 'bg-zinc-800'
+                                )}
+                              >
+                                <div
+                                  className={clsx(
+                                    'w-3 h-3 rounded-full bg-zinc-950 transition-transform transform shadow-xs',
+                                    currentDisableLogoCutout ? 'translate-x-3' : 'translate-x-0'
+                                  )}
+                                />
+                              </div>
+                              <span className={clsx('text-[11px] font-semibold transition-colors', currentDisableLogoCutout ? 'text-amber-300' : 'text-zinc-400 group-hover:text-zinc-200')}>
+                                Disable Logo Cutout
+                              </span>
+                              <InfoTooltip content="When enabled (e.g. pre-printed artwork like Burgundy), logo cutouts are disabled and buyers cannot select logo cutouts." />
+                            </label>
+                          </div>
                         </div>
                       </div>
                     );
@@ -7232,6 +7316,22 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     <span className="text-xs font-bold text-white block">Custom Design per Device (e.g. Everything Skins)</span>
                     <span className="text-[11px] text-zinc-400 leading-relaxed block mt-0.5">
                       Only displays on devices where custom artwork for this finish is uploaded in the device's Skins tab.
+                    </span>
+                  </div>
+                </label>
+
+                {/* Disable Logo Cutout checkbox */}
+                <label className="flex items-start gap-2.5 p-3 rounded-xl bg-zinc-900/60 border border-white/5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newFinishForm.disable_logo_cutout}
+                    onChange={(e) => setNewFinishForm((prev) => ({ ...prev, disable_logo_cutout: e.target.checked }))}
+                    className="w-4 h-4 rounded text-amber-400 accent-amber-500 mt-0.5 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-white block">Disable Logo Cutout (e.g. Pre-printed with Apple Logo)</span>
+                    <span className="text-[11px] text-zinc-400 leading-relaxed block mt-0.5">
+                      Disables and hides logo cutout options for this finish, rendering it solid without punch cutout.
                     </span>
                   </div>
                 </label>
@@ -8053,21 +8153,28 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
                             // v2 Engine: Dynamic Canvas Compositing with Alpha Mask & Buyer Cutouts
                             if (editingProfile.configurator_version === 'v2') {
-                              const isCustomPerDevice = Boolean(activeFinish?.is_custom_per_device);
-                              const textureMap = assets.render_texture_map || {};
+                              const fallbackTextureMap = Object.values(l.assets_by_view || {}).find(
+                                (a) => a.render_texture_map && Object.keys(a.render_texture_map).length > 0
+                              )?.render_texture_map || {};
+                              const effectiveTextureMap = (assets.render_texture_map && Object.keys(assets.render_texture_map).length > 0)
+                                ? assets.render_texture_map
+                                : fallbackTextureMap;
+
                               const simNorm = layerFinishSlug.toLowerCase().replace(/[^a-z0-9]/g, '');
-                              const matchedKey = Object.keys(textureMap).find(
+                              const matchedKey = Object.keys(effectiveTextureMap).find(
                                 (k) => k.toLowerCase().replace(/[^a-z0-9]/g, '') === simNorm
                               );
-                              const mappedTex = matchedKey ? textureMap[matchedKey] || '' : '';
-                              const customTex = isCustomPerDevice
-                                ? (assets.render_texture_map?.[layerFinishSlug] ||
-                                   assets.render_texture_map?.[activeFinish?.slug || ''] ||
-                                   assets.render_texture_map?.[activeFinish?.id || ''] ||
-                                   mappedTex)
+                              const mappedTex = matchedKey ? effectiveTextureMap[matchedKey] || '' : '';
+                              const isLegacySliceSet = Object.keys(effectiveTextureMap).length >= 20 && editingProfile.configurator_version !== 'v2';
+                              const isCustomPerDevice = Boolean(activeFinish?.is_custom_per_device) || Boolean(mappedTex && !isLegacySliceSet);
+                              const customTex = (isCustomPerDevice || !isLegacySliceSet)
+                                ? (effectiveTextureMap[layerFinishSlug] ||
+                                   effectiveTextureMap[activeFinish?.slug || ''] ||
+                                   effectiveTextureMap[activeFinish?.id || ''] ||
+                                   mappedTex || '')
                                 : '';
 
-                              const isCustomDeviceFinish = isCustomPerDevice && Boolean(customTex);
+                              const isCustomDeviceFinish = (isCustomPerDevice || !isLegacySliceSet) && Boolean(customTex);
 
                               const isBigDevice = editingProfile.family === 'laptop' || editingProfile.family === 'tablet' || (editingProfile.family as string) === 'tablet_laptop' || editingProfile.family === 'keyboard';
                               const useBigTexture = l.texture_size === 'big' || (l.texture_size !== 'small' && isBigDevice);
@@ -8075,11 +8182,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 ? activeFinish.texture_big_url
                                 : activeFinish?.texture_url || '';
 
-                              // In v2, standard finishes strictly use global master textures.
-                              // Only genuine custom-per-device finishes use per-device mapped artwork.
-                              const textureToTile = (isCustomPerDevice && customTex)
-                                ? customTex
-                                : (activeTextureUrl || customTex);
+                              // In v2, custom-per-device or explicit device overrides use mapped artwork, while legacy 30+ slices fall back to global pattern
+                              const textureToTile = customTex || activeTextureUrl || '';
                               const fallbackColor = activeFinish?.color_hex || '#18181b';
 
                               // Do not render non-visual kit layers or layers without an alpha mask for this view
@@ -8130,7 +8234,18 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 resolvedLogoMask &&
                                 (isSingleAngleView || isExplicitLogoViewMatch || isLikelyLogoBackView || currentView?.logo_cutout_mask_url || assets.logo_cutout_url)
                               );
-                              const shouldApplyLogoCutout = selectedLogoCutout && (editingProfile.coverage_and_cutouts?.has_logo_cutout ?? true);
+                              const backLayer = editingProfile.layers.find(
+                                (item) => item.id.toLowerCase().includes('back') || (item.name || '').toLowerCase().includes('back')
+                              );
+                              const backFinishSlug = backLayer ? (selectedLayerFinishes[backLayer.id] || selectedSimFinish) : '';
+                              const backFinish = backFinishSlug ? finishes.find((f) => (f.slug || f.id) === backFinishSlug || f.id === backFinishSlug) : undefined;
+                              const isLogoCutoutDisabledByFinish = Boolean(
+                                activeFinish?.disable_logo_cutout ||
+                                activeFinish?.disabled_cutouts?.includes('logo') ||
+                                backFinish?.disable_logo_cutout ||
+                                backFinish?.disabled_cutouts?.includes('logo')
+                              );
+                              const shouldApplyLogoCutout = !isLogoCutoutDisabledByFinish && selectedLogoCutout && (editingProfile.coverage_and_cutouts?.has_logo_cutout ?? true);
                               const effectiveLogoCutout = (shouldApplyLogoCutout && isCurrentViewForLogo) ? resolvedLogoMask : undefined;
 
                               // Model Cut Resolution
@@ -8510,6 +8625,33 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             const isViewForLogo = isSingleView || isExplicitLogoView || isLikelyLogoBackView || Boolean(currentView?.logo_cutout_mask_url);
                             if (!isViewForLogo || !hasLogoMaskOnView) return null;
                             if (editingProfile.coverage_and_cutouts?.has_logo_cutout === false && !currentView?.logo_cutout_mask_url) return null;
+
+                            // Check if finish on back layer / active test part disables logo cutout
+                            const backLayer = editingProfile.layers.find(
+                              (l) => l.id.toLowerCase().includes('back') || (l.name || '').toLowerCase().includes('back')
+                            );
+                            const relevantFinishSlug = (backLayer && selectedLayerFinishes[backLayer.id])
+                              ? selectedLayerFinishes[backLayer.id]
+                              : (activeSimTestingPartId && selectedLayerFinishes[activeSimTestingPartId])
+                              ? selectedLayerFinishes[activeSimTestingPartId]
+                              : selectedSimFinish;
+                            const relevantFinish = finishes.find(
+                              (f) => (f.slug || f.id) === relevantFinishSlug || f.id === relevantFinishSlug
+                            );
+                            const isLogoCutoutDisabledByFinish = Boolean(
+                              relevantFinish?.disable_logo_cutout ||
+                              relevantFinish?.disabled_cutouts?.includes('logo')
+                            );
+
+                            if (isLogoCutoutDisabledByFinish) {
+                              return (
+                                <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-xl text-amber-300">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                  <span className="text-xs font-semibold">Solid / No Cutout</span>
+                                  <span className="text-[10px] text-zinc-400 font-mono">(Pre-printed)</span>
+                                </div>
+                              );
+                            }
 
                             return (
                               <div className="flex items-center gap-1.5 bg-zinc-900/80 p-1 rounded-xl border border-white/10">

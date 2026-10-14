@@ -543,6 +543,8 @@ export interface GlobalFinish {
   highlight_opacity?: number;
   surface_gradient_enabled?: boolean;
   surface_gradient_opacity?: number;
+  disable_logo_cutout?: boolean;
+  disabled_cutouts?: string[];
 }
 
 export interface FinishSurchargeTier {

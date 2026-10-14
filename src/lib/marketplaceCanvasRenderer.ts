@@ -1958,7 +1958,9 @@ async function renderDeviceComposite(
 
     // Resolve texture
     const isCustomPerDevice = Boolean(activeFinish.is_custom_per_device);
-    const customTex = isCustomPerDevice
+    const isLegacySliceSet = Object.keys(textureMap).length >= 20 && profile.configurator_version !== 'v2';
+    const hasExplicitOverride = Boolean(mappedTex && (isCustomPerDevice || !isLegacySliceSet));
+    const customTex = (isCustomPerDevice || hasExplicitOverride)
       ? (assets.render_texture_map?.[activeFinish.slug] ||
          assets.render_texture_map?.[activeFinish.id] ||
          mappedTex)
@@ -1974,9 +1976,7 @@ async function renderDeviceComposite(
       ? activeFinish.texture_big_url
       : activeFinish.texture_url || '';
 
-    const textureToTile = (isCustomPerDevice && customTex)
-      ? customTex
-      : (activeTexUrl || customTex);
+    const textureToTile = customTex || activeTexUrl || '';
 
     let texImg: HTMLImageElement | null = null;
     if (textureToTile) {
@@ -1998,7 +1998,11 @@ async function renderDeviceComposite(
     const isModelCutOnly = covMode === 'model_cut_only';
     const hasCoverageOptions = covMode === 'model_cut_and_360' || (hasModelCutAsset && !isModelCutOnly);
     const shouldApplyModelCut = isModelCutOnly || (hasCoverageOptions && coverage === 'model_cut');
-    const shouldApplyLogoCutout = logoCutout && (profile.coverage_and_cutouts?.has_logo_cutout ?? true);
+    const isLogoCutoutDisabledByFinish = Boolean(
+      activeFinish.disable_logo_cutout ||
+      activeFinish.disabled_cutouts?.includes('logo')
+    );
+    const shouldApplyLogoCutout = !isLogoCutoutDisabledByFinish && logoCutout && (profile.coverage_and_cutouts?.has_logo_cutout ?? true);
     const shouldApplyPencilCutout = pencilCutout && Boolean(profile.coverage_and_cutouts?.has_pencil_cutout);
 
     const targetLogoViewId = profile.coverage_and_cutouts?.logo_cutout_view_id || 'main_view';
