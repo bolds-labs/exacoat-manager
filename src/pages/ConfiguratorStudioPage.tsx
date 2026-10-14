@@ -16,6 +16,7 @@ import {
   batchMarkDevicesAuditedDirect,
   resetDeviceAuditDirect,
   GlobalFinish,
+  resolveFinishStatus,
   fetchGlobalFinishesDirect,
   saveGlobalFinishDirect,
   deleteGlobalFinishDirect,
@@ -3882,7 +3883,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
       editingFinishPrices[f.id] !== (f.extra_price || 0);
     const isStockDirty =
       editingFinishStock[f.id] !== undefined &&
-      editingFinishStock[f.id] !== (f.status || (f.in_stock !== false ? 'in_stock' : 'out_of_stock'));
+      editingFinishStock[f.id] !== resolveFinishStatus(f);
     const isActiveDirty =
       editingFinishActive[f.id] !== undefined &&
       editingFinishActive[f.id] !== (f.is_active !== false);
@@ -4000,7 +4001,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
         const newStatus: 'in_stock' | 'out_of_stock' | 'coming_soon' =
           customStock !== undefined
             ? customStock
-            : (f.status || (f.in_stock !== false ? 'in_stock' : 'out_of_stock'));
+            : resolveFinishStatus(f);
         const newStock = newStatus === 'in_stock';
         const customActive = editingFinishActive[f.id];
         const newActive = customActive !== undefined ? customActive : (f.is_active !== false);
@@ -4053,7 +4054,18 @@ export const ConfiguratorStudioPage: React.FC = () => {
           `Successfully saved all ${dirtyFinishes.length} modified finish(es).`
         );
         if (Array.isArray(res.finishes)) {
-          setFinishes(res.finishes);
+          const sentMap = new Map(updatedFinishes.map((item) => [item.id, item]));
+          const normalized = res.finishes.map((item) => {
+            const sent = sentMap.get(item.id);
+            const st = sent?.status || resolveFinishStatus(item);
+            return {
+              ...item,
+              status: st,
+              in_stock: st === 'in_stock',
+              is_coming_soon: st === 'coming_soon',
+            };
+          });
+          setFinishes(normalized);
         } else {
           setFinishes(updatedFinishes);
         }
@@ -4106,8 +4118,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
     const newStatus: 'in_stock' | 'out_of_stock' | 'coming_soon' =
       customStock !== undefined
         ? customStock
-        : (finish.status || (finish.in_stock !== false ? 'in_stock' : 'out_of_stock'));
+        : resolveFinishStatus(finish);
     const newStock = newStatus === 'in_stock';
+    const newComingSoon = newStatus === 'coming_soon';
     const customActive = editingFinishActive[finish.id];
     const newActive = customActive !== undefined ? customActive : (finish.is_active !== false);
     const customFlag = editingFinishCustomFlags[finish.id];
@@ -4140,7 +4153,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
         extra_price: newPrice,
         status: newStatus,
         in_stock: newStock,
-        is_coming_soon: newStatus === 'coming_soon',
+        is_coming_soon: newComingSoon,
         is_active: newActive,
         class_name: finish.class_name,
         is_custom_per_device: newCustomFlag,
@@ -4156,7 +4169,22 @@ export const ConfiguratorStudioPage: React.FC = () => {
       if (res.success) {
         showToast('success', 'Finish Saved', `Finish "${newName}" updated successfully.`);
         if (Array.isArray(res.finishes)) {
-          setFinishes(res.finishes);
+          const normalized = res.finishes.map((f) =>
+            f.id === finish.id || f.slug === finish.slug
+              ? {
+                  ...f,
+                  status: newStatus,
+                  in_stock: newStock,
+                  is_coming_soon: newComingSoon,
+                }
+              : {
+                  ...f,
+                  status: resolveFinishStatus(f),
+                  in_stock: resolveFinishStatus(f) === 'in_stock',
+                  is_coming_soon: resolveFinishStatus(f) === 'coming_soon',
+                }
+          );
+          setFinishes(normalized);
         } else {
           setFinishes((prev) =>
             prev.map((f) =>
@@ -4169,7 +4197,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     texture_url: newTexture,
                     texture_big_url: newBigTexture,
                     extra_price: newPrice,
+                    status: newStatus,
                     in_stock: newStock,
+                    is_coming_soon: newComingSoon,
                     is_active: newActive,
                     is_custom_per_device: newCustomFlag,
                     disable_logo_cutout: newDisableLogoCutout,
@@ -6355,7 +6385,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                     const currentStockInput: 'in_stock' | 'out_of_stock' | 'coming_soon' =
                       editingFinishStock[f.id] !== undefined
                         ? editingFinishStock[f.id]
-                        : (f.status || (f.in_stock !== false ? 'in_stock' : 'out_of_stock'));
+                        : resolveFinishStatus(f);
                     const currentActiveInput =
                       editingFinishActive[f.id] !== undefined
                         ? editingFinishActive[f.id]

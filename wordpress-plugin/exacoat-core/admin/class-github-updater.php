@@ -632,7 +632,7 @@ class Exacoat_Plugin_Updater {
 		register_rest_route( 'exacoat-core/v1', '/plugin/update', [
 			'methods'             => 'POST',
 			'callback'            => [ $this, 'rest_run_one_click_update' ],
-			'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
+			'permission_callback' => [ 'Exacoat_Configurator_Engine', 'verify_permission' ],
 		] );
 	}
 

@@ -550,8 +550,14 @@ class Exacoat_Configurator_Engine {
 			if ( ! isset( $f['is_active'] ) ) {
 				$f['is_active'] = true;
 			}
-			if ( ! isset( $f['status'] ) ) {
-				$f['status'] = ( isset( $f['in_stock'] ) && false === $f['in_stock'] ) ? 'out_of_stock' : 'in_stock';
+			if ( ! isset( $f['status'] ) || ! in_array( $f['status'], [ 'in_stock', 'out_of_stock', 'coming_soon' ], true ) ) {
+				if ( ! empty( $f['is_coming_soon'] ) ) {
+					$f['status'] = 'coming_soon';
+				} elseif ( isset( $f['in_stock'] ) && false === $f['in_stock'] ) {
+					$f['status'] = 'out_of_stock';
+				} else {
+					$f['status'] = 'in_stock';
+				}
 			}
 			$f['in_stock'] = ( 'in_stock' === $f['status'] );
 			$f['is_coming_soon'] = ( 'coming_soon' === $f['status'] );
@@ -1037,6 +1043,9 @@ class Exacoat_Configurator_Engine {
 		if ( ! in_array( $status, [ 'in_stock', 'out_of_stock', 'coming_soon' ], true ) ) {
 			$status = null;
 		}
+		if ( null === $status && ! empty( $params['is_coming_soon'] ) ) {
+			$status = 'coming_soon';
+		}
 		if ( null === $status && isset( $params['in_stock'] ) ) {
 			$status = (bool) $params['in_stock'] ? 'in_stock' : 'out_of_stock';
 		}
@@ -1172,7 +1181,9 @@ class Exacoat_Configurator_Engine {
 				'texture_big_url'      => $texture_big_url,
 				'extra_price'          => $extra_price,
 				'accent_extra_price'   => $accent_extra_price,
+				'status'               => $status,
 				'in_stock'             => $in_stock,
+				'is_coming_soon'       => $is_coming_soon,
 				'is_active'            => $is_active,
 				'is_custom_per_device' => $is_custom_per_device,
 				'shadow_opacity'       => $shadow_opacity,
@@ -1320,7 +1331,9 @@ class Exacoat_Configurator_Engine {
 				}
 				$item_status = sanitize_text_field( $item['status'] ?? '' );
 				if ( ! in_array( $item_status, [ 'in_stock', 'out_of_stock', 'coming_soon' ], true ) ) {
-					if ( isset( $item['in_stock'] ) ) {
+					if ( ! empty( $item['is_coming_soon'] ) ) {
+						$item_status = 'coming_soon';
+					} elseif ( isset( $item['in_stock'] ) ) {
 						$item_status = rest_sanitize_boolean( $item['in_stock'] ) ? 'in_stock' : 'out_of_stock';
 					} else {
 						$item_status = 'in_stock';

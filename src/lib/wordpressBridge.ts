@@ -549,6 +549,34 @@ export interface GlobalFinish {
   disabled_cutouts?: string[];
 }
 
+export function resolveFinishStatus(f: Partial<GlobalFinish> | undefined | null): 'in_stock' | 'out_of_stock' | 'coming_soon' {
+  if (!f) return 'in_stock';
+  if (f.status === 'coming_soon' || f.status === 'out_of_stock' || f.status === 'in_stock') {
+    return f.status;
+  }
+  if (f.is_coming_soon || (f as any).coming_soon) {
+    return 'coming_soon';
+  }
+  if (f.in_stock === false) {
+    return 'out_of_stock';
+  }
+  return 'in_stock';
+}
+
+export function normalizeGlobalFinishes(finishes: GlobalFinish[], overrides?: Map<string, Partial<GlobalFinish>>): GlobalFinish[] {
+  return (finishes || []).map((f) => {
+    const override = overrides?.get(f.id) || overrides?.get(f.slug);
+    const targetStatus = override?.status || resolveFinishStatus(override || f);
+    return {
+      ...f,
+      ...override,
+      status: targetStatus,
+      in_stock: targetStatus === 'in_stock',
+      is_coming_soon: targetStatus === 'coming_soon',
+    };
+  });
+}
+
 export interface FinishSurchargeTier {
   id: string;
   label: string;
@@ -3789,7 +3817,7 @@ export async function fetchGlobalFinishesDirect(): Promise<{
     if (cached) {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        localFinishes = parsed;
+        localFinishes = normalizeGlobalFinishes(parsed);
       }
     }
   } catch {}
@@ -3801,10 +3829,11 @@ export async function fetchGlobalFinishesDirect(): Promise<{
     const res = await authenticatedFetch(url, { headers: { Accept: 'application/json' } });
     const data = await res.json();
     if (res.ok && !!data?.success && Array.isArray(data?.finishes)) {
-      try { localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(data.finishes)); } catch {}
+      const normalized = normalizeGlobalFinishes(decodeDeep(data.finishes));
+      try { localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(normalized)); } catch {}
       return {
         success: true,
-        finishes: decodeDeep(data.finishes),
+        finishes: normalized,
         groups: Array.isArray(data?.groups) ? decodeDeep(data.groups) : undefined,
         group_settings: data?.group_settings ? decodeDeep(data.group_settings) : undefined,
         presets: Array.isArray(data?.presets) ? decodeDeep(data.presets) : undefined,
@@ -3818,10 +3847,11 @@ export async function fetchGlobalFinishesDirect(): Promise<{
     if (nextRes.ok) {
       const nextData = await nextRes.json();
       if (nextData?.success && Array.isArray(nextData?.finishes)) {
-        try { localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(nextData.finishes)); } catch {}
+        const normalized = normalizeGlobalFinishes(decodeDeep(nextData.finishes));
+        try { localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(normalized)); } catch {}
         return {
           success: true,
-          finishes: decodeDeep(nextData.finishes),
+          finishes: normalized,
           groups: Array.isArray(nextData?.groups) ? decodeDeep(nextData.groups) : undefined,
           group_settings: nextData?.group_settings ? decodeDeep(nextData.group_settings) : undefined,
           presets: Array.isArray(nextData?.presets) ? decodeDeep(nextData.presets) : undefined,
@@ -3833,7 +3863,7 @@ export async function fetchGlobalFinishesDirect(): Promise<{
 
   return {
     success: true,
-    finishes: localFinishes,
+    finishes: normalizeGlobalFinishes(localFinishes),
     surcharge_tiers: DEFAULT_FINISH_SURCHARGE_TIERS,
   };
 }
@@ -3916,13 +3946,14 @@ export async function toggleFinishStockDirect(
   }
 
   let updatedList: GlobalFinish[] = DEFAULT_GLOBAL_FINISHES;
+  let targetStatus: 'in_stock' | 'out_of_stock' | 'coming_soon' = status || 'in_stock';
   try {
     const cached = typeof localStorage !== 'undefined' ? localStorage.getItem(FINISHES_STORAGE_KEY) : null;
     const current = cached ? JSON.parse(cached) : DEFAULT_GLOBAL_FINISHES;
     updatedList = current.map((f: GlobalFinish) => {
       if (f.id !== id && f.slug !== id) return f;
-      const currStatus = f.status || (f.in_stock !== false ? 'in_stock' : 'out_of_stock');
-      const targetStatus = status || (currStatus === 'in_stock' ? 'out_of_stock' : currStatus === 'out_of_stock' ? 'coming_soon' : 'in_stock');
+      const currStatus = resolveFinishStatus(f);
+      targetStatus = status || (currStatus === 'in_stock' ? 'out_of_stock' : currStatus === 'out_of_stock' ? 'coming_soon' : 'in_stock');
       return {
         ...f,
         status: targetStatus,
@@ -3935,13 +3966,12 @@ export async function toggleFinishStockDirect(
     }
   } catch {}
 
-  const postPayload: Record<string, any> = { id };
-  if (status) {
-    postPayload.status = status;
-    postPayload.in_stock = inStock;
-  } else if (typeof inStockOrStatus === 'boolean') {
-    postPayload.in_stock = inStockOrStatus;
-  }
+  const postPayload: Record<string, any> = {
+    id,
+    status: targetStatus,
+    in_stock: targetStatus === 'in_stock',
+    is_coming_soon: targetStatus === 'coming_soon',
+  };
 
   try {
     await fetch('http://localhost:3020/api/configurator/finishes', {
@@ -3962,10 +3992,17 @@ export async function toggleFinishStockDirect(
     });
     const data = await res.json();
     if (res.ok && !!data?.success && Array.isArray(data?.finishes)) {
-      try { localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(data.finishes)); } catch {}
+      const overrides = new Map<string, Partial<GlobalFinish>>();
+      overrides.set(id, {
+        status: targetStatus,
+        in_stock: targetStatus === 'in_stock',
+        is_coming_soon: targetStatus === 'coming_soon',
+      });
+      const normalizedFinishes = normalizeGlobalFinishes(data.finishes, overrides);
+      try { localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(normalizedFinishes)); } catch {}
       return {
         success: true,
-        finishes: data.finishes,
+        finishes: normalizedFinishes,
       };
     }
   } catch {}
@@ -4024,19 +4061,32 @@ export async function saveGlobalFinishDirect(finish: Partial<GlobalFinish>): Pro
   const base = getWordPressBaseUrl();
   const url = `${base}/wp-json/exacoat-core/v1/finishes/save`;
 
+  const targetStatus = finish.status || (finish.is_coming_soon ? 'coming_soon' : (finish.in_stock !== false ? 'in_stock' : 'out_of_stock'));
+  const payload = {
+    ...finish,
+    status: targetStatus,
+    in_stock: targetStatus === 'in_stock',
+    is_coming_soon: targetStatus === 'coming_soon',
+  };
+
   try {
     const res = await authenticatedFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify(finish),
+      body: JSON.stringify(payload),
     });
     const data = await res.json();
+    let normalizedFinishes: GlobalFinish[] | undefined;
     if (res.ok && !!data?.success && Array.isArray(data?.finishes)) {
-      try { localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(data.finishes)); } catch {}
+      const overrides = new Map<string, Partial<GlobalFinish>>();
+      if (payload.id) overrides.set(payload.id, payload);
+      if (payload.slug) overrides.set(payload.slug, payload);
+      normalizedFinishes = normalizeGlobalFinishes(data.finishes, overrides);
+      try { localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(normalizedFinishes)); } catch {}
     }
     return {
       success: res.ok && !!data?.success,
-      finishes: data?.finishes,
+      finishes: normalizedFinishes || data?.finishes,
       groups: data?.groups,
       error: data?.error || data?.message,
     };
@@ -4125,19 +4175,36 @@ export async function saveAllGlobalFinishesDirect(
   const base = getWordPressBaseUrl();
   const url = `${base}/wp-json/exacoat-core/v1/finishes/save-all`;
 
+  const normalizedPayloadList = finishes.map((f) => {
+    const targetStatus = resolveFinishStatus(f);
+    return {
+      ...f,
+      status: targetStatus,
+      in_stock: targetStatus === 'in_stock',
+      is_coming_soon: targetStatus === 'coming_soon',
+    };
+  });
+
   try {
     const res = await authenticatedFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ finishes, groups, group_settings }),
+      body: JSON.stringify({ finishes: normalizedPayloadList, groups, group_settings }),
     });
     const data = await res.json();
+    let normalizedFinishes: GlobalFinish[] | undefined;
     if (res.ok && !!data?.success && Array.isArray(data?.finishes)) {
-      try { localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(data.finishes)); } catch {}
+      const overrides = new Map<string, Partial<GlobalFinish>>();
+      normalizedPayloadList.forEach((f) => {
+        if (f.id) overrides.set(f.id, f);
+        if (f.slug) overrides.set(f.slug, f);
+      });
+      normalizedFinishes = normalizeGlobalFinishes(data.finishes, overrides);
+      try { localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(normalizedFinishes)); } catch {}
     }
     return {
       success: res.ok && !!data?.success,
-      finishes: data?.finishes,
+      finishes: normalizedFinishes || data?.finishes,
       groups: data?.groups,
       group_settings: data?.group_settings,
       error: data?.error || data?.message,
