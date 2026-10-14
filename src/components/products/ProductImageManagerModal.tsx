@@ -22,6 +22,9 @@ import {
   ArrowUpLeft,
   X,
   Crop,
+  GripVertical,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { ImageCropModal } from '../ui/ImageCropModal';
@@ -54,6 +57,10 @@ export const ProductImageManagerModal: React.FC<ProductImageManagerModalProps> =
   const [images, setImages] = useState<ProductImageItem[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+
+  // Gallery Drag-and-Drop Reordering State
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   // Gallery Cropping Queue State (3:4 1500x2000)
   const [cropQueue, setCropQueue] = useState<File[]>([]);
@@ -133,6 +140,70 @@ export const ProductImageManagerModal: React.FC<ProductImageManagerModalProps> =
   // Remove an image from the list
   const handleRemoveImage = (index: number) => {
     setImages((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  // Drag and drop event handlers
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(index));
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverIndex !== index) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleDragLeave = (index: number) => {
+    if (dragOverIndex === index) {
+      setDragOverIndex(null);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === dropIndex) {
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+
+    setImages((prev) => {
+      const copy = [...prev];
+      const [draggedItem] = copy.splice(draggedIndex, 1);
+      copy.splice(dropIndex, 0, draggedItem);
+      return copy;
+    });
+
+    if (dropIndex === 0) {
+      showToast('info', 'Featured Cover', 'Image moved to slot #1 (primary featured cover).');
+    }
+
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  // Reorder via arrow buttons (prev/next slot)
+  const handleMoveImage = (fromIndex: number, direction: 'prev' | 'next') => {
+    const toIndex = direction === 'prev' ? fromIndex - 1 : fromIndex + 1;
+    if (toIndex < 0 || toIndex >= images.length) return;
+    setImages((prev) => {
+      const copy = [...prev];
+      const [item] = copy.splice(fromIndex, 1);
+      copy.splice(toIndex, 0, item);
+      return copy;
+    });
+    if (toIndex === 0) {
+      showToast('info', 'Featured Cover', 'Image moved to slot #1 (primary featured cover).');
+    }
   };
 
   // Helper to upload a batch of files to WordPress Media and append to active images
@@ -463,8 +534,11 @@ export const ProductImageManagerModal: React.FC<ProductImageManagerModalProps> =
       <div className="space-y-6">
         {/* Action Bar */}
         <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-zinc-950/60 border border-zinc-800">
-          <div className="text-xs text-zinc-300">
-            Click <Star className="w-3 h-3 inline text-amber-400 fill-amber-400" /> to set an image as the Featured Cover.
+          <div className="text-xs text-zinc-300 flex items-center gap-1.5">
+            <GripVertical className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span>
+              Drag and drop images or use the arrows to reorder. Slot #1 is the primary featured cover.
+            </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
 
@@ -544,28 +618,48 @@ export const ProductImageManagerModal: React.FC<ProductImageManagerModalProps> =
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
               {images.map((img, idx) => {
                 const isFeatured = idx === 0;
+                const isDragging = draggedIndex === idx;
+                const isDragOver = dragOverIndex === idx && draggedIndex !== idx;
+
                 return (
                   <div
                     key={img.id ? `img_${img.id}` : `src_${idx}`}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, idx)}
+                    onDragOver={(e) => handleDragOver(e, idx)}
+                    onDragLeave={() => handleDragLeave(idx)}
+                    onDragEnd={handleDragEnd}
+                    onDrop={(e) => handleDrop(e, idx)}
                     className={clsx(
-                      'group relative rounded-xl border overflow-hidden bg-zinc-950 flex flex-col transition',
-                      isFeatured
-                        ? 'border-amber-500/60 ring-1 ring-amber-500/40 shadow-lg shadow-amber-500/10'
-                        : 'border-zinc-800 hover:border-zinc-700'
+                      'group relative rounded-xl border overflow-hidden bg-zinc-950 flex flex-col transition cursor-grab active:cursor-grabbing select-none',
+                      isDragging && 'opacity-35 scale-95 border-amber-500/70 border-dashed',
+                      isDragOver && 'border-amber-400 ring-2 ring-amber-400/60 scale-[1.03] shadow-lg shadow-amber-400/20 z-10',
+                      !isDragging && !isDragOver && (
+                        isFeatured
+                          ? 'border-amber-500/60 ring-1 ring-amber-500/40 shadow-lg shadow-amber-500/10'
+                          : 'border-zinc-800 hover:border-zinc-700'
+                      )
                     )}
                   >
-                    {/* Badge */}
-                    <div className="absolute top-2 left-2 z-10">
+                    {/* Top Badges & Drag Grip */}
+                    <div className="absolute top-2 left-2 right-2 z-10 flex items-center justify-between pointer-events-none">
                       {isFeatured ? (
                         <span className="px-2 py-0.5 rounded-full bg-amber-400 text-zinc-950 font-bold text-[10px] flex items-center gap-1 shadow">
                           <Star className="w-3 h-3 fill-zinc-950" />
                           Featured
                         </span>
                       ) : (
-                        <span className="px-1.5 py-0.5 rounded bg-black/70 text-zinc-300 text-[10px] font-mono">
+                        <span className="px-1.5 py-0.5 rounded bg-black/75 text-zinc-300 text-[10px] font-mono border border-zinc-700/50 backdrop-blur-sm shadow">
                           #{idx + 1}
                         </span>
                       )}
+
+                      <span
+                        className="p-1 rounded bg-black/75 text-zinc-400 group-hover:text-amber-400 border border-zinc-700/50 backdrop-blur-sm shadow transition"
+                        title="Drag to reorder"
+                      >
+                        <GripVertical className="w-3.5 h-3.5" />
+                      </span>
                     </div>
 
                     {/* Image Preview */}
@@ -573,31 +667,62 @@ export const ProductImageManagerModal: React.FC<ProductImageManagerModalProps> =
                       <img
                         src={img.src}
                         alt={img.alt || `Product image ${idx + 1}`}
-                        className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                        className="w-full h-full object-cover group-hover:scale-105 transition duration-300 pointer-events-none"
                         loading="lazy"
                       />
                     </div>
 
                     {/* Actions bar */}
-                    <div className="p-2 bg-zinc-900/90 border-t border-zinc-800/80 flex items-center justify-between gap-1">
-                      {!isFeatured ? (
+                    <div className="p-1.5 bg-zinc-900/95 border-t border-zinc-800 flex items-center justify-between gap-1">
+                      {/* Left: Reorder buttons & Featured star */}
+                      <div className="flex items-center gap-0.5">
                         <button
                           type="button"
-                          onClick={() => handleSetFeatured(idx)}
-                          className="text-[11px] text-zinc-400 hover:text-amber-400 transition flex items-center gap-1 cursor-pointer"
-                          title="Make Featured"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMoveImage(idx, 'prev');
+                          }}
+                          disabled={idx === 0}
+                          className="p-1 rounded text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 disabled:opacity-20 disabled:pointer-events-none transition cursor-pointer"
+                          title="Move earlier"
                         >
-                          <Star className="w-3 h-3" />
-                          <span>Set Cover</span>
+                          <ChevronLeft className="w-3.5 h-3.5" />
                         </button>
-                      ) : (
-                        <span className="text-[10px] text-amber-400 font-medium">Cover Image</span>
-                      )}
-
-                      <div className="flex items-center gap-1">
                         <button
                           type="button"
-                          onClick={() => handleStartSingleCrop(img, idx)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMoveImage(idx, 'next');
+                          }}
+                          disabled={idx === images.length - 1}
+                          className="p-1 rounded text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 disabled:opacity-20 disabled:pointer-events-none transition cursor-pointer"
+                          title="Move later"
+                        >
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                        {!isFeatured && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSetFeatured(idx);
+                            }}
+                            className="p-1 rounded text-zinc-400 hover:text-amber-400 hover:bg-amber-400/10 transition cursor-pointer"
+                            title="Make Featured Cover"
+                          >
+                            <Star className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Right: Crop & Delete */}
+                      <div className="flex items-center gap-0.5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleStartSingleCrop(img, idx);
+                          }}
                           className="p-1 rounded text-zinc-400 hover:text-amber-400 hover:bg-amber-400/10 transition cursor-pointer"
                           title="Re-frame image to 3:4 (1500×2000 px)"
                         >
@@ -606,7 +731,10 @@ export const ProductImageManagerModal: React.FC<ProductImageManagerModalProps> =
 
                         <button
                           type="button"
-                          onClick={() => handleRemoveImage(idx)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveImage(idx);
+                          }}
                           className="p-1 rounded text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
                           title="Remove image"
                         >
