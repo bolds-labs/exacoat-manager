@@ -777,6 +777,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [inspectorTab, setInspectorTab] = useState<'device' | 'skins' | 'cutouts' | 'presets' | 'pricing'>('skins');
   const [selectedLayerId, setSelectedLayerId] = useState<string>('');
   const [finishCategoryFilter, setFinishCategoryFilter] = useState<string>('all');
+  const [logoCutoutFinishSearch, setLogoCutoutFinishSearch] = useState<string>('');
 
   // Per-Device Presets Editor Modal state
   const [editingDevicePreset, setEditingDevicePreset] = useState<{
@@ -8400,11 +8401,16 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               );
                               const backFinishSlug = backLayer ? (selectedLayerFinishes[backLayer.id] || selectedSimFinish) : '';
                               const backFinish = backFinishSlug ? finishes.find((f) => (f.slug || f.id) === backFinishSlug || f.id === backFinishSlug) : undefined;
+                              const disabledFinishesForProfile = (editingProfile.coverage_and_cutouts?.disabled_logo_cutout_finishes || []).map((s) => s.toLowerCase().trim());
+                              const activeSlug = (activeFinish?.slug || activeFinish?.id || '').toLowerCase().trim();
+                              const backSlug = (backFinish?.slug || backFinish?.id || '').toLowerCase().trim();
                               const isLogoCutoutDisabledByFinish = Boolean(
                                 activeFinish?.disable_logo_cutout ||
                                 activeFinish?.disabled_cutouts?.includes('logo') ||
                                 backFinish?.disable_logo_cutout ||
-                                backFinish?.disabled_cutouts?.includes('logo')
+                                backFinish?.disabled_cutouts?.includes('logo') ||
+                                disabledFinishesForProfile.includes(activeSlug) ||
+                                disabledFinishesForProfile.includes(backSlug)
                               );
                               const shouldApplyLogoCutout = !isLogoCutoutDisabledByFinish && selectedLogoCutout && (editingProfile.coverage_and_cutouts?.has_logo_cutout ?? true);
                               const effectiveLogoCutout = (shouldApplyLogoCutout && isCurrentViewForLogo) ? resolvedLogoMask : undefined;
@@ -8816,9 +8822,12 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             const relevantFinish = finishes.find(
                               (f) => (f.slug || f.id) === relevantFinishSlug || f.id === relevantFinishSlug
                             );
+                            const disabledFinishesForProfile = (editingProfile.coverage_and_cutouts?.disabled_logo_cutout_finishes || []).map((s) => s.toLowerCase().trim());
+                            const relSlug = (relevantFinish?.slug || relevantFinish?.id || '').toLowerCase().trim();
                             const isLogoCutoutDisabledByFinish = Boolean(
                               relevantFinish?.disable_logo_cutout ||
-                              relevantFinish?.disabled_cutouts?.includes('logo')
+                              relevantFinish?.disabled_cutouts?.includes('logo') ||
+                              disabledFinishesForProfile.includes(relSlug)
                             );
 
                             if (isLogoCutoutDisabledByFinish) {
@@ -11370,6 +11379,153 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     </select>
                                   </div>
                                 )}
+
+                                {/* Per-Device Disabled Logo Cutout Finishes */}
+                                <div className="space-y-2.5 pt-3 border-t border-white/5">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-xs font-semibold text-white">Disable Logo Cutout for Specific Finishes</span>
+                                      <InfoTooltip text="Select finishes (e.g. Burgundy) that should never have a logo cutout on this specific device. When chosen, the webstore defaults to 'No Logo Cutout' and locks 'With Logo Cutout' as unselectable." />
+                                    </div>
+                                    {(editingProfile.coverage_and_cutouts?.disabled_logo_cutout_finishes || []).length > 0 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSetCoverageAndCutouts('disabled_logo_cutout_finishes', [])}
+                                        className="text-[10px] text-zinc-400 hover:text-rose-400 font-mono cursor-pointer transition-colors"
+                                      >
+                                        Clear All ({(editingProfile.coverage_and_cutouts?.disabled_logo_cutout_finishes || []).length})
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  <p className="text-[11px] text-zinc-400 leading-relaxed">
+                                    Click any finish to toggle logo cutout off for this device only. The webstore will lock logo cutout to &quot;No Logo Cutout&quot; whenever this finish is active.
+                                  </p>
+
+                                  {/* Filter input */}
+                                  <div className="relative">
+                                    <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                    <input
+                                      type="text"
+                                      placeholder="Search finish to toggle (e.g. Burgundy)..."
+                                      value={logoCutoutFinishSearch}
+                                      onChange={(e) => setLogoCutoutFinishSearch(e.target.value)}
+                                      className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl bg-zinc-950/80 border border-white/10 text-white placeholder-zinc-500 focus:outline-none focus:border-[#f3aa18] transition-colors"
+                                    />
+                                  </div>
+
+                                  {/* Active disabled finishes pills (if any) */}
+                                  {(editingProfile.coverage_and_cutouts?.disabled_logo_cutout_finishes || []).length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                      {(editingProfile.coverage_and_cutouts?.disabled_logo_cutout_finishes || []).map((fSlug) => {
+                                        const finish = finishes.find(
+                                          (f) =>
+                                            (f.slug || f.id).toLowerCase() === fSlug.toLowerCase() ||
+                                            f.id.toLowerCase() === fSlug.toLowerCase()
+                                        );
+                                        const displayName = finish?.name || fSlug;
+                                        return (
+                                          <span
+                                            key={fSlug}
+                                            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-xs font-medium bg-amber-500/15 border border-amber-500/30 text-amber-300"
+                                          >
+                                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                            <span>{displayName}</span>
+                                            <span className="text-[10px] opacity-75 font-mono">(No Cutout)</span>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                const current = editingProfile.coverage_and_cutouts?.disabled_logo_cutout_finishes || [];
+                                                const norm = fSlug.trim();
+                                                const next = current.filter(
+                                                  (s) => s.toLowerCase().trim() !== norm && (!finish || s.toLowerCase().trim() !== finish.id.toLowerCase().trim())
+                                                );
+                                                handleSetCoverageAndCutouts('disabled_logo_cutout_finishes', next);
+                                              }}
+                                              className="hover:text-white ml-0.5 cursor-pointer"
+                                              title={`Re-enable logo cutout for ${displayName}`}
+                                            >
+                                              <X className="w-3 h-3" />
+                                            </button>
+                                          </span>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+
+                                  {/* Chips selector */}
+                                  <div className="flex flex-wrap gap-1 max-h-36 overflow-y-auto pr-1 pt-1">
+                                    {finishes
+                                      .filter((f) => {
+                                        if (!logoCutoutFinishSearch.trim()) return true;
+                                        const q = logoCutoutFinishSearch.toLowerCase().trim();
+                                        return (
+                                          f.name.toLowerCase().includes(q) ||
+                                          (f.slug || '').toLowerCase().includes(q) ||
+                                          f.id.toLowerCase().includes(q)
+                                        );
+                                      })
+                                      .map((f) => {
+                                        const fSlug = (f.slug || f.id).toLowerCase().trim();
+                                        const currentDisabledList = (
+                                          editingProfile.coverage_and_cutouts?.disabled_logo_cutout_finishes || []
+                                        ).map((s) => s.toLowerCase().trim());
+                                        const isDisabledForDevice =
+                                          currentDisabledList.includes(fSlug) ||
+                                          currentDisabledList.includes(f.id.toLowerCase().trim()) ||
+                                          currentDisabledList.includes(f.name.toLowerCase().replace(/\s+/g, '-'));
+                                        return (
+                                          <button
+                                            key={f.id}
+                                            type="button"
+                                            onClick={() => {
+                                              const current = editingProfile.coverage_and_cutouts?.disabled_logo_cutout_finishes || [];
+                                              const norm = fSlug;
+                                              const exists = current.some(
+                                                (s) =>
+                                                  s.toLowerCase().trim() === norm ||
+                                                  s.toLowerCase().trim() === f.id.toLowerCase().trim() ||
+                                                  s.toLowerCase().trim() === f.name.toLowerCase().replace(/\s+/g, '-')
+                                              );
+                                              const next = exists
+                                                ? current.filter(
+                                                    (s) =>
+                                                      s.toLowerCase().trim() !== norm &&
+                                                      s.toLowerCase().trim() !== f.id.toLowerCase().trim() &&
+                                                      s.toLowerCase().trim() !== f.name.toLowerCase().replace(/\s+/g, '-')
+                                                  )
+                                                : [...current, norm];
+                                              handleSetCoverageAndCutouts('disabled_logo_cutout_finishes', next);
+                                            }}
+                                            className={clsx(
+                                              'px-2.5 py-1 rounded-lg text-xs font-sans transition-all flex items-center gap-1.5 cursor-pointer select-none',
+                                              isDisabledForDevice
+                                                ? 'bg-amber-500/20 border border-amber-500/40 text-amber-300 font-semibold'
+                                                : 'bg-zinc-950/60 border border-white/5 text-zinc-400 hover:text-white hover:bg-zinc-800'
+                                            )}
+                                            title={
+                                              isDisabledForDevice
+                                                ? `Logo Cutout is DISABLED for ${f.name} on this device. Click to re-enable.`
+                                                : `Click to disable logo cutout for ${f.name} on this device.`
+                                            }
+                                          >
+                                            <span
+                                              className={clsx(
+                                                'w-2 h-2 rounded-full shrink-0',
+                                                isDisabledForDevice ? 'bg-amber-400 ring-2 ring-amber-400/30' : 'bg-zinc-600'
+                                              )}
+                                            />
+                                            <span className="truncate">{f.name}</span>
+                                            {isDisabledForDevice && (
+                                              <span className="text-[9px] font-mono px-1 rounded bg-amber-500/30 text-amber-200">
+                                                No Cutout
+                                              </span>
+                                            )}
+                                          </button>
+                                        );
+                                      })}
+                                  </div>
+                                </div>
                               </div>
                             </div>
 

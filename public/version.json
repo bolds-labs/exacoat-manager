@@ -9,7 +9,7 @@
   "requires_php": "7.4",
   "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.183.zip?v=0.1.183",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-10-14T13:22:33.457Z",
+  "last_updated": "2026-10-14T13:55:51.155Z",
   "sections": {
     "changelog": "### Version 0.1.183\n- Add 3-state finish status (in_stock, out_of_stock, coming_soon)\n- Ensure coming_soon persists reliably across all configurator and studio endpoints\n- Add backward-compatible fallback normalization for finish status"
   }

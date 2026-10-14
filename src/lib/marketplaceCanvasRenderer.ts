@@ -1998,9 +1998,12 @@ async function renderDeviceComposite(
     const isModelCutOnly = covMode === 'model_cut_only';
     const hasCoverageOptions = covMode === 'model_cut_and_360' || (hasModelCutAsset && !isModelCutOnly);
     const shouldApplyModelCut = isModelCutOnly || (hasCoverageOptions && coverage === 'model_cut');
+    const disabledFinishesForProfile = (profile.coverage_and_cutouts?.disabled_logo_cutout_finishes || []).map((s) => s.toLowerCase().trim());
+    const activeFinishSlug = (activeFinish.slug || activeFinish.id || '').toLowerCase().trim();
     const isLogoCutoutDisabledByFinish = Boolean(
       activeFinish.disable_logo_cutout ||
-      activeFinish.disabled_cutouts?.includes('logo')
+      activeFinish.disabled_cutouts?.includes('logo') ||
+      disabledFinishesForProfile.includes(activeFinishSlug)
     );
     const shouldApplyLogoCutout = !isLogoCutoutDisabledByFinish && logoCutout && (profile.coverage_and_cutouts?.has_logo_cutout ?? true);
     const shouldApplyPencilCutout = pencilCutout && Boolean(profile.coverage_and_cutouts?.has_pencil_cutout);

@@ -569,6 +569,7 @@ export interface DeviceCoverageAndCutouts {
   has_logo_cutout?: boolean;
   logo_cutout_mask_url?: string;
   logo_cutout_view_id?: string;
+  disabled_logo_cutout_finishes?: string[];
   has_pencil_cutout?: boolean;
   pencil_cutout_mask_url?: string;
   pencil_cutout_label?: string;
