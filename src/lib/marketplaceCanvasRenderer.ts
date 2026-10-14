@@ -2051,7 +2051,17 @@ async function renderDeviceComposite(
     // Tile pattern texture
     if (texImg && texImg.width > 0 && texImg.height > 0) {
       const rot = (layer.texture_rotation || 0) % 360;
-      const zoom = currentView.texture_scale ?? profile.texture_scale ?? layer.texture_scale ?? 1.0;
+      const isCustomDeviceFinish = Boolean(customTex);
+      const scaleMap = assets.render_texture_scale_map || {};
+      const scaleMatchedKey = Object.keys(scaleMap).find(
+        (k) => k.toLowerCase().replace(/[^a-z0-9]/g, '') === (activeFinish.slug || activeFinish.id || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+      );
+      const customScale = scaleMatchedKey
+        ? scaleMap[scaleMatchedKey]
+        : (scaleMap[activeFinish.slug] ?? scaleMap[activeFinish.id]);
+      const zoom = isCustomDeviceFinish
+        ? (typeof customScale === 'number' && customScale > 0 ? customScale : 1.0)
+        : (currentView.texture_scale ?? profile.texture_scale ?? layer.texture_scale ?? 1.0);
       const baseScale = Math.max(1500 / texImg.width, 1500 / texImg.height);
       const scale = baseScale * zoom;
 

@@ -816,9 +816,11 @@ export const ConfiguratorStudioPage: React.FC = () => {
     finishSlug: string;
     finishName: string;
     initialUrl: string;
+    initialScale?: number;
     thumbnail?: string;
   } | null>(null);
   const [tempTextureUrl, setTempTextureUrl] = useState('');
+  const [tempTextureScale, setTempTextureScale] = useState<number>(100);
 
   // Category combobox dropdown state
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
@@ -3468,6 +3470,36 @@ export const ConfiguratorStudioPage: React.FC = () => {
     });
   };
 
+  const handleSetFinishTextureScale = (layerId: string, finishSlug: string, scale: number) => {
+    if (!editingProfile) return;
+    const viewId = activeSimView || 'main_view';
+    setEditingProfile({
+      ...editingProfile,
+      layers: editingProfile.layers.map((l) => {
+        if (l.id !== layerId) return l;
+        const currentAssets = l.assets_by_view || {};
+        const currentViewAssets = currentAssets[viewId] || {};
+        const currentScaleMap = currentViewAssets.render_texture_scale_map || {};
+        const updatedScaleMap = { ...currentScaleMap };
+        if (typeof scale === 'number' && scale > 0) {
+          updatedScaleMap[finishSlug] = Number(scale.toFixed(3));
+        } else {
+          delete updatedScaleMap[finishSlug];
+        }
+        return {
+          ...l,
+          assets_by_view: {
+            ...currentAssets,
+            [viewId]: {
+              ...currentViewAssets,
+              render_texture_scale_map: updatedScaleMap,
+            },
+          },
+        };
+      }),
+    });
+  };
+
   const handleSetLayerOverlayUrl = (
     layerId: string,
     key: 'mask_svg_url' | 'logo_cutout_url' | 'model_cutout_url' | 'shadow_png_url' | 'highlight_png_url' | 'shadow_opacity' | 'highlight_opacity',
@@ -3725,16 +3757,19 @@ export const ConfiguratorStudioPage: React.FC = () => {
     finishSlug: string,
     finishName: string,
     initialUrl: string,
-    thumbnail?: string
+    thumbnail?: string,
+    initialScale?: number
   ) => {
-    setEditingTextureModal({ layerId, layerName, finishSlug, finishName, initialUrl, thumbnail });
+    setEditingTextureModal({ layerId, layerName, finishSlug, finishName, initialUrl, initialScale, thumbnail });
     setTempTextureUrl(initialUrl || '');
+    setTempTextureScale(typeof initialScale === 'number' && initialScale > 0 ? Math.round(initialScale * 100) : 100);
   };
 
   const handleSaveTextureModal = () => {
     if (!editingTextureModal) return;
     handleSetFinishTexture(editingTextureModal.layerId, editingTextureModal.finishSlug, tempTextureUrl);
-    showToast('success', 'Texture Updated', `Updated texture for ${editingTextureModal.finishName}.`);
+    handleSetFinishTextureScale(editingTextureModal.layerId, editingTextureModal.finishSlug, tempTextureScale / 100);
+    showToast('success', 'Texture & Scale Updated', `Updated texture and scale for ${editingTextureModal.finishName}.`);
     setEditingTextureModal(null);
   };
 
@@ -7914,6 +7949,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                 })();
 
                 const textureMap = currentLayerAssets.render_texture_map || {};
+                const scaleMap = currentLayerAssets.render_texture_scale_map || {};
 
                 const activeTestPartId = activeSimTestingPartId || skinLayers[0]?.id || '';
                 const activeTestLayer = skinLayers.find((l) => l.id === activeTestPartId) || skinLayers[0];
@@ -8292,8 +8328,25 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 currentView?.highlight_png_url
                               );
 
+                              // Custom texture overrides default to 100% 1:1 canvas fit (or custom scale if set).
                               // Pattern materials strictly follow angle texture zoom/scale if specified, then profile, then layer default.
-                              const effectiveTextureScale = currentView?.texture_scale ?? editingProfile.texture_scale ?? l.texture_scale ?? 1.0;
+                              const fallbackScaleMap = Object.values(l.assets_by_view || {}).find(
+                                (a) => a.render_texture_scale_map && Object.keys(a.render_texture_scale_map).length > 0
+                              )?.render_texture_scale_map || {};
+                              const effectiveScaleMap = (assets.render_texture_scale_map && Object.keys(assets.render_texture_scale_map).length > 0)
+                                ? assets.render_texture_scale_map
+                                : fallbackScaleMap;
+
+                              const scaleMatchedKey = Object.keys(effectiveScaleMap).find(
+                                (k) => k.toLowerCase().replace(/[^a-z0-9]/g, '') === simNorm
+                              );
+                              const customScale = scaleMatchedKey
+                                ? effectiveScaleMap[scaleMatchedKey]
+                                : (effectiveScaleMap[layerFinishSlug] ?? effectiveScaleMap[activeFinish?.slug || ''] ?? effectiveScaleMap[activeFinish?.id || '']);
+
+                              const effectiveTextureScale = isCustomDeviceFinish
+                                ? (typeof customScale === 'number' && customScale > 0 ? customScale : 1.0)
+                                : (currentView?.texture_scale ?? editingProfile.texture_scale ?? l.texture_scale ?? 1.0);
 
                               return (
                                 <V2SkinCanvasLayer
@@ -9700,11 +9753,16 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                           const currentAssets =
                                             currentActiveLayer.assets_by_view?.[currentView?.id || 'main_view'] || {};
                                           const currentMap = currentAssets.render_texture_map || {};
+                                          const currentScaleMap = currentAssets.render_texture_scale_map || {};
                                           const matchedKey = Object.keys(currentMap).find(
                                             (k) => k.toLowerCase().replace(/[^a-z0-9]/g, '') === normSlug
                                           );
                                           const currentUrl = matchedKey ? currentMap[matchedKey] : '';
                                           const isConfigured = Boolean(currentUrl);
+                                          const matchedScaleKey = Object.keys(currentScaleMap).find(
+                                            (k) => k.toLowerCase().replace(/[^a-z0-9]/g, '') === normSlug
+                                          );
+                                          const currentScale = matchedScaleKey ? currentScaleMap[matchedScaleKey] : (currentScaleMap[finishSlug] ?? 1.0);
                                           const isCurrentlySimulated =
                                             (selectedLayerFinishes[currentActiveLayer.id] || selectedSimFinish) === finishSlug;
 
@@ -9773,9 +9831,28 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                                       {isConfigured ? 'Active on device' : 'Hidden on device'}
                                                     </span>
                                                     {isConfigured && (
-                                                      <span className="text-[9px] font-mono px-1.5 py-0.2 rounded-full font-semibold border bg-sky-500/10 text-sky-400 border-sky-500/30">
-                                                        100% Scale
-                                                      </span>
+                                                      <div
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className="flex items-center gap-1 bg-sky-500/10 border border-sky-500/30 rounded-md px-1.5 py-0.2"
+                                                        title="Custom texture scale (defaults to 100% full fit)"
+                                                      >
+                                                        <span className="text-[9px] text-sky-400 font-mono font-semibold">Scale:</span>
+                                                        <input
+                                                          type="number"
+                                                          min="50"
+                                                          max="200"
+                                                          step="1"
+                                                          value={Math.round(currentScale * 100)}
+                                                          onChange={(e) => {
+                                                            const val = parseFloat(e.target.value);
+                                                            if (!isNaN(val) && val > 0) {
+                                                              handleSetFinishTextureScale(currentActiveLayer.id, finishSlug, val / 100);
+                                                            }
+                                                          }}
+                                                          className="w-9 text-[9px] font-mono text-white bg-transparent border-none p-0 text-center focus:outline-none"
+                                                        />
+                                                        <span className="text-[9px] text-sky-400 font-mono">%</span>
+                                                      </div>
                                                     )}
                                                   </div>
                                                   <span className="text-[10px] text-zinc-400 font-mono block truncate">
@@ -9871,34 +9948,69 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                           );
                                           const currentUrl = matchedKey ? textureMap[matchedKey] : '';
                                           const isAssigned = Boolean(currentUrl);
+                                          const matchedScaleKey = Object.keys(scaleMap).find(
+                                            (k) => k.toLowerCase().replace(/[^a-z0-9]/g, '') === normSlug
+                                          );
+                                          const assignedScale = matchedScaleKey ? scaleMap[matchedScaleKey] : (scaleMap[finishSlug] ?? 1.0);
 
                                           return (
                                             <div
                                               key={`override-${f.id}`}
                                               className="p-2 rounded-xl bg-zinc-900 border border-white/5 flex items-center justify-between gap-2"
                                             >
-                                              <span className="text-xs text-zinc-300 truncate">{f.name}</span>
-                                              <button
-                                                type="button"
-                                                onClick={() =>
-                                                  setEditingTextureModal({
-                                                    layerId: currentActiveLayer.id,
-                                                    layerName: currentActiveLayer.name,
-                                                    finishSlug,
-                                                    finishName: f.name,
-                                                    initialUrl: currentUrl,
-                                                    thumbnail: f.thumbnail,
-                                                  })
-                                                }
-                                                className={clsx(
-                                                  'text-[10px] px-2 py-0.5 rounded cursor-pointer transition-colors font-mono',
-                                                  isAssigned
-                                                    ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                                                    : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                                              <div className="flex items-center gap-1.5 min-w-0">
+                                                <span className="text-xs text-zinc-300 truncate">{f.name}</span>
+                                                {isAssigned && (
+                                                  <span className="text-[9px] font-mono px-1 rounded bg-sky-500/10 text-sky-400 border border-sky-500/30 shrink-0">
+                                                    {Math.round(assignedScale * 100)}%
+                                                  </span>
                                                 )}
-                                              >
-                                                {isAssigned ? 'Edit' : 'Set URL'}
-                                              </button>
+                                              </div>
+                                              <div className="flex items-center gap-1.5 shrink-0">
+                                                {isAssigned && (
+                                                  <div className="flex items-center gap-0.5 bg-zinc-950/80 border border-white/10 rounded px-1 py-0.5" title="Scale percentage (100% full fit)">
+                                                    <input
+                                                      type="number"
+                                                      min="50"
+                                                      max="200"
+                                                      step="1"
+                                                      value={Math.round(assignedScale * 100)}
+                                                      onChange={(e) => {
+                                                        const val = parseFloat(e.target.value);
+                                                        if (!isNaN(val) && val > 0) {
+                                                          handleSetFinishTextureScale(currentActiveLayer.id, finishSlug, val / 100);
+                                                        }
+                                                      }}
+                                                      className="w-8 text-[10px] font-mono text-white bg-transparent border-none p-0 text-center focus:outline-none"
+                                                    />
+                                                    <span className="text-[9px] text-zinc-400 font-mono">%</span>
+                                                  </div>
+                                                )}
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setEditingTextureModal({
+                                                      layerId: currentActiveLayer.id,
+                                                      layerName: currentActiveLayer.name,
+                                                      finishSlug,
+                                                      finishName: f.name,
+                                                      initialUrl: currentUrl,
+                                                      initialScale: assignedScale,
+                                                      thumbnail: f.thumbnail,
+                                                    });
+                                                    setTempTextureUrl(currentUrl || '');
+                                                    setTempTextureScale(Math.round(assignedScale * 100));
+                                                  }}
+                                                  className={clsx(
+                                                    'text-[10px] px-2 py-0.5 rounded cursor-pointer transition-colors font-mono',
+                                                    isAssigned
+                                                      ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                                      : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                                                  )}
+                                                >
+                                                  {isAssigned ? 'Edit' : 'Set URL'}
+                                                </button>
+                                              </div>
                                             </div>
                                           );
                                         })}
@@ -12293,6 +12405,57 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       </div>
                     )}
 
+                    {/* Texture Scale / Fit Control */}
+                    <div className="space-y-2 pt-2 border-t border-white/5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-zinc-300">
+                          Artwork Texture Scale / Fit
+                        </label>
+                        <span className="text-xs font-mono font-bold text-[#f3aa18]">
+                          {tempTextureScale}%
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min="50"
+                          max="200"
+                          step="1"
+                          value={tempTextureScale}
+                          onChange={(e) => setTempTextureScale(Number(e.target.value))}
+                          className="flex-1 accent-[#f3aa18] cursor-pointer"
+                        />
+                        <div className="flex items-center gap-1 bg-zinc-900 border border-white/10 rounded-xl px-2.5 py-1.5 shrink-0">
+                          <input
+                            type="number"
+                            min="50"
+                            max="200"
+                            step="1"
+                            value={tempTextureScale}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              if (!isNaN(val) && val >= 10 && val <= 500) {
+                                setTempTextureScale(val);
+                              }
+                            }}
+                            className="w-12 text-xs font-mono text-white bg-transparent border-none p-0 text-center focus:outline-none"
+                          />
+                          <span className="text-xs text-zinc-400 font-mono">%</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setTempTextureScale(100)}
+                          className="px-2.5 py-1.5 text-[11px] font-sans font-medium rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-white/10 cursor-pointer shrink-0 transition-colors"
+                          title="Reset to 100% full canvas fit"
+                        >
+                          Reset (100%)
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-zinc-500 leading-relaxed">
+                        Custom texture overrides default to 100% 1:1 canvas fit (unlike repeating seamless patterns which follow angle zoom). Adjust if you need custom zoom or sizing.
+                      </p>
+                    </div>
+
                     <div className="pt-3 border-t border-white/10 flex items-center justify-end gap-3">
                       <button
                         type="button"
@@ -12306,7 +12469,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                         onClick={handleSaveTextureModal}
                         className="px-5 py-2 text-xs font-sans font-bold uppercase tracking-wider rounded-xl bg-[#f3aa18] hover:bg-[#ffb72b] text-black transition-colors cursor-pointer"
                       >
-                        Save Texture URL
+                        Save Texture & Scale
                       </button>
                     </div>
                   </div>

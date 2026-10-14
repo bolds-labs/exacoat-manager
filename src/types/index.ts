@@ -540,6 +540,7 @@ export interface ConfiguratorLayer {
     shadow_opacity?: number;
     highlight_opacity?: number;
     render_texture_map?: Record<string, string>;
+    render_texture_scale_map?: Record<string, number>;
   }>;
   legacy_id?: number;
   texture_rotation?: number;
