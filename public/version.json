@@ -9,7 +9,7 @@
   "requires_php": "7.4",
   "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.182.zip?v=0.1.182",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-10-14T10:37:21.659Z",
+  "last_updated": "2026-10-14T12:47:23.664Z",
   "sections": {
     "changelog": "### Version 0.1.182\n- Prevent store pickup orders from auto-allocating courier tracking numbers\n- Add tracking pool return endpoint and restore AWB numbers to pool\n- Format store pickup orders cleanly in order manager API and ERP UI\n- Guard against default courier fallback on pickup checkout"
   }

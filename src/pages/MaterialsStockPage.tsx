@@ -45,7 +45,17 @@ export const MaterialsStockPage: React.FC = () => {
   // New Material Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [newFinish, setNewFinish] = useState({
+  const [newFinish, setNewFinish] = useState<{
+    name: string;
+    group: string;
+    slug: string;
+    thumbnail: string;
+    texture_url: string;
+    extra_price: number;
+    accent_extra_price: number;
+    status: 'in_stock' | 'out_of_stock' | 'coming_soon';
+    in_stock: boolean;
+  }>({
     name: '',
     group: 'Signature skins',
     slug: '',
@@ -53,6 +63,7 @@ export const MaterialsStockPage: React.FC = () => {
     texture_url: '',
     extra_price: 0,
     accent_extra_price: 0,
+    status: 'in_stock',
     in_stock: true,
   });
 
@@ -84,32 +95,46 @@ export const MaterialsStockPage: React.FC = () => {
   }, []);
 
   const handleToggleStock = async (finish: GlobalFinish) => {
-    const nextStock = !finish.in_stock;
+    const currentStatus: 'in_stock' | 'out_of_stock' | 'coming_soon' =
+      finish.status || (finish.is_coming_soon ? 'coming_soon' : finish.in_stock !== false ? 'in_stock' : 'out_of_stock');
+    const nextStatus: 'in_stock' | 'out_of_stock' | 'coming_soon' =
+      currentStatus === 'in_stock'
+        ? 'out_of_stock'
+        : currentStatus === 'out_of_stock'
+        ? 'coming_soon'
+        : 'in_stock';
+    const nextInStock = nextStatus === 'in_stock';
+    const nextComingSoon = nextStatus === 'coming_soon';
+
     setUpdatingId(finish.id);
 
     // Optimistic update
     setFinishes((prev) =>
-      prev.map((f) => (f.id === finish.id ? { ...f, in_stock: nextStock } : f))
+      prev.map((f) =>
+        f.id === finish.id
+          ? { ...f, status: nextStatus, in_stock: nextInStock, is_coming_soon: nextComingSoon }
+          : f
+      )
     );
 
     try {
-      const res = await toggleFinishStockDirect(finish.id, nextStock);
+      const res = await toggleFinishStockDirect(finish.id, nextStatus);
       if (res.success) {
         showToast(
           'success',
           'Stock Status Updated',
-          `${finish.name} marked as ${nextStock ? 'IN STOCK' : 'OUT OF STOCK'}. Propagated across all device configurators.`
+          `${finish.name} status updated to ${nextStatus === 'in_stock' ? 'IN STOCK' : nextStatus === 'out_of_stock' ? 'DEPLETED' : 'COMING SOON'}. Propagated across all device configurators.`
         );
       } else {
         // Revert on failure
         setFinishes((prev) =>
-          prev.map((f) => (f.id === finish.id ? { ...f, in_stock: finish.in_stock } : f))
+          prev.map((f) => (f.id === finish.id ? finish : f))
         );
         showToast('error', 'Update Failed', res.error || 'Failed updating stock status');
       }
     } catch (err: any) {
       setFinishes((prev) =>
-        prev.map((f) => (f.id === finish.id ? { ...f, in_stock: finish.in_stock } : f))
+        prev.map((f) => (f.id === finish.id ? finish : f))
       );
       showToast('error', 'Store Error', err.message || 'Communication error with store');
     } finally {
@@ -173,7 +198,9 @@ export const MaterialsStockPage: React.FC = () => {
         texture_url: newFinish.texture_url.trim() || newFinish.thumbnail.trim(),
         extra_price: Number(newFinish.extra_price) || 0,
         accent_extra_price: Number(newFinish.accent_extra_price) || 0,
-        in_stock: newFinish.in_stock,
+        status: newFinish.status,
+        in_stock: newFinish.status === 'in_stock',
+        is_coming_soon: newFinish.status === 'coming_soon',
       });
 
       if (res.success) {
@@ -187,6 +214,7 @@ export const MaterialsStockPage: React.FC = () => {
           texture_url: '',
           extra_price: 0,
           accent_extra_price: 0,
+          status: 'in_stock',
           in_stock: true,
         });
         loadFinishes(true);
@@ -209,6 +237,14 @@ export const MaterialsStockPage: React.FC = () => {
 
     setIsSaving(true);
     try {
+      const st =
+        editingFinish.status ||
+        (editingFinish.is_coming_soon
+          ? 'coming_soon'
+          : editingFinish.in_stock !== false
+          ? 'in_stock'
+          : 'out_of_stock');
+
       const res = await saveGlobalFinishDirect({
         id: editingFinish.id,
         name: editingFinish.name.trim(),
@@ -219,7 +255,9 @@ export const MaterialsStockPage: React.FC = () => {
         texture_url: (editingFinish.texture_url || '').trim(),
         extra_price: Number(editingFinish.extra_price) || 0,
         accent_extra_price: Number(editingFinish.accent_extra_price) || 0,
-        in_stock: editingFinish.in_stock,
+        status: st,
+        in_stock: st === 'in_stock',
+        is_coming_soon: st === 'coming_soon',
         shadow_opacity: editingFinish.shadow_opacity,
         highlight_opacity: editingFinish.highlight_opacity,
       });
@@ -261,9 +299,20 @@ export const MaterialsStockPage: React.FC = () => {
   // Inventory stats
   const stats = useMemo(() => {
     const total = finishes.length;
-    const inStock = finishes.filter((f) => f.in_stock).length;
-    const outOfStock = total - inStock;
-    return { total, inStock, outOfStock };
+    const comingSoon = finishes.filter(
+      (f) => f.status === 'coming_soon' || f.is_coming_soon
+    ).length;
+    const inStock = finishes.filter(
+      (f) =>
+        f.status === 'in_stock' ||
+        (f.in_stock !== false && f.status !== 'coming_soon' && !f.is_coming_soon)
+    ).length;
+    const outOfStock = finishes.filter(
+      (f) =>
+        f.status === 'out_of_stock' ||
+        (!f.in_stock && f.status !== 'coming_soon' && !f.is_coming_soon)
+    ).length;
+    return { total, inStock, comingSoon, outOfStock };
   }, [finishes]);
 
   return (
@@ -302,7 +351,7 @@ export const MaterialsStockPage: React.FC = () => {
       />
 
       {/* Metrics Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <GlassCard className="p-4 flex items-center gap-4">
           <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-[#f3aa18] shrink-0">
             <Layers className="w-5 h-5" />
@@ -320,6 +369,16 @@ export const MaterialsStockPage: React.FC = () => {
           <div>
             <p className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">In Stock</p>
             <p className="text-2xl font-mono font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">{stats.inStock}</p>
+          </div>
+        </GlassCard>
+
+        <GlassCard className="p-4 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 shrink-0">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Coming Soon</p>
+            <p className="text-2xl font-mono font-bold text-amber-500 mt-0.5">{stats.comingSoon}</p>
           </div>
         </GlassCard>
 
@@ -383,15 +442,25 @@ export const MaterialsStockPage: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredFinishes.map((finish) => {
             const isUpdating = updatingId === finish.id;
+            const finishStatus: 'in_stock' | 'out_of_stock' | 'coming_soon' =
+              finish.status ||
+              (finish.is_coming_soon
+                ? 'coming_soon'
+                : finish.in_stock !== false
+                ? 'in_stock'
+                : 'out_of_stock');
 
             return (
               <GlassCard
                 key={finish.id}
                 className={clsx(
                   'p-4 transition-all duration-200 flex flex-col justify-between border',
-                  finish.in_stock
-                    ? 'border-zinc-200 dark:border-white/10 hover:border-zinc-300 dark:hover:border-white/20'
-                    : 'border-rose-500/30 bg-rose-50/50 dark:bg-rose-950/10'
+                  finishStatus === 'in_stock' &&
+                    'border-zinc-200 dark:border-white/10 hover:border-zinc-300 dark:hover:border-white/20',
+                  finishStatus === 'out_of_stock' &&
+                    'border-rose-500/30 bg-rose-50/50 dark:bg-rose-950/10',
+                  finishStatus === 'coming_soon' &&
+                    'border-amber-500/30 bg-amber-50/40 dark:bg-amber-950/10'
                 )}
               >
                 <div>
@@ -432,12 +501,19 @@ export const MaterialsStockPage: React.FC = () => {
                       <span
                         className={clsx(
                           'text-[10px] font-mono font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border',
-                          finish.in_stock
-                            ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30'
-                            : 'bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/40'
+                          finishStatus === 'in_stock' &&
+                            'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30',
+                          finishStatus === 'out_of_stock' &&
+                            'bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/40',
+                          finishStatus === 'coming_soon' &&
+                            'bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/40'
                         )}
                       >
-                        {finish.in_stock ? 'In Stock' : 'Depleted'}
+                        {finishStatus === 'in_stock'
+                          ? 'In Stock'
+                          : finishStatus === 'out_of_stock'
+                          ? 'Depleted'
+                          : 'Coming Soon'}
                       </span>
                     </div>
                   </div>
@@ -513,27 +589,37 @@ export const MaterialsStockPage: React.FC = () => {
                     </button>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-zinc-400 font-sans">
-                      {finish.in_stock ? 'In Stock' : 'Depleted'}
-                    </span>
-
+                  <div className="flex items-center gap-1.5">
                     <button
                       type="button"
                       onClick={() => handleToggleStock(finish)}
                       disabled={isUpdating}
                       className={clsx(
-                        'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-50',
-                        finish.in_stock ? 'bg-emerald-500' : 'bg-zinc-700'
+                        'flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-mono transition-all cursor-pointer disabled:opacity-50 select-none shadow-xs',
+                        finishStatus === 'in_stock' &&
+                          'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20',
+                        finishStatus === 'out_of_stock' &&
+                          'bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-400 hover:bg-rose-500/20',
+                        finishStatus === 'coming_soon' &&
+                          'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20'
                       )}
-                      aria-label={`Toggle stock for ${finish.name}`}
+                      title={`Status: ${finishStatus === 'in_stock' ? 'In Stock' : finishStatus === 'out_of_stock' ? 'Depleted' : 'Coming Soon'} (Click to cycle)`}
                     >
                       <span
                         className={clsx(
-                          'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out',
-                          finish.in_stock ? 'translate-x-5' : 'translate-x-0'
+                          'w-1.5 h-1.5 rounded-full',
+                          finishStatus === 'in_stock' && 'bg-emerald-500',
+                          finishStatus === 'out_of_stock' && 'bg-rose-500',
+                          finishStatus === 'coming_soon' && 'bg-amber-500 animate-pulse'
                         )}
                       />
+                      <span className="font-semibold">
+                        {finishStatus === 'in_stock'
+                          ? 'In Stock'
+                          : finishStatus === 'out_of_stock'
+                          ? 'Depleted'
+                          : 'Coming Soon'}
+                      </span>
                     </button>
                   </div>
                 </div>
@@ -648,17 +734,38 @@ export const MaterialsStockPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-900/60 border border-white/5">
+              <div className="p-3 rounded-xl bg-zinc-900/60 border border-white/5 space-y-2">
                 <div>
                   <p className="text-xs font-bold text-white">Initial Stock Availability</p>
-                  <p className="text-[11px] text-zinc-500">Enable material in product configurators</p>
+                  <p className="text-[11px] text-zinc-500">Live availability across product configurators</p>
                 </div>
-                <input
-                  type="checkbox"
-                  checked={newFinish.in_stock}
-                  onChange={(e) => setNewFinish({ ...newFinish, in_stock: e.target.checked })}
-                  className="w-4 h-4 rounded text-[#f3aa18] focus:ring-0 bg-zinc-800 border-white/20"
-                />
+                <div className="grid grid-cols-3 gap-2 pt-1">
+                  {(['in_stock', 'out_of_stock', 'coming_soon'] as const).map((st) => (
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() =>
+                        setNewFinish({
+                          ...newFinish,
+                          status: st,
+                          in_stock: st === 'in_stock',
+                        })
+                      }
+                      className={clsx(
+                        'py-1.5 px-2 rounded-lg text-xs font-mono font-medium border text-center transition-all cursor-pointer',
+                        newFinish.status === st
+                          ? st === 'in_stock'
+                            ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 font-bold'
+                            : st === 'out_of_stock'
+                            ? 'bg-rose-500/20 border-rose-500/40 text-rose-400 font-bold'
+                            : 'bg-amber-500/20 border-amber-500/40 text-amber-400 font-bold'
+                          : 'bg-zinc-800/50 border-white/5 text-zinc-400 hover:text-zinc-200'
+                      )}
+                    >
+                      {st === 'in_stock' ? 'In Stock' : st === 'out_of_stock' ? 'Depleted' : 'Coming Soon'}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="pt-2 flex items-center justify-end gap-2">
@@ -799,17 +906,48 @@ export const MaterialsStockPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-900/60 border border-white/5">
+              <div className="p-3 rounded-xl bg-zinc-900/60 border border-white/5 space-y-2">
                 <div>
-                  <p className="text-xs font-bold text-white">Stock Availability</p>
-                  <p className="text-[11px] text-zinc-500">Enable in product configurators</p>
+                  <p className="text-xs font-bold text-white">Stock & Availability Status</p>
+                  <p className="text-[11px] text-zinc-500">Live availability across product configurators</p>
                 </div>
-                <input
-                  type="checkbox"
-                  checked={editingFinish.in_stock}
-                  onChange={(e) => setEditingFinish({ ...editingFinish, in_stock: e.target.checked })}
-                  className="w-4 h-4 rounded text-[#f3aa18] focus:ring-0 bg-zinc-800 border-white/20"
-                />
+                <div className="grid grid-cols-3 gap-2 pt-1">
+                  {(['in_stock', 'out_of_stock', 'coming_soon'] as const).map((st) => {
+                    const currentStatus =
+                      editingFinish.status ||
+                      (editingFinish.is_coming_soon
+                        ? 'coming_soon'
+                        : editingFinish.in_stock !== false
+                        ? 'in_stock'
+                        : 'out_of_stock');
+                    return (
+                      <button
+                        key={st}
+                        type="button"
+                        onClick={() =>
+                          setEditingFinish({
+                            ...editingFinish,
+                            status: st,
+                            in_stock: st === 'in_stock',
+                            is_coming_soon: st === 'coming_soon',
+                          })
+                        }
+                        className={clsx(
+                          'py-1.5 px-2 rounded-lg text-xs font-mono font-medium border text-center transition-all cursor-pointer',
+                          currentStatus === st
+                            ? st === 'in_stock'
+                              ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 font-bold'
+                              : st === 'out_of_stock'
+                              ? 'bg-rose-500/20 border-rose-500/40 text-rose-400 font-bold'
+                              : 'bg-amber-500/20 border-amber-500/40 text-amber-400 font-bold'
+                            : 'bg-zinc-800/50 border-white/5 text-zinc-400 hover:text-zinc-200'
+                        )}
+                      >
+                        {st === 'in_stock' ? 'In Stock' : st === 'out_of_stock' ? 'Depleted' : 'Coming Soon'}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="pt-2 flex items-center justify-end gap-2">

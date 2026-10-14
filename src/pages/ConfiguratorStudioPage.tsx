@@ -843,7 +843,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [editingFinishNames, setEditingFinishNames] = useState<Record<string, string>>({});
   const [editingFinishGroups, setEditingFinishGroups] = useState<Record<string, string>>({});
   const [editingFinishPrices, setEditingFinishPrices] = useState<Record<string, number>>({});
-  const [editingFinishStock, setEditingFinishStock] = useState<Record<string, boolean>>({});
+  const [editingFinishStock, setEditingFinishStock] = useState<Record<string, 'in_stock' | 'out_of_stock' | 'coming_soon'>>({});
   const [editingFinishActive, setEditingFinishActive] = useState<Record<string, boolean>>({});
   const [editingFinishCustomFlags, setEditingFinishCustomFlags] = useState<Record<string, boolean>>({});
   const [editingFinishDisableLogoCutout, setEditingFinishDisableLogoCutout] = useState<Record<string, boolean>>({});
@@ -3882,7 +3882,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
       editingFinishPrices[f.id] !== (f.extra_price || 0);
     const isStockDirty =
       editingFinishStock[f.id] !== undefined &&
-      editingFinishStock[f.id] !== (f.in_stock !== false);
+      editingFinishStock[f.id] !== (f.status || (f.in_stock !== false ? 'in_stock' : 'out_of_stock'));
     const isActiveDirty =
       editingFinishActive[f.id] !== undefined &&
       editingFinishActive[f.id] !== (f.is_active !== false);
@@ -3997,7 +3997,11 @@ export const ConfiguratorStudioPage: React.FC = () => {
         const customPrice = editingFinishPrices[f.id];
         const newPrice = customPrice !== undefined ? customPrice : (f.extra_price || 0);
         const customStock = editingFinishStock[f.id];
-        const newStock = customStock !== undefined ? customStock : (f.in_stock !== false);
+        const newStatus: 'in_stock' | 'out_of_stock' | 'coming_soon' =
+          customStock !== undefined
+            ? customStock
+            : (f.status || (f.in_stock !== false ? 'in_stock' : 'out_of_stock'));
+        const newStock = newStatus === 'in_stock';
         const customActive = editingFinishActive[f.id];
         const newActive = customActive !== undefined ? customActive : (f.is_active !== false);
         const customFlag = editingFinishCustomFlags[f.id];
@@ -4025,7 +4029,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
           texture_url: newTexture,
           texture_big_url: newBigTexture,
           extra_price: newPrice,
+          status: newStatus,
           in_stock: newStock,
+          is_coming_soon: newStatus === 'coming_soon',
           is_active: newActive,
           is_custom_per_device: newCustomFlag,
           disable_logo_cutout: newDisableLogoCutout,
@@ -4097,7 +4103,11 @@ export const ConfiguratorStudioPage: React.FC = () => {
     const customPrice = editingFinishPrices[finish.id];
     const newPrice = customPrice !== undefined ? customPrice : finish.extra_price;
     const customStock = editingFinishStock[finish.id];
-    const newStock = customStock !== undefined ? customStock : (finish.in_stock !== false);
+    const newStatus: 'in_stock' | 'out_of_stock' | 'coming_soon' =
+      customStock !== undefined
+        ? customStock
+        : (finish.status || (finish.in_stock !== false ? 'in_stock' : 'out_of_stock'));
+    const newStock = newStatus === 'in_stock';
     const customActive = editingFinishActive[finish.id];
     const newActive = customActive !== undefined ? customActive : (finish.is_active !== false);
     const customFlag = editingFinishCustomFlags[finish.id];
@@ -4128,7 +4138,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
         texture_url: newTexture,
         texture_big_url: newBigTexture,
         extra_price: newPrice,
+        status: newStatus,
         in_stock: newStock,
+        is_coming_soon: newStatus === 'coming_soon',
         is_active: newActive,
         class_name: finish.class_name,
         is_custom_per_device: newCustomFlag,
@@ -6340,10 +6352,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
                       editingFinishPrices[f.id] !== undefined
                         ? editingFinishPrices[f.id]
                         : f.extra_price || 0;
-                    const currentStockInput =
+                    const currentStockInput: 'in_stock' | 'out_of_stock' | 'coming_soon' =
                       editingFinishStock[f.id] !== undefined
                         ? editingFinishStock[f.id]
-                        : (f.in_stock !== false);
+                        : (f.status || (f.in_stock !== false ? 'in_stock' : 'out_of_stock'));
                     const currentActiveInput =
                       editingFinishActive[f.id] !== undefined
                         ? editingFinishActive[f.id]
@@ -6518,25 +6530,50 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               </span>
                             </button>
 
-                            {/* In Stock / Out of Stock Toggle */}
+                            {/* 3-State Stock & Availability Toggle */}
                             <button
                               type="button"
-                              onClick={() =>
+                              onClick={() => {
+                                const nextStock: 'in_stock' | 'out_of_stock' | 'coming_soon' =
+                                  currentStockInput === 'in_stock'
+                                    ? 'out_of_stock'
+                                    : currentStockInput === 'out_of_stock'
+                                    ? 'coming_soon'
+                                    : 'in_stock';
                                 setEditingFinishStock((prev) => ({
                                   ...prev,
-                                  [f.id]: !currentStockInput,
-                                }))
-                              }
+                                  [f.id]: nextStock,
+                                }));
+                              }}
                               className={clsx(
                                 'flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-mono transition-all cursor-pointer select-none shadow-xs',
-                                currentStockInput
-                                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
-                                  : 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20'
+                                currentStockInput === 'in_stock' && 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20',
+                                currentStockInput === 'out_of_stock' && 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20',
+                                currentStockInput === 'coming_soon' && 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20'
                               )}
-                              title={currentStockInput ? 'Click to mark Out of Stock' : 'Click to mark In Stock'}
+                              title={
+                                currentStockInput === 'in_stock'
+                                  ? 'Status: In Stock (Click to change to Out of Stock)'
+                                  : currentStockInput === 'out_of_stock'
+                                  ? 'Status: Out of Stock (Click to change to Coming Soon)'
+                                  : 'Status: Coming Soon (Click to change to In Stock)'
+                              }
                             >
-                              <span className={clsx('w-1.5 h-1.5 rounded-full', currentStockInput ? 'bg-emerald-400' : 'bg-rose-400')} />
-                              <span className="text-[11px] font-semibold">{currentStockInput ? 'In Stock' : 'Out of Stock'}</span>
+                              <span
+                                className={clsx(
+                                  'w-1.5 h-1.5 rounded-full',
+                                  currentStockInput === 'in_stock' && 'bg-emerald-400',
+                                  currentStockInput === 'out_of_stock' && 'bg-rose-400',
+                                  currentStockInput === 'coming_soon' && 'bg-amber-400 animate-pulse'
+                                )}
+                              />
+                              <span className="text-[11px] font-semibold">
+                                {currentStockInput === 'in_stock'
+                                  ? 'In Stock'
+                                  : currentStockInput === 'out_of_stock'
+                                  ? 'Out of Stock'
+                                  : 'Coming Soon'}
+                              </span>
                             </button>
 
                             {/* Extra Price Input */}

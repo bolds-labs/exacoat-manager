@@ -531,6 +531,8 @@ export interface GlobalFinish {
   texture_big_url?: string;
   color_hex?: string;
   in_stock: boolean;
+  status?: 'in_stock' | 'out_of_stock' | 'coming_soon';
+  is_coming_soon?: boolean;
   is_active?: boolean;
   extra_price: number;
   accent_extra_price?: number;
@@ -3896,22 +3898,56 @@ export async function saveFinishSurchargeTiersDirect(tiers: FinishSurchargeTier[
   }
 }
 
-export async function toggleFinishStockDirect(id: string, inStock: boolean): Promise<{ success: boolean; finishes?: GlobalFinish[]; error?: string }> {
+export async function toggleFinishStockDirect(
+  id: string,
+  inStockOrStatus?: boolean | 'in_stock' | 'out_of_stock' | 'coming_soon'
+): Promise<{ success: boolean; finishes?: GlobalFinish[]; error?: string }> {
+  let status: 'in_stock' | 'out_of_stock' | 'coming_soon' | undefined;
+  let inStock: boolean;
+
+  if (typeof inStockOrStatus === 'string') {
+    status = inStockOrStatus;
+    inStock = inStockOrStatus === 'in_stock';
+  } else if (typeof inStockOrStatus === 'boolean') {
+    inStock = inStockOrStatus;
+    status = inStock ? 'in_stock' : 'out_of_stock';
+  } else {
+    inStock = true;
+  }
+
   let updatedList: GlobalFinish[] = DEFAULT_GLOBAL_FINISHES;
   try {
     const cached = typeof localStorage !== 'undefined' ? localStorage.getItem(FINISHES_STORAGE_KEY) : null;
     const current = cached ? JSON.parse(cached) : DEFAULT_GLOBAL_FINISHES;
-    updatedList = current.map((f: GlobalFinish) => f.id === id ? { ...f, in_stock: inStock } : f);
+    updatedList = current.map((f: GlobalFinish) => {
+      if (f.id !== id && f.slug !== id) return f;
+      const currStatus = f.status || (f.in_stock !== false ? 'in_stock' : 'out_of_stock');
+      const targetStatus = status || (currStatus === 'in_stock' ? 'out_of_stock' : currStatus === 'out_of_stock' ? 'coming_soon' : 'in_stock');
+      return {
+        ...f,
+        status: targetStatus,
+        in_stock: targetStatus === 'in_stock',
+        is_coming_soon: targetStatus === 'coming_soon',
+      };
+    });
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(updatedList));
     }
   } catch {}
 
+  const postPayload: Record<string, any> = { id };
+  if (status) {
+    postPayload.status = status;
+    postPayload.in_stock = inStock;
+  } else if (typeof inStockOrStatus === 'boolean') {
+    postPayload.in_stock = inStockOrStatus;
+  }
+
   try {
     await fetch('http://localhost:3020/api/configurator/finishes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, in_stock: inStock }),
+      body: JSON.stringify(postPayload),
     });
   } catch {}
 
@@ -3922,7 +3958,7 @@ export async function toggleFinishStockDirect(id: string, inStock: boolean): Pro
     const res = await authenticatedFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ id, in_stock: inStock }),
+      body: JSON.stringify(postPayload),
     });
     const data = await res.json();
     if (res.ok && !!data?.success && Array.isArray(data?.finishes)) {

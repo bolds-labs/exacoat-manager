@@ -550,6 +550,11 @@ class Exacoat_Configurator_Engine {
 			if ( ! isset( $f['is_active'] ) ) {
 				$f['is_active'] = true;
 			}
+			if ( ! isset( $f['status'] ) ) {
+				$f['status'] = ( isset( $f['in_stock'] ) && false === $f['in_stock'] ) ? 'out_of_stock' : 'in_stock';
+			}
+			$f['in_stock'] = ( 'in_stock' === $f['status'] );
+			$f['is_coming_soon'] = ( 'coming_soon' === $f['status'] );
 			$idx++;
 		}
 
@@ -632,8 +637,13 @@ class Exacoat_Configurator_Engine {
 					'sanitize_callback' => 'sanitize_text_field',
 				],
 				'in_stock' => [
-					'required' => true,
+					'required' => false,
 					'type'     => 'boolean',
+				],
+				'status'   => [
+					'required'          => false,
+					'type'              => 'string',
+					'sanitize_callback' => 'sanitize_text_field',
 				],
 			],
 		] );
@@ -907,14 +917,37 @@ class Exacoat_Configurator_Engine {
 
 	public static function rest_toggle_finish_stock( WP_REST_Request $request ): WP_REST_Response {
 		$id = sanitize_text_field( (string) $request->get_param( 'id' ) );
-		$in_stock = (bool) $request->get_param( 'in_stock' );
+		$param_status = $request->get_param( 'status' );
+		$param_in_stock = $request->get_param( 'in_stock' );
 
 		$finishes = self::get_finishes();
 		$found = false;
+		$new_status = null;
+		$new_in_stock = true;
 
 		foreach ( $finishes as &$f ) {
 			if ( ( $f['id'] ?? '' ) === $id || ( $f['slug'] ?? '' ) === $id ) {
-				$f['in_stock'] = $in_stock;
+				$curr_status = $f['status'] ?? ( ( $f['in_stock'] ?? true ) ? 'in_stock' : 'out_of_stock' );
+
+				if ( ! empty( $param_status ) && in_array( $param_status, [ 'in_stock', 'out_of_stock', 'coming_soon' ], true ) ) {
+					$new_status = sanitize_text_field( (string) $param_status );
+				} elseif ( null !== $param_in_stock ) {
+					$new_status = (bool) $param_in_stock ? 'in_stock' : 'out_of_stock';
+				} else {
+					// 3-way cycle: in_stock -> out_of_stock -> coming_soon -> in_stock
+					if ( 'in_stock' === $curr_status ) {
+						$new_status = 'out_of_stock';
+					} elseif ( 'out_of_stock' === $curr_status ) {
+						$new_status = 'coming_soon';
+					} else {
+						$new_status = 'in_stock';
+					}
+				}
+
+				$new_in_stock = ( 'in_stock' === $new_status );
+				$f['status'] = $new_status;
+				$f['in_stock'] = $new_in_stock;
+				$f['is_coming_soon'] = ( 'coming_soon' === $new_status );
 				$found = true;
 				break;
 			}
@@ -930,16 +963,18 @@ class Exacoat_Configurator_Engine {
 		self::save_finishes( $finishes );
 
 		if ( class_exists( 'Exacoat_Logger' ) ) {
-			Exacoat_Logger::log( 'info', 'materials', "Finish '{$id}' stock toggled to " . ( $in_stock ? 'IN STOCK' : 'OUT OF STOCK' ) );
+			Exacoat_Logger::log( 'info', 'materials', "Finish '{$id}' stock toggled to " . strtoupper( $new_status ) );
 		}
 
 		return rest_ensure_response( [
-			'success'  => true,
-			'id'       => $id,
-			'in_stock' => $in_stock,
-			'message'  => "Stock status updated for '{$id}'.",
-			'finishes' => $finishes,
-			'groups'   => self::get_finish_groups(),
+			'success'        => true,
+			'id'             => $id,
+			'status'         => $new_status,
+			'in_stock'       => $new_in_stock,
+			'is_coming_soon' => ( 'coming_soon' === $new_status ),
+			'message'        => "Stock status updated for '{$id}' to {$new_status}.",
+			'finishes'       => $finishes,
+			'groups'         => self::get_finish_groups(),
 		] );
 	}
 
@@ -998,7 +1033,18 @@ class Exacoat_Configurator_Engine {
 		$texture_big_url = esc_url_raw( $params['texture_big_url'] ?? '' );
 		$extra_price = isset( $params['extra_price'] ) ? (float) $params['extra_price'] : 0.0;
 		$accent_extra_price = isset( $params['accent_extra_price'] ) ? (float) $params['accent_extra_price'] : 0.0;
-		$in_stock = isset( $params['in_stock'] ) ? (bool) $params['in_stock'] : true;
+		$status = isset( $params['status'] ) ? sanitize_text_field( $params['status'] ) : null;
+		if ( ! in_array( $status, [ 'in_stock', 'out_of_stock', 'coming_soon' ], true ) ) {
+			$status = null;
+		}
+		if ( null === $status && isset( $params['in_stock'] ) ) {
+			$status = (bool) $params['in_stock'] ? 'in_stock' : 'out_of_stock';
+		}
+		if ( null === $status ) {
+			$status = 'in_stock';
+		}
+		$in_stock = ( 'in_stock' === $status );
+		$is_coming_soon = ( 'coming_soon' === $status );
 		$is_active = isset( $params['is_active'] ) ? (bool) $params['is_active'] : true;
 		$is_custom_per_device = ! empty( $params['is_custom_per_device'] );
 		$disable_logo_cutout = ! empty( $params['disable_logo_cutout'] );
@@ -1032,7 +1078,9 @@ class Exacoat_Configurator_Engine {
 				}
 				$f['extra_price']          = $extra_price;
 				$f['accent_extra_price']   = $accent_extra_price;
+				$f['status']               = $status;
 				$f['in_stock']             = $in_stock;
+				$f['is_coming_soon']       = $is_coming_soon;
 				$f['is_active']            = $is_active;
 				$f['is_custom_per_device'] = $is_custom_per_device;
 				$f['badge_text']           = $badge_text;
@@ -1075,7 +1123,9 @@ class Exacoat_Configurator_Engine {
 				'texture_big_url'      => $texture_big_url,
 				'extra_price'          => $extra_price,
 				'accent_extra_price'   => $accent_extra_price,
+				'status'               => $status,
 				'in_stock'             => $in_stock,
+				'is_coming_soon'       => $is_coming_soon,
 				'is_active'            => $is_active,
 				'is_custom_per_device' => $is_custom_per_device,
 				'disable_logo_cutout'  => $disable_logo_cutout,
@@ -1268,6 +1318,17 @@ class Exacoat_Configurator_Engine {
 				if ( isset( $item['order'] ) ) {
 					$item['order'] = (int) $item['order'];
 				}
+				$item_status = sanitize_text_field( $item['status'] ?? '' );
+				if ( ! in_array( $item_status, [ 'in_stock', 'out_of_stock', 'coming_soon' ], true ) ) {
+					if ( isset( $item['in_stock'] ) ) {
+						$item_status = rest_sanitize_boolean( $item['in_stock'] ) ? 'in_stock' : 'out_of_stock';
+					} else {
+						$item_status = 'in_stock';
+					}
+				}
+				$item['status']         = $item_status;
+				$item['in_stock']       = ( 'in_stock' === $item_status );
+				$item['is_coming_soon'] = ( 'coming_soon' === $item_status );
 			}
 			unset( $item );
 			self::save_finishes( $finishes );
