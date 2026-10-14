@@ -818,6 +818,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
     initialUrl: string;
     initialScale?: number;
     thumbnail?: string;
+    viewId?: string;
   } | null>(null);
   const [tempTextureUrl, setTempTextureUrl] = useState('');
   const [tempTextureScale, setTempTextureScale] = useState<number>(100);
@@ -3443,61 +3444,97 @@ export const ConfiguratorStudioPage: React.FC = () => {
     });
   };
 
-  const handleSetFinishTexture = (layerId: string, finishSlug: string, url: string) => {
-    if (!editingProfile) return;
-    const viewId = activeSimView || 'main_view';
-    setEditingProfile({
-      ...editingProfile,
-      layers: editingProfile.layers.map((l) => {
-        if (l.id !== layerId) return l;
-        const currentAssets = l.assets_by_view || {};
-        const currentViewAssets = currentAssets[viewId] || {};
-        const currentMap = currentViewAssets.render_texture_map || {};
-        return {
-          ...l,
-          assets_by_view: {
-            ...currentAssets,
-            [viewId]: {
-              ...currentViewAssets,
-              render_texture_map: {
+  const handleSetFinishTextureAndScale = (
+    layerId: string,
+    finishSlug: string,
+    url?: string,
+    scale?: number,
+    explicitViewId?: string
+  ) => {
+    setEditingProfile((prev) => {
+      if (!prev) return prev;
+      const currentActiveView = prev.views?.find((v) => v.id === activeSimView) || prev.views?.[0];
+      const targetViewId = explicitViewId || currentActiveView?.id || activeSimView || 'main_view';
+
+      return {
+        ...prev,
+        layers: prev.layers.map((l) => {
+          if (l.id !== layerId) return l;
+          const currentAssets = l.assets_by_view || {};
+          const existingKey =
+            Object.keys(currentAssets).find((k) => k === targetViewId) ||
+            Object.keys(currentAssets).find((k) => k === currentActiveView?.id) ||
+            targetViewId;
+
+          const currentViewAssets = currentAssets[existingKey] || currentAssets[targetViewId] || {};
+          const currentMap = currentViewAssets.render_texture_map || {};
+          const currentScaleMap = currentViewAssets.render_texture_scale_map || {};
+
+          let updatedMap = currentMap;
+          if (url !== undefined) {
+            const cleanUrl = url.trim();
+            if (cleanUrl) {
+              updatedMap = {
                 ...currentMap,
-                [finishSlug]: url.trim(),
-              },
-            },
-          },
-        };
-      }),
+                [finishSlug]: cleanUrl,
+              };
+            } else {
+              updatedMap = { ...currentMap };
+              delete updatedMap[finishSlug];
+              const normSlug = finishSlug.toLowerCase().replace(/[^a-z0-9]/g, '');
+              Object.keys(updatedMap).forEach((k) => {
+                if (k.toLowerCase().replace(/[^a-z0-9]/g, '') === normSlug) {
+                  delete updatedMap[k];
+                }
+              });
+            }
+          }
+
+          let updatedScaleMap = currentScaleMap;
+          if (scale !== undefined) {
+            updatedScaleMap = { ...currentScaleMap };
+            if (typeof scale === 'number' && scale > 0) {
+              updatedScaleMap[finishSlug] = Number(scale.toFixed(3));
+            } else {
+              delete updatedScaleMap[finishSlug];
+              const normSlug = finishSlug.toLowerCase().replace(/[^a-z0-9]/g, '');
+              Object.keys(updatedScaleMap).forEach((k) => {
+                if (k.toLowerCase().replace(/[^a-z0-9]/g, '') === normSlug) {
+                  delete updatedScaleMap[k];
+                }
+              });
+            }
+          }
+
+          const updatedViewAssets = {
+            ...currentViewAssets,
+            render_texture_map: updatedMap,
+            render_texture_scale_map: updatedScaleMap,
+          };
+
+          const updatedAssets: Record<string, any> = {
+            ...currentAssets,
+            [existingKey]: updatedViewAssets,
+          };
+          if (targetViewId !== existingKey) {
+            updatedAssets[targetViewId] = updatedViewAssets;
+          }
+
+          return {
+            ...l,
+            assets_by_view: updatedAssets,
+          };
+        }),
+      };
     });
   };
 
-  const handleSetFinishTextureScale = (layerId: string, finishSlug: string, scale: number) => {
-    if (!editingProfile) return;
-    const viewId = activeSimView || 'main_view';
-    setEditingProfile({
-      ...editingProfile,
-      layers: editingProfile.layers.map((l) => {
-        if (l.id !== layerId) return l;
-        const currentAssets = l.assets_by_view || {};
-        const currentViewAssets = currentAssets[viewId] || {};
-        const currentScaleMap = currentViewAssets.render_texture_scale_map || {};
-        const updatedScaleMap = { ...currentScaleMap };
-        if (typeof scale === 'number' && scale > 0) {
-          updatedScaleMap[finishSlug] = Number(scale.toFixed(3));
-        } else {
-          delete updatedScaleMap[finishSlug];
-        }
-        return {
-          ...l,
-          assets_by_view: {
-            ...currentAssets,
-            [viewId]: {
-              ...currentViewAssets,
-              render_texture_scale_map: updatedScaleMap,
-            },
-          },
-        };
-      }),
-    });
+  const handleSetFinishTexture = (layerId: string, finishSlug: string, url: string, explicitViewId?: string) => {
+    handleSetFinishTextureAndScale(layerId, finishSlug, url, undefined, explicitViewId);
+  };
+
+  const handleSetFinishTextureScale = (layerId: string, finishSlug: string, scale: number, explicitViewId?: string) => {
+    handleSetFinishTextureAndScale(layerId, finishSlug, undefined, scale, explicitViewId);
   };
 
   const handleSetLayerOverlayUrl = (
@@ -3758,17 +3795,38 @@ export const ConfiguratorStudioPage: React.FC = () => {
     finishName: string,
     initialUrl: string,
     thumbnail?: string,
-    initialScale?: number
+    initialScale?: number,
+    viewId?: string
   ) => {
-    setEditingTextureModal({ layerId, layerName, finishSlug, finishName, initialUrl, initialScale, thumbnail });
+    const resolvedViewId =
+      viewId ||
+      editingProfile?.views?.find((v) => v.id === activeSimView)?.id ||
+      editingProfile?.views?.[0]?.id ||
+      activeSimView ||
+      'main_view';
+    setEditingTextureModal({
+      layerId,
+      layerName,
+      finishSlug,
+      finishName,
+      initialUrl,
+      initialScale,
+      thumbnail,
+      viewId: resolvedViewId,
+    });
     setTempTextureUrl(initialUrl || '');
     setTempTextureScale(typeof initialScale === 'number' && initialScale > 0 ? Math.round(initialScale * 100) : 100);
   };
 
   const handleSaveTextureModal = () => {
     if (!editingTextureModal) return;
-    handleSetFinishTexture(editingTextureModal.layerId, editingTextureModal.finishSlug, tempTextureUrl);
-    handleSetFinishTextureScale(editingTextureModal.layerId, editingTextureModal.finishSlug, tempTextureScale / 100);
+    handleSetFinishTextureAndScale(
+      editingTextureModal.layerId,
+      editingTextureModal.finishSlug,
+      tempTextureUrl,
+      tempTextureScale / 100,
+      editingTextureModal.viewId
+    );
     showToast('success', 'Texture & Scale Updated', `Updated texture and scale for ${editingTextureModal.finishName}.`);
     setEditingTextureModal(null);
   };
@@ -9846,7 +9904,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                                           onChange={(e) => {
                                                             const val = parseFloat(e.target.value);
                                                             if (!isNaN(val) && val > 0) {
-                                                              handleSetFinishTextureScale(currentActiveLayer.id, finishSlug, val / 100);
+                                                              handleSetFinishTextureScale(currentActiveLayer.id, finishSlug, val / 100, currentView?.id);
                                                             }
                                                           }}
                                                           className="w-9 text-[9px] font-mono text-white bg-transparent border-none p-0 text-center focus:outline-none"
@@ -9871,7 +9929,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                                       recommendedDimensions: '1000x1000 High-Res Device Artwork PNG',
                                                       currentUrl: currentUrl,
                                                       onSelect: (url) =>
-                                                        handleSetFinishTexture(currentActiveLayer.id, finishSlug, url),
+                                                        handleSetFinishTexture(currentActiveLayer.id, finishSlug, url, currentView?.id),
                                                     })
                                                   }
                                                   className={clsx(
@@ -9888,7 +9946,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                                   <button
                                                     type="button"
                                                     onClick={() =>
-                                                      handleSetFinishTexture(currentActiveLayer.id, finishSlug, '')
+                                                      handleSetFinishTexture(currentActiveLayer.id, finishSlug, '', currentView?.id)
                                                     }
                                                     className="p-1.5 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 cursor-pointer transition-colors"
                                                     title="Remove artwork (hides finish from this device)"
@@ -9978,7 +10036,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                                       onChange={(e) => {
                                                         const val = parseFloat(e.target.value);
                                                         if (!isNaN(val) && val > 0) {
-                                                          handleSetFinishTextureScale(currentActiveLayer.id, finishSlug, val / 100);
+                                                          handleSetFinishTextureScale(currentActiveLayer.id, finishSlug, val / 100, currentView?.id);
                                                         }
                                                       }}
                                                       className="w-8 text-[10px] font-mono text-white bg-transparent border-none p-0 text-center focus:outline-none"
@@ -9989,17 +10047,16 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                                 <button
                                                   type="button"
                                                   onClick={() => {
-                                                    setEditingTextureModal({
-                                                      layerId: currentActiveLayer.id,
-                                                      layerName: currentActiveLayer.name,
+                                                    handleOpenTextureModal(
+                                                      currentActiveLayer.id,
+                                                      currentActiveLayer.name,
                                                       finishSlug,
-                                                      finishName: f.name,
-                                                      initialUrl: currentUrl,
-                                                      initialScale: assignedScale,
-                                                      thumbnail: f.thumbnail,
-                                                    });
-                                                    setTempTextureUrl(currentUrl || '');
-                                                    setTempTextureScale(Math.round(assignedScale * 100));
+                                                      f.name,
+                                                      currentUrl,
+                                                      f.thumbnail,
+                                                      assignedScale,
+                                                      currentView?.id
+                                                    );
                                                   }}
                                                   className={clsx(
                                                     'text-[10px] px-2 py-0.5 rounded cursor-pointer transition-colors font-mono',

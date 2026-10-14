@@ -14,6 +14,14 @@ export async function loadCorsSafeImageBlobUrl(
 ): Promise<string> {
   if (!url && !productId) return '';
 
+  // Route WordPress upload URLs to media.exacoat.com to guarantee Access-Control-Allow-Origin: *
+  if (url && typeof url === 'string') {
+    url = url.replace(
+      /^https?:\/\/(?:cms\.|staging\.|www\.)?exacoat\.com\/(?:wp-content\/)?uploads\//i,
+      'https://media.exacoat.com/wp-content/uploads/'
+    );
+  }
+
   // Intercept known bundled brand assets to use same-origin public files
   if (url && (url.includes('Textured-Skins-Product-Info.jpg') || url.includes('textured-skins-product-info.jpg'))) {
     url = '/assets/brand/textured-skins-product-info.jpg';
@@ -136,6 +144,14 @@ export async function loadCorsSafeImageElement(
 ): Promise<HTMLImageElement> {
   if (!url) {
     throw new Error('Image URL is empty');
+  }
+
+  // Route WordPress upload URLs to media.exacoat.com to guarantee Access-Control-Allow-Origin: *
+  if (url && typeof url === 'string') {
+    url = url.replace(
+      /^https?:\/\/(?:cms\.|staging\.|www\.)?exacoat\.com\/(?:wp-content\/)?uploads\//i,
+      'https://media.exacoat.com/wp-content/uploads/'
+    );
   }
 
   // Intercept known bundled brand assets
