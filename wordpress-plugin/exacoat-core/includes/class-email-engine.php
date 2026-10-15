@@ -3073,11 +3073,15 @@ class Exacoat_Email_Engine {
 		$user = get_user_by( 'login', $user_login );
 		if ( ! $user || ! is_email( $user->user_email ) ) return;
 
+		$storefront_base = function_exists( 'exacoat_storefront_url' )
+			? exacoat_storefront_url( 'login' )
+			: ( defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL . '/login' : 'https://exacoat.com/login' );
+
 		$reset_url = add_query_arg( [
+			'mode'  => 'reset',
 			'key'   => $reset_key,
-			'id'    => $user->ID,
 			'login' => rawurlencode( $user_login ),
-		], function_exists( 'wc_get_endpoint_url' ) ? wc_get_endpoint_url( 'lost-password', '', wc_get_page_permalink( 'myaccount' ) ) : home_url( '/my-account/lost-password' ) );
+		], $storefront_base );
 
 		$first_name = get_user_meta( $user->ID, 'first_name', true ) ?: ( $user->display_name ?: 'Collector' );
 

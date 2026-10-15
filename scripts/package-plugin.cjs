@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Add 3-state finish status (in_stock, out_of_stock, coming_soon)\n- Ensure coming_soon persists reliably across all configurator and studio endpoints\n- Add backward-compatible fallback normalization for finish status`,
+      changelog: `### Version ${version}\n- Fix customer password reset email delivery via Zoho ZeptoMail API with authorized support@exacoat.com sender\n- Route password reset link directly to Next.js storefront (/login?mode=reset)\n- Fix client IP rate limiting header inspection across proxies`,
     },
   };
 

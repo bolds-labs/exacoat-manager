@@ -119,13 +119,41 @@ class Exacoat_Customer_Auth {
 	}
 
 	public static function rest_forgot( WP_REST_Request $request ) {
-		if ( self::is_rate_limited( 'forgot', 5, HOUR_IN_SECONDS ) ) {
+		if ( self::is_rate_limited( 'forgot', 10, HOUR_IN_SECONDS ) ) {
 			return self::error( 'Too many reset requests. Please try again later.', 429 );
 		}
 
-		$email = sanitize_email( (string) $request->get_param( 'email' ) );
-		if ( is_email( $email ) ) {
-			retrieve_password( $email );
+		$raw_input = sanitize_text_field( trim( (string) $request->get_param( 'email' ) ) );
+		if ( ! empty( $raw_input ) ) {
+			$user = is_email( $raw_input ) ? get_user_by( 'email', $raw_input ) : null;
+			if ( ! $user instanceof WP_User ) {
+				$user = get_user_by( 'login', $raw_input );
+			}
+
+			if ( $user instanceof WP_User && is_email( $user->user_email ) ) {
+				$key = get_password_reset_key( $user );
+				if ( ! is_wp_error( $key ) ) {
+					$user_login      = $user->user_login;
+					$storefront_base = function_exists( 'exacoat_storefront_url' )
+						? exacoat_storefront_url( 'login' )
+						: ( defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL . '/login' : 'https://exacoat.com/login' );
+
+					$reset_url = add_query_arg( [
+						'mode'  => 'reset',
+						'key'   => $key,
+						'login' => rawurlencode( $user_login ),
+					], $storefront_base );
+
+					$first_name = get_user_meta( $user->ID, 'first_name', true ) ?: ( $user->display_name ?: 'Customer' );
+
+					if ( class_exists( 'Exacoat_Email_Engine' ) ) {
+						Exacoat_Email_Engine::send_email( 'customer_reset_password', $user->user_email, $first_name, [
+							'customer_first_name' => $first_name,
+							'reset_url'           => $reset_url,
+						] );
+					}
+				}
+			}
 		}
 
 		return self::response( [
@@ -1168,8 +1196,12 @@ class Exacoat_Customer_Auth {
 	}
 
 	private static function is_rate_limited( string $action, int $limit, int $window ): bool {
-		$ip  = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ?? 'unknown' ) );
-		$key = 'artmatter_auth_rate_' . md5( $action . '|' . $ip );
+		$raw_ip = (string) ( $_SERVER['HTTP_X_EXACOAT_CLIENT_IP'] ?? $_SERVER['HTTP_CF_CONNECTING_IP'] ?? $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown' );
+		if ( false !== strpos( $raw_ip, ',' ) ) {
+			$raw_ip = trim( explode( ',', $raw_ip )[0] );
+		}
+		$ip   = sanitize_text_field( wp_unslash( $raw_ip ) );
+		$key  = 'exacoat_auth_rate_' . md5( $action . '|' . $ip );
 		$data = get_transient( $key );
 		$count = is_array( $data ) ? (int) $data['count'] : 0;
 		set_transient( $key, [ 'count' => $count + 1 ], $window );

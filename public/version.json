@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.183",
+  "version": "0.1.184",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.183.zip?v=0.1.183",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.184.zip?v=0.1.184",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-10-15T07:24:06.548Z",
+  "last_updated": "2026-10-15T07:32:02.672Z",
   "sections": {
-    "changelog": "### Version 0.1.183\n- Add 3-state finish status (in_stock, out_of_stock, coming_soon)\n- Ensure coming_soon persists reliably across all configurator and studio endpoints\n- Add backward-compatible fallback normalization for finish status"
+    "changelog": "### Version 0.1.184\n- Fix customer password reset email delivery via Zoho ZeptoMail API with authorized support@exacoat.com sender\n- Route password reset link directly to Next.js storefront (/login?mode=reset)\n- Fix client IP rate limiting header inspection across proxies"
   }
 }
