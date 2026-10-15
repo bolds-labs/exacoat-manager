@@ -618,7 +618,8 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
     const res = await fetchAcumbamailCampaignsDirect(settings.acumbamail_token);
     setIsLoadingCampaigns(false);
     if (res.success && Array.isArray(res.campaigns)) {
-      setAcumbaCampaigns(res.campaigns);
+      const sorted = [...res.campaigns].sort((a, b) => Number(b.id) - Number(a.id));
+      setAcumbaCampaigns(sorted);
     } else {
       showToast('error', 'Campaigns Load Failed', res.error || 'Could not fetch campaigns from Acumbamail.');
     }
@@ -628,7 +629,8 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
     showToast('info', 'Loading Campaign', `Fetching ${name}...`);
     const res = await fetchAcumbamailCampaignDetailDirect(campaignId, settings.acumbamail_token);
     if (res.success && res.html) {
-      setViewingCampaignHtml(res.html);
+      const cleanHtml = res.html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+      setViewingCampaignHtml(cleanHtml);
       setViewingCampaignTitle(name);
     } else {
       showToast('error', 'Preview Error', res.error || 'Could not load campaign HTML.');
@@ -639,10 +641,18 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
     showToast('info', 'Importing Reference', `Loading details for ${name}...`);
     const res = await fetchAcumbamailCampaignDetailDirect(campaignId, settings.acumbamail_token);
     if (res.success) {
+      const rawHtml = res.html || '';
+      const cleanHtml = rawHtml.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+      if (cleanHtml) {
+        setCustomHtmlCode(cleanHtml);
+        setCodeFormat('html');
+        setComposerMode('code');
+        setCompiledHtml(cleanHtml);
+      }
       if (res.subject) setSubject(res.subject);
       setCampaignName(`${name} (Reference)`);
       setShowReferencesModal(false);
-      showToast('success', 'Reference Imported', `Loaded subject and title from ${name}.`);
+      showToast('success', 'Reference Imported', `Loaded template and subject from "${name}".`);
     } else {
       showToast('error', 'Import Error', res.error || 'Failed to import campaign.');
     }
@@ -1115,9 +1125,11 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
           <button
             type="button"
             onClick={() => {
+              if (!customHtmlCode) {
+                setCodeFormat('mjml');
+                setCustomHtmlCode(visualMjml);
+              }
               setComposerMode('code');
-              setCodeFormat('mjml');
-              setCustomHtmlCode(visualMjml);
             }}
             className={`flex-1 lg:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
               composerMode === 'code'
@@ -1126,7 +1138,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
             }`}
           >
             <Code className="w-3.5 h-3.5" />
-            <span>MJML Code</span>
+            <span>{codeFormat === 'html' ? 'HTML Code' : 'MJML Code'}</span>
           </button>
         </div>
 
@@ -3027,9 +3039,8 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                   srcDoc={replaceNamePlaceholders(
                     composerMode === 'code' ? (compiledHtml || customHtmlCode) : activeVisualHtml,
                     previewRecipientName
-                  )}
+                  ).replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')}
                   className="w-full h-full min-h-[640px] border-0"
-                  sandbox="allow-same-origin"
                 />
               </div>
             </div>
@@ -3315,9 +3326,8 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
             <div className="border border-zinc-300 dark:border-zinc-700 rounded-xl overflow-hidden h-[540px] bg-black">
               <iframe
                 title="Historical Campaign Preview"
-                srcDoc={viewingCampaignHtml}
+                srcDoc={(viewingCampaignHtml || '').replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')}
                 className="w-full h-full border-0"
-                sandbox="allow-same-origin"
               />
             </div>
             <div className="flex items-center justify-between text-xs pt-1 gap-2">
@@ -3327,9 +3337,14 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                   variant="secondary"
                   size="sm"
                   onClick={() => {
-                    setCustomHtmlCode(viewingCampaignHtml);
-                    setSubject(viewingCampaignTitle);
-                    setComposerMode('code');
+                    const cleanHtml = (viewingCampaignHtml || '').replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+                    if (cleanHtml) {
+                      setCustomHtmlCode(cleanHtml);
+                      setCodeFormat('html');
+                      setComposerMode('code');
+                      setCompiledHtml(cleanHtml);
+                    }
+                    if (viewingCampaignTitle) setSubject(viewingCampaignTitle);
                     setViewingCampaignHtml(null);
                     setShowReferencesModal(false);
                     showToast('success', 'Loaded into HTML Editor', `Imported "${viewingCampaignTitle}" HTML into Code Studio.`);
@@ -3343,14 +3358,22 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                   variant="primary"
                   size="sm"
                   onClick={() => {
-                    setSubject(viewingCampaignTitle);
+                    const cleanHtml = (viewingCampaignHtml || '').replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+                    if (cleanHtml) {
+                      setCustomHtmlCode(cleanHtml);
+                      setCodeFormat('html');
+                      setComposerMode('code');
+                      setCompiledHtml(cleanHtml);
+                    }
+                    if (viewingCampaignTitle) setSubject(viewingCampaignTitle);
+                    setCampaignName(`${viewingCampaignTitle} (Reference)`);
                     setViewingCampaignHtml(null);
                     setShowReferencesModal(false);
-                    showToast('success', 'Applied to Composer', `Set subject to "${viewingCampaignTitle}".`);
+                    showToast('success', 'Reference Imported', `Loaded template and subject from "${viewingCampaignTitle}".`);
                   }}
                   className="bg-amber-500 hover:bg-amber-600 text-black font-bold"
                 >
-                  Use Title Only
+                  Use as Reference
                 </Button>
               </div>
             </div>

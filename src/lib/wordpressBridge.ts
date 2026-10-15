@@ -2355,6 +2355,7 @@ export async function fetchAcumbamailCampaignsDirect(tokenOverride?: string): Pr
             });
           }
         });
+        campaigns.sort((a, b) => Number(b.id) - Number(a.id));
         return { success: true, campaigns };
       }
     }
@@ -2367,7 +2368,11 @@ export async function fetchAcumbamailCampaignsDirect(tokenOverride?: string): Pr
     const url = `${base}/wp-json/exacoat-core/v1/acumbamail/campaigns`;
     const res = await authenticatedFetch(url);
     if (res.ok) {
-      return await res.json();
+      const bridgeData = await res.json();
+      if (bridgeData.success && Array.isArray(bridgeData.campaigns)) {
+        bridgeData.campaigns.sort((a: any, b: any) => Number(b.id) - Number(a.id));
+      }
+      return bridgeData;
     }
   } catch (err: any) {
     return { success: false, error: err.message };
@@ -2413,7 +2418,7 @@ export async function fetchAcumbamailCampaignDetailDirect(campaignId: string, to
       subject: infoData.subject || '',
       sent: infoData.total_sent || 0,
       date: infoData.date_sent || infoData.date || '',
-      html: htmlData.html || '',
+      html: typeof htmlData === 'string' ? htmlData : (htmlData.html || htmlData.content || htmlData.body || ''),
     };
   } catch (err: any) {
     console.warn('[fetchAcumbamailCampaignDetailDirect] Direct failed, trying bridge:', err);

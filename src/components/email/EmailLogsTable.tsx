@@ -986,7 +986,6 @@ export const EmailLogsTable: React.FC<EmailLogsTableProps> = ({ onSelectOrder })
                   title="Rendered Email Preview"
                   srcDoc={previewHtml}
                   className="w-full h-[520px] border-none"
-                  sandbox="allow-same-origin"
                 />
               </div>
             )}
