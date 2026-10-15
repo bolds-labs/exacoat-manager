@@ -15,7 +15,8 @@ import {
   Activity, 
   ArrowRight,
   TrendingUp,
-  PackageCheck
+  PackageCheck,
+  Layers
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -100,6 +101,17 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                 );
               })}
             </div>
+
+            <button
+              type="button"
+              onClick={() => onNavigate('skin_performance')}
+              className="px-3.5 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-neutral-300 hover:text-white border border-white/[0.08] text-xs font-semibold font-sans flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+              title="Open Base Skin Performance Analytics"
+            >
+              <Layers className="w-3.5 h-3.5 text-[#f3aa18]" />
+              <span>Skin Analytics</span>
+              <ArrowRight className="w-3 h-3 text-neutral-500" />
+            </button>
 
             <button
               type="button"

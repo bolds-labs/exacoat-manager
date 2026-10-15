@@ -24,6 +24,7 @@ const pageTitles: Record<NavItemKey, string> = {
   materials: 'Materials & Stock',
   reviews: 'Reviews',
   reports: 'Reports',
+  skin_performance: 'Skin Performance',
   ai_tools: 'AI Tools',
   emails: 'Emails',
   marketing_emails: 'Marketing Studio',

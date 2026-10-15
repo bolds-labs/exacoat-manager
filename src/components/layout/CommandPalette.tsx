@@ -148,6 +148,15 @@ const WORKSPACE_PAGES: WorkspaceAction[] = [
     keywords: ['analytics', 'sales', 'revenue', 'financials', 'charts', 'trends', 'exports'] 
   },
   { 
+    id: 'skin_performance', 
+    label: 'Skin Performance', 
+    category: 'Analytics',
+    description: 'Base skin purchase volume, finish popularity, market share, and device pairings', 
+    tab: 'skin_performance', 
+    icon: Layers,
+    keywords: ['skins', 'textures', 'finishes', 'configurator', 'base skin', 'swarm', 'forged carbon', 'popularity', 'performance'] 
+  },
+  { 
     id: 'customers', 
     label: 'Customers', 
     category: 'Analytics',

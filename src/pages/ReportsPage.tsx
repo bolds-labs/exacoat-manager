@@ -42,6 +42,7 @@ import {
   Receipt,
   AlertCircle,
   Loader2,
+  Layers,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -49,7 +50,7 @@ interface ReportsPageProps {
   onNavigate?: (tab: string, filter?: string) => void;
 }
 
-export const ReportsPage: React.FC<ReportsPageProps> = () => {
+export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
   const [datePreset, setDatePreset] = useState<DatePreset>('30d');
   const [customStart, setCustomStart] = useState<string>('');
   const [customEnd, setCustomEnd] = useState<string>('');
@@ -322,6 +323,17 @@ export const ReportsPage: React.FC<ReportsPageProps> = () => {
             <span className="text-[11px] font-mono text-neutral-400 hidden md:inline-block">
               Updated {lastRefreshedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </span>
+          )}
+          {onNavigate && (
+            <button
+              type="button"
+              onClick={() => onNavigate('skin_performance')}
+              className="min-h-11 px-3.5 rounded-xl border border-white/10 bg-[#121316] text-neutral-200 hover:bg-white/[0.06] hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+              title="Open Configurator Base Skin Analytics"
+            >
+              <Layers className="w-3.5 h-3.5 text-[#f3aa18]" />
+              <span>Skin Analytics</span>
+            </button>
           )}
           <button
             type="button"

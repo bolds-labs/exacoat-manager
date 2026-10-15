@@ -15,6 +15,7 @@ const ConfiguratorStudioPage = React.lazy(() => import('./pages/ConfiguratorStud
 const MaterialsStockPage = React.lazy(() => import('./pages/MaterialsStockPage').then(m => ({ default: m.MaterialsStockPage })));
 const ReviewsPage = React.lazy(() => import('./pages/ReviewsPage').then(m => ({ default: m.ReviewsPage })));
 const ReportsPage = React.lazy(() => import('./pages/ReportsPage').then(m => ({ default: m.ReportsPage })));
+const SkinPerformancePage = React.lazy(() => import('./pages/SkinPerformancePage').then(m => ({ default: m.SkinPerformancePage })));
 const EmailTemplatesPage = React.lazy(() => import('./pages/EmailTemplatesPage').then(m => ({ default: m.EmailTemplatesPage })));
 const AiToolsPage = React.lazy(() => import('./pages/AiToolsPage').then(m => ({ default: m.AiToolsPage })));
 const TeamRolesManager = React.lazy(() => import('./components/settings/TeamRolesManager').then(m => ({ default: m.TeamRolesManager })));
@@ -99,6 +100,18 @@ const getTabFromUrl = (): NavItemKey => {
     'reports': 'reports',
     'sales': 'reports',
     'analytics': 'reports',
+    'skin_performance': 'skin_performance',
+    'skin-performance': 'skin_performance',
+    'skin_analytics': 'skin_performance',
+    'skin-analytics': 'skin_performance',
+    'skins_performance': 'skin_performance',
+    'skins-performance': 'skin_performance',
+    'skins_report': 'skin_performance',
+    'skins-report': 'skin_performance',
+    'skins_analytics': 'skin_performance',
+    'skins-analytics': 'skin_performance',
+    'skin-reports': 'skin_performance',
+    'skin_reports': 'skin_performance',
     'ai_tools': 'ai_tools',
     'ai-tools': 'ai_tools',
     'ai': 'ai_tools',
@@ -412,6 +425,15 @@ export const App: React.FC = () => {
         return <ReviewsPage />;
       case 'reports':
         return <ReportsPage onNavigate={(tab) => handleTabChange(tab as NavItemKey)} />;
+      case 'skin_performance':
+        return (
+          <SkinPerformancePage
+            orders={orders}
+            onNavigate={handleTabChange}
+            onRefresh={() => loadWorkspaceData(true)}
+            isLoading={isLoading}
+          />
+        );
       case 'marketing_emails':
         return <EmailTemplatesPage defaultTab="marketing" />;
       case 'emails':

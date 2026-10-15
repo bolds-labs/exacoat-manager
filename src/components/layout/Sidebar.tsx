@@ -46,6 +46,7 @@ export type NavItemKey =
   | 'materials'
   | 'reviews'
   | 'reports'
+  | 'skin_performance'
   | 'ai_tools'
   | 'emails'
   | 'marketing_emails'
@@ -172,6 +173,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       title: 'Analytics',
       items: [
         { key: 'reports', label: 'Sales & Reports', icon: FileText },
+        { key: 'skin_performance', label: 'Skin Performance', icon: Layers },
         { key: 'customers', label: 'Customers', icon: Users },
       ]
     },
