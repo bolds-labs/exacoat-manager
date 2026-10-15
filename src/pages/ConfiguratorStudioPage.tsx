@@ -3762,6 +3762,22 @@ export const ConfiguratorStudioPage: React.FC = () => {
     });
   };
 
+  const handleSelectAllLayerFinishes = (layerId: string) => {
+    if (!editingProfile) return;
+    const allSlugs = finishes.map((f) => f.slug || f.id);
+    setEditingProfile({
+      ...editingProfile,
+      layers: editingProfile.layers.map((l) => {
+        if (l.id !== layerId) return l;
+        return {
+          ...l,
+          allowed_finish_slugs: allSlugs,
+        };
+      }),
+    });
+    showToast('info', 'All Finishes Selected', `Selected all ${allSlugs.length} finishes. Click individual skins to exclude them.`);
+  };
+
   const handleAutoDetectLayerFinishes = (layerId: string) => {
     if (!editingProfile) return;
     const layer = editingProfile.layers.find((l) => l.id === layerId);
@@ -9822,6 +9838,19 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                             className="text-[10px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 hover:bg-amber-500/20 cursor-pointer transition-colors"
                                           >
                                             Swarm & Black Camo
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleSelectAllLayerFinishes(currentActiveLayer.id)}
+                                            className={clsx(
+                                              'text-[10px] px-2 py-0.5 rounded cursor-pointer transition-colors',
+                                              activeAllowedSlugs.length === finishes.length
+                                                ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30 font-semibold'
+                                                : 'bg-white/5 text-zinc-300 hover:text-white'
+                                            )}
+                                            title="Select all finishes to easily exclude 1 or 2 skins"
+                                          >
+                                            All
                                           </button>
                                           <button
                                             type="button"
