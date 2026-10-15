@@ -38,7 +38,8 @@ import {
   SlidersHorizontal,
   AlignLeft,
   AlignCenter,
-  Share2
+  Share2,
+  Crop
 } from 'lucide-react';
 import { GlassCard } from '../ui/GlassCard';
 import { Input } from '../ui/Input';
@@ -46,6 +47,7 @@ import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { CustomSelect, SelectOption } from '../ui/CustomSelect';
 import { MediaLibraryModal } from '../modals/MediaLibraryModal';
+import { BannerCropModal } from '../modals/BannerCropModal';
 import { useToast } from '../../context/ToastContext';
 import { 
   fetchAcumbamailListsDirect, 
@@ -100,6 +102,7 @@ export interface MarketingPreset {
   showTrustGrid: boolean;
   bannerImageUrl?: string;
   bannerAspectRatio?: '16:9' | '4:3' | '1:1' | '3:4' | 'auto';
+  bannerPosition?: string;
 }
 
 const CAMPAIGN_ANGLE_OPTIONS: SelectOption[] = [
@@ -308,9 +311,12 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
 
   // Hero / Banner Image
   const [bannerImageUrl, setBannerImageUrl] = useState('');
+  const [originalBannerImageUrl, setOriginalBannerImageUrl] = useState('');
   const [bannerLinkUrl, setBannerLinkUrl] = useState('https://exacoat.com/shop');
   const [bannerImageAlt, setBannerImageAlt] = useState('Exacoat Precision Skin');
   const [bannerAspectRatio, setBannerAspectRatio] = useState<'16:9' | '4:3' | '1:1' | '3:4' | 'auto'>('16:9');
+  const [bannerPosition, setBannerPosition] = useState<'center' | 'top' | 'bottom' | string>('center');
+  const [showCropModal, setShowCropModal] = useState<boolean>(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -502,6 +508,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
 
     if (res.success && res.url) {
       setBannerImageUrl(res.url);
+      setOriginalBannerImageUrl(res.url);
       showToast('success', 'Image Uploaded', 'Banner image uploaded to media CDN.');
     } else {
       showToast('error', 'Upload Failed', res.error || 'Could not upload image.');
@@ -686,8 +693,12 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
     setCtaUrl(p.ctaUrl);
     setPrimaryCtaColor(p.primaryCtaColor);
     setShowTrustGrid(p.showTrustGrid);
-    if (p.bannerImageUrl) setBannerImageUrl(p.bannerImageUrl);
+    if (p.bannerImageUrl) {
+      setBannerImageUrl(p.bannerImageUrl);
+      setOriginalBannerImageUrl(p.bannerImageUrl);
+    }
     if (p.bannerAspectRatio) setBannerAspectRatio(p.bannerAspectRatio);
+    if (p.bannerPosition) setBannerPosition(p.bannerPosition);
 
     if (composerMode === 'code') {
       const presetMjml = renderMarketingEmailMjml({
@@ -719,6 +730,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
         showTrustGrid: p.showTrustGrid,
         bannerImageUrl: p.bannerImageUrl,
         bannerAspectRatio: p.bannerAspectRatio,
+        bannerPosition: p.bannerPosition,
       });
       setCustomHtmlCode(presetMjml);
       setCodeFormat('mjml');
@@ -767,6 +779,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
       showTrustGrid,
       bannerImageUrl,
       bannerAspectRatio,
+      bannerPosition,
     };
 
     const userCreated = savedTemplates.filter(p => !p.isBuiltIn);
@@ -834,6 +847,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
     bannerImageAlt,
     bannerLinkUrl: bannerLinkUrl || undefined,
     bannerAspectRatio,
+    bannerPosition,
     subPillNotice: subPillNotice.trim() || undefined,
     bodyText,
     highlightTitle: showPromoBox ? promoTitle : undefined,
@@ -871,6 +885,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
     bannerImageAlt,
     bannerLinkUrl,
     bannerAspectRatio,
+    bannerPosition,
     subPillNotice,
     bodyText,
     showPromoBox,
@@ -2103,7 +2118,10 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                         <Input
                           type="text"
                           value={bannerImageUrl}
-                          onChange={(e) => setBannerImageUrl(e.target.value)}
+                          onChange={(e) => {
+                            setBannerImageUrl(e.target.value);
+                            setOriginalBannerImageUrl(e.target.value);
+                          }}
                           placeholder="https://exacoat.com/.../banner.jpg"
                           className="text-xs"
                         />
@@ -2160,6 +2178,57 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                       </div>
                     </div>
 
+                    {/* Crop & Position Tools (Available when image is set and ratio is not auto) */}
+                    {bannerImageUrl && bannerAspectRatio !== 'auto' && (
+                      <div className="pt-1 flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-zinc-50 dark:bg-white/[0.03] border border-zinc-200 dark:border-white/10">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
+                            Framing:
+                          </span>
+                          {(['top', 'center', 'bottom'] as const).map((pos) => (
+                            <button
+                              key={pos}
+                              type="button"
+                              onClick={() => setBannerPosition(pos)}
+                              className={`px-2 py-0.5 rounded-md text-[11px] font-semibold border transition-all ${
+                                bannerPosition === pos
+                                  ? 'bg-amber-500 text-black border-amber-500 font-bold'
+                                  : 'bg-white dark:bg-zinc-800 border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300'
+                              }`}
+                            >
+                              {pos.charAt(0).toUpperCase() + pos.slice(1)}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {originalBannerImageUrl && originalBannerImageUrl !== bannerImageUrl && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setBannerImageUrl(originalBannerImageUrl);
+                                showToast('info', 'Reverted', 'Restored uncropped source image.');
+                              }}
+                              className="text-[11px] text-zinc-500 hover:text-zinc-900 dark:hover:text-white underline transition-colors"
+                            >
+                              Revert to Original
+                            </button>
+                          )}
+
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setShowCropModal(true)}
+                            className="flex items-center gap-1.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 border border-amber-500/25 font-bold text-xs"
+                          >
+                            <Crop className="w-3.5 h-3.5 text-amber-500" />
+                            <span>Adjust Crop &amp; Position</span>
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
                     {bannerImageUrl && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                         <div>
@@ -2179,7 +2248,13 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                         </div>
                         <div className="flex flex-col items-center justify-center">
                           <div
-                            className={`relative w-full rounded-xl overflow-hidden border border-zinc-200 dark:border-white/10 bg-zinc-900 shadow-sm flex items-center justify-center ${
+                            onClick={() => {
+                              if (bannerAspectRatio !== 'auto') setShowCropModal(true);
+                            }}
+                            title={bannerAspectRatio !== 'auto' ? 'Click to adjust crop and framing' : undefined}
+                            className={`relative w-full rounded-xl overflow-hidden border border-zinc-200 dark:border-white/10 bg-zinc-900 shadow-sm flex items-center justify-center group ${
+                              bannerAspectRatio !== 'auto' ? 'cursor-pointer' : ''
+                            } ${
                               bannerAspectRatio === '16:9'
                                 ? 'aspect-[16/9]'
                                 : bannerAspectRatio === '4:3'
@@ -2194,11 +2269,18 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                             <img
                               src={bannerImageUrl}
                               alt="Banner preview"
-                              className="w-full h-full object-cover"
+                              className="w-full h-full object-cover transition-all"
+                              style={{ objectPosition: bannerPosition }}
                             />
                             <div className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/70 backdrop-blur text-[9px] font-mono font-bold text-white uppercase">
                               {bannerAspectRatio}
                             </div>
+                            {bannerAspectRatio !== 'auto' && (
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white text-xs font-bold">
+                                <Crop className="w-4 h-4 text-amber-400" />
+                                <span>Adjust Crop</span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -3387,6 +3469,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
         onClose={() => setShowMediaModal(false)}
         onSelectImage={(url) => {
           setBannerImageUrl(url);
+          setOriginalBannerImageUrl(url);
           setShowMediaModal(false);
           showToast('success', 'Banner Image Selected', 'Banner applied from WordPress Media Library.');
         }}
@@ -3394,6 +3477,26 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
         recommendedDimensions="1200x600 (or 600x300) JPG / WebP"
         currentUrl={bannerImageUrl}
       />
+
+      {/* Interactive Canvas Banner Crop & Framing Modal */}
+      {showCropModal && (
+        <BannerCropModal
+          isOpen={showCropModal}
+          onClose={() => setShowCropModal(false)}
+          imageUrl={originalBannerImageUrl || bannerImageUrl}
+          initialAspectRatio={bannerAspectRatio}
+          initialPosition={bannerPosition}
+          onApplyCrop={(croppedUrl, ratio, position) => {
+            if (!originalBannerImageUrl) {
+              setOriginalBannerImageUrl(bannerImageUrl);
+            }
+            setBannerImageUrl(croppedUrl);
+            setBannerAspectRatio(ratio);
+            setBannerPosition(position);
+            showToast('success', 'Banner Cropped & Applied', `Cropped to ${ratio} and saved to email.`);
+          }}
+        />
+      )}
     </div>
   );
 };

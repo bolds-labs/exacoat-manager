@@ -2325,6 +2325,32 @@ export async function uploadMarketingImageDirect(file: File): Promise<{ success:
   }
 }
 
+export async function uploadMarketingImageBase64(base64Data: string, filename?: string): Promise<{ success: boolean; url?: string; error?: string }> {
+  try {
+    const base = getWordPressBaseUrl();
+    const url = `${base}/wp-json/exacoat-core/v1/email/upload-image`;
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        image_base64: base64Data,
+        filename: filename || `banner-${Date.now()}.jpg`,
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.url) {
+        return { success: true, url: data.url };
+      }
+      return { success: false, error: data.error || data.message || 'Failed to upload image' };
+    }
+    return { success: false, error: `Upload returned status ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 export async function fetchAcumbamailCampaignsDirect(tokenOverride?: string): Promise<{
   success: boolean;
   campaigns?: Array<{ id: string; name: string }>;

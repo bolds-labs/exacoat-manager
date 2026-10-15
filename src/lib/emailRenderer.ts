@@ -1788,6 +1788,7 @@ export interface TrustFeatureCard {
 }
 
 export type BannerAspectRatio = '16:9' | '4:3' | '1:1' | '3:4' | 'auto';
+export type BannerPosition = 'center' | 'top' | 'bottom' | string;
 
 export interface MarketingEmailOptions {
   theme?: 'dark' | 'light';
@@ -1804,6 +1805,7 @@ export interface MarketingEmailOptions {
   bannerImageAlt?: string;
   bannerLinkUrl?: string;
   bannerAspectRatio?: BannerAspectRatio;
+  bannerPosition?: BannerPosition;
   subPillNotice?: string;
   bodyText: string;
   highlightTitle?: string;
@@ -1958,20 +1960,22 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
     const imgUrl = escapeHtml(options.bannerImageUrl);
     const altText = escapeHtml(options.bannerImageAlt || headline);
     const imgBorder = isDark ? '1px solid #27272a' : '1px solid #e5e5e5';
-    const ratio = options.bannerAspectRatio || '16:9';
+    const ratio = options.bannerAspectRatio || 'auto';
+    const position = options.bannerPosition || 'center';
 
-    let ratioStyle = 'aspect-ratio:16/9;';
-    if (ratio === '4:3') {
+    let ratioStyle = '';
+    if (ratio === '16:9') {
+      ratioStyle = 'aspect-ratio:16/9;';
+    } else if (ratio === '4:3') {
       ratioStyle = 'aspect-ratio:4/3;';
     } else if (ratio === '1:1') {
       ratioStyle = 'aspect-ratio:1/1;';
     } else if (ratio === '3:4') {
       ratioStyle = 'aspect-ratio:3/4;max-height:560px;';
-    } else if (ratio === 'auto') {
-      ratioStyle = '';
     }
 
-    const imgTag = `<img src="${imgUrl}" alt="${altText}" width="520" style="width:100%;max-width:520px;${ratioStyle}height:auto;border-radius:20px;border:${imgBorder};display:block;margin:0 auto 20px;object-fit:cover;box-shadow:0 8px 30px rgba(0,0,0,0.35);" />`;
+    const heightStyle = ratioStyle ? '' : 'height:auto;';
+    const imgTag = `<img src="${imgUrl}" alt="${altText}" width="520" style="width:100%;max-width:520px;${ratioStyle}${heightStyle}border-radius:20px;border:${imgBorder};display:block;margin:0 auto 20px;object-fit:cover;object-position:${position};box-shadow:0 8px 30px rgba(0,0,0,0.35);" />`;
     if (options.bannerLinkUrl) {
       const linkUrl = escapeHtml(options.bannerLinkUrl);
       bannerHtml = `<div style="margin-bottom:20px;text-align:center;"><a href="${linkUrl}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;display:block;">${imgTag}</a></div>`;
@@ -2418,13 +2422,40 @@ export function renderMarketingEmailMjml(options: MarketingEmailOptions): string
   // Banner image
   let bannerMjml = '';
   if (options.bannerImageUrl) {
-    bannerMjml = `
+    const imgUrl = escapeHtml(options.bannerImageUrl);
+    const altText = escapeHtml(options.bannerImageAlt || 'Exacoat');
+    const hrefAttr = options.bannerLinkUrl ? `href="${escapeHtml(options.bannerLinkUrl)}"` : '';
+    const ratio = options.bannerAspectRatio || 'auto';
+    const position = options.bannerPosition || 'center';
+
+    let ratioCss = '';
+    if (ratio === '16:9') ratioCss = 'aspect-ratio:16/9;';
+    else if (ratio === '4:3') ratioCss = 'aspect-ratio:4/3;';
+    else if (ratio === '1:1') ratioCss = 'aspect-ratio:1/1;';
+    else if (ratio === '3:4') ratioCss = 'aspect-ratio:3/4;max-height:560px;';
+
+    if (ratio !== 'auto') {
+      const imgBorder = isDark ? '1px solid #27272a' : '1px solid #e5e5e5';
+      const imgTag = `<img src="${imgUrl}" alt="${altText}" width="560" style="width:100%;max-width:560px;${ratioCss}object-fit:cover;object-position:${position};border-radius:20px;border:${imgBorder};display:block;margin:0 auto;box-shadow:0 8px 30px rgba(0,0,0,0.35);" />`;
+      const linkedTag = options.bannerLinkUrl
+        ? `<a href="${escapeHtml(options.bannerLinkUrl)}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;display:block;">${imgTag}</a>`
+        : imgTag;
+      bannerMjml = `
+      <!-- Hero Banner Image -->
+      <mj-raw>
+        <div style="padding:0 0 24px;text-align:center;">
+          ${linkedTag}
+        </div>
+      </mj-raw>`;
+    } else {
+      bannerMjml = `
       <!-- Hero Banner Image -->
       <mj-section padding="0 0 24px">
         <mj-column>
-          <mj-image src="${escapeHtml(options.bannerImageUrl)}" alt="${escapeHtml(options.bannerImageAlt || 'Exacoat')}" href="${options.bannerLinkUrl ? escapeHtml(options.bannerLinkUrl) : 'https://exacoat.com'}" border-radius="20px" padding="0" width="560px" />
+          <mj-image src="${imgUrl}" alt="${altText}" ${hrefAttr} border-radius="20px" padding="0" width="560px" />
         </mj-column>
       </mj-section>`;
+    }
   }
 
   // Body paragraphs
