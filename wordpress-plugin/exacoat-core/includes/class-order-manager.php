@@ -2733,7 +2733,7 @@ class Exacoat_Order_Manager {
 		if ( ! $order instanceof WC_Order ) {
 			$order = is_numeric( $order ) ? wc_get_order( (int) $order ) : null;
 		}
-		$track_base = function_exists( 'exacoat_storefront_url' ) ? exacoat_storefront_url( 'track' ) : home_url( '/track' );
+		$track_base = function_exists( 'exacoat_storefront_url' ) ? exacoat_storefront_url( 'track' ) : 'https://exacoat.com/track';
 		if ( ! $order ) {
 			return $track_base;
 		}

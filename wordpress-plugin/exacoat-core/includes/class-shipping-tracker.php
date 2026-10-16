@@ -383,7 +383,7 @@ class Exacoat_Shipping_Tracker {
 
 		// Link directly to Exacoat storefront tracking page (/track)
 		$billing_email = $order->get_billing_email();
-		$track_base    = function_exists( 'exacoat_storefront_url' ) ? exacoat_storefront_url( 'track' ) : home_url( '/track' );
+		$track_base    = function_exists( 'exacoat_storefront_url' ) ? exacoat_storefront_url( 'track' ) : 'https://exacoat.com/track';
 		$tracking_url  = add_query_arg( [
 			'order_id'    => $order->get_order_number(),
 			'order_email' => $billing_email,

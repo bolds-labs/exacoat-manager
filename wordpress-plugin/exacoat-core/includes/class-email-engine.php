@@ -1406,7 +1406,7 @@ class Exacoat_Email_Engine {
 
 		$native_track_url = '';
 		if ( ! empty( $track_order_id ) ) {
-			$track_base = function_exists( 'exacoat_storefront_url' ) ? exacoat_storefront_url( 'track' ) : home_url( '/track' );
+			$track_base = function_exists( 'exacoat_storefront_url' ) ? exacoat_storefront_url( 'track' ) : 'https://exacoat.com/track';
 			$native_track_url = add_query_arg( array_filter( [
 				'order_id'    => ltrim( (string) $track_order_id, '#' ),
 				'order_email' => $track_order_email,
@@ -1415,6 +1415,12 @@ class Exacoat_Email_Engine {
 		}
 
 		$raw_tracking_url = ! empty( $data['tracking_url'] ) ? (string) $data['tracking_url'] : '';
+		$is_cms_or_internal = ! empty( $raw_tracking_url ) && (
+			stripos( $raw_tracking_url, 'cms.exacoat.com' ) !== false
+			|| stripos( $raw_tracking_url, 'order-received' ) !== false
+			|| stripos( $raw_tracking_url, 'artmatter' ) !== false
+			|| stripos( $raw_tracking_url, 'checkout' ) !== false
+		);
 		$is_external_portal = ! empty( $raw_tracking_url ) && (
 			stripos( $raw_tracking_url, 'parcelsapp.com' ) !== false
 			|| stripos( $raw_tracking_url, 'jne.co.id' ) !== false
@@ -1424,10 +1430,13 @@ class Exacoat_Email_Engine {
 			|| stripos( $raw_tracking_url, 'trackingmore.com' ) !== false
 		);
 
-		if ( ! empty( $native_track_url ) && ( empty( $raw_tracking_url ) || $is_external_portal ) ) {
+		// Strictly point to native Exacoat /track page whenever order details exist; sanitize away all CMS / internal URLs
+		if ( ! empty( $native_track_url ) ) {
 			$tracking_url = esc_url( $native_track_url );
+		} elseif ( ! empty( $raw_tracking_url ) && ! $is_cms_or_internal && ! $is_external_portal ) {
+			$tracking_url = esc_url( $raw_tracking_url );
 		} else {
-			$tracking_url = esc_url( $raw_tracking_url ?: ( ! empty( $native_track_url ) ? $native_track_url : ( function_exists( 'exacoat_storefront_url' ) ? exacoat_storefront_url( 'track' ) : home_url( '/track' ) ) ) );
+			$tracking_url = esc_url( function_exists( 'exacoat_storefront_url' ) ? exacoat_storefront_url( 'track' ) : 'https://exacoat.com/track' );
 		}
 
 		// Shipment Block (strictly ONLY shown in emails when order has shipped)

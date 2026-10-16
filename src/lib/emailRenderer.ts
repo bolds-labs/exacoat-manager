@@ -671,6 +671,13 @@ function renderCustomerOrderEmail(event: string, data: Record<string, any>): Ren
     const trackingNum = escapeHtml(merged.tracking_number);
     const nativeTrackUrl = `https://exacoat.com/track?order_id=${encodeURIComponent(String(merged.order_number || '14589').replace(/^#/, ''))}&order_email=${encodeURIComponent(merged.customer_email || 'customer@example.com')}`;
     const rawTrackUrl = merged.tracking_url || '';
+    const isCmsOrInternal = Boolean(
+      rawTrackUrl &&
+      (rawTrackUrl.includes('cms.exacoat.com') ||
+       rawTrackUrl.includes('order-received') ||
+       rawTrackUrl.includes('artmatter') ||
+       rawTrackUrl.includes('checkout'))
+    );
     const isExternalPortal = Boolean(
       rawTrackUrl &&
       (rawTrackUrl.includes('parcelsapp.com') ||
@@ -680,7 +687,7 @@ function renderCustomerOrderEmail(event: string, data: Record<string, any>): Ren
        rawTrackUrl.includes('17track.net') ||
        rawTrackUrl.includes('trackingmore.com'))
     );
-    const trackingUrl = escapeHtml(!rawTrackUrl || isExternalPortal ? nativeTrackUrl : rawTrackUrl);
+    const trackingUrl = escapeHtml(!rawTrackUrl || isCmsOrInternal || isExternalPortal ? nativeTrackUrl : rawTrackUrl);
 
     shipmentHtml = `
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:16px;margin:28px 0;">
