@@ -1,6 +1,6 @@
 import React from 'react';
 import { GlassCard } from '../ui/GlassCard';
-import { SkinPerformanceReport } from '../../lib/skinPerformanceService';
+import { SkinPerformanceReport, normalizeThumbnailUrl } from '../../lib/skinPerformanceService';
 import { formatCurrency } from '../../lib/formatters';
 import {
   Layers,
@@ -23,6 +23,7 @@ export const SkinMetricsOverview: React.FC<SkinMetricsOverviewProps> = ({ report
     topSkinByVolume,
     groups,
     uniqueSkinsCount,
+    activeSkinsCount,
   } = report;
 
   const topGroup = groups.length > 0 ? groups[0] : null;
@@ -84,10 +85,26 @@ export const SkinMetricsOverview: React.FC<SkinMetricsOverviewProps> = ({ report
           {topSkinByVolume ? (
             <>
               <div className="flex items-center gap-2">
-                <span
-                  className="w-3 h-3 rounded-full shrink-0 border border-white/20 shadow-xs"
-                  style={{ backgroundColor: topSkinByVolume.colorHex }}
-                />
+                <div
+                  className="w-5 h-5 rounded-md overflow-hidden shrink-0 border border-white/20 bg-black relative flex items-center justify-center shadow-xs"
+                  style={{ backgroundColor: topSkinByVolume.colorHex || '#18181b' }}
+                >
+                  {topSkinByVolume.thumbnailUrl ? (
+                    <img
+                      src={normalizeThumbnailUrl(topSkinByVolume.thumbnailUrl)}
+                      alt={topSkinByVolume.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <span
+                      className="w-full h-full"
+                      style={{ backgroundColor: topSkinByVolume.colorHex }}
+                    />
+                  )}
+                </div>
                 <p className="text-lg sm:text-xl font-black font-sans tracking-tight text-zinc-900 dark:text-white truncate">
                   {topSkinByVolume.name}
                 </p>
@@ -140,8 +157,8 @@ export const SkinMetricsOverview: React.FC<SkinMetricsOverviewProps> = ({ report
         </div>
         <div className="mt-2">
           <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-zinc-900 dark:text-white">
-            {uniqueSkinsCount}
-            <span className="text-xs font-normal text-neutral-400 ml-1.5">finishes</span>
+            {activeSkinsCount ?? uniqueSkinsCount}
+            <span className="text-xs font-normal text-neutral-400 ml-1.5">/ {uniqueSkinsCount} active</span>
           </p>
           <p className="text-[11px] text-zinc-500 dark:text-neutral-400 mt-0.5">
             Ordered in selected window

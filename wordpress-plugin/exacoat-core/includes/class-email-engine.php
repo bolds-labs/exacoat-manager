@@ -374,7 +374,7 @@ class Exacoat_Email_Engine {
 					'customer_first_name' => 'Alex',
 					'product_title'       => 'iPhone 16 Pro',
 					'artwork_title'       => 'iPhone 16 Pro',
-					'artwork_image'       => 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg',
+					'artwork_image'       => 'https://media.exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg',
 					'review_url'          => 'https://exacoat.com/review?order_id=14589',
 				],
 			],
@@ -666,7 +666,7 @@ class Exacoat_Email_Engine {
 			'items'               => [
 				[
 					'name'          => 'iPhone 16 Pro',
-					'image_url'     => 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg',
+					'image_url'     => 'https://media.exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg',
 					'quantity'      => 1,
 					'price'         => 'Rp 149.000',
 					'meta'          => "Coverage: Model Cut\nTexture: Black Camo",
@@ -688,7 +688,7 @@ class Exacoat_Email_Engine {
 			'items'                => [
 				[
 					'name'          => 'iPhone 16 Pro',
-					'image_url'     => 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg',
+					'image_url'     => 'https://media.exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg',
 					'quantity'      => 1,
 					'subtotal'      => 'Rp 149.000',
 					'total'         => 'Rp 149.000',
@@ -1473,7 +1473,7 @@ class Exacoat_Email_Engine {
 			$items = [
 				[
 					'name'          => 'iPhone 16 Pro',
-					'image_url'     => 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg',
+					'image_url'     => 'https://media.exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg',
 					'quantity'      => 1,
 					'subtotal'      => $data['subtotal'] ?? 'Rp 149.000',
 					'total'         => $data['total'] ?? 'Rp 149.000',
@@ -1487,7 +1487,7 @@ class Exacoat_Email_Engine {
 			$raw_name = $item['name'] ?? 'Exacoat Product';
 			$clean_name = trim( preg_replace( '/\s*\(\s*feelform.*?\s*\)/i', '', (string) $raw_name ) );
 			$i_name = esc_html( $clean_name );
-			$i_img  = esc_url( $item['image_url'] ?? ( $item['image'] ?? 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg' ) );
+			$i_img  = esc_url( $item['image_url'] ?? ( $item['image'] ?? 'https://media.exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg' ) );
 			$i_qty  = intval( $item['quantity'] ?? ( $item['qty'] ?? 1 ) );
 			$raw_item_price = $item['subtotal'] ?? ( $item['price'] ?? ( $item['total'] ?? 'Rp 149.000' ) );
 			$i_tot  = esc_html( self::clean_email_price( $raw_item_price ) );
@@ -1780,7 +1780,7 @@ class Exacoat_Email_Engine {
 		$badge_text    = esc_html( $data['badge_text'] ?? $tmpl['badge'] ?? 'Product Review' );
 		$title         = esc_html( $data['title'] ?? $tmpl['title'] ?? 'How does your new order look?' );
 		$art_title     = esc_html( $data['product_title'] ?? ( $data['artwork_title'] ?? 'Exacoat Product' ) );
-		$art_img       = esc_url( $data['artwork_image'] ?? 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg' );
+		$art_img       = esc_url( $data['artwork_image'] ?? 'https://media.exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg' );
 		$artist_name   = esc_html( $data['artist_name'] ?? 'Exacoat' );
 		$review_url    = esc_url( $data['review_url'] ?? ( function_exists( 'exacoat_storefront_url' ) ? exacoat_storefront_url( 'review?order_id=' . $order_num ) : home_url( '/review?order_id=' . $order_num ) ) );
 
@@ -2869,7 +2869,7 @@ class Exacoat_Email_Engine {
 		if ( is_array( $items ) && ! empty( $items ) ) {
 			foreach ( $items as $item ) {
 				$name      = esc_html( $item['name'] ?? 'Exacoat Device Protection' );
-				$img       = esc_url( $item['image_url'] ?? 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg' );
+				$img       = esc_url( $item['image_url'] ?? 'https://media.exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg' );
 				$qty       = (int) ( $item['quantity'] ?? 1 );
 				$price     = esc_html( self::clean_email_price( $item['price'] ?? ( $item['subtotal'] ?? '' ) ) );
 				$meta_raw  = $item['meta'] ?? '';

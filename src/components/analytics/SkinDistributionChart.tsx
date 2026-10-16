@@ -17,8 +17,9 @@ export const SkinDistributionChart: React.FC<SkinDistributionChartProps> = ({
 }) => {
   const [viewMode, setViewMode] = useState<'skins' | 'groups'>('skins');
 
-  const topSkins = skins.slice(0, 6);
-  const otherUnits = skins.slice(6).reduce((s, it) => s + it.unitsSold, 0);
+  const activeSkins = skins.filter((s) => s.unitsSold > 0);
+  const topSkins = activeSkins.slice(0, 6);
+  const otherUnits = activeSkins.slice(6).reduce((s, it) => s + it.unitsSold, 0);
   const otherShare = totalUnits > 0 ? Number(((otherUnits / totalUnits) * 100).toFixed(1)) : 0;
 
   return (
@@ -68,8 +69,13 @@ export const SkinDistributionChart: React.FC<SkinDistributionChartProps> = ({
         {/* Breakdown Items List */}
         <div className="space-y-3">
           {viewMode === 'skins' ? (
-            <>
-              {topSkins.map((skin) => (
+            topSkins.length === 0 ? (
+              <div className="py-8 text-center text-neutral-500 text-xs">
+                No finish sales recorded in this timeframe.
+              </div>
+            ) : (
+              <>
+                {topSkins.map((skin) => (
                 <div key={skin.slug} className="space-y-1">
                   <div className="flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2 min-w-0">
@@ -126,7 +132,8 @@ export const SkinDistributionChart: React.FC<SkinDistributionChartProps> = ({
                   </div>
                 </div>
               )}
-            </>
+              </>
+            )
           ) : (
             <>
               {groups.map((grp) => (

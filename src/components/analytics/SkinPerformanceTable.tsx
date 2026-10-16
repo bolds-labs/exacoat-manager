@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { GlassCard } from '../ui/GlassCard';
-import { SkinMetricItem } from '../../lib/skinPerformanceService';
+import { SkinMetricItem, normalizeThumbnailUrl } from '../../lib/skinPerformanceService';
 import { formatCurrency } from '../../lib/formatters';
 import {
   Search,
@@ -234,17 +234,23 @@ export const SkinPerformanceTable: React.FC<SkinPerformanceTableProps> = ({
                           <span className="font-mono text-neutral-600 text-[11px] w-4">
                             #{idx + 1}
                           </span>
-                          <div className="w-7 h-7 rounded-lg overflow-hidden border border-white/20 bg-black shrink-0 relative flex items-center justify-center shadow-xs">
+                          <div
+                            className="w-7 h-7 rounded-lg overflow-hidden border border-white/20 bg-black shrink-0 relative flex items-center justify-center shadow-xs"
+                            style={{ backgroundColor: skin.colorHex || '#18181b' }}
+                          >
                             {skin.thumbnailUrl ? (
                               <img
-                                src={skin.thumbnailUrl}
+                                src={normalizeThumbnailUrl(skin.thumbnailUrl)}
                                 alt={skin.name}
                                 className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  (e.currentTarget as HTMLImageElement).style.display = 'none';
+                                }}
                               />
                             ) : (
                               <div
                                 className="w-full h-full"
-                                style={{ backgroundColor: skin.colorHex }}
+                                style={{ backgroundColor: skin.colorHex || '#18181b' }}
                               />
                             )}
                           </div>
@@ -280,7 +286,7 @@ export const SkinPerformanceTable: React.FC<SkinPerformanceTableProps> = ({
                           <div className="w-full h-1 rounded-full bg-white/[0.06] overflow-hidden">
                             <div
                               className="h-full rounded-full bg-[#f3aa18]"
-                              style={{ width: `${Math.max(4, relativePct)}%` }}
+                              style={{ width: `${skin.unitsSold > 0 ? Math.max(4, relativePct) : 0}%` }}
                             />
                           </div>
                         </div>
@@ -288,39 +294,47 @@ export const SkinPerformanceTable: React.FC<SkinPerformanceTableProps> = ({
 
                       {/* Market Share */}
                       <td className="py-3.5 px-4 font-mono text-xs">
-                        <span className="font-bold text-[#f3aa18]">
+                        <span className={clsx('font-bold', skin.unitsSold > 0 ? 'text-[#f3aa18]' : 'text-neutral-600')}>
                           {skin.shareOfTotalUnits}%
                         </span>
                       </td>
 
                       {/* Gross Revenue */}
                       <td className="py-3.5 px-4 font-mono text-xs text-white">
-                        <span className="font-semibold">
+                        <span className={clsx('font-semibold', skin.unitsSold === 0 && 'text-neutral-500')}>
                           {formatCurrency(skin.grossRevenueIdr, 'IDR')}
                         </span>
-                        <span className="block text-[10px] text-neutral-500">
-                          avg: {formatCurrency(skin.averageItemPriceIdr, 'IDR')}
-                        </span>
+                        {skin.unitsSold > 0 && (
+                          <span className="block text-[10px] text-neutral-500">
+                            avg: {formatCurrency(skin.averageItemPriceIdr, 'IDR')}
+                          </span>
+                        )}
                       </td>
 
                       {/* Top Paired Devices */}
                       <td className="py-3.5 px-4 hidden lg:table-cell">
                         <div className="flex items-center gap-1.5 flex-wrap max-w-sm">
-                          {skin.topDevices.slice(0, 2).map((dev, dIdx) => (
-                            <span
-                              key={dIdx}
-                              className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded bg-[#090a0d] border border-white/[0.06] text-neutral-300"
-                              title={`${dev.deviceName}: ${dev.units} units (${dev.percentage.toFixed(0)}%)`}
-                            >
-                              <Smartphone className="w-2.5 h-2.5 text-[#f3aa18]" />
-                              <span className="truncate max-w-[120px]">{dev.deviceName}</span>
-                              <span className="text-neutral-500">({dev.units})</span>
-                            </span>
-                          ))}
-                          {skin.topDevices.length > 2 && (
-                            <span className="text-[10px] font-mono text-neutral-500">
-                              +{skin.topDevices.length - 2} more
-                            </span>
+                          {skin.topDevices.length === 0 ? (
+                            <span className="text-[11px] text-neutral-600 font-mono italic">No orders yet</span>
+                          ) : (
+                            <>
+                              {skin.topDevices.slice(0, 2).map((dev, dIdx) => (
+                                <span
+                                  key={dIdx}
+                                  className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded bg-[#090a0d] border border-white/[0.06] text-neutral-300"
+                                  title={`${dev.deviceName}: ${dev.units} units (${dev.percentage.toFixed(0)}%)`}
+                                >
+                                  <Smartphone className="w-2.5 h-2.5 text-[#f3aa18]" />
+                                  <span className="truncate max-w-[120px]">{dev.deviceName}</span>
+                                  <span className="text-neutral-500">({dev.units})</span>
+                                </span>
+                              ))}
+                              {skin.topDevices.length > 2 && (
+                                <span className="text-[10px] font-mono text-neutral-500">
+                                  +{skin.topDevices.length - 2} more
+                                </span>
+                              )}
+                            </>
                           )}
                         </div>
                       </td>
@@ -355,17 +369,23 @@ export const SkinPerformanceTable: React.FC<SkinPerformanceTableProps> = ({
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg overflow-hidden border border-white/20 bg-black shrink-0 relative flex items-center justify-center">
+                <div
+                  className="w-8 h-8 rounded-lg overflow-hidden border border-white/20 bg-black shrink-0 relative flex items-center justify-center"
+                  style={{ backgroundColor: inspectedSkin.colorHex || '#18181b' }}
+                >
                   {inspectedSkin.thumbnailUrl ? (
                     <img
-                      src={inspectedSkin.thumbnailUrl}
+                      src={normalizeThumbnailUrl(inspectedSkin.thumbnailUrl)}
                       alt={inspectedSkin.name}
                       className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).style.display = 'none';
+                      }}
                     />
                   ) : (
                     <div
                       className="w-full h-full"
-                      style={{ backgroundColor: inspectedSkin.colorHex }}
+                      style={{ backgroundColor: inspectedSkin.colorHex || '#18181b' }}
                     />
                   )}
                 </div>

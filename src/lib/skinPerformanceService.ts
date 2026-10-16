@@ -71,6 +71,7 @@ export interface SkinPerformanceReport {
   totalRevenueIdr: number;
   averageOrderValueIdr: number;
   uniqueSkinsCount: number;
+  activeSkinsCount?: number;
   topSkinByVolume: SkinMetricItem | null;
   topSkinByRevenue: SkinMetricItem | null;
   fastestGrowingSkin?: SkinMetricItem | null;
@@ -88,21 +89,185 @@ export function normalizeSkinSlug(raw: string): string {
 }
 
 /**
- * Build index of all known finishes from defaults & cached custom finishes
+ * Normalizes any legacy or external thumbnail URLs to point directly to media.exacoat.com/wp-content/uploads/
  */
-export function buildKnownFinishesDictionary(): Map<string, GlobalFinish> {
-  const dict = new Map<string, GlobalFinish>();
+export function normalizeThumbnailUrl(url?: string | null): string {
+  if (!url || typeof url !== 'string') return '';
+  const trimmed = url.trim();
+  if (!trimmed) return '';
 
-  // Ingest defaults first
+  // Rewrite any exacoat.com (without media/cms) or staging uploads to media.exacoat.com
+  let normalized = trimmed.replace(
+    /^https?:\/\/(?:(?:www\.)?exacoat\.com|staging\.exacoat\.com)\/(?:wp-content\/)?uploads\//i,
+    'https://media.exacoat.com/wp-content/uploads/'
+  );
+
+  // If Burgundy or Titanium thumbnail was saved as https://media.exacoat.com/Burgundy-Texture-Thumbnail.jpg
+  // Ensure it has /wp-content/uploads/
+  normalized = normalized.replace(
+    /^https?:\/\/media\.exacoat\.com\/([^/]+\.(?:jpe?g|png|webp|svg))$/i,
+    'https://media.exacoat.com/wp-content/uploads/$1'
+  );
+
+  return normalized;
+}
+
+/**
+ * Detect non-finish values such as coverage options ("Full Skin", "Back Only"),
+ * device model names ("iPhone", "Samsung"), or structural/placeholder terms.
+ */
+export function isInvalidFinishCandidate(rawVal: string): boolean {
+  if (!rawVal || typeof rawVal !== 'string') return true;
+  const val = rawVal.trim().toLowerCase();
+  if (val.length < 2) return true;
+
+  // Explicitly allow Everything Skins and known special finishes
+  if (/^everythings?(?:\s*skins?)?$/i.test(val)) {
+    return false;
+  }
+
+  // 1. Common generic placeholder values
+  if (
+    /^(custom|default|none|select|false|true|yes|no|undefined|null|n\/a|std|standard|unknown|empty|auto|all|n\/d)$/i.test(val)
+  ) {
+    return true;
+  }
+
+  // 2. Coverage options & variations (e.g. "Full Skin", "Back Only", "Back & Sides", "Precision Fit")
+  if (
+    /^(full\s*skin|back\s*only|full\s*body|back\s*&\s*sides?|back\s*and\s*sides?|coverage|precision\s*fit|standard\s*fit|full\s*coverage|simple\s*fit)$/i.test(val) ||
+    /^(with\s*logo|without\s*logo|logo\s*cutout|no\s*logo\s*cutout|cutout|no\s*cutout)$/i.test(val)
+  ) {
+    return true;
+  }
+
+  // 3. Device brands & device models passed erroneously as skin values
+  // e.g. "iPhone", "iPhone 16 Pro", "Samsung S24 Ultra", "MacBook Pro", "iPad", "Xiaomi 14", "POCO F6"
+  if (
+    /\b(iphone|samsung|galaxy|macbook|ipad|xiaomi|poco|oppo|vivo|pixel|asus|rog|lenovo|infinix|oneplus|realme|huawei|redmi|xperia)\b/i.test(val) ||
+    /^(device|phone|smartphone|laptop|tablet|keyboard|magic\s*keyboard|airpods|watch|charger|case)$/i.test(val)
+  ) {
+    return true;
+  }
+
+  // 4. Layer component labels mistakenly extracted as the choice/finish value
+  if (
+    /^(back|back\s*skin|body|body\s*skin|base|base\s*skin|accent|camera|camera\s*lens|frame|sides?|hinge|logo|trackpad|keyboard|visor)$/i.test(val)
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Detect whether an order is an RMA Installation Warranty Replacement or Redeem claim
+ */
+export function isWarrantyReplacementOrder(order: any): boolean {
+  if (!order) return false;
+
+  // 1. Direct RMA properties
+  const rmaOrderType = String(
+    order.rma?.order_type ||
+    order._rma_order_type ||
+    ''
+  ).toLowerCase().trim();
+
+  if (rmaOrderType === 'warranty' || rmaOrderType === 'redeem') {
+    return true;
+  }
+
+  // 2. Metadata inspection
+  const meta = Array.isArray(order.meta_data) ? order.meta_data : [];
+  for (const m of meta) {
+    if (!m || typeof m !== 'object') continue;
+    const k = String(m.key || '').toLowerCase().trim();
+    const v = String(m.value || '').toLowerCase().trim();
+
+    if (k === '_rma_order_type' && (v === 'warranty' || v === 'redeem')) {
+      return true;
+    }
+    if ((k === '_is_warranty' || k === '_is_warranty_claim') && (v === 'yes' || v === 'warranty' || v === 'true')) {
+      return true;
+    }
+    if (k === '_order_badge' && (v === 'warranty' || v === 'redeem')) {
+      return true;
+    }
+  }
+
+  // 3. Customer note or order notes inspection
+  const noteContent = [
+    order.customer_note,
+    order.note,
+    order.admin_note,
+    order.notes,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  if (
+    noteContent.includes('[warranty replacement]') ||
+    noteContent.includes('[rma installation warranty]') ||
+    noteContent.includes('[marketplace warranty claim]') ||
+    noteContent.includes('installation warranty replacement') ||
+    noteContent.includes('garansi pemasangan')
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Detect whether an individual order item is a warranty replacement item
+ */
+export function isWarrantyReplacementItem(item: any): boolean {
+  if (!item) return false;
+
+  const meta = Array.isArray(item.meta_data) ? item.meta_data : [];
+  for (const m of meta) {
+    if (!m || typeof m !== 'object') continue;
+    const k = String(m.key || '').toLowerCase().trim();
+    const v = String(m.value || '').toLowerCase().trim();
+    if (k === '_is_warranty' && (v === 'yes' || v === 'warranty' || v === 'true')) {
+      return true;
+    }
+  }
+
+  const name = String(item.name || '').toLowerCase();
+  if (
+    name.includes('[warranty replacement]') ||
+    name.includes('[warranty]') ||
+    name.includes('warranty replacement') ||
+    name.includes('garansi pemasangan')
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Returns the definitive list of all master textures (defaults, limited, and Skin Studio inventory)
+ */
+export function getMasterTexturesList(): GlobalFinish[] {
+  const map = new Map<string, GlobalFinish>();
+
+  // 1. Ingest DEFAULT_GLOBAL_FINISHES
   DEFAULT_GLOBAL_FINISHES.forEach((f) => {
-    dict.set(normalizeSkinSlug(f.slug), f);
-    dict.set(normalizeSkinSlug(f.name), f);
-    dict.set(normalizeSkinSlug(f.id), f);
+    const slug = normalizeSkinSlug(f.slug || f.id || f.name);
+    map.set(slug, {
+      ...f,
+      slug: f.slug || slug,
+      thumbnail: normalizeThumbnailUrl(f.thumbnail),
+      texture_big_url: normalizeThumbnailUrl(f.texture_big_url),
+    });
   });
 
-  // Add Burgundy and Titanium+ if not present
-  if (!dict.has('burgundy')) {
-    const burg: GlobalFinish = {
+  // 2. Add Burgundy
+  if (!map.has('burgundy')) {
+    map.set('burgundy', {
       id: 'burgundy',
       name: 'Burgundy',
       slug: 'burgundy',
@@ -110,13 +275,13 @@ export function buildKnownFinishesDictionary(): Map<string, GlobalFinish> {
       color_hex: '#5B1E28',
       in_stock: true,
       extra_price: 35000,
-      thumbnail: 'https://media.exacoat.com/Burgundy-Texture-Thumbnail.jpg',
-    };
-    dict.set('burgundy', burg);
+      thumbnail: 'https://media.exacoat.com/wp-content/uploads/Burgundy-Texture-Thumbnail.jpg',
+    });
   }
 
-  if (!dict.has('titanium') && !dict.has('titaniumplus')) {
-    const tit: GlobalFinish = {
+  // 3. Add Titanium+
+  if (!map.has('titaniumplus') && !map.has('titanium-plus')) {
+    map.set('titanium-plus', {
       id: 'titanium-plus',
       name: 'Titanium+',
       slug: 'titanium-plus',
@@ -124,29 +289,103 @@ export function buildKnownFinishesDictionary(): Map<string, GlobalFinish> {
       color_hex: '#8E8D8A',
       in_stock: true,
       extra_price: 35000,
-      thumbnail: 'https://media.exacoat.com/Titanium-Plus-Texture-Thumbnail.jpg',
-    };
-    dict.set('titaniumplus', tit);
-    dict.set('titanium', tit);
+      thumbnail: 'https://media.exacoat.com/wp-content/uploads/Titanium-Plus-Texture-Thumbnail.jpg',
+    });
   }
 
-  // Check localStorage for runtime custom finishes
+  // 4. Add Everything Skins (special / custom per-device master skin)
+  if (!map.has('everything') && !map.has('everythingskins') && !map.has('everythingskin')) {
+    map.set('everything', {
+      id: 'everything',
+      name: 'Everything',
+      slug: 'everything',
+      group: 'Special edition',
+      color_hex: '#2d2d30',
+      in_stock: true,
+      extra_price: 35000,
+      thumbnail: 'https://media.exacoat.com/wp-content/uploads/Everything-Texture-Thumbnail.jpg',
+    });
+  }
+
+  // 5. Ingest custom master textures from Skin Studio inventory cache
   if (typeof localStorage !== 'undefined') {
-    try {
-      const cached = localStorage.getItem('exacoat_finishes_inventory_v2');
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed)) {
-          parsed.forEach((f: GlobalFinish) => {
-            if (f?.slug) dict.set(normalizeSkinSlug(f.slug), f);
-            if (f?.name) dict.set(normalizeSkinSlug(f.name), f);
-            if (f?.id) dict.set(normalizeSkinSlug(f.id), f);
-          });
+    const storageKeys = ['exacoat_finishes_inventory_cache', 'exacoat_finishes_inventory_v2'];
+    for (const key of storageKeys) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((f: GlobalFinish) => {
+              if (!f || typeof f !== 'object') return;
+              const slug = normalizeSkinSlug(f.slug || f.id || f.name);
+              if (!slug) return;
+              if (isInvalidFinishCandidate(f.name || f.slug)) return;
+
+              map.set(slug, {
+                ...f,
+                slug: f.slug || slug,
+                thumbnail: normalizeThumbnailUrl(f.thumbnail),
+                texture_big_url: normalizeThumbnailUrl(f.texture_big_url),
+              });
+            });
+          }
         }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
     }
+  }
+
+  return Array.from(map.values());
+}
+
+/**
+ * Build index of all known finishes from defaults & cached custom finishes
+ */
+export function buildKnownFinishesDictionary(): Map<string, GlobalFinish> {
+  const dict = new Map<string, GlobalFinish>();
+  const masters = getMasterTexturesList();
+
+  masters.forEach((f) => {
+    const slugKey = normalizeSkinSlug(f.slug);
+    const nameKey = normalizeSkinSlug(f.name);
+    const idKey = normalizeSkinSlug(f.id);
+
+    if (slugKey) dict.set(slugKey, f);
+    if (nameKey) dict.set(nameKey, f);
+    if (idKey) dict.set(idKey, f);
+  });
+
+  // Map Titanium+ aliases explicitly
+  const titaniumPlus = dict.get('titaniumplus') || dict.get('titanium-plus') || dict.get('titanium');
+  if (titaniumPlus) {
+    dict.set('titaniumplus', titaniumPlus);
+    dict.set('titanium-plus', titaniumPlus);
+    dict.set('titanium', titaniumPlus);
+  }
+
+  // Map Everything Skins aliases explicitly
+  const everythingFinish = dict.get('everything') || dict.get('everythingskins') || dict.get('everythingskin');
+  if (everythingFinish) {
+    dict.set('everything', everythingFinish);
+    dict.set('everythingskins', everythingFinish);
+    dict.set('everythingskin', everythingFinish);
+  }
+
+  // Map Forged Carbon aliases explicitly
+  const forgedCarbon = dict.get('forgedcarbon') || dict.get('forged-carbon');
+  if (forgedCarbon) {
+    dict.set('forgedcarbon', forgedCarbon);
+    dict.set('forged-carbon', forgedCarbon);
+    dict.set('forgedcarbonblack', forgedCarbon);
+  }
+
+  // Map Woven aliases explicitly
+  const wovenFinish = dict.get('woven');
+  if (wovenFinish) {
+    dict.set('woven', wovenFinish);
+    dict.set('wovenblack', wovenFinish);
   }
 
   return dict;
@@ -216,42 +455,47 @@ export function extractBaseSkinFromOrderItem(
   let matchedLayerName = '';
   let layerGroup = '';
 
-  // 1. Inspect item.parsed_configurator
+  // Clean raw choice text (strip price surcharges like "(+Rp 30.000)")
+  const cleanChoiceString = (raw: any): string => {
+    if (!raw || typeof raw !== 'string') return '';
+    return raw
+      .replace(/\s*\(\+[^)]+\)\s*$/i, '')
+      .replace(/&quot;/g, '"')
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+
+  // Helper to test if a candidate matches a known finish in finishesDict
+  const findKnownFinish = (candidate: string): GlobalFinish | undefined => {
+    const cleaned = cleanChoiceString(candidate);
+    if (!cleaned || isInvalidFinishCandidate(cleaned)) return undefined;
+    const slug = normalizeSkinSlug(cleaned);
+    return finishesDict.get(slug);
+  };
+
+  // Helper to extract choice string and layer details without falling back to layer name
+  const getLayerChoice = (layer: any): { choice: string; layerName: string; group: string; isReq: boolean } => {
+    const lData = layer?.layer_data || {};
+    const lName = String(lData.layer_name || lData.name || layer?.layer_name || layer?.name || '').trim();
+    // Do NOT fall back to layer name if choice_name is not set!
+    const rawChoice =
+      layer?.choice_name ||
+      layer?.choice_title ||
+      layer?.choice ||
+      lData.name ||
+      (typeof layer?.value === 'string' ? layer.value : '') ||
+      '';
+    const choice = cleanChoiceString(rawChoice);
+    const group = String(lData.group || layer?.group || layer?.layer_group || '').toLowerCase();
+    const isReq = Boolean(lData.is_required || layer?.is_required);
+    return { choice, layerName: lName, group, isReq };
+  };
+
+  // Collect candidate layers from parsed_configurator
+  const configuratorLayers: any[] = [];
   if (Array.isArray(item.parsed_configurator) && item.parsed_configurator.length > 0) {
-    // Priority A: Explicitly isBaseSkinLayer or primary group or is_required
-    for (const l of item.parsed_configurator) {
-      const lName = String(l.layer_name || l.name || '').trim();
-      const cName = String((l as any).choice_name || (l as any).choice_title || l.name || '').trim();
-      const lGroup = String((l as any).group || (l as any).layer_group || '').toLowerCase();
-      const isReq = Boolean((l as any).is_required);
-
-      if (isReq || lGroup === 'primary' || isBaseSkinLayer(lName, lGroup)) {
-        if (cName && !/^(custom|default|none|select|false)$/i.test(cName)) {
-          selectedFinishName = cName;
-          matchedLayerName = lName || 'Base Skin';
-          layerGroup = lGroup;
-          break;
-        }
-      }
-    }
-
-    // Priority B: If no explicit base layer matched, take layer 0 (primary base skin in studio)
-    if (!selectedFinishName && item.parsed_configurator.length > 0) {
-      const first = item.parsed_configurator[0];
-      const lName = String(first.layer_name || first.name || '').trim();
-      const cName = String((first as any).choice_name || (first as any).choice_title || first.name || '').trim();
-      // Ensure layer 0 is not an obvious accent
-      if (!/\b(camera|accent|logo|frame|side|hinge|lens)\b/i.test(lName)) {
-        if (cName && !/^(custom|default|none|select|false)$/i.test(cName)) {
-          selectedFinishName = cName;
-          matchedLayerName = lName || 'Base Skin';
-        }
-      }
-    }
-  }
-
-  // 2. Inspect item.meta_data configurator raw structures if parsed_configurator was empty
-  if (!selectedFinishName && Array.isArray((item as any).meta_data)) {
+    configuratorLayers.push(...item.parsed_configurator);
+  } else if (Array.isArray((item as any).meta_data)) {
     const rawConfig = (item as any).meta_data.find(
       (m: any) =>
         m.key === '_configurator_data_raw' ||
@@ -260,7 +504,6 @@ export function extractBaseSkinFromOrderItem(
         m.key === 'layers' ||
         m.key === '_layers'
     );
-
     if (rawConfig && rawConfig.value) {
       let cfgList = rawConfig.value;
       if (typeof cfgList === 'string') {
@@ -270,57 +513,89 @@ export function extractBaseSkinFromOrderItem(
           // ignore
         }
       }
-
       if (Array.isArray(cfgList)) {
-        for (const v of cfgList) {
-          if (!v || typeof v !== 'object') continue;
-          const lData = v.layer_data || {};
-          const lName = String(lData.layer_name || lData.name || v.layer_name || v.name || '').trim();
-          const lGroup = String(lData.group || v.group || '').toLowerCase();
-          const isReq = Boolean(lData.is_required || v.is_required);
-          const cName = String(
-            lData.name || v.choice_name || v.choice_title || v.choice || v.name || v.value || ''
-          ).trim();
+        configuratorLayers.push(...cfgList);
+      }
+    }
+  }
 
-          if (isReq || lGroup === 'primary' || isBaseSkinLayer(lName, lGroup)) {
-            if (cName && !/^(custom|default|none|select|false)$/i.test(cName)) {
-              selectedFinishName = cName;
-              matchedLayerName = lName || 'Base Skin';
-              layerGroup = lGroup;
-              break;
-            }
-          }
+  // Collect specs (WooCommerce attributes or parsed metadata)
+  const specs = Array.isArray((item as any).specs) && (item as any).specs.length > 0
+    ? (item as any).specs
+    : extractItemSpecs(item);
+
+  // -----------------------------------------------------------------
+  // STRATEGY 1: Inspect Configurator Layers (Prioritized Multi-pass)
+  // -----------------------------------------------------------------
+  if (configuratorLayers.length > 0) {
+    // 1A. Primary / Base skin layer matching a KNOWN master texture
+    for (const l of configuratorLayers) {
+      const { choice, layerName, group, isReq } = getLayerChoice(l);
+      if (!choice || isInvalidFinishCandidate(choice)) continue;
+      // Skip camera, accents, logo, frame
+      if (/\b(camera|accent|logo|frame|side|hinge|lens)\b/i.test(layerName)) continue;
+
+      if (isReq || group === 'primary' || isBaseSkinLayer(layerName, group)) {
+        const known = findKnownFinish(choice);
+        if (known) {
+          selectedFinishName = known.name;
+          matchedLayerName = layerName || 'Base Skin';
+          layerGroup = group;
+          break;
+        }
+      }
+    }
+
+    // 1B. Any non-accent layer matching a KNOWN master texture
+    if (!selectedFinishName) {
+      for (const l of configuratorLayers) {
+        const { choice, layerName, group } = getLayerChoice(l);
+        if (!choice || isInvalidFinishCandidate(choice)) continue;
+        if (/\b(camera|accent|logo|frame|side|hinge|lens)\b/i.test(layerName)) continue;
+
+        const known = findKnownFinish(choice);
+        if (known) {
+          selectedFinishName = known.name;
+          matchedLayerName = layerName || 'Base Skin';
+          layerGroup = group;
+          break;
         }
       }
     }
   }
 
-  // 3. Inspect item.specs or extractItemSpecs
-  if (!selectedFinishName) {
-    const specs = Array.isArray((item as any).specs) && (item as any).specs.length > 0
-      ? (item as any).specs
-      : extractItemSpecs(item);
-
+  // -----------------------------------------------------------------
+  // STRATEGY 2: Inspect Item Specs (Variations / Custom Meta)
+  // -----------------------------------------------------------------
+  if (!selectedFinishName && specs.length > 0) {
+    // 2A. Spec matching isBaseSkinLayer AND a KNOWN master texture in dictionary
     for (const s of specs) {
       const label = String(s.label || '').trim();
-      const val = String(s.value || '').trim();
+      const val = cleanChoiceString(s.value);
+      if (!val || isInvalidFinishCandidate(val)) continue;
+      if (/\b(camera|accent|logo|frame|side|hinge|lens|coverage|device|model|tipe)\b/i.test(label)) continue;
+
       if (isBaseSkinLayer(label)) {
-        if (val && !/^(custom|default|none|select|false)$/i.test(val)) {
-          selectedFinishName = val;
+        const known = findKnownFinish(val);
+        if (known) {
+          selectedFinishName = known.name;
           matchedLayerName = label;
           break;
         }
       }
     }
 
-    // Fallback in specs: check Texture / Finish / Skin / Material
+    // 2B. Spec with texture/finish/skin/material label matching a KNOWN master texture
     if (!selectedFinishName) {
       for (const s of specs) {
         const label = String(s.label || '').trim().toLowerCase();
-        const val = String(s.value || '').trim();
-        if (['texture', 'finish', 'skin', 'material'].includes(label)) {
-          if (val && !/^(custom|default|none|select|false)$/i.test(val)) {
-            selectedFinishName = val;
+        const val = cleanChoiceString(s.value);
+        if (!val || isInvalidFinishCandidate(val)) continue;
+
+        if (['texture', 'finish', 'skin', 'material', 'back skin', 'back'].includes(label)) {
+          const known = findKnownFinish(val);
+          if (known) {
+            selectedFinishName = known.name;
             matchedLayerName = s.label;
             break;
           }
@@ -329,11 +604,15 @@ export function extractBaseSkinFromOrderItem(
     }
   }
 
-  // 4. Fallback: Check if item title explicitly contains a known finish name
+  // -----------------------------------------------------------------
+  // STRATEGY 3: Check Product Title for Known Master Finish
+  // -----------------------------------------------------------------
   if (!selectedFinishName) {
     const cleanTitle = (item.name || '').toLowerCase();
     for (const [normKey, finish] of finishesDict.entries()) {
       if (normKey.length < 4) continue; // Avoid tiny accidental matches
+      if (['black', 'white'].includes(normKey)) continue;
+
       const finishNameLower = finish.name.toLowerCase();
       if (cleanTitle.includes(finishNameLower)) {
         selectedFinishName = finish.name;
@@ -343,19 +622,26 @@ export function extractBaseSkinFromOrderItem(
     }
   }
 
-  if (!selectedFinishName) {
+  // If no finish was identified or it was an invalid candidate, reject
+  if (!selectedFinishName || isInvalidFinishCandidate(selectedFinishName)) {
     return null;
   }
 
-  // Resolve metadata for the detected finish
+  // Resolve metadata for the detected finish STRICTLY against master textures
   const normChoice = normalizeSkinSlug(selectedFinishName);
   const matchedFinish = finishesDict.get(normChoice);
 
-  const finalName = matchedFinish?.name || selectedFinishName;
-  const finalSlug = matchedFinish?.slug || normChoice;
-  const finalGroup = matchedFinish?.group || (layerGroup === 'primary' ? 'Signature skins' : 'Other');
-  const colorHex = matchedFinish?.color_hex || '#3f3f46';
-  const thumbnailUrl = matchedFinish?.thumbnail || matchedFinish?.texture_big_url;
+  // STRICT GUARD: Must resolve to an authenticated master texture finish
+  if (!matchedFinish) {
+    return null;
+  }
+
+  const finalName = matchedFinish.name;
+  const finalSlug = matchedFinish.slug;
+  const finalGroup = matchedFinish.group || (layerGroup === 'primary' ? 'Signature skins' : 'Other');
+  const colorHex = matchedFinish.color_hex || '#3f3f46';
+  const rawThumbnail = matchedFinish.thumbnail || matchedFinish.texture_big_url;
+  const thumbnailUrl = normalizeThumbnailUrl(rawThumbnail);
 
   const deviceName = extractCleanDeviceName(item.name);
   const qty = Number(item.quantity) || 1;
@@ -438,7 +724,8 @@ export function filterOrdersByHorizon(
 }
 
 /**
- * Main Aggregator: Computes comprehensive base skin performance statistics
+ * Main Aggregator: Computes comprehensive base skin performance statistics.
+ * Pre-populates ALL master textures so 0-sales items are displayed, and excludes warranty replacements.
  */
 export function aggregateSkinPerformance(
   orders: Order[],
@@ -446,6 +733,7 @@ export function aggregateSkinPerformance(
   endMs: number
 ): SkinPerformanceReport {
   const finishesDict = buildKnownFinishesDictionary();
+  const masterTextures = getMasterTexturesList();
 
   // Continuous date buckets for the timeline
   const continuousDays = generateContinuousDays(startMs, endMs);
@@ -472,7 +760,8 @@ export function aggregateSkinPerformance(
     });
   });
 
-  // Accumulators per skin
+  // Pre-populate skinMap with ALL master textures from catalog
+  // This guarantees that 0-unit items are shown and rogue non-skin items cannot be added!
   const skinMap = new Map<
     string,
     {
@@ -489,13 +778,32 @@ export function aggregateSkinPerformance(
     }
   >();
 
+  masterTextures.forEach((f) => {
+    const canonicalKey = normalizeSkinSlug(f.slug || f.name);
+    if (!skinMap.has(canonicalKey)) {
+      skinMap.set(canonicalKey, {
+        slug: f.slug || canonicalKey,
+        name: f.name,
+        group: f.group || 'Signature skins',
+        colorHex: f.color_hex || '#52525b',
+        thumbnailUrl: normalizeThumbnailUrl(f.thumbnail || f.texture_big_url),
+        unitsSold: 0,
+        orderIds: new Set(),
+        grossRevenueIdr: 0,
+        devicesMap: new Map(),
+        dailyMap: new Map(),
+      });
+    }
+  });
+
   let totalBaseSkinsSold = 0;
   let totalRevenueIdr = 0;
   const ordersWithBaseSkins = new Set<number | string>();
 
-  // Process revenue-valid orders
+  // Process revenue-valid orders, EXCLUDING warranty replacement orders
   orders.forEach((order) => {
     if (!isRevenueOrder(order)) return;
+    if (isWarrantyReplacementOrder(order)) return;
 
     const orderDateKey = getStoreDateKey(order.created_at) || '';
     const timelineEntry = timelineMap.get(orderDateKey);
@@ -506,11 +814,27 @@ export function aggregateSkinPerformance(
     let orderHasBaseSkin = false;
 
     rawItems.forEach((item) => {
+      // Exclude warranty replacement line items
+      if (isWarrantyReplacementItem(item)) return;
+
       const extracted = extractBaseSkinFromOrderItem(item, finishesDict);
       if (!extracted) return;
 
+      // Match strictly to initialized master textures in skinMap
+      const canonicalKey = normalizeSkinSlug(extracted.skinSlug || extracted.skinName);
+      let skinEntry = skinMap.get(canonicalKey);
+
+      if (!skinEntry) {
+        const fallbackMaster = finishesDict.get(canonicalKey);
+        if (fallbackMaster) {
+          skinEntry = skinMap.get(normalizeSkinSlug(fallbackMaster.slug || fallbackMaster.name));
+        }
+      }
+
+      // If not an authentic master texture, skip! (Prevents iPhone, Samsung, etc.)
+      if (!skinEntry) return;
+
       orderHasBaseSkin = true;
-      const key = extracted.skinSlug;
       const units = extracted.quantity;
       const itemRevIdr = extracted.unitPriceIdr * units;
 
@@ -521,27 +845,10 @@ export function aggregateSkinPerformance(
       if (timelineEntry) {
         timelineEntry.totalUnits += units;
         timelineEntry.totalRevenue += itemRevIdr;
-        timelineEntry.topSkins[extracted.skinName] = (timelineEntry.topSkins[extracted.skinName] || 0) + units;
+        timelineEntry.topSkins[skinEntry.name] = (timelineEntry.topSkins[skinEntry.name] || 0) + units;
       }
 
-      // Update skin accumulator
-      let skinEntry = skinMap.get(key);
-      if (!skinEntry) {
-        skinEntry = {
-          slug: extracted.skinSlug,
-          name: extracted.skinName,
-          group: extracted.skinGroup,
-          colorHex: extracted.colorHex || '#52525b',
-          thumbnailUrl: extracted.thumbnailUrl,
-          unitsSold: 0,
-          orderIds: new Set(),
-          grossRevenueIdr: 0,
-          devicesMap: new Map(),
-          dailyMap: new Map(),
-        };
-        skinMap.set(key, skinEntry);
-      }
-
+      // Accumulate units and revenue
       skinEntry.unitsSold += units;
       skinEntry.orderIds.add(order.id);
       skinEntry.grossRevenueIdr += itemRevIdr;
@@ -567,7 +874,7 @@ export function aggregateSkinPerformance(
     }
   });
 
-  // Transform skinMap into sorted array
+  // Transform skinMap into sorted array (ALL master textures, including 0 units sold!)
   const skins: SkinMetricItem[] = Array.from(skinMap.values()).map((s) => {
     const shareUnits = totalBaseSkinsSold > 0 ? (s.unitsSold / totalBaseSkinsSold) * 100 : 0;
     const shareRev = totalRevenueIdr > 0 ? (s.grossRevenueIdr / totalRevenueIdr) * 100 : 0;
@@ -611,8 +918,12 @@ export function aggregateSkinPerformance(
     };
   });
 
-  // Sort primarily by units sold desc
-  skins.sort((a, b) => b.unitsSold - a.unitsSold);
+  // Sort primarily by units sold desc, then revenue desc, then name asc
+  skins.sort((a, b) => {
+    if (b.unitsSold !== a.unitsSold) return b.unitsSold - a.unitsSold;
+    if (b.grossRevenueIdr !== a.grossRevenueIdr) return b.grossRevenueIdr - a.grossRevenueIdr;
+    return a.name.localeCompare(b.name);
+  });
 
   // Group summary breakdown
   const groupMap = new Map<string, { units: number; revenue: number; count: number }>();
@@ -635,11 +946,14 @@ export function aggregateSkinPerformance(
     }))
     .sort((a, b) => b.units - a.units);
 
-  const topSkinByVolume = skins.length > 0 ? skins[0] : null;
-  const topSkinByRevenue = skins.length > 0 ? [...skins].sort((a, b) => b.grossRevenueIdr - a.grossRevenueIdr)[0] : null;
+  const topSkinByVolume = skins.length > 0 && skins[0].unitsSold > 0 ? skins[0] : null;
+  const topSkinByRevenueCandidate = skins.length > 0 ? [...skins].sort((a, b) => b.grossRevenueIdr - a.grossRevenueIdr)[0] : null;
+  const topSkinByRevenue = topSkinByRevenueCandidate && topSkinByRevenueCandidate.grossRevenueIdr > 0 ? topSkinByRevenueCandidate : null;
 
   const averageOrderValueIdr =
     ordersWithBaseSkins.size > 0 ? Math.round(totalRevenueIdr / ordersWithBaseSkins.size) : 0;
+
+  const activeSkinsCount = skins.filter((s) => s.unitsSold > 0).length;
 
   return {
     totalBaseSkinsSold,
@@ -647,6 +961,7 @@ export function aggregateSkinPerformance(
     totalRevenueIdr,
     averageOrderValueIdr,
     uniqueSkinsCount: skins.length,
+    activeSkinsCount,
     topSkinByVolume,
     topSkinByRevenue,
     skins,

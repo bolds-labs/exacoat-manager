@@ -2589,7 +2589,7 @@ class Exacoat_Order_Manager {
 				$image_url = wp_get_attachment_image_url( $product->get_image_id(), 'medium' );
 			}
 			if ( empty( $image_url ) ) {
-				$image_url = 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg';
+				$image_url = 'https://media.exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg';
 			}
 
 			// Configuration / specs parsing

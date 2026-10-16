@@ -293,7 +293,7 @@ class Exacoat_Abandoned_Cart {
 					'product_id'   => $item['product_id'],
 					'variation_id' => $item['variation_id'] ?? 0,
 					'name'         => $product->get_name(),
-					'image_url'    => $image_url ?: 'https://exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg',
+					'image_url'    => $image_url ?: 'https://media.exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg',
 					'quantity'     => (int) ( $item['quantity'] ?? 1 ),
 					'price'        => function_exists( 'wc_price' )
 						? trim( preg_replace( '/\s+/', ' ', str_replace( [ "\xc2\xa0", "\u{00A0}", "&nbsp;" ], ' ', html_entity_decode( wp_strip_all_tags( wc_price( (float) $product->get_price() ) ), ENT_QUOTES, 'UTF-8' ) ) ) )
