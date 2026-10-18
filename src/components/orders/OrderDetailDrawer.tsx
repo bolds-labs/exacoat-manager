@@ -61,7 +61,7 @@ import {
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { extractItemSpecs } from '../../lib/orderItems';
-import { isStorePickupOrder, toggleLocalStorePickupOrder, resolveOrderCourier, getOrderCourierDisplay, formatOrderNumber, cleanOrderNumber } from '../../lib/orderUtils';
+import { isStorePickupOrder, toggleLocalStorePickupOrder, resolveOrderCourier, getOrderCourierDisplay, formatOrderNumber, cleanOrderNumber, normalizeCourierSlug } from '../../lib/orderUtils';
 import { resolveCountryName } from '../../lib/countries';
 import { getWpBaseUrl } from '../../lib/wordpressBridge';
 import { GooritaBookingModal } from './GooritaBookingModal';
@@ -107,6 +107,11 @@ const COURIER_PRESETS = [
   { label: 'JNE Express', value: 'jne' },
   { label: 'SiCepat', value: 'sicepat' },
   { label: 'POS Indonesia', value: 'pos' },
+  { label: 'J&T Express', value: 'jnt' },
+  { label: 'Lion Parcel', value: 'lion' },
+  { label: 'SPX Express', value: 'spx' },
+  { label: 'Anteraja', value: 'anteraja' },
+  { label: 'Ninja Xpress', value: 'ninja' },
   { label: 'Goorita', value: 'goorita' },
   { label: 'DHL Express', value: 'dhl' },
   { label: 'FedEx', value: 'fedex' },
@@ -411,9 +416,13 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
           }
 
           // Prioritize explicit carrierId from tracking/order, falling back to resolvedCourier
-          const effectiveCarrierId = (carrierId && (!isConsolidation || carrierId !== 'goorita'))
+          const rawEffective = (carrierId && (!isConsolidation || carrierId !== 'goorita'))
             ? carrierId
             : (resolvedCourier.courierId || 'jne');
+          const normalizedSlug = normalizeCourierSlug(rawEffective);
+          const effectiveCarrierId = (normalizedSlug !== 'custom')
+            ? normalizedSlug
+            : rawEffective;
 
           const isPreset = COURIER_PRESETS.some(p => p.value === effectiveCarrierId && p.value !== 'custom');
           
@@ -436,8 +445,15 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
             setCourier('custom');
             setCustomCourierName(resolvedCourier.courierName);
           } else {
-            setCourier(resolvedCourier.courierId);
-            setCustomCourierName('');
+            const normalizedSlug = normalizeCourierSlug(resolvedCourier.courierId);
+            const isPreset = COURIER_PRESETS.some(p => p.value === normalizedSlug && p.value !== 'custom');
+            if (isPreset) {
+              setCourier(normalizedSlug);
+              setCustomCourierName('');
+            } else {
+              setCourier('custom');
+              setCustomCourierName(resolvedCourier.courierName);
+            }
           }
           setCustomTrackingUrl('');
           setTrackingNumber('');
@@ -3612,9 +3628,19 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                   <span>Pulling live checkpoints from courier...</span>
                 </div>
               ) : !order.tracking?.checkpoints || order.tracking.checkpoints.length === 0 ? (
-                <div className="p-4 rounded-xl bg-neutral-900/40 border border-white/5 text-center text-xs text-neutral-400">
-                  <p>No tracking checkpoints recorded yet.</p>
-                  <p className="text-[11px] text-neutral-500 mt-1">Click the Refresh button to pull live tracking from courier.</p>
+                <div className="p-4 rounded-xl bg-neutral-900/40 border border-white/5 text-center text-xs text-neutral-400 space-y-2">
+                  <div className="flex items-center justify-center gap-2 text-amber-400 font-medium text-xs">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                    <span>Waybill Registered with {order.tracking?.courier || 'Courier'}</span>
+                  </div>
+                  <p className="text-[11px] text-neutral-400 max-w-sm mx-auto leading-relaxed">
+                    The waybill has been registered in the carrier tracking system. Checkpoints will populate once the package is scanned at the carrier sorting hub.
+                  </p>
+                  {order.tracking?.tracking_number && (
+                    <p className="text-[10px] text-neutral-500 pt-0.5 font-mono">
+                      Tracking Number: {order.tracking.tracking_number}
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div className="p-4 rounded-xl bg-neutral-900/60 border border-white/10 space-y-3 max-h-80 overflow-y-auto custom-scrollbar">

@@ -37,6 +37,7 @@ import {
 import { extractItemSpecs } from './orderItems';
 import { normalizeDeviceName } from './seoUtils';
 import { decodeHtmlEntities, decodeDeep, formatCleanText, cleanAddressObject } from './utils';
+import { normalizeCourierSlug, CANONICAL_COURIER_MAP } from './orderUtils';
 
 
 // ==========================================
@@ -838,7 +839,7 @@ function enrichOrder(order: any): Order {
 
   const carrierMeta = metaList.find(
     (m: any) =>
-      (m.key === '_shipping_carrier' || m.key === 'carrier_id' || m.key === '_carrier_id' || m.key === '_tracking_provider' || m.key === '_exacoat_courier' || m.key === '_artmatter_courier') &&
+      (m.key === '_shipping_carrier' || m.key === 'carrier_id' || m.key === '_carrier_id' || m.key === '_tracking_provider' || m.key === '_exacoat_courier' || m.key === '_artmatter_courier' || m.key === '_exacoat_tracking_note_logged_carrier' || m.key === '_biteship_courier_code') &&
       m.value &&
       !String(m.value).startsWith('field_')
   );
@@ -910,8 +911,6 @@ function enrichOrder(order: any): Order {
       '_artmatter_tracking_number',
       '_biteship_waybill_id',
       '_biteship_tracking_id',
-      '_ywot_tracking_code',
-      'yith_wcmg_tracking_code',
     ];
 
     let foundTrackingNum = '';
@@ -924,9 +923,17 @@ function enrichOrder(order: any): Order {
     }
 
     if (foundTrackingNum) {
+      const rawCourier = carrierMeta?.value
+        ? String(carrierMeta.value)
+        : (order.shipping_courier_name || order.shipping_lines?.[0]?.method_title || order.shipping_method_name || order.detected_courier || 'Standard');
+      const normSlug = normalizeCourierSlug(rawCourier);
+      const canonicalCourier = normSlug !== 'custom' && CANONICAL_COURIER_MAP[normSlug]
+        ? CANONICAL_COURIER_MAP[normSlug]
+        : rawCourier;
+
       tracking = {
-        courier: carrierMeta?.value ? String(carrierMeta.value) : (order.shipping_courier_name || 'Standard'),
-        carrier_id: carrierMeta?.value ? String(carrierMeta.value) : undefined,
+        courier: canonicalCourier,
+        carrier_id: normSlug !== 'custom' ? normSlug : (carrierMeta?.value ? String(carrierMeta.value) : undefined),
         tracking_number: foundTrackingNum,
         latest_status: latestStatusMeta?.value ? String(latestStatusMeta.value) : undefined,
         checkpoints: Array.isArray(checkpointsMeta?.value) ? checkpointsMeta.value : undefined,

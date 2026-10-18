@@ -194,6 +194,53 @@ export interface ResolvedOrderCourier {
   isCustom: boolean;
 }
 
+export const CANONICAL_COURIER_MAP: Record<string, string> = {
+  jne: 'JNE Express',
+  sicepat: 'SiCepat',
+  pos: 'POS Indonesia',
+  goorita: 'Goorita Send USA',
+  dhl: 'DHL Express',
+  fedex: 'FedEx International',
+  rayspeed: 'Rayspeed Asia',
+  biteship: 'Biteship (Auto)',
+  lion: 'Lion Parcel',
+  jnt: 'J&T Express',
+  spx: 'SPX Express',
+  anteraja: 'Anteraja',
+  ninja: 'Ninja Xpress',
+};
+
+/**
+ * Normalizes any courier string, slug, or shipping method title to its canonical preset key.
+ * E.g. "JNE - REG", "jne_reg", "JNE Express" -> "jne"
+ *      "SICEPAT - BEST", "SiCepat" -> "sicepat"
+ *      "J&T Express", "jnt" -> "jnt"
+ *      "Lion Parcel" -> "lion"
+ *      "POS Indonesia", "pos" -> "pos"
+ *      "SPX Express", "shopee express" -> "spx"
+ *      "Anteraja" -> "anteraja"
+ *      "Ninja Xpress" -> "ninja"
+ */
+export function normalizeCourierSlug(raw?: string): string {
+  if (!raw) return 'jne';
+  const s = String(raw).toLowerCase().trim();
+  if (!s || s === 'undefined' || s === 'null') return 'jne';
+  if (s.includes('sicepat')) return 'sicepat';
+  if (s.includes('jne')) return 'jne';
+  if (s.includes('j&t') || s.includes('jnt')) return 'jnt';
+  if (s.includes('lion')) return 'lion';
+  if (s.includes('pos indonesia') || /\bpos\b/.test(s)) return 'pos';
+  if (s.includes('goorita')) return 'goorita';
+  if (s.includes('dhl')) return 'dhl';
+  if (s.includes('fedex')) return 'fedex';
+  if (s.includes('rayspeed')) return 'rayspeed';
+  if (s.includes('biteship')) return 'biteship';
+  if (s.includes('spx') || s.includes('shopee')) return 'spx';
+  if (s.includes('anteraja')) return 'anteraja';
+  if (s.includes('ninja')) return 'ninja';
+  return s === 'custom' ? 'custom' : 'custom';
+}
+
 /**
  * Intelligently resolves the intended shipping courier for an order.
  * Inspects customer note (e.g. "Shipping Courier: SICEPAT - BEST"),
@@ -214,18 +261,7 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
     };
   }
 
-  const PRESET_MAP: Record<string, string> = {
-    jne: 'JNE Express',
-    sicepat: 'SiCepat',
-    pos: 'POS Indonesia',
-    goorita: 'Goorita Send USA',
-    dhl: 'DHL Express',
-    fedex: 'FedEx International',
-    rayspeed: 'Rayspeed Asia',
-    biteship: 'Biteship (Auto)',
-    lion: 'Lion Parcel',
-    jnt: 'J&T Express',
-  };
+  const PRESET_MAP = CANONICAL_COURIER_MAP;
 
   // 2. Domestic consolidation shipment to Goorita HQ
   const isConsolidation = Boolean(
@@ -263,19 +299,33 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
   const trackingNumber = String(order.tracking?.tracking_number || order.tracking_number || '').trim();
   const savedCarrierId = String(order.tracking?.carrier_id || order.carrier_id || '').toLowerCase().trim();
   if (trackingNumber && trackingNumber !== '⚠️' && !trackingNumber.startsWith('field_')) {
-    if (savedCarrierId && PRESET_MAP[savedCarrierId]) {
-      const slTitle = String(order.shipping_lines?.[0]?.method_title || '');
-      const serviceMatch = slTitle.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*[-:]\s*([A-Za-z0-9_\s]+)/i);
+    const normCarrierId = normalizeCourierSlug(savedCarrierId);
+    if (savedCarrierId && normCarrierId !== 'custom' && PRESET_MAP[normCarrierId]) {
+      const slTitle = String(order.shipping_lines?.[0]?.method_title || order.shipping_method_name || (order as any).shipping_courier_name || '');
+      const serviceMatch = slTitle.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*[-:]\s*([A-Za-z0-9_\s]+)/i) ||
+                           slTitle.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*\(([A-Za-z0-9_\s]+)\)/i);
       return {
-        courierId: savedCarrierId,
-        courierName: PRESET_MAP[savedCarrierId],
+        courierId: normCarrierId,
+        courierName: PRESET_MAP[normCarrierId],
         serviceName: serviceMatch ? serviceMatch[1].trim().toUpperCase() : undefined,
-        rawMatch: slTitle || PRESET_MAP[savedCarrierId],
+        rawMatch: slTitle || PRESET_MAP[normCarrierId],
         isCustom: false,
       };
     }
     const savedCourier = String(order.tracking?.courier || (order as any).shipping_courier_name || '').trim();
-    if (savedCarrierId === 'custom' || (savedCourier && savedCourier !== 'Express Courier' && savedCourier !== 'Standard' && savedCourier !== 'JNE Express' && !PRESET_MAP[savedCourier.toLowerCase()])) {
+    const normSavedCourier = normalizeCourierSlug(savedCourier);
+    if (savedCourier && normSavedCourier !== 'custom' && PRESET_MAP[normSavedCourier]) {
+      const serviceMatch = savedCourier.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*[-:]\s*([A-Za-z0-9_\s]+)/i) ||
+                           savedCourier.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*\(([A-Za-z0-9_\s]+)\)/i);
+      return {
+        courierId: normSavedCourier,
+        courierName: PRESET_MAP[normSavedCourier],
+        serviceName: serviceMatch ? serviceMatch[1].trim().toUpperCase() : undefined,
+        rawMatch: savedCourier,
+        isCustom: false,
+      };
+    }
+    if (savedCarrierId === 'custom' || (savedCourier && savedCourier !== 'Express Courier' && savedCourier !== 'Standard' && normSavedCourier === 'custom')) {
       return {
         courierId: 'custom',
         courierName: (savedCourier && savedCourier !== 'Express Courier' && savedCourier !== 'Standard') ? savedCourier : 'Custom Courier',
@@ -428,10 +478,45 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
         isCustom: false,
       };
     }
+    if (t.includes('spx') || t.includes('shopee express') || t.includes('shopee')) {
+      return {
+        courierId: 'spx',
+        courierName: 'SPX Express',
+        serviceName,
+        rawMatch: text,
+        isCustom: false,
+      };
+    }
+    if (t.includes('anteraja')) {
+      return {
+        courierId: 'anteraja',
+        courierName: 'Anteraja',
+        serviceName,
+        rawMatch: text,
+        isCustom: false,
+      };
+    }
+    if (t.includes('ninja')) {
+      return {
+        courierId: 'ninja',
+        courierName: 'Ninja Xpress',
+        serviceName,
+        rawMatch: text,
+        isCustom: false,
+      };
+    }
   }
 
   // 5. Fallback to tracking courier if non-preset custom name
-  if (order.tracking?.courier && order.tracking.courier !== 'Express Courier' && order.tracking.courier !== 'JNE Express') {
+  if (order.tracking?.courier && order.tracking.courier !== 'Express Courier' && order.tracking.courier !== 'Standard') {
+    const norm = normalizeCourierSlug(order.tracking.courier);
+    if (norm !== 'custom' && PRESET_MAP[norm]) {
+      return {
+        courierId: norm,
+        courierName: PRESET_MAP[norm],
+        isCustom: false,
+      };
+    }
     return {
       courierId: 'custom',
       courierName: order.tracking.courier,
@@ -478,6 +563,11 @@ export function getOrderCourierDisplay(order: any): string {
     else if (resolved.courierId === 'dhl') prefix = 'DHL';
     else if (resolved.courierId === 'fedex') prefix = 'FedEx';
     else if (resolved.courierId === 'rayspeed') prefix = 'Rayspeed';
+    else if (resolved.courierId === 'jnt') prefix = 'J&T';
+    else if (resolved.courierId === 'lion') prefix = 'Lion';
+    else if (resolved.courierId === 'spx') prefix = 'SPX';
+    else if (resolved.courierId === 'anteraja') prefix = 'Anteraja';
+    else if (resolved.courierId === 'ninja') prefix = 'Ninja';
     else if (resolved.courierName) prefix = resolved.courierName.split(' ')[0];
 
     return `${prefix} - ${resolved.serviceName}`;
@@ -498,6 +588,11 @@ export function getOrderCourierDisplay(order: any): string {
         else if (p0Lower.includes('pos')) p0 = 'POS';
         else if (p0Lower.includes('goorita')) p0 = isConsolidation ? 'JNE' : 'Goorita';
         else if (p0Lower.includes('rayspeed')) p0 = 'Rayspeed';
+        else if (p0Lower.includes('j&t') || p0Lower.includes('jnt')) p0 = 'J&T';
+        else if (p0Lower.includes('lion')) p0 = 'Lion';
+        else if (p0Lower.includes('spx') || p0Lower.includes('shopee')) p0 = 'SPX';
+        else if (p0Lower.includes('anteraja')) p0 = 'Anteraja';
+        else if (p0Lower.includes('ninja')) p0 = 'Ninja';
         return `${p0} - ${parts.slice(1).join('-').trim().toUpperCase()}`;
       }
     }
@@ -572,7 +667,7 @@ export function matchesOrderSearch(order: any, query: string): boolean {
   if (Array.isArray(order.meta_data)) {
     const hasTrackMeta = order.meta_data.some((m: any) => {
       const k = String(m?.key || '').toLowerCase();
-      if (k.includes('tracking') || k.includes('carrier') || k === '_ywot_tracking_code') {
+      if (k.includes('tracking') || k.includes('carrier') || k.includes('waybill')) {
         return String(m?.value || '').toLowerCase().includes(q);
       }
       return false;
