@@ -6440,6 +6440,7 @@ export async function sendWarrantyClarificationEmailDirect(params: {
   subject: string;
   messageText: string;
   adminName?: string;
+  fromEmail?: string;
 }): Promise<{ success: boolean; message?: string; error?: string }> {
   const base = getWordPressBaseUrl();
   const url = `${base}/wp-json/exacoat-core/v1/warranty/send-clarification-email`;
@@ -6457,7 +6458,8 @@ export async function sendWarrantyClarificationEmailDirect(params: {
         recipient_name: params.recipientName || 'Customer',
         subject: params.subject,
         message_text: params.messageText,
-        admin_name: params.adminName || 'Customer Support',
+        admin_name: params.adminName || 'Aurelia',
+        from_email: params.fromEmail || 'support@exacoat.com',
       }),
     });
     const data = await res.json();

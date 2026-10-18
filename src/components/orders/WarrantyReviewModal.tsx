@@ -39,9 +39,9 @@ const COMM_TEMPLATES = {
     subjectId: (ref: string) => `[Exacoat] Permintaan Video Ulang Klaim Garansi #${ref}`,
     subjectEn: (ref: string) => `[Exacoat] Video Clarification for Installation Warranty Claim #${ref}`,
     textId: (name: string, ref: string) =>
-      `Halo kak ${name}, terima kasih telah mengajukan klaim garansi pemasangan Exacoat untuk pesanan #${ref}.\n\nSetelah tim kami meninjau video bukti yang diunggah, pemotongan skin belum sesuai ketentuan garansi (produk skin asli harus dipotong, bukan hanya lapisan pelindung atau kertas alasnya, dan terlihat jelas pada video).\n\nMohon bantu kirimkan video pemotongan produk skin yang sesuai melalui WhatsApp/email ini agar klaim penggantian dapat segera kami proses. Terima kasih!`,
+      `Halo kak ${name},\n\nTerima kasih telah mengajukan klaim garansi pemasangan Exacoat untuk pesanan #${ref}.\n\nSetelah tim kami meninjau video bukti yang diunggah, pemotongan skin belum sesuai ketentuan garansi (produk skin asli harus dipotong, bukan hanya lapisan pelindung atau kertas alasnya, dan terlihat jelas pada video).\n\nMohon bantu kirimkan video pemotongan produk skin yang sesuai melalui WhatsApp/email ini agar klaim penggantian dapat segera kami proses. Terima kasih!\n\nBest Regards,\nAurelia\nExacoat Customer Support`,
     textEn: (name: string, ref: string) =>
-      `Hi ${name}, thank you for submitting your Exacoat installation warranty claim for order #${ref}.\n\nUpon review, the uploaded video proof does not show the actual skin cut as required (the actual skin material must be cut, not just the backing sheet or protective layers, and shown clearly on video).\n\nPlease send an updated video showing the cut skin product so we can approve your replacement. Thank you!`,
+      `Hi ${name},\n\nThank you for submitting your Exacoat installation warranty claim for order #${ref}.\n\nUpon review, the uploaded video proof does not show the actual skin cut as required (the actual skin material must be cut, not just the backing sheet or protective layers, and shown clearly on video).\n\nPlease send an updated video showing the cut skin product so we can approve your replacement. Thank you!\n\nBest Regards,\nAurelia\nExacoat Customer Support`,
   },
   missing_skins: {
     labelId: 'Bagian Skin Belum Dipotong Lengkap di Video',
@@ -49,9 +49,9 @@ const COMM_TEMPLATES = {
     subjectId: (ref: string) => `[Exacoat] Video Bukti Belum Lengkap untuk Klaim Garansi #${ref}`,
     subjectEn: (ref: string) => `[Exacoat] Incomplete Proof Video for Warranty Claim #${ref}`,
     textId: (name: string, ref: string) =>
-      `Halo kak ${name}, mengenai pengajuan garansi pemasangan Exacoat untuk pesanan #${ref}.\n\nKami melihat masih ada bagian skin yang belum dipotong di dalam video bukti yang dilampirkan. Sesuai ketentuan garansi, seluruh bagian skin yang diajukan penggantian harus dipotong hingga terpisah.\n\nMohon kirimkan video pemotongan untuk seluruh bagian skin yang diklaim agar dapat kami setujui segera. Terima kasih!`,
+      `Halo kak ${name},\n\nMengenai pengajuan garansi pemasangan Exacoat untuk pesanan #${ref}.\n\nKami melihat masih ada bagian skin yang belum dipotong di dalam video bukti yang dilampirkan. Sesuai ketentuan garansi, seluruh bagian skin yang diajukan penggantian harus dipotong hingga terpisah.\n\nMohon kirimkan video pemotongan untuk seluruh bagian skin yang diklaim agar dapat kami setujui segera. Terima kasih!\n\nBest Regards,\nAurelia\nExacoat Customer Support`,
     textEn: (name: string, ref: string) =>
-      `Hi ${name}, regarding your Exacoat warranty replacement claim for order #${ref}.\n\nWe noticed that some of the claimed skin parts are missing from the cutting proof video. According to our warranty terms, all skins requested for replacement must be cut.\n\nPlease send a video showing all claimed skin parts cut so we can proceed with your replacement. Thank you!`,
+      `Hi ${name},\n\nRegarding your Exacoat warranty replacement claim for order #${ref}.\n\nWe noticed that some of the claimed skin parts are missing from the cutting proof video. According to our warranty terms, all skins requested for replacement must be cut.\n\nPlease send a video showing all claimed skin parts cut so we can proceed with your replacement. Thank you!\n\nBest Regards,\nAurelia\nExacoat Customer Support`,
   },
   unclear_video: {
     labelId: 'Video Buram / Tidak Dapat Diputar',
@@ -59,9 +59,9 @@ const COMM_TEMPLATES = {
     subjectId: (ref: string) => `[Exacoat] Video Bukti Buram / Tidak Dapat Diputar #${ref}`,
     subjectEn: (ref: string) => `[Exacoat] Video Proof Unclear or Unplayable #${ref}`,
     textId: (name: string, ref: string) =>
-      `Halo kak ${name}, terkait pengajuan garansi pemasangan Exacoat untuk pesanan #${ref}.\n\nVideo bukti yang diunggah tidak dapat kami putar atau resolusinya kurang jelas sehingga tim QC belum dapat melakukan verifikasi.\n\nBisa tolong kirimkan video bukti pemotongan skin secara langsung ke WhatsApp/email ini? Kami akan segera memproses penggantian setelah video diverifikasi. Terima kasih!`,
+      `Halo kak ${name},\n\nTerkait pengajuan garansi pemasangan Exacoat untuk pesanan #${ref}.\n\nVideo bukti yang diunggah tidak dapat kami putar atau resolusinya kurang jelas sehingga tim QC belum dapat melakukan verifikasi.\n\nBisa tolong kirimkan video bukti pemotongan skin secara langsung ke WhatsApp/email ini? Kami akan segera memproses penggantian setelah video diverifikasi. Terima kasih!\n\nBest Regards,\nAurelia\nExacoat Customer Support`,
     textEn: (name: string, ref: string) =>
-      `Hi ${name}, regarding your Exacoat warranty claim for order #${ref}.\n\nWe were unable to play or clearly view the uploaded proof video, preventing our team from verifying the claim.\n\nCould you please send the video showing the cut skin directly in response to this message? We will process your replacement right away once verified. Thank you!`,
+      `Hi ${name},\n\nRegarding your Exacoat warranty claim for order #${ref}.\n\nWe were unable to play or clearly view the uploaded proof video, preventing our team from verifying the claim.\n\nCould you please send the video showing the cut skin directly in response to this message? We will process your replacement right away once verified. Thank you!\n\nBest Regards,\nAurelia\nExacoat Customer Support`,
   },
 };
 
@@ -106,6 +106,7 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
   const [commMessage, setCommMessage] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
+  const [fromEmail, setFromEmail] = useState('support@exacoat.com');
   const [emailSubject, setEmailSubject] = useState('');
   const [isSendingEmail, setIsSendingEmail] = useState(false);
 
@@ -210,6 +211,8 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
       recipientName: claim?.customer_name || 'Customer',
       subject: emailSubject.trim() || `[Exacoat] Warranty Claim Clarification #${getOrderRef(claim)}`,
       messageText: commMessage.trim(),
+      fromEmail: fromEmail.trim() || 'support@exacoat.com',
+      adminName: 'Aurelia',
     });
     setIsSendingEmail(false);
 
@@ -673,12 +676,30 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
               </div>
 
               {/* Email Form */}
-              <div className="space-y-2 pt-1">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="space-y-2.5 pt-1">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                  <div className="space-y-1">
+                    <label className="text-[11px] text-neutral-400 flex items-center justify-between font-medium">
+                      <span className="flex items-center gap-1">
+                        <Mail className="h-3 w-3 text-sky-400" />
+                        <span>From (Sender Email):</span>
+                      </span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
+                        Verified
+                      </span>
+                    </label>
+                    <input
+                      type="email"
+                      value={fromEmail}
+                      onChange={(e) => setFromEmail(e.target.value)}
+                      placeholder="support@exacoat.com"
+                      className="h-8 w-full rounded border border-neutral-700 bg-neutral-900 px-2.5 text-xs text-white placeholder:text-neutral-600 focus:border-sky-500 focus:outline-none"
+                    />
+                  </div>
                   <div className="space-y-1">
                     <label className="text-[11px] text-neutral-400 flex items-center gap-1 font-medium">
                       <Mail className="h-3 w-3 text-neutral-500" />
-                      <span>Recipient Email:</span>
+                      <span>Recipient Email (To):</span>
                     </label>
                     <input
                       type="email"
@@ -704,12 +725,17 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] text-neutral-400 font-medium">Message Body:</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] text-neutral-400 font-medium">Message Body:</label>
+                    <span className="text-[10px] text-neutral-500">
+                      Dispatched from {fromEmail || 'support@exacoat.com'}
+                    </span>
+                  </div>
                   <textarea
-                    rows={5}
+                    rows={8}
                     value={commMessage}
                     onChange={(e) => setCommMessage(e.target.value)}
-                    className="w-full rounded-lg border border-neutral-700 bg-neutral-900 p-2.5 text-xs text-white placeholder:text-neutral-600 focus:border-sky-500 focus:outline-none leading-relaxed"
+                    className="w-full rounded-lg border border-neutral-700 bg-neutral-900 p-2.5 text-xs text-white placeholder:text-neutral-600 focus:border-sky-500 focus:outline-none leading-relaxed font-sans"
                   />
                 </div>
 

@@ -1791,7 +1791,9 @@ class Exacoat_Warranty_Manager {
 		$recipient_name  = sanitize_text_field( $request->get_param( 'recipient_name' ) ?: 'Customer' );
 		$subject         = sanitize_text_field( $request->get_param( 'subject' ) ?: 'Exacoat Warranty Video Proof Clarification' );
 		$message_text    = trim( (string) $request->get_param( 'message_text' ) );
-		$admin_name      = sanitize_text_field( $request->get_param( 'admin_name' ) ?: 'Customer Support' );
+		$admin_name      = sanitize_text_field( $request->get_param( 'admin_name' ) ?: 'Aurelia' );
+		$from_email      = sanitize_email( $request->get_param( 'from_email' ) ?: 'support@exacoat.com' );
+		$from_name       = sanitize_text_field( $request->get_param( 'from_name' ) ?: 'Exacoat Customer Support' );
 
 		if ( empty( $recipient_email ) || ! is_email( $recipient_email ) ) {
 			return new \WP_REST_Response( [
@@ -1826,30 +1828,41 @@ class Exacoat_Warranty_Manager {
 		</div>';
 
 		$sent = false;
+		$email_res = [];
 		if ( class_exists( 'Exacoat_Email_Engine' ) ) {
 			$email_res = Exacoat_Email_Engine::send_email(
 				'warranty_clarification',
 				$recipient_email,
 				$recipient_name,
 				[
-					'subject'  => $subject,
-					'html'     => $styled_html,
-					'htmlbody' => $styled_html,
+					'subject'    => $subject,
+					'html'       => $styled_html,
+					'htmlbody'   => $styled_html,
+					'from_email' => $from_email,
+					'from_name'  => $from_name,
+					'reply_to'   => $from_email,
+					'reply_name' => $from_name,
+					'order_id'   => $order_id,
 				]
 			);
 			$sent = ! empty( $email_res['success'] );
 		}
 
 		if ( ! $sent ) {
-			$headers = [ 'Content-Type: text/html; charset=UTF-8' ];
+			$headers = [
+				'Content-Type: text/html; charset=UTF-8',
+				"From: {$from_name} <{$from_email}>",
+				"Reply-To: {$from_name} <{$from_email}>",
+			];
 			$sent = wp_mail( $recipient_email, $subject, $styled_html, $headers );
 		}
 
-		if ( $order ) {
+		if ( $order && $sent ) {
 			$order->add_order_note( sprintf(
-				'Warranty clarification email sent to %s (%s) by %s. Subject: "%s"',
+				'Warranty clarification email sent to %s (%s) from %s by %s. Subject: "%s"',
 				$recipient_name,
 				$recipient_email,
+				$from_email,
 				$admin_name,
 				$subject
 			) );
@@ -1858,9 +1871,10 @@ class Exacoat_Warranty_Manager {
 			$parent_order = $parent_id ? wc_get_order( $parent_id ) : null;
 			if ( $parent_order ) {
 				$parent_order->add_order_note( sprintf(
-					'Warranty clarification email sent to %s (%s) by %s regarding replacement #%d.',
+					'Warranty clarification email sent to %s (%s) from %s by %s regarding replacement #%d.',
 					$recipient_name,
 					$recipient_email,
+					$from_email,
 					$admin_name,
 					$order_id
 				) );
@@ -1869,7 +1883,10 @@ class Exacoat_Warranty_Manager {
 
 		return new \WP_REST_Response( [
 			'success' => $sent,
-			'message' => $sent ? 'Clarification email successfully sent to customer.' : 'Failed to deliver email through mail service.',
+			'message' => $sent 
+				? 'Clarification email successfully sent to customer.' 
+				: ( ! empty( $email_res['message'] ) ? $email_res['message'] : 'Failed to deliver email through mail service.' ),
+			'details' => $email_res,
 		], $sent ? 200 : 500 );
 	}
 
