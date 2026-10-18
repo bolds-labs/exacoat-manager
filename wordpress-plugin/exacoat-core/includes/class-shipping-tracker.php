@@ -326,13 +326,10 @@ class Exacoat_Shipping_Tracker {
 				update_post_meta( $order_id, '_exacoat_tracking_note_logged_carrier', $carrier );
 				$meta_updated = true;
 
-				$is_domestic = in_array( strtolower( trim( $carrier ) ), [ 'sicepat', 'jne', 'jne express' ], true );
+				$is_sicepat = in_array( strtolower( trim( $carrier ) ), [ 'sicepat' ], true );
 
-				// POS Indonesia & International orders: register with AfterShip
-				if ( ! $is_domestic ) {
-					$aftership_res = self::register_with_aftership( $tracking_number, $carrier, $order_id );
-
-					// Register with TrackingMore as secondary fallback engine
+				// Register with TrackingMore for JNE, POS Indonesia & International orders
+				if ( ! $is_sicepat ) {
 					self::register_with_trackingmore( $tracking_number, $carrier, $order_id );
 				}
 
@@ -762,7 +759,7 @@ class Exacoat_Shipping_Tracker {
 	 */
 	public static function get_trackingmore_carrier_code( string $carrier_id, string $tracking_number = '' ): string {
 		$key = strtolower( trim( $carrier_id ) );
-		if ( in_array( $key, [ 'sicepat', 'jne', 'jne express' ], true ) ) {
+		if ( in_array( $key, [ 'sicepat' ], true ) ) {
 			return '';
 		}
 
@@ -856,8 +853,8 @@ class Exacoat_Shipping_Tracker {
 	 */
 	public static function register_with_trackingmore( string $tracking_number, string $carrier_id = '', int $order_id = 0 ): array {
 		$key = strtolower( trim( $carrier_id ) );
-		if ( in_array( $key, [ 'sicepat', 'jne', 'jne express' ], true ) ) {
-			return [ 'success' => false, 'message' => 'Domestic shipments (SiCepat/JNE) are tracked via Biteship' ];
+		if ( in_array( $key, [ 'sicepat' ], true ) ) {
+			return [ 'success' => false, 'message' => 'SiCepat shipments are tracked via Biteship' ];
 		}
 		$tracking_number = trim( $tracking_number );
 		if ( empty( $tracking_number ) || $tracking_number === '⚠️' || str_starts_with( $tracking_number, 'field_' ) || $tracking_number === 'N/A' || $tracking_number === '-' ) {
@@ -885,6 +882,17 @@ class Exacoat_Shipping_Tracker {
 				$email = $order->get_billing_email();
 				if ( ! empty( $email ) ) {
 					$payload['customer_email'] = $email;
+				}
+				$phone = $order->get_shipping_phone() ?: $order->get_billing_phone();
+				if ( ! empty( $phone ) ) {
+					$clean_phone = preg_replace( '/\D/', '', (string) $phone );
+					if ( ! empty( $clean_phone ) ) {
+						$payload['customer_sms'] = $clean_phone;
+					}
+				}
+				$postcode = $order->get_shipping_postcode() ?: $order->get_billing_postcode();
+				if ( ! empty( $postcode ) ) {
+					$payload['tracking_postal_code'] = trim( (string) $postcode );
 				}
 			}
 		}
@@ -1160,9 +1168,14 @@ class Exacoat_Shipping_Tracker {
 		}
 
 		// Query TrackingMore GET endpoint
-		$query_url = add_query_arg( [
+		$courier_code = self::get_trackingmore_carrier_code( $carrier, $tracking_number );
+		$query_args   = [
 			'tracking_numbers' => $tracking_number,
-		], 'https://api.trackingmore.com/v4/trackings/get' );
+		];
+		if ( ! empty( $courier_code ) ) {
+			$query_args['courier_code'] = $courier_code;
+		}
+		$query_url = add_query_arg( $query_args, 'https://api.trackingmore.com/v4/trackings/get' );
 
 		$response = wp_remote_get( $query_url, [
 			'headers' => [
@@ -1290,10 +1303,20 @@ class Exacoat_Shipping_Tracker {
 			];
 		}
 
-		// 1. Domestic couriers (SiCepat & JNE): Biteship is the exclusive engine
+		// 1. Domestic couriers: SiCepat (Biteship) & JNE (Biteship with TrackingMore fallback)
 		$biteship_courier = self::get_biteship_courier_code( $carrier );
 		if ( empty( $biteship_courier ) ) {
 			$biteship_courier = self::detect_biteship_courier( $tracking_number );
+		}
+		if ( 'sicepat' === $biteship_courier ) {
+			return self::sync_biteship_tracking( $tracking_number, 'sicepat', $order_id );
+		}
+		if ( 'jne' === $biteship_courier ) {
+			$biteship_res = self::sync_biteship_tracking( $tracking_number, 'jne', $order_id );
+			if ( ! empty( $biteship_res['success'] ) && ! empty( $biteship_res['checkpoints'] ) ) {
+				return $biteship_res;
+			}
+			return self::sync_trackingmore_tracking( $order_id, $tracking_number, 'jne' );
 		}
 		if ( ! empty( $biteship_courier ) ) {
 			return self::sync_biteship_tracking( $tracking_number, $biteship_courier, $order_id );
@@ -1889,8 +1912,9 @@ class Exacoat_Shipping_Tracker {
 		$tracking_url  = ! empty( $tracking_number ) ? self::get_carrier_tracking_url( $carrier, $tracking_number ) : '';
 		$sync_nonce    = wp_create_nonce( 'exacoat_admin_sync_trackingmore_' . $order_id );
 
-		$is_domestic   = in_array( strtolower( trim( $carrier ) ), [ 'sicepat', 'jne', 'jne express' ], true );
-		$engine_name   = $is_domestic ? 'Biteship' : 'TrackingMore';
+		$is_sicepat    = in_array( strtolower( trim( $carrier ) ), [ 'sicepat' ], true );
+		$is_jne        = in_array( strtolower( trim( $carrier ) ), [ 'jne', 'jne express' ], true );
+		$engine_name   = $is_sicepat ? 'Biteship' : ( $is_jne ? 'TrackingMore (Fallback)' : 'TrackingMore' );
 		?>
 		<div class="exacoat-shipping-admin-box" style="font-size:12px; line-height:1.4;">
 			<div style="margin-bottom:10px;">

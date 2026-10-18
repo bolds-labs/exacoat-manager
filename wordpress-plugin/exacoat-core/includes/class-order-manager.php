@@ -1352,15 +1352,15 @@ class Exacoat_Order_Manager {
 			$order->add_order_note( "Order tracking updated with {$carrier_display} #{$tracking_number} (status retained as {$current_status_name})" );
 		}
 
-		// Automatically register tracking: Biteship for SiCepat/JNE; TrackingMore for POS Indonesia/international
-		$is_domestic = in_array( strtolower( trim( $carrier_id ) ), [ 'sicepat', 'jne', 'jne express' ], true );
+		// Automatically register tracking: Biteship for SiCepat; TrackingMore for JNE, POS Indonesia & International
+		$is_sicepat = in_array( strtolower( trim( $carrier_id ) ), [ 'sicepat' ], true );
 		if ( class_exists( 'Exacoat_Shipping_Tracker' ) && ! empty( $tracking_number ) ) {
-			if ( ! $is_domestic ) {
+			if ( ! $is_sicepat ) {
 				Exacoat_Shipping_Tracker::register_with_trackingmore( $tracking_number, $carrier_id, $order_id );
 			}
 			Exacoat_Shipping_Tracker::sync_order_tracking( $order_id );
 		} elseif ( class_exists( 'Artmatter_Shipping_Tracker' ) && ! empty( $tracking_number ) ) {
-			if ( ! $is_domestic ) {
+			if ( ! $is_sicepat ) {
 				Artmatter_Shipping_Tracker::register_with_trackingmore( $tracking_number, $carrier_id, $order_id );
 			}
 			Artmatter_Shipping_Tracker::sync_order_tracking( $order_id );
@@ -3020,10 +3020,10 @@ class Exacoat_Order_Manager {
 				);
 			}
 
-			// Automatically register tracking: Biteship for SiCepat/JNE; TrackingMore for POS Indonesia/international
-			$is_domestic = in_array( strtolower( trim( $carrier_key ) ), [ 'sicepat', 'jne', 'jne express' ], true );
+			// Automatically register tracking: Biteship for SiCepat; TrackingMore for JNE, POS Indonesia & International
+			$is_sicepat = in_array( strtolower( trim( $carrier_key ) ), [ 'sicepat' ], true );
 			if ( class_exists( 'Exacoat_Shipping_Tracker' ) && ! empty( $tracking_code ) ) {
-				if ( ! $is_domestic ) {
+				if ( ! $is_sicepat ) {
 					Exacoat_Shipping_Tracker::register_with_trackingmore( $tracking_code, $carrier_key, $order_id );
 				}
 				Exacoat_Shipping_Tracker::sync_order_tracking( $order_id );
