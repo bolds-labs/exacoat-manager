@@ -15,44 +15,53 @@ import {
   User,
   MapPin,
   MessageSquare,
+  Mail,
   Send,
   Phone,
+  KeyRound,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { formatOrderNumber } from '../../lib/orderUtils';
 import {
   fetchWarrantyClaimDetails,
   reviewWarrantyClaimDirect,
+  sendWarrantyClarificationEmailDirect,
   WarrantyClaimDetails,
 } from '../../lib/wordpressBridge';
 import { useToast } from '../../context/ToastContext';
 import { cleanItemTitle } from '../../lib/orderItems';
 import { getWordPressBaseUrl } from '../../lib/env';
 
-const WA_TEMPLATES = {
+const COMM_TEMPLATES = {
   cut_incorrect: {
-    labelId: 'Video Potongan Tidak Sesuai (Kurang 5 Bagian)',
-    labelEn: 'Skin Cut Proof Incorrect (Not 5 Distinct Pieces)',
+    labelId: 'Video Potongan Skin Tidak Sesuai',
+    labelEn: 'Skin Cut Proof Incorrect',
+    subjectId: (ref: string) => `[Exacoat] Permintaan Video Ulang Klaim Garansi #${ref}`,
+    subjectEn: (ref: string) => `[Exacoat] Video Clarification for Installation Warranty Claim #${ref}`,
     textId: (name: string, ref: string) =>
-      `Halo kak ${name}, terima kasih telah mengajukan klaim garansi pemasangan Exacoat untuk pesanan #${ref}.\n\nSetelah tim kami meninjau video bukti yang diunggah, pemotongan skin belum sesuai ketentuan garansi (skin harus dipotong menjadi minimal 5 bagian terpisah dan terlihat jelas pada video).\n\nMohon bantu kirimkan video pemotongan skin yang sesuai langsung melalui WhatsApp ini agar klaim penggantian dapat segera kami proses. Terima kasih!`,
+      `Halo kak ${name}, terima kasih telah mengajukan klaim garansi pemasangan Exacoat untuk pesanan #${ref}.\n\nSetelah tim kami meninjau video bukti yang diunggah, pemotongan skin belum sesuai ketentuan garansi (produk skin asli harus dipotong, bukan hanya lapisan pelindung atau kertas alasnya, dan terlihat jelas pada video).\n\nMohon bantu kirimkan video pemotongan produk skin yang sesuai melalui WhatsApp/email ini agar klaim penggantian dapat segera kami proses. Terima kasih!`,
     textEn: (name: string, ref: string) =>
-      `Hi ${name}, thank you for submitting your Exacoat installation warranty claim for order #${ref}.\n\nUpon review, the uploaded video proof does not show the skin cut into at least 5 distinct pieces as required by our warranty policy.\n\nPlease reply with an updated video showing all claimed skins cut into at least 5 pieces so we can approve your replacement. Thank you!`,
+      `Hi ${name}, thank you for submitting your Exacoat installation warranty claim for order #${ref}.\n\nUpon review, the uploaded video proof does not show the actual skin cut as required (the actual skin material must be cut, not just the backing sheet or protective layers, and shown clearly on video).\n\nPlease send an updated video showing the cut skin product so we can approve your replacement. Thank you!`,
   },
   missing_skins: {
     labelId: 'Bagian Skin Belum Dipotong Lengkap di Video',
     labelEn: 'Missing Claimed Skin Parts in Video',
+    subjectId: (ref: string) => `[Exacoat] Video Bukti Belum Lengkap untuk Klaim Garansi #${ref}`,
+    subjectEn: (ref: string) => `[Exacoat] Incomplete Proof Video for Warranty Claim #${ref}`,
     textId: (name: string, ref: string) =>
-      `Halo kak ${name}, mengenai pengajuan garansi pemasangan Exacoat untuk pesanan #${ref}.\n\nKami melihat masih ada bagian skin yang belum dipotong di dalam video bukti yang dilampirkan. Sesuai ketentuan garansi, seluruh bagian skin yang diajukan penggantian harus dipotong menjadi 5 bagian.\n\nMohon kirimkan video pemotongan untuk seluruh bagian skin yang diklaim agar dapat kami setujui segera. Terima kasih!`,
+      `Halo kak ${name}, mengenai pengajuan garansi pemasangan Exacoat untuk pesanan #${ref}.\n\nKami melihat masih ada bagian skin yang belum dipotong di dalam video bukti yang dilampirkan. Sesuai ketentuan garansi, seluruh bagian skin yang diajukan penggantian harus dipotong hingga terpisah.\n\nMohon kirimkan video pemotongan untuk seluruh bagian skin yang diklaim agar dapat kami setujui segera. Terima kasih!`,
     textEn: (name: string, ref: string) =>
       `Hi ${name}, regarding your Exacoat warranty replacement claim for order #${ref}.\n\nWe noticed that some of the claimed skin parts are missing from the cutting proof video. According to our warranty terms, all skins requested for replacement must be cut.\n\nPlease send a video showing all claimed skin parts cut so we can proceed with your replacement. Thank you!`,
   },
   unclear_video: {
     labelId: 'Video Buram / Tidak Dapat Diputar',
     labelEn: 'Video Unplayable or Unclear',
+    subjectId: (ref: string) => `[Exacoat] Video Bukti Buram / Tidak Dapat Diputar #${ref}`,
+    subjectEn: (ref: string) => `[Exacoat] Video Proof Unclear or Unplayable #${ref}`,
     textId: (name: string, ref: string) =>
-      `Halo kak ${name}, terkait pengajuan garansi pemasangan Exacoat untuk pesanan #${ref}.\n\nVideo bukti yang diunggah tidak dapat kami putar atau resolusinya kurang jelas sehingga tim QC belum dapat melakukan verifikasi.\n\nBisa tolong kirimkan video bukti pemotongan skin secara langsung ke WhatsApp ini? Kami akan segera memproses penggantian setelah video diverifikasi. Terima kasih!`,
+      `Halo kak ${name}, terkait pengajuan garansi pemasangan Exacoat untuk pesanan #${ref}.\n\nVideo bukti yang diunggah tidak dapat kami putar atau resolusinya kurang jelas sehingga tim QC belum dapat melakukan verifikasi.\n\nBisa tolong kirimkan video bukti pemotongan skin secara langsung ke WhatsApp/email ini? Kami akan segera memproses penggantian setelah video diverifikasi. Terima kasih!`,
     textEn: (name: string, ref: string) =>
-      `Hi ${name}, regarding your Exacoat warranty claim for order #${ref}.\n\nWe were unable to play or clearly view the uploaded proof video, preventing our team from verifying the claim.\n\nCould you please send the video showing the cut skin directly here on WhatsApp? We will process your replacement right away once verified. Thank you!`,
+      `Hi ${name}, regarding your Exacoat warranty claim for order #${ref}.\n\nWe were unable to play or clearly view the uploaded proof video, preventing our team from verifying the claim.\n\nCould you please send the video showing the cut skin directly in response to this message? We will process your replacement right away once verified. Thank you!`,
   },
 };
 
@@ -88,53 +97,87 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [showRejectInput, setShowRejectInput] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [allowResubmit, setAllowResubmit] = useState(false);
 
-  // WhatsApp Customer Dispatch State
-  const [showWhatsApp, setShowWhatsApp] = useState(false);
-  const [waLanguage, setWaLanguage] = useState<'id' | 'en'>('id');
-  const [waTemplateKey, setWaTemplateKey] = useState<'cut_incorrect' | 'missing_skins' | 'unclear_video'>('cut_incorrect');
-  const [waMessage, setWaMessage] = useState('');
-  const [waPhone, setWaPhone] = useState('');
+  // Manual Customer Follow-up State (WhatsApp or Email)
+  const [commChannel, setCommChannel] = useState<'whatsapp' | 'email' | null>(null);
+  const [commLanguage, setCommLanguage] = useState<'id' | 'en'>('id');
+  const [templateKey, setTemplateKey] = useState<'cut_incorrect' | 'missing_skins' | 'unclear_video'>('cut_incorrect');
+  const [commMessage, setCommMessage] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
+  const [emailSubject, setEmailSubject] = useState('');
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
 
-  const generateWaMessage = (
+  const getOrderRef = (details: WarrantyClaimDetails | null) => {
+    return String(details?.parent_order_number || details?.parent_order_id || details?.order_number || '');
+  };
+
+  const generateCommMessage = (
     tplKey: 'cut_incorrect' | 'missing_skins' | 'unclear_video',
     lang: 'id' | 'en',
     details: WarrantyClaimDetails | null
   ) => {
     const rawName = (details?.customer_name || '').trim();
     const firstName = rawName.split(' ')[0] || (lang === 'id' ? 'Kak' : 'Customer');
-    const orderRef = String(details?.parent_order_number || details?.parent_order_id || details?.order_number || '');
+    const orderRef = getOrderRef(details);
 
-    const tpl = WA_TEMPLATES[tplKey];
+    const tpl = COMM_TEMPLATES[tplKey];
     if (!tpl) return '';
     return lang === 'id' ? tpl.textId(firstName, orderRef) : tpl.textEn(firstName, orderRef);
   };
 
+  const generateEmailSubject = (
+    tplKey: 'cut_incorrect' | 'missing_skins' | 'unclear_video',
+    lang: 'id' | 'en',
+    details: WarrantyClaimDetails | null
+  ) => {
+    const orderRef = getOrderRef(details);
+    const tpl = COMM_TEMPLATES[tplKey];
+    if (!tpl) return '';
+    return lang === 'id' ? tpl.subjectId(orderRef) : tpl.subjectEn(orderRef);
+  };
+
   const handleSelectTemplate = (tplKey: 'cut_incorrect' | 'missing_skins' | 'unclear_video') => {
-    setWaTemplateKey(tplKey);
-    setWaMessage(generateWaMessage(tplKey, waLanguage, claim));
+    setTemplateKey(tplKey);
+    setCommMessage(generateCommMessage(tplKey, commLanguage, claim));
+    setEmailSubject(generateEmailSubject(tplKey, commLanguage, claim));
   };
 
   const handleSelectLanguage = (lang: 'id' | 'en') => {
-    setWaLanguage(lang);
-    setWaMessage(generateWaMessage(waTemplateKey, lang, claim));
+    setCommLanguage(lang);
+    setCommMessage(generateCommMessage(templateKey, lang, claim));
+    setEmailSubject(generateEmailSubject(templateKey, lang, claim));
   };
 
   const handleToggleWhatsApp = () => {
-    setShowWhatsApp((prev) => {
-      const next = !prev;
+    setCommChannel((prev) => {
+      const next = prev === 'whatsapp' ? null : 'whatsapp';
       if (next && claim) {
-        setWaMessage(generateWaMessage(waTemplateKey, waLanguage, claim));
-        if (claim.customer_phone) {
-          setWaPhone(claim.customer_phone);
-        }
+        setCommMessage(generateCommMessage(templateKey, commLanguage, claim));
+        setEmailSubject(generateEmailSubject(templateKey, commLanguage, claim));
+        if (claim.customer_phone) setCustomerPhone(claim.customer_phone);
+        if (claim.customer_email) setCustomerEmail(claim.customer_email);
+      }
+      return next;
+    });
+  };
+
+  const handleToggleEmail = () => {
+    setCommChannel((prev) => {
+      const next = prev === 'email' ? null : 'email';
+      if (next && claim) {
+        setCommMessage(generateCommMessage(templateKey, commLanguage, claim));
+        setEmailSubject(generateEmailSubject(templateKey, commLanguage, claim));
+        if (claim.customer_email) setCustomerEmail(claim.customer_email);
+        if (claim.customer_phone) setCustomerPhone(claim.customer_phone);
       }
       return next;
     });
   };
 
   const handleSendWhatsApp = () => {
-    const rawPhone = waPhone || claim?.customer_phone || '';
+    const rawPhone = customerPhone || claim?.customer_phone || '';
     let cleaned = rawPhone.replace(/\D/g, '');
     if (cleaned.startsWith('0')) {
       cleaned = '62' + cleaned.slice(1);
@@ -145,8 +188,44 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
       showToast('warning', 'WhatsApp Phone Required', 'Customer phone number is missing or invalid.');
       return;
     }
-    const url = `https://wa.me/${cleaned}?text=${encodeURIComponent(waMessage)}`;
+    const url = `https://wa.me/${cleaned}?text=${encodeURIComponent(commMessage)}`;
     window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleSendEmail = async () => {
+    const targetEmail = (customerEmail || claim?.customer_email || '').trim();
+    if (!targetEmail || !targetEmail.includes('@')) {
+      showToast('warning', 'Valid Email Required', 'Customer email address is missing or invalid.');
+      return;
+    }
+    if (!commMessage.trim()) {
+      showToast('warning', 'Message Required', 'Please enter a message body.');
+      return;
+    }
+
+    setIsSendingEmail(true);
+    const res = await sendWarrantyClarificationEmailDirect({
+      orderId,
+      recipientEmail: targetEmail,
+      recipientName: claim?.customer_name || 'Customer',
+      subject: emailSubject.trim() || `[Exacoat] Warranty Claim Clarification #${getOrderRef(claim)}`,
+      messageText: commMessage.trim(),
+    });
+    setIsSendingEmail(false);
+
+    if (res.success) {
+      showToast('success', 'Email Sent', res.message || 'Clarification email sent to customer.');
+      setCommChannel(null);
+    } else {
+      showToast('error', 'Email Delivery Failed', res.error || 'Failed to deliver email.');
+    }
+  };
+
+  const handleOpenMailto = () => {
+    const to = encodeURIComponent((customerEmail || claim?.customer_email || '').trim());
+    const subj = encodeURIComponent(emailSubject);
+    const body = encodeURIComponent(commMessage);
+    window.open(`mailto:${to}?subject=${subj}&body=${body}`, '_blank');
   };
 
   const loadDetails = async () => {
@@ -158,8 +237,13 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
     if (res.success && res.data) {
       setClaim(res.data);
       if (res.data.customer_phone) {
-        setWaPhone(res.data.customer_phone);
+        setCustomerPhone(res.data.customer_phone);
       }
+      if (res.data.customer_email) {
+        setCustomerEmail(res.data.customer_email);
+      }
+      setCommMessage(generateCommMessage(templateKey, commLanguage, res.data));
+      setEmailSubject(generateEmailSubject(templateKey, commLanguage, res.data));
     } else {
       setError(res.error || 'Failed to load warranty claim details.');
     }
@@ -170,8 +254,9 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
     if (isOpen && orderId) {
       setShowRejectInput(false);
       setRejectionReason('');
-      setShowWhatsApp(false);
-      setWaMessage('');
+      setAllowResubmit(false);
+      setCommChannel(null);
+      setCommMessage('');
       loadDetails();
     }
   }, [isOpen, orderId]);
@@ -200,11 +285,17 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
     }
 
     setIsProcessing(true);
-    const res = await reviewWarrantyClaimDirect(orderId, 'reject', rejectionReason);
+    const res = await reviewWarrantyClaimDirect(orderId, 'reject', rejectionReason, undefined, allowResubmit);
     setIsProcessing(false);
 
     if (res.success) {
-      showToast('info', 'Claim Rejected', 'Warranty claim rejected and video proof deleted from disk.');
+      showToast(
+        'info',
+        'Claim Rejected',
+        allowResubmit
+          ? 'Warranty claim rejected, proof video purged, and customer unlocked to re-apply on website.'
+          : 'Warranty claim rejected and video proof deleted from disk.'
+      );
       if (onClaimReviewed) onClaimReviewed();
       loadDetails();
     } else {
@@ -234,10 +325,10 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
           <span>Warranty Claim Review {formatOrderNumber(claim?.order_number || orderId)}</span>
         </div>
       }
-      subtitle="Verify customer 5-piece cut video proof and approve replacement"
+      subtitle="Verify customer skin cutting proof video and approve replacement"
       footer={
-        <div className="flex w-full items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+        <div className="flex w-full items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
               onClick={onClose}
@@ -249,8 +340,8 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
               type="button"
               onClick={handleToggleWhatsApp}
               className={clsx(
-                "flex items-center gap-1.5 rounded-lg border px-3.5 py-2 text-xs font-medium transition-colors",
-                showWhatsApp
+                "flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors cursor-pointer",
+                commChannel === 'whatsapp'
                   ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-300"
                   : "border-neutral-700 bg-neutral-800 text-emerald-400 hover:bg-neutral-700 hover:border-emerald-500/30"
               )}
@@ -258,17 +349,30 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
               <MessageSquare className="h-4 w-4" />
               WhatsApp Customer
             </button>
+            <button
+              type="button"
+              onClick={handleToggleEmail}
+              className={clsx(
+                "flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors cursor-pointer",
+                commChannel === 'email'
+                  ? "border-sky-500/50 bg-sky-500/20 text-sky-300"
+                  : "border-neutral-700 bg-neutral-800 text-sky-400 hover:bg-neutral-700 hover:border-sky-500/30"
+              )}
+            >
+              <Mail className="h-4 w-4" />
+              Email Customer
+            </button>
           </div>
 
           {claim?.rma_status === 'pending_review' && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {!showRejectInput ? (
                 <>
                   <button
                     type="button"
                     onClick={() => setShowRejectInput(true)}
                     disabled={isProcessing}
-                    className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-medium text-red-400 hover:bg-red-500/20 transition-colors"
+                    className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-medium text-red-400 hover:bg-red-500/20 transition-colors cursor-pointer"
                   >
                     <XCircle className="h-4 w-4" />
                     Reject Claim
@@ -278,33 +382,42 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
                     type="button"
                     onClick={handleApprove}
                     disabled={isProcessing}
-                    className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-500 transition-colors"
+                    className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-500 transition-colors cursor-pointer shadow-sm"
                   >
                     {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                     Approve Claim
                   </button>
                 </>
               ) : (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                   <input
                     type="text"
                     value={rejectionReason}
                     onChange={(e) => setRejectionReason(e.target.value)}
-                    placeholder="Reason for rejection (e.g. skin not cut into 5 pieces)..."
-                    className="h-9 w-64 rounded-lg border border-neutral-700 bg-neutral-900 px-3 text-xs text-white placeholder:text-neutral-500 focus:border-red-500 focus:outline-none"
+                    placeholder="Reason for rejection (e.g. skin not cut / wrong material)..."
+                    className="h-9 w-60 rounded-lg border border-neutral-700 bg-neutral-900 px-3 text-xs text-white placeholder:text-neutral-500 focus:border-red-500 focus:outline-none"
                   />
+                  <label className="flex items-center gap-1.5 text-[11px] text-neutral-300 select-none cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={allowResubmit}
+                      onChange={(e) => setAllowResubmit(e.target.checked)}
+                      className="rounded border-neutral-700 bg-neutral-900 text-red-500 focus:ring-0"
+                    />
+                    <span title="Unlock invoice so customer can re-apply on website">Unlock web re-submit</span>
+                  </label>
                   <button
                     type="button"
                     onClick={handleReject}
                     disabled={isProcessing || !rejectionReason.trim()}
-                    className="rounded-lg bg-red-600 px-3 py-2 text-xs font-medium text-white hover:bg-red-500 transition-colors"
+                    className="rounded-lg bg-red-600 px-3 py-2 text-xs font-medium text-white hover:bg-red-500 transition-colors cursor-pointer whitespace-nowrap"
                   >
                     Confirm Rejection
                   </button>
                   <button
                     type="button"
                     onClick={() => setShowRejectInput(false)}
-                    className="text-xs text-neutral-400 hover:text-white"
+                    className="text-xs text-neutral-400 hover:text-white px-1 cursor-pointer"
                   >
                     Cancel
                   </button>
@@ -325,6 +438,28 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
         </div>
       ) : claim ? (
         <div className="space-y-6 text-xs text-neutral-300">
+          {/* Warranty Extension Code Callout */}
+          {claim.used_warranty_code && (
+            <div className="flex items-center justify-between rounded-xl border border-purple-500/30 bg-purple-500/10 px-4 py-3">
+              <div className="flex items-center gap-2.5">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-500/20 text-purple-300">
+                  <KeyRound className="h-4 w-4" />
+                </span>
+                <div>
+                  <p className="text-xs font-semibold text-purple-200">
+                    Warranty Code Override Applied
+                  </p>
+                  <p className="text-[11px] text-purple-300/80">
+                    Customer used special code to override the 48-hour delivery deadline.
+                  </p>
+                </div>
+              </div>
+              <span className="rounded-lg border border-purple-500/40 bg-purple-950/60 px-2.5 py-1 font-mono text-xs font-bold text-purple-300">
+                {claim.used_warranty_code}
+              </span>
+            </div>
+          )}
+
           {/* Top Status & Original Order Grid */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 space-y-2">
@@ -382,7 +517,7 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
           </div>
 
           {/* WhatsApp Interactive Assistant Panel */}
-          {showWhatsApp && (
+          {commChannel === 'whatsapp' && (
             <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-emerald-400 font-semibold text-xs">
@@ -394,8 +529,8 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
                     type="button"
                     onClick={() => handleSelectLanguage('id')}
                     className={clsx(
-                      "px-2.5 py-1 rounded font-medium transition-colors",
-                      waLanguage === 'id' ? "bg-emerald-600 text-white" : "text-neutral-400 hover:text-white"
+                      "px-2.5 py-1 rounded font-medium transition-colors cursor-pointer",
+                      commLanguage === 'id' ? "bg-emerald-600 text-white" : "text-neutral-400 hover:text-white"
                     )}
                   >
                     ID (Indonesia)
@@ -404,8 +539,8 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
                     type="button"
                     onClick={() => handleSelectLanguage('en')}
                     className={clsx(
-                      "px-2.5 py-1 rounded font-medium transition-colors",
-                      waLanguage === 'en' ? "bg-emerald-600 text-white" : "text-neutral-400 hover:text-white"
+                      "px-2.5 py-1 rounded font-medium transition-colors cursor-pointer",
+                      commLanguage === 'en' ? "bg-emerald-600 text-white" : "text-neutral-400 hover:text-white"
                     )}
                   >
                     EN (English)
@@ -417,22 +552,22 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
               <div className="space-y-1.5">
                 <span className="text-[11px] text-neutral-400 font-medium">Select Pre-filled Template:</span>
                 <div className="flex flex-wrap gap-1.5">
-                  {(Object.keys(WA_TEMPLATES) as Array<keyof typeof WA_TEMPLATES>).map((key) => {
-                    const tpl = WA_TEMPLATES[key];
-                    const isSelected = waTemplateKey === key;
+                  {(Object.keys(COMM_TEMPLATES) as Array<keyof typeof COMM_TEMPLATES>).map((key) => {
+                    const tpl = COMM_TEMPLATES[key];
+                    const isSelected = templateKey === key;
                     return (
                       <button
                         key={key}
                         type="button"
                         onClick={() => handleSelectTemplate(key)}
                         className={clsx(
-                          "rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition-colors border",
+                          "rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition-colors border cursor-pointer",
                           isSelected
                             ? "bg-emerald-500/20 border-emerald-500 text-emerald-300"
                             : "bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-neutral-200 hover:border-neutral-700"
                         )}
                       >
-                        {waLanguage === 'id' ? tpl.labelId : tpl.labelEn}
+                        {commLanguage === 'id' ? tpl.labelId : tpl.labelEn}
                       </button>
                     );
                   })}
@@ -448,8 +583,8 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
                   </label>
                   <input
                     type="text"
-                    value={waPhone}
-                    onChange={(e) => setWaPhone(e.target.value)}
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value)}
                     placeholder="0812... or 62812..."
                     className="h-7 w-48 rounded border border-neutral-700 bg-neutral-900 px-2 text-xs text-white placeholder:text-neutral-600 focus:border-emerald-500 focus:outline-none"
                   />
@@ -457,8 +592,8 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
 
                 <textarea
                   rows={4}
-                  value={waMessage}
-                  onChange={(e) => setWaMessage(e.target.value)}
+                  value={commMessage}
+                  onChange={(e) => setCommMessage(e.target.value)}
                   className="w-full rounded-lg border border-neutral-700 bg-neutral-900 p-2.5 text-xs text-white placeholder:text-neutral-600 focus:border-emerald-500 focus:outline-none leading-relaxed"
                 />
 
@@ -469,10 +604,133 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
                   <button
                     type="button"
                     onClick={handleSendWhatsApp}
-                    className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 transition-colors shadow-sm"
+                    className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 transition-colors shadow-sm cursor-pointer"
                   >
                     <Send className="h-3.5 w-3.5" />
                     Open WhatsApp
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Email Interactive Assistant Panel */}
+          {commChannel === 'email' && (
+            <div className="rounded-xl border border-sky-500/30 bg-sky-950/20 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sky-400 font-semibold text-xs">
+                  <Mail className="h-4 w-4" />
+                  <span>Send Clarification Email to Customer</span>
+                </div>
+                <div className="flex items-center gap-1 bg-neutral-900 rounded-lg p-0.5 border border-neutral-800 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => handleSelectLanguage('id')}
+                    className={clsx(
+                      "px-2.5 py-1 rounded font-medium transition-colors cursor-pointer",
+                      commLanguage === 'id' ? "bg-sky-600 text-white" : "text-neutral-400 hover:text-white"
+                    )}
+                  >
+                    ID (Indonesia)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectLanguage('en')}
+                    className={clsx(
+                      "px-2.5 py-1 rounded font-medium transition-colors cursor-pointer",
+                      commLanguage === 'en' ? "bg-sky-600 text-white" : "text-neutral-400 hover:text-white"
+                    )}
+                  >
+                    EN (English)
+                  </button>
+                </div>
+              </div>
+
+              {/* Template Selector Chips */}
+              <div className="space-y-1.5">
+                <span className="text-[11px] text-neutral-400 font-medium">Select Pre-filled Template:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {(Object.keys(COMM_TEMPLATES) as Array<keyof typeof COMM_TEMPLATES>).map((key) => {
+                    const tpl = COMM_TEMPLATES[key];
+                    const isSelected = templateKey === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => handleSelectTemplate(key)}
+                        className={clsx(
+                          "rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition-colors border cursor-pointer",
+                          isSelected
+                            ? "bg-sky-500/20 border-sky-500 text-sky-300"
+                            : "bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-neutral-200 hover:border-neutral-700"
+                        )}
+                      >
+                        {commLanguage === 'id' ? tpl.labelId : tpl.labelEn}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Email Form */}
+              <div className="space-y-2 pt-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-[11px] text-neutral-400 flex items-center gap-1 font-medium">
+                      <Mail className="h-3 w-3 text-neutral-500" />
+                      <span>Recipient Email:</span>
+                    </label>
+                    <input
+                      type="email"
+                      value={customerEmail}
+                      onChange={(e) => setCustomerEmail(e.target.value)}
+                      placeholder="customer@email.com"
+                      className="h-8 w-full rounded border border-neutral-700 bg-neutral-900 px-2.5 text-xs text-white placeholder:text-neutral-600 focus:border-sky-500 focus:outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] text-neutral-400 flex items-center gap-1 font-medium">
+                      <FileText className="h-3 w-3 text-neutral-500" />
+                      <span>Subject:</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={emailSubject}
+                      onChange={(e) => setEmailSubject(e.target.value)}
+                      placeholder="Email Subject..."
+                      className="h-8 w-full rounded border border-neutral-700 bg-neutral-900 px-2.5 text-xs text-white placeholder:text-neutral-600 focus:border-sky-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] text-neutral-400 font-medium">Message Body:</label>
+                  <textarea
+                    rows={5}
+                    value={commMessage}
+                    onChange={(e) => setCommMessage(e.target.value)}
+                    className="w-full rounded-lg border border-neutral-700 bg-neutral-900 p-2.5 text-xs text-white placeholder:text-neutral-600 focus:border-sky-500 focus:outline-none leading-relaxed"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between pt-1 flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleOpenMailto}
+                    className="flex items-center gap-1 text-[11px] text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    <span>Open in Local Mail Client (mailto:)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSendEmail}
+                    disabled={isSendingEmail || !customerEmail.trim() || !commMessage.trim()}
+                    className="flex items-center gap-1.5 rounded-lg bg-sky-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-sky-500 disabled:opacity-50 transition-colors shadow-sm cursor-pointer"
+                  >
+                    {isSendingEmail ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                    <span>Send Official Email</span>
                   </button>
                 </div>
               </div>
@@ -572,7 +830,7 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-neutral-400 font-medium">
                 <Video className="h-4 w-4 text-[#f3aa18]" />
-                <span>5-Piece Cut Proof Video</span>
+                <span>Skin Cut Proof Video</span>
               </div>
               {claim.video_proof_url && !claim.video_deleted && (
                 <a

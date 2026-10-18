@@ -50,13 +50,19 @@ class Exacoat_Shipping_Tracker {
 		// 8. Automated Shipping Sync Cron for Active Domestic & International Orders
 		add_filter( 'cron_schedules', [ __CLASS__, 'register_cron_intervals' ] );
 		add_action( 'exacoat_shipping_sync_cron', [ __CLASS__, 'cron_sync_active_shipments' ] );
-		add_action( 'exacoat_hourly_shipping_sync', [ __CLASS__, 'cron_sync_active_shipments' ] );
-		if ( function_exists( 'as_has_scheduled_action' ) ) {
+		add_action( 'init', [ __CLASS__, 'ensure_action_scheduler_cron' ], 20 );
+	}
+
+	/**
+	 * Ensure Action Scheduler recurring action is registered after Action Scheduler loads
+	 */
+	public static function ensure_action_scheduler_cron() {
+		if ( function_exists( 'as_has_scheduled_action' ) && function_exists( 'as_schedule_recurring_action' ) ) {
 			if ( ! as_has_scheduled_action( 'exacoat_shipping_sync_cron' ) ) {
-				as_schedule_recurring_action( time() + 300, 3 * HOUR_IN_SECONDS, 'exacoat_shipping_sync_cron', [], 'exacoat-shipping' );
+				as_schedule_recurring_action( time() + 180, 2 * HOUR_IN_SECONDS, 'exacoat_shipping_sync_cron', [], 'exacoat-shipping' );
 			}
 		} elseif ( ! wp_next_scheduled( 'exacoat_shipping_sync_cron' ) ) {
-			wp_schedule_event( time() + 300, 'three_hours', 'exacoat_shipping_sync_cron' );
+			wp_schedule_event( time() + 180, 'three_hours', 'exacoat_shipping_sync_cron' );
 		}
 	}
 
@@ -991,11 +997,11 @@ class Exacoat_Shipping_Tracker {
 			$err_msg   = (string) ( $body['error'] ?? ( $body['message'] ?? "Biteship tracking returned HTTP {$status_code}" ) );
 			$err_lower = strtolower( $err_msg );
 
-			// If JNE courier, fall back to direct JNE official portal verification
+			// If JNE courier, fall back to TrackingMore (official API) instead of direct site scraping which hangs on Cloudflare
 			if ( 'jne' === $biteship_courier && $order_id > 0 ) {
-				$jne_direct = self::sync_jne_direct_tracking( $order_id, $tracking_number );
-				if ( ! empty( $jne_direct['success'] ) ) {
-					return $jne_direct;
+				$tm_fallback = self::sync_trackingmore_tracking( $order_id, $tracking_number, 'jne' );
+				if ( ! empty( $tm_fallback['success'] ) && ! empty( $tm_fallback['checkpoints'] ) ) {
+					return $tm_fallback;
 				}
 			}
 
@@ -1017,11 +1023,11 @@ class Exacoat_Shipping_Tracker {
 		$biteship_status = strtolower( trim( (string) ( $body['status'] ?? '' ) ) );
 		$history = is_array( $body['history'] ?? null ) ? $body['history'] : [];
 
-		// If JNE returns 200 from Biteship but with empty history or pending status, try JNE direct verification
+		// If JNE returns 200 from Biteship but with empty history, try TrackingMore fallback
 		if ( 'jne' === $biteship_courier && empty( $history ) && $order_id > 0 ) {
-			$jne_direct = self::sync_jne_direct_tracking( $order_id, $tracking_number );
-			if ( ! empty( $jne_direct['success'] ) ) {
-				return $jne_direct;
+			$tm_fallback = self::sync_trackingmore_tracking( $order_id, $tracking_number, 'jne' );
+			if ( ! empty( $tm_fallback['success'] ) && ! empty( $tm_fallback['checkpoints'] ) ) {
+				return $tm_fallback;
 			}
 		}
 		$dest_addr = trim( (string) ( $body['destination']['address'] ?? '' ) );
@@ -1169,7 +1175,7 @@ class Exacoat_Shipping_Tracker {
 				'User-Agent' => $user_agent,
 				'Accept'     => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
 			],
-			'timeout' => 12,
+			'timeout' => 3,
 		] );
 
 		if ( is_wp_error( $home_res ) ) {
@@ -1211,7 +1217,7 @@ class Exacoat_Shipping_Tracker {
 				'_token'     => $token,
 				'lacak-resi' => $tracking_number,
 			],
-			'timeout' => 12,
+			'timeout' => 3,
 		] );
 
 		if ( is_wp_error( $pkg_res ) ) {
@@ -1246,7 +1252,7 @@ class Exacoat_Shipping_Tracker {
 					'resi_'   => $tracking_number,
 					'num_all' => $last5,
 				],
-				'timeout' => 12,
+				'timeout' => 3,
 			] );
 
 			if ( ! is_wp_error( $verify_res ) ) {
@@ -1573,29 +1579,31 @@ class Exacoat_Shipping_Tracker {
 	}
 
 	/**
-	 * Periodic Automated Shipping Sync Cron (Every 6 Hours)
+	 * Periodic Automated Shipping Sync Cron
 	 * Checks active shipped orders from the past 30 days and updates delivered status automatically.
-	 * Conserves Biteship API quota by enforcing a minimum 4-hour cooldown per order.
+	 * Strictly targets 'shipped' orders per business rules.
+	 * Conserves Biteship API quota by enforcing a minimum 2-hour cooldown per order unless forced.
 	 */
-	public static function cron_sync_active_shipments() {
+	public static function cron_sync_active_shipments( bool $force = false, int $limit = 50 ): array {
 		if ( ! function_exists( 'wc_get_orders' ) ) {
-			return;
+			return [];
 		}
 
 		$orders = wc_get_orders( [
-			'status'       => [ 'wc-shipped', 'shipped', 'wc-ready-to-ship', 'ready-to-ship', 'wc-awaiting-pickup', 'awaiting-pickup' ],
-			'limit'        => 50,
-			'date_created' => '>=' . ( time() - ( 30 * DAY_IN_SECONDS ) ),
-			'orderby'      => 'date',
-			'order'        => 'DESC',
+			'status'     => [ 'wc-shipped', 'shipped' ],
+			'limit'      => $limit,
+			'date_after' => gmdate( 'Y-m-d H:i:s', time() - ( 30 * DAY_IN_SECONDS ) ),
+			'orderby'    => 'date',
+			'order'      => 'DESC',
 		] );
 
 		if ( empty( $orders ) ) {
-			return;
+			return [];
 		}
 
 		$now          = time();
 		$min_interval = 2 * HOUR_IN_SECONDS; // Guard: check an order at most once per 2 hours
+		$results      = [];
 
 		foreach ( $orders as $order ) {
 			$order_id = $order->get_id();
@@ -1605,7 +1613,7 @@ class Exacoat_Shipping_Tracker {
 			}
 
 			$last_sync = (int) $order->get_meta( '_last_tracking_sync_time' );
-			if ( $last_sync > 0 && ( $now - $last_sync ) < $min_interval ) {
+			if ( ! $force && $last_sync > 0 && ( $now - $last_sync ) < $min_interval ) {
 				continue; // Skip: checked recently, save Biteship tokens
 			}
 
@@ -1613,8 +1621,17 @@ class Exacoat_Shipping_Tracker {
 			$order->save();
 			update_post_meta( $order_id, '_last_tracking_sync_time', $now );
 
-			self::sync_order_tracking( $order_id );
+			$sync_res = self::sync_order_tracking( $order_id, $force );
+			$results[] = [
+				'order_id' => $order_id,
+				'tracking' => $tracking,
+				'status'   => $sync_res['status'] ?? 'unknown',
+				'source'   => $sync_res['source'] ?? 'unknown',
+				'success'  => ! empty( $sync_res['success'] ),
+			];
 		}
+
+		return $results;
 	}
 
 	/**
@@ -2238,6 +2255,12 @@ class Exacoat_Shipping_Tracker {
 				'callback'            => [ __CLASS__, 'rest_sync_order_tracking' ],
 				'permission_callback' => '__return_true',
 			] );
+
+			register_rest_route( $ns, '/shipping/sync-active', [
+				'methods'             => [ 'POST', 'GET' ],
+				'callback'            => [ __CLASS__, 'rest_sync_active_shipments' ],
+				'permission_callback' => '__return_true',
+			] );
 		}
 	}
 
@@ -2646,6 +2669,33 @@ class Exacoat_Shipping_Tracker {
 				'success' => false,
 				'message' => 'Tracking sync exception: ' . $e->getMessage(),
 			], 200 );
+		}
+	}
+
+	/**
+	 * REST: On-demand sync of all active shipped orders from manager or background heartbeat
+	 */
+	public static function rest_sync_active_shipments( WP_REST_Request $request ) {
+		try {
+			$force = ! empty( $request->get_param( 'force' ) );
+			$limit = (int) ( $request->get_param( 'limit' ) ?: 30 );
+			if ( $limit <= 0 || $limit > 100 ) {
+				$limit = 30;
+			}
+
+			$results = self::cron_sync_active_shipments( $force, $limit );
+
+			return new WP_REST_Response( [
+				'success'      => true,
+				'synced_count' => count( $results ),
+				'results'      => $results,
+				'timestamp'    => time(),
+			], 200 );
+		} catch ( Throwable $e ) {
+			return new WP_REST_Response( [
+				'success' => false,
+				'message' => 'Active shipping sync error: ' . $e->getMessage(),
+			], 500 );
 		}
 	}
 

@@ -8,7 +8,7 @@ import { ManualWarrantyModal } from './ManualWarrantyModal';
 import { RmaClaimsLogModal } from './RmaClaimsLogModal';
 import { ShopeeOrdersView } from './ShopeeOrdersView';
 import { TikTokOrdersView } from './TikTokOrdersView';
-import { fetchOrdersDirect, fetchOrderDetailDirect, ShopeeOrder, TikTokOrder } from '../../lib/wordpressBridge';
+import { fetchOrdersDirect, fetchOrderDetailDirect, syncActiveShipmentsDirect, ShopeeOrder, TikTokOrder } from '../../lib/wordpressBridge';
 import { useToast } from '../../context/ToastContext';
 import { formatCurrency } from '../../lib/formatters';
 import { isStorePickupOrder } from '../../lib/orderUtils';
@@ -74,6 +74,10 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
     try {
       if (!quiet) setIsLoading(true);
       else setIsRefreshing(true);
+
+      if (status === 'shipped') {
+        syncActiveShipmentsDirect().catch(() => {});
+      }
 
       const hasSearch = Boolean(search && search.trim());
       const res = await fetchOrdersDirect({
@@ -296,7 +300,12 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => loadOrders(true)}
+              onClick={() => {
+                if (statusFilter === 'shipped') {
+                  syncActiveShipmentsDirect({ force: true }).catch(() => {});
+                }
+                loadOrders(true);
+              }}
               disabled={isLoading || isRefreshing}
               className="px-3.5 py-2 rounded-xl bg-[#141414] hover:bg-white/[0.06] text-neutral-300 hover:text-white border border-white/[0.08] text-xs font-semibold font-sans flex items-center gap-2 transition-all shrink-0 self-start sm:self-auto disabled:opacity-50 cursor-pointer shadow-xs"
             >

@@ -17,6 +17,7 @@ class Exacoat_Warranty_Manager {
 	const MAX_VIDEO_BYTES       = 104857600; // 100 MB
 	const WARRANTY_WINDOW_HOURS = 48;
 	const WARRANTY_WINDOW_SECS  = 172800;    // 48 * 3600
+	const OPTION_WARRANTY_CODES = 'exacoat_warranty_codes';
 
 	/**
 	 * Excluded product / line item keywords
@@ -139,6 +140,15 @@ class Exacoat_Warranty_Manager {
 			],
 		] );
 
+		// Admin / Manager: Send clarification email to customer regarding proof video
+		register_rest_route( 'exacoat-core/v1', '/warranty/send-clarification-email', [
+			[
+				'methods'             => \WP_REST_Server::CREATABLE,
+				'callback'            => [ __CLASS__, 'rest_send_clarification_email' ],
+				'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
+			],
+		] );
+
 		// Admin / Manager: Get warranty claim details
 		register_rest_route( 'exacoat-core/v1', '/warranty/claim/(?P<id>\d+)', [
 			[
@@ -174,6 +184,60 @@ class Exacoat_Warranty_Manager {
 				'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
 			],
 		] );
+
+		// Admin / Manager: Get all warranty codes
+		register_rest_route( 'exacoat-core/v1', '/warranty/codes', [
+			[
+				'methods'             => \WP_REST_Server::READABLE,
+				'callback'            => [ __CLASS__, 'rest_get_warranty_codes' ],
+				'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
+			],
+		] );
+
+		// Admin / Manager: Generate new warranty code
+		register_rest_route( 'exacoat-core/v1', '/warranty/codes/generate', [
+			[
+				'methods'             => \WP_REST_Server::CREATABLE,
+				'callback'            => [ __CLASS__, 'rest_generate_warranty_code' ],
+				'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
+			],
+		] );
+
+		// Admin / Manager: Revoke a warranty code
+		register_rest_route( 'exacoat-core/v1', '/warranty/codes/revoke', [
+			[
+				'methods'             => \WP_REST_Server::CREATABLE,
+				'callback'            => [ __CLASS__, 'rest_revoke_warranty_code' ],
+				'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
+			],
+		] );
+
+		// Admin / Manager: Delete a warranty code
+		register_rest_route( 'exacoat-core/v1', '/warranty/codes/delete', [
+			[
+				'methods'             => \WP_REST_Server::CREATABLE,
+				'callback'            => [ __CLASS__, 'rest_delete_warranty_code' ],
+				'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
+			],
+		] );
+
+		// Admin / Internal: Consume a warranty code
+		register_rest_route( 'exacoat-core/v1', '/warranty/codes/consume', [
+			[
+				'methods'             => \WP_REST_Server::CREATABLE,
+				'callback'            => [ __CLASS__, 'rest_consume_warranty_code' ],
+				'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
+			],
+		] );
+
+		// Public: Verify a warranty code (frontend /warranty check)
+		register_rest_route( 'exacoat-core/v1', '/warranty/codes/verify', [
+			[
+				'methods'             => \WP_REST_Server::CREATABLE,
+				'callback'            => [ __CLASS__, 'rest_verify_warranty_code' ],
+				'permission_callback' => '__return_true',
+			],
+		] );
 	}
 
 	/**
@@ -196,11 +260,58 @@ class Exacoat_Warranty_Manager {
 	}
 
 	/**
+	 * Check if an order is a Store Pickup (Summarecon Bekasi / SMB) order
+	 */
+	public static function is_store_pickup_order( $order ): bool {
+		if ( ! $order || ! is_a( $order, 'WC_Order' ) ) {
+			return false;
+		}
+
+		if ( class_exists( 'Exacoat_Tracking_Pool' ) && method_exists( 'Exacoat_Tracking_Pool', 'is_store_pickup_order' ) ) {
+			if ( Exacoat_Tracking_Pool::is_store_pickup_order( $order ) ) {
+				return true;
+			}
+		}
+
+		$status = str_replace( 'wc-', '', $order->get_status() );
+		if ( in_array( $status, [ 'smb-ready', 'smb-picked' ], true ) ) {
+			return true;
+		}
+
+		$meta_pickup = (string) ( $order->get_meta( '_is_store_pickup' ) ?: ( $order->get_meta( 'is_store_pickup' ) ?: ( $order->get_meta( 'store_pickup' ) ?: '' ) ) );
+		if ( in_array( strtolower( trim( $meta_pickup ) ), [ 'yes', '1', 'true' ], true ) ) {
+			return true;
+		}
+
+		if ( method_exists( $order, 'get_items' ) ) {
+			foreach ( $order->get_items( 'shipping' ) as $s_item ) {
+				$m_id    = strtolower( (string) $s_item->get_method_id() );
+				$m_title = strtolower( (string) $s_item->get_method_title() );
+				if ( strpos( $m_id, 'local_pickup' ) !== false || strpos( $m_id, 'pickup' ) !== false ) {
+					return true;
+				}
+				if ( strpos( $m_title, 'pickup' ) !== false || strpos( $m_title, 'summarecon' ) !== false || strpos( $m_title, 'ambil di toko' ) !== false || strpos( $m_title, 'ambil sendiri' ) !== false ) {
+					return true;
+				}
+			}
+		}
+
+		$shipping_addr1 = strtolower( trim( (string) $order->get_shipping_address_1() ?: (string) $order->get_billing_address_1() ) );
+		$shipping_addr2 = strtolower( trim( (string) $order->get_shipping_address_2() ?: (string) $order->get_billing_address_2() ) );
+		if ( strpos( $shipping_addr1, 'summarecon bekasi' ) !== false || strpos( $shipping_addr2, 'summarecon bekasi' ) !== false || strpos( $shipping_addr1, 'ruby commercial' ) !== false ) {
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
 	 * Check warranty eligibility for an order
 	 */
 	public static function rest_check_eligibility( \WP_REST_Request $request ): \WP_REST_Response {
 		$order_param = trim( (string) $request->get_param( 'order_id' ) );
 		$verification = trim( (string) $request->get_param( 'verification' ) );
+		$warranty_code = trim( (string) $request->get_param( 'warranty_code' ) );
 
 		$clean_id = ltrim( $order_param, '#' );
 		$order = wc_get_order( $clean_id );
@@ -256,7 +367,7 @@ class Exacoat_Warranty_Manager {
 			}
 
 			if ( $shopee_match ) {
-				return self::check_shopee_eligibility( $shopee_match, $verification, $clean_id );
+				return self::check_shopee_eligibility( $shopee_match, $verification, $clean_id, $warranty_code );
 			}
 
 			// Search TikTok Shop orders cache by order_id, order_sn, or tracking_number
@@ -276,7 +387,7 @@ class Exacoat_Warranty_Manager {
 			}
 
 			if ( $tiktok_match ) {
-				return self::check_tiktok_eligibility( $tiktok_match, $verification, $clean_id );
+				return self::check_tiktok_eligibility( $tiktok_match, $verification, $clean_id, $warranty_code );
 			}
 
 			return new \WP_REST_Response( [
@@ -313,6 +424,16 @@ class Exacoat_Warranty_Manager {
 					'message'  => 'The email or phone number does not match the billing records for Order #' . $order->get_order_number() . '.',
 				], 200 );
 			}
+		}
+
+		// 0. Store Pickup Exclusion (Summarecon Bekasi / SMB)
+		if ( self::is_store_pickup_order( $order ) ) {
+			return new \WP_REST_Response( [
+				'success'  => false,
+				'eligible' => false,
+				'reason'   => 'store_pickup',
+				'message'  => 'Orders with Store Pickup (Summarecon Bekasi) are installed on-site by our technician and are not eligible for self-installation warranty claims.',
+			], 200 );
 		}
 
 		// 1. Single Claim Enforcement: Check if warranty already claimed
@@ -406,7 +527,15 @@ class Exacoat_Warranty_Manager {
 		$elapsed_secs = $current_ts - $delivered_ts;
 		$remaining_secs = self::WARRANTY_WINDOW_SECS - $elapsed_secs;
 
-		if ( $remaining_secs <= 0 ) {
+		$is_code_override = false;
+		if ( ! empty( $warranty_code ) ) {
+			$code_val = self::validate_warranty_code( $warranty_code, (string) $clean_id );
+			if ( ! empty( $code_val['valid'] ) ) {
+				$is_code_override = true;
+			}
+		}
+
+		if ( $remaining_secs <= 0 && ! $is_code_override ) {
 			$delivered_display = date( 'd M Y, H:i', $delivered_ts );
 			return new \WP_REST_Response( [
 				'success'        => false,
@@ -611,25 +740,32 @@ class Exacoat_Warranty_Manager {
 		$hours_left = floor( $remaining_secs / 3600 );
 		$mins_left  = floor( ( $remaining_secs % 3600 ) / 60 );
 
-		return new \WP_REST_Response( [
+		$res_payload = [
 			'success'            => true,
 			'eligible'           => true,
 			'order_id'           => $order_id,
 			'order_number'       => $order->get_order_number(),
 			'delivered_at'       => $delivered_at_str,
-			'remaining_seconds'  => $remaining_secs,
-			'remaining_text'     => "{$hours_left}h {$mins_left}m remaining",
+			'remaining_seconds'  => $is_code_override ? 86400 : $remaining_secs,
+			'remaining_text'     => $is_code_override ? 'Warranty Code Applied' : "{$hours_left}h {$mins_left}m remaining",
 			'expires_at'         => date( 'Y-m-d H:i:s', $delivered_ts + self::WARRANTY_WINDOW_SECS ),
 			'shipping_address'   => $shipping_address,
 			'eligible_items'     => $eligible_items,
 			'excluded_items'     => $excluded_items,
-		], 200 );
+		];
+
+		if ( $is_code_override ) {
+			$res_payload['warranty_code_applied'] = true;
+			$res_payload['applied_code']          = strtoupper( $warranty_code );
+		}
+
+		return new \WP_REST_Response( $res_payload, 200 );
 	}
 
 	/**
 	 * Check warranty eligibility for a Shopee order
 	 */
-	public static function check_shopee_eligibility( array $ord, string $verification = '', string $query_ref = '' ): \WP_REST_Response {
+	public static function check_shopee_eligibility( array $ord, string $verification = '', string $query_ref = '', string $warranty_code = '' ): \WP_REST_Response {
 		$sn = $ord['order_sn'] ?? $query_ref;
 
 		// 1. Check existing claim
@@ -699,7 +835,15 @@ class Exacoat_Warranty_Manager {
 		$elapsed_secs = max( 0, $current_ts - $delivered_ts );
 		$remaining_secs = self::WARRANTY_WINDOW_SECS - $elapsed_secs;
 
-		if ( $remaining_secs <= 0 ) {
+		$is_code_override = false;
+		if ( ! empty( $warranty_code ) ) {
+			$code_val = self::validate_warranty_code( $warranty_code, $sn );
+			if ( ! empty( $code_val['valid'] ) ) {
+				$is_code_override = true;
+			}
+		}
+
+		if ( $remaining_secs <= 0 && ! $is_code_override ) {
 			$delivered_display = date( 'd M Y, H:i', $delivered_ts );
 			return new \WP_REST_Response( [
 				'success'        => false,
@@ -735,7 +879,7 @@ class Exacoat_Warranty_Manager {
 		$hours_left = floor( $remaining_secs / 3600 );
 		$mins_left  = floor( ( $remaining_secs % 3600 ) / 60 );
 
-		return new \WP_REST_Response( [
+		$res_payload = [
 			'success'            => true,
 			'eligible'           => true,
 			'is_marketplace'     => true,
@@ -744,8 +888,8 @@ class Exacoat_Warranty_Manager {
 			'order_number'       => $sn,
 			'tracking_number'    => $ord['tracking_number'] ?? '',
 			'delivered_at'       => $delivered_at_str,
-			'remaining_seconds'  => $remaining_secs,
-			'remaining_text'     => "{$hours_left}h {$mins_left}m remaining",
+			'remaining_seconds'  => $is_code_override ? 86400 : $remaining_secs,
+			'remaining_text'     => $is_code_override ? 'Warranty Code Applied' : "{$hours_left}h {$mins_left}m remaining",
 			'expires_at'         => date( 'Y-m-d H:i:s', $delivered_ts + self::WARRANTY_WINDOW_SECS ),
 			'buyer_note'         => $ord['buyer_note'] ?? '',
 			'shipping_address'   => [
@@ -760,13 +904,20 @@ class Exacoat_Warranty_Manager {
 			],
 			'eligible_items'     => $eligible_items,
 			'excluded_items'     => [],
-		], 200 );
+		];
+
+		if ( $is_code_override ) {
+			$res_payload['warranty_code_applied'] = true;
+			$res_payload['applied_code']          = strtoupper( $warranty_code );
+		}
+
+		return new \WP_REST_Response( $res_payload, 200 );
 	}
 
 	/**
 	 * Check warranty eligibility for a TikTok Shop order
 	 */
-	public static function check_tiktok_eligibility( array $ord, string $verification = '', string $query_ref = '' ): \WP_REST_Response {
+	public static function check_tiktok_eligibility( array $ord, string $verification = '', string $query_ref = '', string $warranty_code = '' ): \WP_REST_Response {
 		$order_id = $ord['order_id'] ?? ( $ord['order_sn'] ?? $query_ref );
 
 		// 1. Check existing claim
@@ -836,7 +987,15 @@ class Exacoat_Warranty_Manager {
 		$elapsed_secs = max( 0, $current_ts - $delivered_ts );
 		$remaining_secs = self::WARRANTY_WINDOW_SECS - $elapsed_secs;
 
-		if ( $remaining_secs <= 0 ) {
+		$is_code_override = false;
+		if ( ! empty( $warranty_code ) ) {
+			$code_val = self::validate_warranty_code( $warranty_code, $order_id );
+			if ( ! empty( $code_val['valid'] ) ) {
+				$is_code_override = true;
+			}
+		}
+
+		if ( $remaining_secs <= 0 && ! $is_code_override ) {
 			$delivered_display = date( 'd M Y, H:i', $delivered_ts );
 			return new \WP_REST_Response( [
 				'success'        => false,
@@ -873,7 +1032,7 @@ class Exacoat_Warranty_Manager {
 		$hours_left = floor( $remaining_secs / 3600 );
 		$mins_left  = floor( ( $remaining_secs % 3600 ) / 60 );
 
-		return new \WP_REST_Response( [
+		$res_payload = [
 			'success'            => true,
 			'eligible'           => true,
 			'is_marketplace'     => true,
@@ -882,8 +1041,8 @@ class Exacoat_Warranty_Manager {
 			'order_number'       => $order_id,
 			'tracking_number'    => $ord['tracking_number'] ?? '',
 			'delivered_at'       => $delivered_at_str,
-			'remaining_seconds'  => $remaining_secs,
-			'remaining_text'     => "{$hours_left}h {$mins_left}m remaining",
+			'remaining_seconds'  => $is_code_override ? 86400 : $remaining_secs,
+			'remaining_text'     => $is_code_override ? 'Warranty Code Applied' : "{$hours_left}h {$mins_left}m remaining",
 			'expires_at'         => date( 'Y-m-d H:i:s', $delivered_ts + self::WARRANTY_WINDOW_SECS ),
 			'buyer_note'         => $ord['buyer_note'] ?? ( $ord['buyer_message'] ?? '' ),
 			'shipping_address'   => [
@@ -898,7 +1057,14 @@ class Exacoat_Warranty_Manager {
 			],
 			'eligible_items'     => $eligible_items,
 			'excluded_items'     => [],
-		], 200 );
+		];
+
+		if ( $is_code_override ) {
+			$res_payload['warranty_code_applied'] = true;
+			$res_payload['applied_code']          = strtoupper( $warranty_code );
+		}
+
+		return new \WP_REST_Response( $res_payload, 200 );
 	}
 
 	/**
@@ -1334,6 +1500,13 @@ class Exacoat_Warranty_Manager {
 			], 404 );
 		}
 
+		if ( self::is_store_pickup_order( $parent_order ) ) {
+			return new \WP_REST_Response( [
+				'success' => false,
+				'message' => 'Orders with Store Pickup (Summarecon Bekasi) are installed on-site by our technician and are not eligible for self-installation warranty claims.',
+			], 400 );
+		}
+
 		if ( 'yes' === $parent_order->get_meta( '_has_warranty_claim' ) || 'yes' === $parent_order->get_meta( '_has_redeem_claim' ) || ! empty( $parent_order->get_meta( '_warranty_replacement_order_id' ) ) || ! empty( $parent_order->get_meta( '_redeem_replacement_order_id' ) ) ) {
 			return new \WP_REST_Response( [
 				'success' => false,
@@ -1350,6 +1523,7 @@ class Exacoat_Warranty_Manager {
 		$courier_id      = sanitize_text_field( $request->get_param( 'courier_id' ) ?: 'jne_reg' );
 		$courier_label   = sanitize_text_field( $request->get_param( 'courier_label' ) ?: 'JNE Regular' );
 		$shipping_cost   = max( 0, floatval( $request->get_param( 'shipping_cost' ) ?: 10000 ) );
+		$warranty_code   = sanitize_text_field( $request->get_param( 'warranty_code' ) ?: '' );
 
 		if ( empty( $item_ids ) ) {
 			return new \WP_REST_Response( [
@@ -1468,11 +1642,22 @@ class Exacoat_Warranty_Manager {
 			if ( ! empty( $selected_parts ) ) {
 				$replacement_order->update_meta_data( '_rma_selected_parts', $selected_parts );
 			}
+			if ( ! empty( $warranty_code ) ) {
+				$clean_code = strtoupper( trim( $warranty_code ) );
+				self::consume_warranty_code( $clean_code, $rep_id, (string) $parent_order_id );
+				$replacement_order->update_meta_data( '_used_warranty_code', $clean_code );
+				$replacement_order->add_order_note( sprintf(
+					'[Warranty Extension Code Applied] Special code %s was used to override the 48-hour delivery window.',
+					esc_html( $clean_code )
+				), false );
+			}
 			$replacement_order->save();
 
 			// Mark parent order as claimed
 			$parent_order->update_meta_data( '_has_warranty_claim', 'yes' );
+			$parent_order->update_meta_data( '_is_warranty_claim', 'yes' );
 			$parent_order->update_meta_data( '_warranty_replacement_order_id', $rep_id );
+			$parent_order->update_meta_data( '_warranty_claim_status', 'pending_review' );
 			$parent_order->add_order_note( sprintf(
 				'Installation Warranty replacement claimed. Replacement Order #%d created with courier %s (Rp %s). Proof video recorded.',
 				$rep_id,
@@ -1511,10 +1696,11 @@ class Exacoat_Warranty_Manager {
 	 * Automatically deletes video proof file from disk on either decision!
 	 */
 	public static function rest_review_claim( \WP_REST_Request $request ): \WP_REST_Response {
-		$order_id   = absint( $request->get_param( 'order_id' ) );
-		$action     = sanitize_text_field( $request->get_param( 'action' ) );
-		$reason     = sanitize_textarea_field( $request->get_param( 'reason' ) ?: '' );
-		$admin_name = sanitize_text_field( $request->get_param( 'admin_name' ) ?: 'Operations Manager' );
+		$order_id        = absint( $request->get_param( 'order_id' ) );
+		$action          = sanitize_text_field( $request->get_param( 'action' ) );
+		$reason          = sanitize_textarea_field( $request->get_param( 'reason' ) ?: '' );
+		$admin_name      = sanitize_text_field( $request->get_param( 'admin_name' ) ?: 'Operations Manager' );
+		$allow_resubmit  = (bool) $request->get_param( 'allow_resubmit' );
 
 		$order = wc_get_order( $order_id );
 		if ( ! $order ) {
@@ -1532,13 +1718,20 @@ class Exacoat_Warranty_Manager {
 			], 400 );
 		}
 
-		$video_path = $order->get_meta( '_rma_video_file_path' );
-		$video_url  = $order->get_meta( '_rma_video_proof_url' );
+		$video_path   = $order->get_meta( '_rma_video_file_path' );
+		$video_url    = $order->get_meta( '_rma_video_proof_url' );
+		$parent_id    = $order->get_meta( '_rma_original_invoice' );
+		$parent_order = $parent_id ? wc_get_order( $parent_id ) : null;
 
 		if ( 'approve' === $action ) {
 			$order->update_meta_data( '_rma_status', 'approved' );
 			$order->update_meta_data( '_rma_reviewed_by', $admin_name );
 			$order->update_meta_data( '_rma_reviewed_at', current_time( 'mysql' ) );
+
+			if ( $parent_order ) {
+				$parent_order->update_meta_data( '_warranty_claim_status', 'approved' );
+				$parent_order->save();
+			}
 
 			if ( 'Redeem' === $order_type || $order->is_paid() || in_array( $order->get_status(), [ 'processing', 'on-hold' ], true ) ) {
 				$order->set_status( 'processing', sprintf( '%s claim approved by %s. Moving to production.', $order_type, $admin_name ) );
@@ -1552,6 +1745,19 @@ class Exacoat_Warranty_Manager {
 			$order->update_meta_data( '_rma_reviewed_by', $admin_name );
 			$order->update_meta_data( '_rma_reviewed_at', current_time( 'mysql' ) );
 			$order->set_status( 'cancelled', sprintf( '%s claim rejected by %s. Reason: %s', $order_type, $admin_name, $reason ?: 'Does not meet warranty criteria' ) );
+
+			if ( $parent_order ) {
+				if ( $allow_resubmit ) {
+					$parent_order->delete_meta_data( '_has_warranty_claim' );
+					$parent_order->delete_meta_data( '_is_warranty_claim' );
+					$parent_order->delete_meta_data( '_warranty_replacement_order_id' );
+					$parent_order->update_meta_data( '_warranty_claim_status', 'resubmit_allowed' );
+					$parent_order->add_order_note( sprintf( 'Warranty claim on replacement #%d rejected by %s. Re-submission on website unlocked.', $order_id, $admin_name ) );
+				} else {
+					$parent_order->update_meta_data( '_warranty_claim_status', 'rejected' );
+				}
+				$parent_order->save();
+			}
 		} else {
 			return new \WP_REST_Response( [
 				'success' => false,
@@ -1574,6 +1780,97 @@ class Exacoat_Warranty_Manager {
 			'video_deleted' => $deleted,
 			'message'       => sprintf( '%s claim successfully %sd. Proof video has been deleted from server.', $order_type, $action ),
 		], 200 );
+	}
+
+	/**
+	 * Admin / Manager: Send clarification email to customer regarding proof video
+	 */
+	public static function rest_send_clarification_email( \WP_REST_Request $request ): \WP_REST_Response {
+		$order_id        = absint( $request->get_param( 'order_id' ) );
+		$recipient_email = sanitize_email( $request->get_param( 'recipient_email' ) );
+		$recipient_name  = sanitize_text_field( $request->get_param( 'recipient_name' ) ?: 'Customer' );
+		$subject         = sanitize_text_field( $request->get_param( 'subject' ) ?: 'Exacoat Warranty Video Proof Clarification' );
+		$message_text    = trim( (string) $request->get_param( 'message_text' ) );
+		$admin_name      = sanitize_text_field( $request->get_param( 'admin_name' ) ?: 'Customer Support' );
+
+		if ( empty( $recipient_email ) || ! is_email( $recipient_email ) ) {
+			return new \WP_REST_Response( [
+				'success' => false,
+				'message' => 'Valid recipient email address is required.',
+			], 400 );
+		}
+
+		if ( empty( $message_text ) ) {
+			return new \WP_REST_Response( [
+				'success' => false,
+				'message' => 'Message text cannot be empty.',
+			], 400 );
+		}
+
+		$order = wc_get_order( $order_id );
+
+		// Format clean HTML email
+		$html_body = nl2br( esc_html( $message_text ) );
+		$styled_html = '
+		<div style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px; color: #18181b; background-color: #ffffff; border-radius: 12px; border: 1px solid #e4e4e7;">
+			<div style="margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid #f3aa18;">
+				<h2 style="margin: 0; color: #18181b; font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">EXACOAT</h2>
+				<p style="margin: 4px 0 0; color: #71717a; font-size: 13px; font-weight: 500;">Customer Support &amp; Quality Control</p>
+			</div>
+			<div style="font-size: 14px; line-height: 1.65; color: #27272a;">
+				' . $html_body . '
+			</div>
+			<div style="margin-top: 32px; padding-top: 16px; border-top: 1px solid #e4e4e7; font-size: 12px; line-height: 1.5; color: #a1a1aa;">
+				<p style="margin: 0;">Email ini dikirim oleh tim Support Exacoat terkait pengajuan garansi Anda. Anda dapat membalas email ini secara langsung dengan melampirkan video bukti yang sesuai.</p>
+			</div>
+		</div>';
+
+		$sent = false;
+		if ( class_exists( 'Exacoat_Email_Engine' ) ) {
+			$email_res = Exacoat_Email_Engine::send_email(
+				'warranty_clarification',
+				$recipient_email,
+				$recipient_name,
+				[
+					'subject'  => $subject,
+					'html'     => $styled_html,
+					'htmlbody' => $styled_html,
+				]
+			);
+			$sent = ! empty( $email_res['success'] );
+		}
+
+		if ( ! $sent ) {
+			$headers = [ 'Content-Type: text/html; charset=UTF-8' ];
+			$sent = wp_mail( $recipient_email, $subject, $styled_html, $headers );
+		}
+
+		if ( $order ) {
+			$order->add_order_note( sprintf(
+				'Warranty clarification email sent to %s (%s) by %s. Subject: "%s"',
+				$recipient_name,
+				$recipient_email,
+				$admin_name,
+				$subject
+			) );
+
+			$parent_id = $order->get_meta( '_rma_original_invoice' );
+			$parent_order = $parent_id ? wc_get_order( $parent_id ) : null;
+			if ( $parent_order ) {
+				$parent_order->add_order_note( sprintf(
+					'Warranty clarification email sent to %s (%s) by %s regarding replacement #%d.',
+					$recipient_name,
+					$recipient_email,
+					$admin_name,
+					$order_id
+				) );
+			}
+		}
+
+		return new \WP_REST_Response( [
+			'success' => $sent,
+			'message' => $sent ? 'Clarification email successfully sent to customer.' : 'Failed to deliver email through mail service.',
+		], $sent ? 200 : 500 );
 	}
 
 	/**
@@ -1639,6 +1936,7 @@ class Exacoat_Warranty_Manager {
 			'customer_phone'          => $order->get_billing_phone(),
 			'customer_email'          => $order->get_billing_email(),
 			'shipping_address'        => $order->get_formatted_shipping_address(),
+			'used_warranty_code'      => (string) ( $order->get_meta( '_used_warranty_code' ) ?: '' ),
 		], 200 );
 	}
 
@@ -2467,6 +2765,26 @@ class Exacoat_Warranty_Manager {
 			], 200 );
 		}
 
+		// Check if invoice belongs to a Store Pickup (Summarecon Bekasi) order
+		$order_for_pickup_check = null;
+		if ( is_numeric( $clean_invoice ) ) {
+			$order_for_pickup_check = wc_get_order( (int) $clean_invoice );
+		}
+		if ( ! $order_for_pickup_check && function_exists( 'wc_get_order_id_by_order_number' ) ) {
+			$found_id = wc_get_order_id_by_order_number( $clean_invoice );
+			if ( $found_id ) {
+				$order_for_pickup_check = wc_get_order( $found_id );
+			}
+		}
+		if ( $order_for_pickup_check && self::is_store_pickup_order( $order_for_pickup_check ) ) {
+			return new \WP_REST_Response( [
+				'success'   => true,
+				'available' => false,
+				'reason'    => 'store_pickup',
+				'message'   => 'Orders with Store Pickup (Summarecon Bekasi) are installed on-site by our technician and are not eligible for self-installation warranty claims.',
+			], 200 );
+		}
+
 		return new \WP_REST_Response( [
 			'success'   => true,
 			'available' => true,
@@ -2701,9 +3019,10 @@ class Exacoat_Warranty_Manager {
 				'waived_shipping'  => $waived_shipping,
 				'video_url'        => $video_url,
 				'video_deleted'    => $video_deleted,
-				'reviewed_by'      => $reviewed_by,
-				'reviewed_at'      => $reviewed_at,
-				'items'            => $items,
+				'reviewed_by'        => $reviewed_by,
+				'reviewed_at'        => $reviewed_at,
+				'items'              => $items,
+				'used_warranty_code' => (string) ( $order->get_meta( '_used_warranty_code' ) ?: '' ),
 			];
 		}
 
@@ -2953,6 +3272,332 @@ class Exacoat_Warranty_Manager {
 			return '62' . $digits;
 		}
 		return $digits;
+	}
+
+	// ==========================================
+	// Warranty Extension Codes Management
+	// ==========================================
+
+	/**
+	 * Retrieve all stored warranty codes with dynamically evaluated status.
+	 *
+	 * @return array
+	 */
+	public static function get_all_warranty_codes(): array {
+		$codes = get_option( self::OPTION_WARRANTY_CODES, [] );
+		if ( ! is_array( $codes ) ) {
+			$codes = [];
+		}
+
+		$current_ts = current_time( 'timestamp' );
+		foreach ( $codes as &$c ) {
+			if ( 'active' === ( $c['status'] ?? '' ) ) {
+				$exp_ts = ! empty( $c['expires_at'] ) ? strtotime( $c['expires_at'] ) : 0;
+				if ( $exp_ts > 0 && $exp_ts < $current_ts ) {
+					$c['status'] = 'expired';
+				}
+			}
+		}
+		unset( $c );
+
+		return $codes;
+	}
+
+	/**
+	 * Find warranty code entry by code string.
+	 *
+	 * @param string $code
+	 * @return array|null
+	 */
+	public static function find_warranty_code( string $code ): ?array {
+		$clean = strtoupper( trim( $code ) );
+		if ( empty( $clean ) ) {
+			return null;
+		}
+
+		$codes = self::get_all_warranty_codes();
+		foreach ( $codes as $c ) {
+			if ( strtoupper( trim( $c['code'] ?? '' ) ) === $clean ) {
+				return $c;
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * Validate warranty code against expiration, usage, and optional order binding.
+	 *
+	 * @param string $code
+	 * @param string $target_order_id
+	 * @return array
+	 */
+	public static function validate_warranty_code( string $code, string $target_order_id = '' ): array {
+		$clean = strtoupper( trim( $code ) );
+		if ( empty( $clean ) ) {
+			return [
+				'valid'   => false,
+				'reason'  => 'empty_code',
+				'message' => 'Warranty code is required.',
+			];
+		}
+
+		$code_data = self::find_warranty_code( $clean );
+		if ( ! $code_data ) {
+			return [
+				'valid'   => false,
+				'reason'  => 'not_found',
+				'message' => 'Warranty code was not found.',
+			];
+		}
+
+		if ( 'used' === ( $code_data['status'] ?? '' ) ) {
+			return [
+				'valid'   => false,
+				'reason'  => 'already_used',
+				'message' => 'This warranty code has already been used.',
+			];
+		}
+
+		if ( 'revoked' === ( $code_data['status'] ?? '' ) ) {
+			return [
+				'valid'   => false,
+				'reason'  => 'revoked',
+				'message' => 'This warranty code has been revoked.',
+			];
+		}
+
+		$exp_ts = ! empty( $code_data['expires_at'] ) ? strtotime( $code_data['expires_at'] ) : 0;
+		if ( $exp_ts > 0 && $exp_ts < current_time( 'timestamp' ) ) {
+			return [
+				'valid'   => false,
+				'reason'  => 'expired',
+				'message' => 'This warranty code has expired.',
+			];
+		}
+
+		// Optional Order Binding Check
+		$bound_order = trim( (string) ( $code_data['bound_order_id'] ?? '' ) );
+		if ( ! empty( $bound_order ) && ! empty( $target_order_id ) ) {
+			$clean_bound  = ltrim( strtolower( $bound_order ), '#' );
+			$clean_target = ltrim( strtolower( $target_order_id ), '#' );
+			if ( $clean_bound !== $clean_target ) {
+				return [
+					'valid'   => false,
+					'reason'  => 'order_mismatch',
+					'message' => 'This warranty code is assigned to a different order number.',
+				];
+			}
+		}
+
+		return [
+			'valid'     => true,
+			'reason'    => 'valid',
+			'message'   => 'Warranty code is valid.',
+			'code_data' => $code_data,
+		];
+	}
+
+	/**
+	 * Mark warranty code as used upon successful claim submission.
+	 *
+	 * @param string $code
+	 * @param int|string $replacement_order_id
+	 * @param string $target_order_id
+	 * @return bool
+	 */
+	public static function consume_warranty_code( string $code, $replacement_order_id, string $target_order_id = '' ): bool {
+		$clean = strtoupper( trim( $code ) );
+		if ( empty( $clean ) ) {
+			return false;
+		}
+
+		$codes = get_option( self::OPTION_WARRANTY_CODES, [] );
+		if ( ! is_array( $codes ) ) {
+			$codes = [];
+		}
+
+		$updated = false;
+		foreach ( $codes as &$c ) {
+			if ( strtoupper( trim( $c['code'] ?? '' ) ) === $clean ) {
+				$c['status']        = 'used';
+				$c['used_in_order'] = $replacement_order_id;
+				$c['used_at']       = current_time( 'mysql' );
+				if ( ! empty( $target_order_id ) && empty( $c['bound_order_id'] ) ) {
+					$c['bound_order_id'] = $target_order_id;
+				}
+				$updated = true;
+				break;
+			}
+		}
+		unset( $c );
+
+		if ( $updated ) {
+			update_option( self::OPTION_WARRANTY_CODES, $codes, false );
+		}
+
+		return $updated;
+	}
+
+	/**
+	 * REST: Get all warranty codes (Admin)
+	 */
+	public static function rest_get_warranty_codes( \WP_REST_Request $request ): \WP_REST_Response {
+		$codes = self::get_all_warranty_codes();
+		usort( $codes, function( $a, $b ) {
+			return strcmp( $b['created_at'] ?? '', $a['created_at'] ?? '' );
+		} );
+
+		return new \WP_REST_Response( [
+			'success' => true,
+			'codes'   => $codes,
+		], 200 );
+	}
+
+	/**
+	 * REST: Generate a new warranty code (Admin)
+	 */
+	public static function rest_generate_warranty_code( \WP_REST_Request $request ): \WP_REST_Response {
+		$duration_hours = max( 1, intval( $request->get_param( 'duration_hours' ) ?: 24 ) );
+		$bound_order_id = sanitize_text_field( $request->get_param( 'bound_order_id' ) ?: '' );
+		$note           = sanitize_textarea_field( $request->get_param( 'note' ) ?: '' );
+
+		$current_user = wp_get_current_user();
+		$created_by   = $current_user && $current_user->ID ? $current_user->display_name : 'Operations Manager';
+
+		// Generate random 6-character alphanumeric string avoiding ambiguous letters
+		$alphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+		$random_str = '';
+		for ( $i = 0; $i < 6; $i++ ) {
+			$random_str .= $alphabet[ wp_rand( 0, strlen( $alphabet ) - 1 ) ];
+		}
+		$code = 'WARR-' . $random_str;
+
+		$now_ts     = current_time( 'timestamp' );
+		$expires_ts = $now_ts + ( $duration_hours * 3600 );
+
+		$new_entry = [
+			'code'           => $code,
+			'created_at'     => current_time( 'mysql' ),
+			'expires_at'     => date( 'Y-m-d H:i:s', $expires_ts ),
+			'duration_hours' => $duration_hours,
+			'bound_order_id' => $bound_order_id,
+			'note'           => $note,
+			'created_by'     => $created_by,
+			'status'         => 'active',
+			'used_in_order'  => null,
+			'used_at'        => null,
+		];
+
+		$codes = get_option( self::OPTION_WARRANTY_CODES, [] );
+		if ( ! is_array( $codes ) ) {
+			$codes = [];
+		}
+		$codes[] = $new_entry;
+		update_option( self::OPTION_WARRANTY_CODES, $codes, false );
+
+		return new \WP_REST_Response( [
+			'success' => true,
+			'code'    => $new_entry,
+		], 200 );
+	}
+
+	/**
+	 * REST: Revoke a warranty code (Admin)
+	 */
+	public static function rest_revoke_warranty_code( \WP_REST_Request $request ): \WP_REST_Response {
+		$code = sanitize_text_field( $request->get_param( 'code' ) ?: '' );
+		$clean = strtoupper( trim( $code ) );
+
+		if ( empty( $clean ) ) {
+			return new \WP_REST_Response( [
+				'success' => false,
+				'message' => 'Code parameter required.',
+			], 400 );
+		}
+
+		$codes = get_option( self::OPTION_WARRANTY_CODES, [] );
+		if ( ! is_array( $codes ) ) {
+			$codes = [];
+		}
+
+		$found = false;
+		foreach ( $codes as &$c ) {
+			if ( strtoupper( trim( $c['code'] ?? '' ) ) === $clean ) {
+				$c['status'] = 'revoked';
+				$found = true;
+				break;
+			}
+		}
+		unset( $c );
+
+		if ( $found ) {
+			update_option( self::OPTION_WARRANTY_CODES, $codes, false );
+			return new \WP_REST_Response( [ 'success' => true ], 200 );
+		}
+
+		return new \WP_REST_Response( [
+			'success' => false,
+			'message' => 'Warranty code not found.',
+		], 404 );
+	}
+
+	/**
+	 * REST: Delete a warranty code (Admin)
+	 */
+	public static function rest_delete_warranty_code( \WP_REST_Request $request ): \WP_REST_Response {
+		$code = sanitize_text_field( $request->get_param( 'code' ) ?: '' );
+		$clean = strtoupper( trim( $code ) );
+
+		if ( empty( $clean ) ) {
+			return new \WP_REST_Response( [
+				'success' => false,
+				'message' => 'Code parameter required.',
+			], 400 );
+		}
+
+		$codes = get_option( self::OPTION_WARRANTY_CODES, [] );
+		if ( ! is_array( $codes ) ) {
+			$codes = [];
+		}
+
+		$filtered = array_values( array_filter( $codes, function( $c ) use ( $clean ) {
+			return strtoupper( trim( $c['code'] ?? '' ) ) !== $clean;
+		} ) );
+
+		update_option( self::OPTION_WARRANTY_CODES, $filtered, false );
+
+		return new \WP_REST_Response( [ 'success' => true ], 200 );
+	}
+
+	/**
+	 * REST: Consume a warranty code (Admin / Internal)
+	 */
+	public static function rest_consume_warranty_code( \WP_REST_Request $request ): \WP_REST_Response {
+		$code     = sanitize_text_field( $request->get_param( 'code' ) ?: '' );
+		$rep_id   = sanitize_text_field( $request->get_param( 'replacement_order_id' ) ?: '' );
+		$bound_id = sanitize_text_field( $request->get_param( 'bound_order_id' ) ?: '' );
+
+		$consumed = self::consume_warranty_code( $code, $rep_id, $bound_id );
+
+		return new \WP_REST_Response( [
+			'success' => $consumed,
+			'message' => $consumed ? 'Warranty code consumed successfully.' : 'Failed to consume code.',
+		], $consumed ? 200 : 400 );
+	}
+
+	/**
+	 * REST: Verify a warranty code (Public)
+	 */
+	public static function rest_verify_warranty_code( \WP_REST_Request $request ): \WP_REST_Response {
+		$code     = sanitize_text_field( $request->get_param( 'code' ) ?: '' );
+		$order_id = sanitize_text_field( $request->get_param( 'order_id' ) ?: '' );
+
+		$res = self::validate_warranty_code( $code, $order_id );
+
+		return new \WP_REST_Response( array_merge( [
+			'success' => $res['valid'],
+		], $res ), 200 );
 	}
 }
 

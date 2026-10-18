@@ -17,6 +17,7 @@ import { Order } from '../types';
 import { OrderDetailDrawer } from '../components/orders/OrderDetailDrawer';
 import { WarrantyReviewModal } from '../components/orders/WarrantyReviewModal';
 import { ManualWarrantyModal } from '../components/orders/ManualWarrantyModal';
+import { WarrantyCodesModal } from '../components/orders/WarrantyCodesModal';
 import { formatCurrency } from '../lib/formatters';
 import { formatOrderNumber } from '../lib/orderUtils';
 import {
@@ -41,6 +42,7 @@ import {
   Check,
   CheckCheck,
   BarChart2,
+  KeyRound,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -104,6 +106,7 @@ export const RmaClaimsPage: React.FC = () => {
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [manualClaimType, setManualClaimType] = useState<'Warranty' | 'Redeem'>('Warranty');
+  const [isCodesModalOpen, setIsCodesModalOpen] = useState(false);
 
   const loadClaims = useCallback(async () => {
     setIsLoading(true);
@@ -319,14 +322,24 @@ export const RmaClaimsPage: React.FC = () => {
         actions={
           <div className="flex items-center gap-2">
             {activeTab === 'warranty' && (
-              <button
-                type="button"
-                onClick={() => handleOpenManualClaim('Warranty')}
-                className="px-3.5 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
-              >
-                <Plus className="w-3.5 h-3.5 text-emerald-400" />
-                <span>New Warranty Claim</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => setIsCodesModalOpen(true)}
+                  className="px-3.5 py-2 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                >
+                  <KeyRound className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Warranty Codes</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleOpenManualClaim('Warranty')}
+                  className="px-3.5 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                >
+                  <Plus className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>New Warranty Claim</span>
+                </button>
+              </>
             )}
             {activeTab === 'redeem' && (
               <button
@@ -752,6 +765,14 @@ export const RmaClaimsPage: React.FC = () => {
                               <span className="text-[10px] font-mono text-zinc-500 dark:text-neutral-400">
                                 {claim.channel || 'Web'}
                               </span>
+                              {claim.used_warranty_code && (
+                                <span
+                                  className="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-purple-500/15 text-purple-600 dark:text-purple-300 border border-purple-500/30"
+                                  title={`Special Warranty Extension Code: ${claim.used_warranty_code}`}
+                                >
+                                  {claim.used_warranty_code}
+                                </span>
+                              )}
                             </div>
                           </td>
 
@@ -1372,6 +1393,15 @@ export const RmaClaimsPage: React.FC = () => {
         onClose={() => setIsManualModalOpen(false)}
         initialClaimType={manualClaimType}
         onSuccess={() => loadClaims()}
+      />
+
+      {/* Warranty Extension Codes Modal */}
+      <WarrantyCodesModal
+        isOpen={isCodesModalOpen}
+        onClose={() => setIsCodesModalOpen(false)}
+        onSelectOrder={(orderId) => {
+          handleOpenOrder(orderId);
+        }}
       />
     </div>
   );

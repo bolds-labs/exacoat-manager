@@ -20,6 +20,7 @@ import {
   Package,
   Truck,
   ShieldCheck,
+  ShieldAlert,
   RotateCcw,
   Printer,
   Copy,
@@ -1039,13 +1040,18 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                           {getOrderRma(order)?.order_type === 'Redeem' && (
                             <span className="inline-flex items-center gap-0.5 text-[8px] font-mono font-bold text-amber-500 dark:text-amber-400 bg-amber-500/15 border border-amber-500/30 px-1 py-0.5 rounded shadow-xs">
                               <RotateCcw className="w-2.5 h-2.5 text-amber-400" />
-                              REDEEM
+                              {getOrderRma(order)?.is_parent_order ? 'REDEEM (CLAIMED)' : 'REDEEM'}
                             </span>
                           )}
                           {getOrderRma(order)?.order_type === 'Warranty' && (
-                            <span className="inline-flex items-center gap-0.5 text-[8px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-1 py-0.5 rounded shadow-xs">
+                            <span className={clsx(
+                              "inline-flex items-center gap-0.5 text-[8px] font-mono font-semibold px-1 py-0.5 rounded shadow-xs border",
+                              getOrderRma(order)?.is_parent_order
+                                ? "text-amber-500 dark:text-amber-400 bg-amber-500/15 border-amber-500/30"
+                                : "text-emerald-600 dark:text-emerald-400 bg-emerald-500/15 border-emerald-500/30"
+                            )}>
                               <ShieldCheck className="w-2.5 h-2.5" />
-                              WARRANTY
+                              {getOrderRma(order)?.is_parent_order ? 'WARRANTY (CLAIMED)' : 'WARRANTY'}
                             </span>
                           )}
                         </div>
@@ -1102,6 +1108,15 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                             </span>
                           ) : (
                             <Badge type="orderStatus" value={order.status} size="xs" />
+                          )}
+                          {(getOrderRma(order)?.status === 'pending_review' || order.warranty_claim_status === 'pending_review') && (
+                            <span
+                              className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-amber-500 dark:text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded border border-amber-500/30 whitespace-nowrap shadow-xs"
+                              title="Warranty claim proof pending review"
+                            >
+                              <ShieldAlert className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+                              PENDING REVIEW
+                            </span>
                           )}
                           {isPickup && (
                             <span className="inline-flex items-center text-[9px] font-mono font-semibold text-[#f3aa18] bg-[#f3aa18]/10 px-1.5 py-0.5 rounded border border-[#f3aa18]/20 whitespace-nowrap">
@@ -1239,30 +1254,43 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                       {getOrderRma(order)?.order_type === 'Redeem' && (
                         <span className="inline-flex items-center gap-0.5 text-[8px] font-mono font-bold text-amber-500 dark:text-amber-400 bg-amber-500/20 border border-amber-500/40 px-1 py-0.2 rounded">
                           <RotateCcw className="w-2 h-2 text-amber-400" />
-                          REDEEM
+                          {getOrderRma(order)?.is_parent_order ? 'REDEEM (CLAIMED)' : 'REDEEM'}
                         </span>
                       )}
                       {getOrderRma(order)?.order_type === 'Warranty' && (
-                        <span className="inline-flex items-center gap-0.5 text-[8px] font-mono font-bold text-sky-500 dark:text-sky-400 bg-sky-500/20 border border-sky-500/40 px-1 py-0.2 rounded">
-                          <ShieldCheck className="w-2 h-2 text-sky-400" />
-                          WARRANTY
+                        <span className={clsx(
+                          "inline-flex items-center gap-0.5 text-[8px] font-mono font-bold px-1 py-0.2 rounded border",
+                          getOrderRma(order)?.is_parent_order
+                            ? "text-amber-500 dark:text-amber-400 bg-amber-500/20 border-amber-500/40"
+                            : "text-sky-500 dark:text-sky-400 bg-sky-500/20 border-sky-500/40"
+                        )}>
+                          <ShieldCheck className="w-2 h-2" />
+                          {getOrderRma(order)?.is_parent_order ? 'WARRANTY (CLAIMED)' : 'WARRANTY'}
                         </span>
                       )}
                       <span className="text-[10px] text-zinc-500 font-mono">
                         {formatDateTime(order.created_at)}
                       </span>
                     </div>
-                    {isCompleted ? (
-                      <span
-                        className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 shadow-xs"
-                        title="Completed"
-                        aria-label="Completed"
-                      >
-                        <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                      </span>
-                    ) : (
-                      <Badge type="orderStatus" value={order.status} size="xs" />
-                    )}
+                    <div className="flex flex-col items-end gap-1">
+                      {isCompleted ? (
+                        <span
+                          className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 shadow-xs"
+                          title="Completed"
+                          aria-label="Completed"
+                        >
+                          <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                        </span>
+                      ) : (
+                        <Badge type="orderStatus" value={order.status} size="xs" />
+                      )}
+                      {(getOrderRma(order)?.status === 'pending_review' || order.warranty_claim_status === 'pending_review') && (
+                        <span className="inline-flex items-center gap-1 text-[8.5px] font-mono font-bold text-amber-500 dark:text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded border border-amber-500/30 whitespace-nowrap shadow-xs">
+                          <ShieldAlert className="w-2 h-2 text-amber-400" />
+                          PENDING REVIEW
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-between text-xs">

@@ -262,16 +262,26 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
   // 3. Check tracking object if already saved on the order with a valid tracking number
   const trackingNumber = String(order.tracking?.tracking_number || order.tracking_number || '').trim();
   const savedCarrierId = String(order.tracking?.carrier_id || order.carrier_id || '').toLowerCase().trim();
-  if (trackingNumber && trackingNumber !== '⚠️' && !trackingNumber.startsWith('field_') && savedCarrierId && PRESET_MAP[savedCarrierId]) {
-    const slTitle = String(order.shipping_lines?.[0]?.method_title || '');
-    const serviceMatch = slTitle.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*[-:]\s*([A-Za-z0-9_\s]+)/i);
-    return {
-      courierId: savedCarrierId,
-      courierName: PRESET_MAP[savedCarrierId],
-      serviceName: serviceMatch ? serviceMatch[1].trim().toUpperCase() : undefined,
-      rawMatch: slTitle || PRESET_MAP[savedCarrierId],
-      isCustom: false,
-    };
+  if (trackingNumber && trackingNumber !== '⚠️' && !trackingNumber.startsWith('field_')) {
+    if (savedCarrierId && PRESET_MAP[savedCarrierId]) {
+      const slTitle = String(order.shipping_lines?.[0]?.method_title || '');
+      const serviceMatch = slTitle.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*[-:]\s*([A-Za-z0-9_\s]+)/i);
+      return {
+        courierId: savedCarrierId,
+        courierName: PRESET_MAP[savedCarrierId],
+        serviceName: serviceMatch ? serviceMatch[1].trim().toUpperCase() : undefined,
+        rawMatch: slTitle || PRESET_MAP[savedCarrierId],
+        isCustom: false,
+      };
+    }
+    const savedCourier = String(order.tracking?.courier || (order as any).shipping_courier_name || '').trim();
+    if (savedCarrierId === 'custom' || (savedCourier && savedCourier !== 'Express Courier' && savedCourier !== 'Standard' && savedCourier !== 'JNE Express' && !PRESET_MAP[savedCourier.toLowerCase()])) {
+      return {
+        courierId: 'custom',
+        courierName: (savedCourier && savedCourier !== 'Express Courier' && savedCourier !== 'Standard') ? savedCourier : 'Custom Courier',
+        isCustom: true,
+      };
+    }
   }
 
   // 4. Gather candidate text sources in prioritized order

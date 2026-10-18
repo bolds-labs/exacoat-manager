@@ -1545,7 +1545,10 @@ function renderAbandonedCartEmail(event: string, data: Record<string, any>): Ren
   const isSecondEmail = event === 'customer_cart_abandoned_2' || String(data.sequence) === '2';
   const custName = escapeHtml(data.customer_first_name || data.display_name || 'there');
   const restoreUrl = escapeHtml(data.restore_url || 'https://exacoat.com/checkout/?restore_cart=mock_cart_token_98234');
-  const unsubscribeUrl = escapeHtml(data.unsubscribe_url || 'https://exacoat.com/cart/?unsubscribe_cart=mock_cart_token_98234');
+  const rawUnsub = (data.unsubscribe_url || '').trim();
+  const unsubscribeUrl = (!rawUnsub || rawUnsub.includes('unsubscribe_url'))
+    ? 'https://exacoat.com/cart/?unsubscribe_cart=mock_cart_token_98234'
+    : escapeHtml(rawUnsub);
 
   const badgeText = escapeHtml(
     data.badge_text || (isSecondEmail ? 'Expiring Soon' : 'Cart Saved')
@@ -1852,6 +1855,81 @@ export function replaceNamePlaceholders(text: string, name?: string | null): str
   });
 }
 
+/**
+ * Normalizes email HTML before dispatching via Acumbamail campaigns.
+ * Replaces any broken or legacy tags like https://{{unsubscribe_url}}/, {{unsubscribe_url}}, etc.
+ * with Acumbamail's official merge tags: *|UNSUBSCRIBE_URL|* and *|BROWSER_VIEW|*.
+ */
+export function normalizeAcumbamailCampaignHtml(html: string): string {
+  if (!html) return '';
+  let normalized = html;
+
+  // Unsubscribe variations:
+  // - https://{{unsubscribe_url}}/
+  // - http://{{unsubscribe_url}}/
+  // - https://{{unsubscribe_url}}
+  // - http://{{unsubscribe_url}}
+  // - {{unsubscribe_url}}
+  // - {unsubscribe_url}
+  // - {{unsubscribe}}
+  // - *|UNSUBSCRIBE|*
+  // - URL-encoded variations: https%3A%2F%2F%7B%7Bunsubscribe_url%7D%7D%2F, %7B%7Bunsubscribe_url%7D%7D
+  normalized = normalized.replace(
+    /(?:https?:\/\/)?(?:%7B%7B|\{\{)\s*(?:unsubscribe_url|unsubscribe)\s*(?:%7D%7D|\}\})\/?/gi,
+    '*|UNSUBSCRIBE_URL|*'
+  );
+  normalized = normalized.replace(
+    /(?:https?:\/\/)?\{\s*(?:unsubscribe_url|unsubscribe)\s*\}\/?/gi,
+    '*|UNSUBSCRIBE_URL|*'
+  );
+  normalized = normalized.replace(/\*\|UNSUBSCRIBE\|\*/gi, '*|UNSUBSCRIBE_URL|*');
+
+  // Webview / View in browser variations:
+  // - https://{{webview_url}}/
+  // - http://{{webview_url}}/
+  // - https://{{webview_url}}
+  // - {{webview_url}}
+  // - {webview_url}
+  // - {{browser_view}}
+  // - *|WEBVIEW|*
+  // - *|WEBVIEW_URL|*
+  normalized = normalized.replace(
+    /(?:https?:\/\/)?(?:%7B%7B|\{\{)\s*(?:webview_url|webview|browser_view)\s*(?:%7D%7D|\}\})\/?/gi,
+    '*|BROWSER_VIEW|*'
+  );
+  normalized = normalized.replace(
+    /(?:https?:\/\/)?\{\s*(?:webview_url|webview|browser_view)\s*\}\/?/gi,
+    '*|BROWSER_VIEW|*'
+  );
+  normalized = normalized.replace(/\*\|(?:WEBVIEW|WEBVIEW_URL)\|\*/gi, '*|BROWSER_VIEW|*');
+
+  return normalized;
+}
+
+/**
+ * Normalizes email HTML for single 1-to-1 or test sends where Acumbamail's campaign
+ * merge tags (*|UNSUBSCRIBE_URL|*, *|BROWSER_VIEW|*) would NOT be replaced because
+ * there is no campaign or subscriber list context.
+ */
+export function normalizeAcumbamailSingleEmailHtml(
+  html: string,
+  fallbackUnsubUrl: string = 'https://exacoat.com/cart/',
+  fallbackWebviewUrl: string = 'https://exacoat.com'
+): string {
+  if (!html) return '';
+  let normalized = html;
+
+  // First normalize legacy variations into canonical tags
+  normalized = normalizeAcumbamailCampaignHtml(normalized);
+
+  // Then replace Acumbamail tags with valid fallback URLs so recipients never see raw tags or broken links
+  normalized = normalized.replace(/\*\|UNSUBSCRIBE_URL\|\*/g, fallbackUnsubUrl);
+  normalized = normalized.replace(/\*\|BROWSER_VIEW\|\*/g, fallbackWebviewUrl);
+
+  return normalized;
+}
+
+
 const DEFAULT_TRUST_CARDS: TrustFeatureCard[] = [
   {
     title: 'Installation Warranty',
@@ -2132,7 +2210,18 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
       </div>`;
   }
 
-  const unsubscribeUrl = escapeHtml(options.unsubscribeUrl || '{{unsubscribe_url}}');
+  const rawUnsub = (options.unsubscribeUrl || '').trim();
+  const isUnsubPlaceholder = !rawUnsub ||
+    /^(?:https?:\/\/)?(?:%7B%7B|\{\{)?\s*unsubscribe(?:_url)?\s*(?:%7D%7D|\}\})?\/?$/i.test(rawUnsub) ||
+    rawUnsub === '*|UNSUBSCRIBE_URL|*' ||
+    rawUnsub === '*|UNSUBSCRIBE|*';
+  const unsubscribeUrl = isUnsubPlaceholder ? '*|UNSUBSCRIBE_URL|*' : escapeHtml(rawUnsub);
+
+  const rawWebview = (options.viewInBrowserUrl || '').trim();
+  const isWebviewPlaceholder = !rawWebview ||
+    /^(?:https?:\/\/)?(?:%7B%7B|\{\{)?\s*(?:webview_url|webview|browser_view)\s*(?:%7D%7D|\}\})?\/?$/i.test(rawWebview) ||
+    rawWebview === '*|BROWSER_VIEW|*';
+  const webviewUrl = isWebviewPlaceholder ? '*|BROWSER_VIEW|*' : escapeHtml(rawWebview);
   const footerNote = options.footerNote ? `<p style="margin:0 0 12px;font-size:13px;line-height:1.6;color:${textBody};text-align:center;">${escapeHtml(options.footerNote)}</p>` : '';
   const brandLogo = isDark ? BRAND_LOGO_WHITE_IMG : BRAND_LOGO_IMG;
 
@@ -2276,7 +2365,7 @@ export function renderMarketingEmailHtml(options: MarketingEmailOptions): Render
                         &copy; 2016-2026 Exacoat
                       </p>
                       <p style="margin:0;font-size:11px;color:#71717a;line-height:1.5;">
-                        <a href="{{webview_url}}" target="_blank" rel="noopener noreferrer" style="color:#a1a1aa;text-decoration:underline;">View in browser</a>
+                        <a href="${webviewUrl}" target="_blank" rel="noopener noreferrer" style="color:#a1a1aa;text-decoration:underline;">View in browser</a>
                         &nbsp;&bull;&nbsp;
                         <a href="${unsubscribeUrl}" target="_blank" rel="noopener noreferrer" style="color:#a1a1aa;text-decoration:underline;">Unsubscribe</a>
                       </p>
@@ -2569,7 +2658,18 @@ export function renderMarketingEmailMjml(options: MarketingEmailOptions): string
       </mj-section>`;
   }
 
-  const unsubscribeUrl = escapeHtml(options.unsubscribeUrl || '{{unsubscribe_url}}');
+  const rawUnsub = (options.unsubscribeUrl || '').trim();
+  const isUnsubPlaceholder = !rawUnsub ||
+    /^(?:https?:\/\/)?(?:%7B%7B|\{\{)?\s*unsubscribe(?:_url)?\s*(?:%7D%7D|\}\})?\/?$/i.test(rawUnsub) ||
+    rawUnsub === '*|UNSUBSCRIBE_URL|*' ||
+    rawUnsub === '*|UNSUBSCRIBE|*';
+  const unsubscribeUrl = isUnsubPlaceholder ? '*|UNSUBSCRIBE_URL|*' : escapeHtml(rawUnsub);
+
+  const rawWebview = (options.viewInBrowserUrl || '').trim();
+  const isWebviewPlaceholder = !rawWebview ||
+    /^(?:https?:\/\/)?(?:%7B%7B|\{\{)?\s*(?:webview_url|webview|browser_view)\s*(?:%7D%7D|\}\})?\/?$/i.test(rawWebview) ||
+    rawWebview === '*|BROWSER_VIEW|*';
+  const webviewUrl = isWebviewPlaceholder ? '*|BROWSER_VIEW|*' : escapeHtml(rawWebview);
   const footerNoteMjml = options.footerNote ? `
           <mj-text align="center" font-size="12.5px" line-height="1.6" color="${textBody}" padding="0 0 12px">
             ${escapeHtml(options.footerNote)}
@@ -2666,7 +2766,7 @@ export function renderMarketingEmailMjml(options: MarketingEmailOptions): string
             &copy; 2016-2026 Exacoat
           </mj-text>
           <mj-text align="center" font-size="11px" color="${textMuted}" padding="6px 0 0">
-            <a href="{{webview_url}}" style="color:${isDark ? '#d4d4d8' : '#71717a'};text-decoration:underline;">View in browser</a> &bull;
+            <a href="${webviewUrl}" style="color:${isDark ? '#d4d4d8' : '#71717a'};text-decoration:underline;">View in browser</a> &bull;
             <a href="${unsubscribeUrl}" style="color:${isDark ? '#d4d4d8' : '#71717a'};text-decoration:underline;">Unsubscribe</a>
           </mj-text>
         </mj-column>

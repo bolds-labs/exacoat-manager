@@ -63,7 +63,15 @@ import {
   AcumbamailList,
   WordPressPluginSettings 
 } from '../../lib/wordpressBridge';
-import { renderMarketingEmailHtml, renderMarketingEmailMjml, replaceNamePlaceholders, MarketingEmailOptions, TrustFeatureCard } from '../../lib/emailRenderer';
+import { 
+  renderMarketingEmailHtml, 
+  renderMarketingEmailMjml, 
+  replaceNamePlaceholders, 
+  normalizeAcumbamailCampaignHtml,
+  normalizeAcumbamailSingleEmailHtml,
+  MarketingEmailOptions, 
+  TrustFeatureCard 
+} from '../../lib/emailRenderer';
 import { compileMjmlToHtml, isMjmlMarkup } from '../../lib/mjmlCompiler';
 
 export type AudienceType = 'subscribers' | 'affiliates' | 'customer';
@@ -400,7 +408,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
       ctaUrl: 'https://exacoat.com/shop',
       primaryCtaColor: 'amber',
       showTrustGrid: true,
-      unsubscribeUrl: '{{unsubscribe_url}}',
+      unsubscribeUrl: '*|UNSUBSCRIBE_URL|*',
     });
   });
   const [compiledHtml, setCompiledHtml] = useState<string>('');
@@ -860,7 +868,7 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
     secondaryCtaUrl: showSecondaryCta ? secondaryCtaUrl : undefined,
     trustCards: customCards.length > 0 ? customCards : undefined,
     showTrustGrid,
-    unsubscribeUrl: '{{unsubscribe_url}}',
+    unsubscribeUrl: '*|UNSUBSCRIBE_URL|*',
     recipientName: previewRecipientName,
   }), [
     emailTheme,
@@ -968,11 +976,16 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
     const testName = 'William';
     const personalizedSubject = replaceNamePlaceholders(`[TEST] ${subject}`, testName);
     const personalizedBody = replaceNamePlaceholders(contentToSend, testName);
+    const cleanBody = normalizeAcumbamailSingleEmailHtml(
+      personalizedBody,
+      'https://exacoat.com/cart/?unsubscribe_cart=test_preview',
+      'https://exacoat.com'
+    );
 
     const res = await sendAcumbamailSingleEmailDirect({
       toEmail: testEmailAddress,
       subject: personalizedSubject,
-      bodyHtml: personalizedBody,
+      bodyHtml: cleanBody,
       fromEmail,
       fromName,
       tokenOverride: settings.acumbamail_token,
@@ -1002,7 +1015,9 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
       }
 
       const acumbaSubject = replaceNamePlaceholders(subject, '*|FNAME|*');
-      const acumbaContent = replaceNamePlaceholders(contentToSend, '*|FNAME|*');
+      const acumbaContent = normalizeAcumbamailCampaignHtml(
+        replaceNamePlaceholders(contentToSend, '*|FNAME|*')
+      );
 
       const res = await sendAcumbamailCampaignDirect({
         name: campaignName,
@@ -1046,11 +1061,16 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
         const creatorFirstName = (aff.first_name || aff.name?.split(' ')[0] || aff.username?.split(' ')[0] || '').trim();
         const personalizedSubject = replaceNamePlaceholders(subject, creatorFirstName);
         const personalizedBody = replaceNamePlaceholders(contentToSend, creatorFirstName);
+        const cleanBody = normalizeAcumbamailSingleEmailHtml(
+          personalizedBody,
+          'https://exacoat.com/?portal=affiliate',
+          'https://exacoat.com'
+        );
 
         const res = await sendAcumbamailSingleEmailDirect({
           toEmail: aff.email,
           subject: personalizedSubject,
-          bodyHtml: personalizedBody,
+          bodyHtml: cleanBody,
           fromEmail,
           fromName,
           tokenOverride: settings.acumbamail_token,
@@ -1078,11 +1098,16 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
       const custFirstName = (customerName?.split(' ')[0] || '').trim();
       const personalizedSubject = replaceNamePlaceholders(subject, custFirstName);
       const personalizedBody = replaceNamePlaceholders(contentToSend, custFirstName);
+      const cleanBody = normalizeAcumbamailSingleEmailHtml(
+        personalizedBody,
+        'https://exacoat.com/cart/',
+        'https://exacoat.com'
+      );
 
       const res = await sendAcumbamailSingleEmailDirect({
         toEmail: customerEmail,
         subject: personalizedSubject,
-        bodyHtml: personalizedBody,
+        bodyHtml: cleanBody,
         fromEmail,
         fromName,
         tokenOverride: settings.acumbamail_token,
@@ -3039,8 +3064,8 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                   </p>
                   <p className="font-mono text-[10px] flex flex-wrap gap-x-3 gap-y-1">
                     <span><code className="text-amber-500 font-semibold">{`{name|there}`}</code> &ndash; Recipient first name with fallback</span>
-                    <span><code className="text-amber-500 font-semibold">{`{{webview_url}}`}</code> &ndash; Browser view link</span>
-                    <span><code className="text-amber-500 font-semibold">{`{{unsubscribe_url}}`}</code> &ndash; Required Unsubscribe link</span>
+                    <span><code className="text-amber-500 font-semibold">{`*|BROWSER_VIEW|*`}</code> (or <code className="text-amber-500 font-semibold">{`{{webview_url}}`}</code>) &ndash; Browser view link</span>
+                    <span><code className="text-amber-500 font-semibold">{`*|UNSUBSCRIBE_URL|*`}</code> (or <code className="text-amber-500 font-semibold">{`{{unsubscribe_url}}`}</code>) &ndash; Required Unsubscribe link</span>
                   </p>
                 </div>
               </GlassCard>
@@ -3121,7 +3146,12 @@ export const EmailMarketingStudio: React.FC<EmailMarketingStudioProps> = ({ sett
                   srcDoc={replaceNamePlaceholders(
                     composerMode === 'code' ? (compiledHtml || customHtmlCode) : activeVisualHtml,
                     previewRecipientName
-                  ).replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')}
+                  )
+                    .replace(/(?:https?:\/\/)?(?:%7B%7B|\{\{)\s*(?:unsubscribe_url|unsubscribe)\s*(?:%7D%7D|\}\})\/?/gi, '#unsubscribe-preview')
+                    .replace(/\*\|UNSUBSCRIBE(?:_URL)?\|\*/gi, '#unsubscribe-preview')
+                    .replace(/(?:https?:\/\/)?(?:%7B%7B|\{\{)\s*(?:webview_url|webview|browser_view)\s*(?:%7D%7D|\}\})\/?/gi, '#browser-view-preview')
+                    .replace(/\*\|(?:BROWSER_VIEW|WEBVIEW|WEBVIEW_URL)\|\*/gi, '#browser-view-preview')
+                    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')}
                   className="w-full h-full min-h-[640px] border-0"
                 />
               </div>

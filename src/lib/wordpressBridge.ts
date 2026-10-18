@@ -27,7 +27,13 @@ import {
   CustomLabelSender
 } from '../types';
 export type { MarketplaceDeviceImageSettings, CustomLabelAddress, CustomLabelSender };
-import { renderEmailHtmlLocally, BRAND_LOGO_WHITE_HTML, BRAND_LOGO_HTML } from './emailRenderer';
+import { 
+  renderEmailHtmlLocally, 
+  BRAND_LOGO_WHITE_HTML, 
+  BRAND_LOGO_HTML,
+  normalizeAcumbamailCampaignHtml,
+  normalizeAcumbamailSingleEmailHtml 
+} from './emailRenderer';
 import { extractItemSpecs } from './orderItems';
 import { normalizeDeviceName } from './seoUtils';
 import { decodeHtmlEntities, decodeDeep, formatCleanText, cleanAddressObject } from './utils';
@@ -2145,6 +2151,9 @@ export async function sendAcumbamailCampaignDirect(params: {
     return { success: false, error: 'Acumbamail Auth Token is missing' };
   }
 
+  // Normalize content HTML with Acumbamail's official merge tags (*|UNSUBSCRIBE_URL|*, *|BROWSER_VIEW|*)
+  const cleanContentHtml = normalizeAcumbamailCampaignHtml(params.contentHtml);
+
   // Attempt direct call first
   try {
     const formData = new URLSearchParams();
@@ -2154,7 +2163,7 @@ export async function sendAcumbamailCampaignDirect(params: {
     formData.append('from_name', params.fromName);
     formData.append('from_email', params.fromEmail);
     formData.append('subject', params.subject);
-    formData.append('content', params.contentHtml);
+    formData.append('content', cleanContentHtml);
     formData.append('https', '1');
 
     params.listIds.forEach((lid, idx) => {
@@ -2205,7 +2214,7 @@ export async function sendAcumbamailCampaignDirect(params: {
         from_name: params.fromName,
         from_email: params.fromEmail,
         subject: params.subject,
-        content: params.contentHtml,
+        content: cleanContentHtml,
         lists: params.listIds,
       }),
     });
@@ -2234,6 +2243,9 @@ export async function sendAcumbamailSingleEmailDirect(params: {
     return { success: false, error: 'Acumbamail Auth Token is missing' };
   }
 
+  // Normalize body HTML for single/test email send (replace merge tags and placeholders with valid URLs)
+  const cleanBodyHtml = normalizeAcumbamailSingleEmailHtml(params.bodyHtml);
+
   try {
     const fromName = params.fromName || getCachedPluginSettings().acumbamail_from_name || 'Exacoat';
 
@@ -2244,7 +2256,7 @@ export async function sendAcumbamailSingleEmailDirect(params: {
     formData.append('from_name', fromName);
     formData.append('to_email', params.toEmail);
     formData.append('subject', params.subject);
-    formData.append('body', params.bodyHtml);
+    formData.append('body', cleanBodyHtml);
 
     const res = await fetch('https://acumbamail.com/api/1/sendOne/', {
       method: 'POST',
@@ -2286,7 +2298,7 @@ export async function sendAcumbamailSingleEmailDirect(params: {
       body: JSON.stringify({
         to_email: params.toEmail,
         subject: params.subject,
-        body: params.bodyHtml,
+        body: cleanBodyHtml,
         from_email: fromEmail,
         from_name: params.fromName || 'Exacoat',
       }),
@@ -2780,7 +2792,7 @@ ARCHITECTURAL SPECIFICATIONS (${isMjml ? 'MJML' : 'HTML'} DESIGN):
        <mj-social-element name="youtube" href="https://youtube.com/exacoat" background-color="${isDark ? '#0e0e11' : '#ffffff'}" color="${isDark ? '#ffffff' : '#111111'}" padding="4px 8px" />
      </mj-social>
    - &copy; 2016-2026 Exacoat
-   - Acumbamail placeholders: <a href="{{webview_url}}">View in browser</a> and <a href="{{unsubscribe_url}}">Unsubscribe</a>
+   - Acumbamail placeholders: <a href="*|BROWSER_VIEW|*">View in browser</a> and <a href="*|UNSUBSCRIBE_URL|*">Unsubscribe</a> (legacy {{webview_url}} and {{unsubscribe_url}} are also supported and auto-mapped)
 10. Bottom Spacing Spacer (MANDATORY EQUAL MARGIN):
    - After the main </mj-wrapper>, include a bottom spacer section matching the top spacer exactly:
      <mj-section padding="0 0 48px"></mj-section>
@@ -3419,6 +3431,39 @@ export async function syncOrderTrackingDirect(orderId: number | string): Promise
     }
   } catch (err: any) {
     return { success: false, error: err.message, message: err.message };
+  }
+}
+
+export async function syncActiveShipmentsDirect(
+  options: { force?: boolean; limit?: number } = {}
+): Promise<{
+  success: boolean;
+  synced_count?: number;
+  results?: Array<{ order_id: number; tracking: string; status: string; source: string; success: boolean }>;
+  timestamp?: number;
+  message?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/shipping/sync-active`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(options),
+    });
+    const text = await res.text();
+    if (!text || !text.trim()) {
+      return { success: false, error: `Empty response from server (HTTP ${res.status})` };
+    }
+    try {
+      return JSON.parse(text);
+    } catch {
+      return { success: false, error: `Invalid JSON response from server (HTTP ${res.status})` };
+    }
+  } catch (err: any) {
+    return { success: false, error: err.message };
   }
 }
 
@@ -6304,6 +6349,7 @@ export interface WarrantyClaimDetails {
   reviewed_by?: string;
   reviewed_at?: string;
   rejection_reason?: string;
+  used_warranty_code?: string;
   items?: Array<{
     name: string;
     quantity: number;
@@ -6344,7 +6390,8 @@ export async function reviewWarrantyClaimDirect(
   orderId: number,
   action: 'approve' | 'reject',
   reason?: string,
-  adminName?: string
+  adminName?: string,
+  allowResubmit?: boolean
 ): Promise<{ success: boolean; rma_status?: string; video_deleted?: boolean; message?: string; error?: string }> {
   const base = getWordPressBaseUrl();
   const url = `${base}/wp-json/exacoat-core/v1/warranty/review`;
@@ -6361,6 +6408,7 @@ export async function reviewWarrantyClaimDirect(
         action,
         reason: reason || '',
         admin_name: adminName || 'Operations Manager',
+        allow_resubmit: !!allowResubmit,
       }),
     });
     const data = await res.json();
@@ -6370,6 +6418,46 @@ export async function reviewWarrantyClaimDirect(
         rma_status: data.rma_status,
         video_deleted: data.video_deleted,
         message: data.message,
+      };
+    }
+    return { success: false, error: data?.message || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function sendWarrantyClarificationEmailDirect(params: {
+  orderId: number;
+  recipientEmail: string;
+  recipientName?: string;
+  subject: string;
+  messageText: string;
+  adminName?: string;
+}): Promise<{ success: boolean; message?: string; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/warranty/send-clarification-email`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        order_id: params.orderId,
+        recipient_email: params.recipientEmail,
+        recipient_name: params.recipientName || 'Customer',
+        subject: params.subject,
+        message_text: params.messageText,
+        admin_name: params.adminName || 'Customer Support',
+      }),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        message: data.message || 'Clarification email sent successfully.',
       };
     }
     return { success: false, error: data?.message || `HTTP ${res.status}` };
@@ -6511,6 +6599,7 @@ export interface RmaClaimLogEntry {
   reviewed_by?: string;
   reviewed_at?: string;
   items: RmaClaimLogItem[];
+  used_warranty_code?: string;
 }
 
 export interface RmaClaimsStats {
@@ -6722,6 +6811,154 @@ export async function checkMarketplaceInvoiceDirect(
     };
   } catch (err: any) {
     return { success: false, available: false, error: err.message };
+  }
+}
+
+// ==========================================
+// Warranty Extension Codes System
+// ==========================================
+
+export interface WarrantyCodeItem {
+  code: string;
+  created_at: string;
+  expires_at: string;
+  duration_hours: number;
+  bound_order_id?: string;
+  note?: string;
+  created_by: string;
+  status: 'active' | 'used' | 'expired' | 'revoked';
+  used_in_order?: number | string | null;
+  used_at?: string | null;
+}
+
+export async function fetchWarrantyCodesDirect(): Promise<{
+  success: boolean;
+  codes: WarrantyCodeItem[];
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/warranty/codes`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        codes: data.codes || [],
+      };
+    }
+    return {
+      success: false,
+      codes: [],
+      error: data?.message || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return { success: false, codes: [], error: err.message };
+  }
+}
+
+export async function generateWarrantyCodeDirect(params: {
+  duration_hours?: number;
+  bound_order_id?: string;
+  note?: string;
+}): Promise<{
+  success: boolean;
+  code?: WarrantyCodeItem;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/warranty/codes/generate`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        duration_hours: params.duration_hours || 24,
+        bound_order_id: params.bound_order_id ? params.bound_order_id.trim() : '',
+        note: params.note ? params.note.trim() : '',
+      }),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        code: data.code,
+      };
+    }
+    return {
+      success: false,
+      error: data?.message || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function revokeWarrantyCodeDirect(code: string): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/warranty/codes/revoke`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ code: code.trim() }),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return { success: true };
+    }
+    return {
+      success: false,
+      error: data?.message || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function deleteWarrantyCodeDirect(code: string): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/warranty/codes/delete`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ code: code.trim() }),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return { success: true };
+    }
+    return {
+      success: false,
+      error: data?.message || `HTTP ${res.status}`,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message };
   }
 }
 

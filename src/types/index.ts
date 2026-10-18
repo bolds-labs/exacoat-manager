@@ -291,6 +291,9 @@ export interface Order {
   shipping_lines?: Array<{ id?: any; method_id?: string; method_title?: string; total?: string }>;
   meta_data?: Array<{ id?: number; key: string; value: any }>;
   rma?: OrderRmaDetails | null;
+  has_warranty_claim?: boolean;
+  warranty_claim_status?: string;
+  warranty_replacement_order_id?: number | null;
   goorita_order_id?: string;
   goorita_awb_url?: string;
   goorita_awb_image?: string;
@@ -299,6 +302,8 @@ export interface Order {
 
 export interface OrderRmaDetails {
   order_type?: string;
+  is_parent_order?: boolean;
+  replacement_order_id?: number | string;
   original_order_id?: number | string;
   original_invoice?: number | string;
   original_order_number?: string;
@@ -324,7 +329,27 @@ export function getOrderRma(order: Order | null): OrderRmaDetails | null {
   const originalInvoice = findMeta('_rma_original_invoice') || (order as any)._rma_original_invoice;
   const originalOrderId = findMeta('_rma_original_order_id') || (order as any)._rma_original_order_id;
 
-  if (!orderType && !originalInvoice && !originalOrderId) return null;
+  const hasWarrantyClaim = findMeta('_has_warranty_claim') === 'yes' || (order as any).has_warranty_claim;
+  const warrantyReplacementId = findMeta('_warranty_replacement_order_id') || (order as any).warranty_replacement_order_id;
+  const hasRedeemClaim = findMeta('_has_redeem_claim') === 'yes';
+  const redeemReplacementId = findMeta('_redeem_replacement_order_id');
+
+  if (!orderType && !originalInvoice && !originalOrderId && !hasWarrantyClaim && !warrantyReplacementId && !hasRedeemClaim && !redeemReplacementId) {
+    return null;
+  }
+
+  // Parent order fallback
+  if (!orderType && (hasWarrantyClaim || warrantyReplacementId || hasRedeemClaim || redeemReplacementId)) {
+    const isRedeem = Boolean(hasRedeemClaim || redeemReplacementId);
+    const repId = isRedeem ? redeemReplacementId : warrantyReplacementId;
+    const claimStatus = findMeta('_warranty_claim_status') || (order as any).warranty_claim_status || 'pending_review';
+    return {
+      order_type: isRedeem ? 'Redeem' : 'Warranty',
+      is_parent_order: true,
+      replacement_order_id: repId ? Number(repId) : undefined,
+      status: claimStatus,
+    };
+  }
 
   return {
     order_type: orderType,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { SlideDrawer } from '../ui/SlideDrawer';
 import { Badge } from '../ui/Badge';
 import { Tooltip } from '../ui/Tooltip';
@@ -36,6 +36,7 @@ import {
   MessageSquare, 
   Tag,
   ShieldCheck,
+  ShieldAlert,
   Plus,
   RotateCcw,
   HelpCircle,
@@ -186,7 +187,9 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
     if (onOrderUpdated) onOrderUpdated();
   };
   
-  // Tracking form state
+  // Tracking form state & edit guards
+  const lastLoadedOrderIdRef = useRef<number | null>(null);
+  const isFormDirtyRef = useRef(false);
   const [courier, setCourier] = useState('jne');
   const [customCourierName, setCustomCourierName] = useState('');
   const [customTrackingUrl, setCustomTrackingUrl] = useState('');
@@ -221,6 +224,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   const [isPackingSlipModalOpen, setIsPackingSlipModalOpen] = useState(false);
   const [isWarrantyReviewModalOpen, setIsWarrantyReviewModalOpen] = useState(false);
+  const [reviewTargetOrderId, setReviewTargetOrderId] = useState<number | null>(null);
   const [isManualWarrantyModalOpen, setIsManualWarrantyModalOpen] = useState(false);
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
   const [manualClaimType, setManualClaimType] = useState<'Warranty' | 'Redeem'>('Warranty');
@@ -335,6 +339,32 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
     }
   };
 
+  // Reset tracking form edit guards when drawer closes
+  useEffect(() => {
+    if (!isOpen) {
+      lastLoadedOrderIdRef.current = null;
+      isFormDirtyRef.current = false;
+    }
+  }, [isOpen]);
+
+  const handleCourierChange = (newCourier: string) => {
+    isFormDirtyRef.current = true;
+    setCourier(newCourier);
+    if (newCourier === 'custom') {
+      const isPresetName = COURIER_PRESETS.some(
+        p => p.label.toLowerCase() === customCourierName.trim().toLowerCase() || p.value === customCourierName.trim().toLowerCase()
+      );
+      if (!customCourierName.trim() || isPresetName || customCourierName.trim().toLowerCase() === 'jne express') {
+        const savedCustom = (order?.tracking?.courier && order.tracking.courier !== 'JNE Express' && order.tracking.courier !== 'Express Courier' && order.tracking.courier !== 'Standard')
+          ? order.tracking.courier
+          : (resolveOrderCourier(order).isCustom ? resolveOrderCourier(order).courierName : '');
+        setCustomCourierName(savedCustom);
+      }
+    } else {
+      setCustomCourierName('');
+    }
+  };
+
   // Sync tracking form, reviews and notes when order changes
   useEffect(() => {
     if (order) {
@@ -351,51 +381,67 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
         }
       }
 
-      const isConsolidation = Boolean(
-        (order?.meta_data || []).some((m: any) => m.key === '_is_consolidation_order' && (m.value === 'yes' || m.value === true || m.value === '1')) ||
-        (order?.meta_data || []).some((m: any) => m.key === '_goorita_consolidated_orders' && Array.isArray(m.value) && m.value.length > 0) ||
-        String(order?.shipping?.company || '').toLowerCase().includes('goorita')
-      );
+      // Only initialize/reset tracking form state if:
+      // 1. This is a new order ID being viewed (different from last loaded), OR
+      // 2. The user has NOT modified the form and the order gained tracking data
+      const isNewOrder = lastLoadedOrderIdRef.current !== order.id;
+      const canSyncTracking = isNewOrder || (!isFormDirtyRef.current && Boolean(order.tracking));
 
-      const resolvedCourier = resolveOrderCourier(order);
-
-      if (order.tracking) {
-        const rawTrack = String(order.tracking.tracking_number || '').trim();
-        const validTrack = rawTrack.startsWith('field_') ? '' : rawTrack;
-        let carrierId = String(order.tracking.carrier_id || (order as any).carrier_id || '').toLowerCase().trim();
-
-        if (isConsolidation && carrierId === 'goorita') {
-          carrierId = 'jne';
+      if (canSyncTracking) {
+        lastLoadedOrderIdRef.current = order.id;
+        if (isNewOrder) {
+          isFormDirtyRef.current = false;
         }
 
-        // Prioritize explicit carrierId from tracking/order, falling back to resolvedCourier
-        const effectiveCarrierId = (carrierId && (!isConsolidation || carrierId !== 'goorita'))
-          ? carrierId
-          : (resolvedCourier.courierId || 'jne');
+        const isConsolidation = Boolean(
+          (order?.meta_data || []).some((m: any) => m.key === '_is_consolidation_order' && (m.value === 'yes' || m.value === true || m.value === '1')) ||
+          (order?.meta_data || []).some((m: any) => m.key === '_goorita_consolidated_orders' && Array.isArray(m.value) && m.value.length > 0) ||
+          String(order?.shipping?.company || '').toLowerCase().includes('goorita')
+        );
 
-        const isPreset = COURIER_PRESETS.some(p => p.value === effectiveCarrierId && p.value !== 'custom');
-        
-        if (isPreset) {
-          setCourier(effectiveCarrierId);
-          setCustomCourierName('');
+        const resolvedCourier = resolveOrderCourier(order);
+
+        if (order.tracking) {
+          const rawTrack = String(order.tracking.tracking_number || '').trim();
+          const validTrack = rawTrack.startsWith('field_') ? '' : rawTrack;
+          let carrierId = String(order.tracking.carrier_id || (order as any).carrier_id || '').toLowerCase().trim();
+
+          if (isConsolidation && carrierId === 'goorita') {
+            carrierId = 'jne';
+          }
+
+          // Prioritize explicit carrierId from tracking/order, falling back to resolvedCourier
+          const effectiveCarrierId = (carrierId && (!isConsolidation || carrierId !== 'goorita'))
+            ? carrierId
+            : (resolvedCourier.courierId || 'jne');
+
+          const isPreset = COURIER_PRESETS.some(p => p.value === effectiveCarrierId && p.value !== 'custom');
+          
+          if (isPreset) {
+            setCourier(effectiveCarrierId);
+            setCustomCourierName('');
+            setCustomTrackingUrl('');
+          } else {
+            setCourier('custom');
+            const savedCustom = (order.tracking.courier && order.tracking.courier !== 'Express Courier' && order.tracking.courier !== 'Standard' && order.tracking.courier !== 'JNE Express')
+              ? order.tracking.courier
+              : (resolvedCourier.isCustom ? resolvedCourier.courierName : '');
+            setCustomCourierName(savedCustom);
+            setCustomTrackingUrl(order.tracking.tracking_url || '');
+          }
+
+          setTrackingNumber(validTrack);
+        } else {
+          if (resolvedCourier.isCustom) {
+            setCourier('custom');
+            setCustomCourierName(resolvedCourier.courierName);
+          } else {
+            setCourier(resolvedCourier.courierId);
+            setCustomCourierName('');
+          }
           setCustomTrackingUrl('');
-        } else {
-          setCourier('custom');
-          setCustomCourierName(resolvedCourier.courierName || order.tracking.courier || '');
-          setCustomTrackingUrl(order.tracking.tracking_url || '');
+          setTrackingNumber('');
         }
-
-        setTrackingNumber(validTrack);
-      } else {
-        if (resolvedCourier.isCustom) {
-          setCourier('custom');
-          setCustomCourierName(resolvedCourier.courierName);
-        } else {
-          setCourier(resolvedCourier.courierId);
-          setCustomCourierName('');
-        }
-        setCustomTrackingUrl('');
-        setTrackingNumber('');
       }
 
       if (order.notes) {
@@ -404,7 +450,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
         loadNotes(order.id);
       }
     }
-  }, [order]);
+  }, [order, isOpen]);
 
   const handleSendReviewInvite = async () => {
     if (!order) return;
@@ -600,6 +646,8 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
         setShowShippedPromptModal(false);
         const orderNum = cleanOrderNumber(order.id);
         const currentStatusInfo = getOrderStatusInfo(order.status);
+        isFormDirtyRef.current = false;
+        lastLoadedOrderIdRef.current = order.id;
         if (targetStatus === 'shipped') {
           showToast('success', 'Order Shipped', `Order #${orderNum} marked as Shipped with tracking code.`);
           order.status = 'shipped' as OrderStatus;
@@ -796,8 +844,9 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
 
     const rmaDetails = getOrderRma(order);
     const guaranteeDetails = getOrderGuarantee(order);
-    const parentWarrantyClaimId = (order.meta_data || []).find(m => m.key === '_warranty_claim_order_id' || m.key === '_warranty_replacement_order_id')?.value;
+    const parentWarrantyClaimId = (order.meta_data || []).find(m => m.key === '_warranty_claim_order_id' || m.key === '_warranty_replacement_order_id')?.value || order.warranty_replacement_order_id || rmaDetails?.replacement_order_id;
     const parentWarrantyClaimInvoice = (order.meta_data || []).find(m => m.key === '_warranty_claim_invoice')?.value;
+    const parentWarrantyStatus = order.warranty_claim_status || rmaDetails?.status || (order.meta_data || []).find(m => m.key === '_warranty_claim_status')?.value || 'pending_review';
     const parentRedeemClaimId = (order.meta_data || []).find(m => m.key === '_redeem_replacement_order_id')?.value;
 
     const orderMetaList = Array.isArray(order.meta_data) ? order.meta_data : [];
@@ -959,22 +1008,52 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
             <div className="flex items-center gap-2.5">
               <ShieldCheck className="w-4 h-4 text-sky-400 shrink-0" />
               <div className="text-xs font-sans text-neutral-300">
-                <span>48h Warranty Replacement claim order filed: </span>
-                {onSelectOrderById ? (
-                  <button
-                    type="button"
-                    onClick={() => onSelectOrderById(Number(parentWarrantyClaimId))}
-                    className="font-mono font-bold text-sky-400 hover:text-sky-300 underline underline-offset-2 cursor-pointer"
-                  >
-                    #{parentWarrantyClaimInvoice || parentWarrantyClaimId}
-                  </button>
-                ) : (
-                  <span className="font-mono font-bold text-white">
-                    #{parentWarrantyClaimInvoice || parentWarrantyClaimId}
-                  </span>
-                )}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span>48h Warranty Replacement claim filed:</span>
+                  {onSelectOrderById ? (
+                    <button
+                      type="button"
+                      onClick={() => onSelectOrderById(Number(parentWarrantyClaimId))}
+                      className="font-mono font-bold text-sky-400 hover:text-sky-300 underline underline-offset-2 cursor-pointer"
+                    >
+                      #{parentWarrantyClaimInvoice || parentWarrantyClaimId}
+                    </button>
+                  ) : (
+                    <span className="font-mono font-bold text-white">
+                      #{parentWarrantyClaimInvoice || parentWarrantyClaimId}
+                    </span>
+                  )}
+                  {parentWarrantyStatus === 'pending_review' ? (
+                    <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-amber-400 bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 rounded shadow-xs">
+                      <ShieldAlert className="w-2.5 h-2.5 text-amber-400" />
+                      PENDING REVIEW
+                    </span>
+                  ) : parentWarrantyStatus === 'approved' ? (
+                    <span className="inline-flex items-center gap-0.5 text-[9px] font-mono font-medium text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 rounded shadow-xs">
+                      <Check className="w-2.5 h-2.5" />
+                      Approved
+                    </span>
+                  ) : parentWarrantyStatus === 'rejected' ? (
+                    <span className="inline-flex items-center gap-0.5 text-[9px] font-mono font-medium text-rose-400 bg-rose-500/15 border border-rose-500/30 px-1.5 py-0.5 rounded shadow-xs">
+                      <XCircle className="w-2.5 h-2.5" />
+                      Rejected
+                    </span>
+                  ) : null}
+                </div>
               </div>
             </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setReviewTargetOrderId(Number(parentWarrantyClaimId));
+                setIsWarrantyReviewModalOpen(true);
+              }}
+              className="px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 bg-[#f3aa18] hover:bg-[#e09b15] text-black transition-all shadow-xs cursor-pointer"
+            >
+              <Video className="w-3.5 h-3.5" />
+              <span>Review Claim Proof</span>
+            </button>
           </div>
         )}
 
@@ -1175,18 +1254,20 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
               </button>
               {rmaDetails?.order_type !== 'Warranty' && rmaDetails?.order_type !== 'Redeem' && (
                 <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setManualClaimType('Warranty');
-                      setIsManualWarrantyModalOpen(true);
-                    }}
-                    className="px-2.5 py-1 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm active:scale-95 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 cursor-pointer"
-                    title="Claim installation warranty manually for this order"
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Warranty</span>
-                  </button>
+                  {!isStorePickup && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setManualClaimType('Warranty');
+                        setIsManualWarrantyModalOpen(true);
+                      }}
+                      className="px-2.5 py-1 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm active:scale-95 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 cursor-pointer"
+                      title="Claim installation warranty manually for this order"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Warranty</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -1710,7 +1791,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                     return null;
                   })()}
                 </div>
-                <Select value={courier} onValueChange={setCourier}>
+                <Select value={courier} onValueChange={handleCourierChange}>
                   <SelectTrigger className="w-full h-10 px-3.5 rounded-xl bg-zinc-50 dark:bg-[#141414] border-zinc-200 dark:border-white/[0.08] text-xs text-zinc-900 dark:text-white">
                     <SelectValue placeholder="Select Courier" />
                   </SelectTrigger>
@@ -1733,7 +1814,10 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                     type="text"
                     required
                     value={customCourierName}
-                    onChange={e => setCustomCourierName(e.target.value)}
+                    onChange={e => {
+                      isFormDirtyRef.current = true;
+                      setCustomCourierName(e.target.value);
+                    }}
                     placeholder="e.g. Royal Mail, USPS, Aramex"
                     className="w-full px-3.5 py-2.5 rounded-xl bg-[#141414] border border-white/[0.08] text-xs font-sans text-white placeholder-neutral-600 focus:outline-none focus:border-[#f3aa18] transition-colors"
                   />
@@ -1746,7 +1830,10 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                   <input
                     type="text"
                     value={trackingNumber}
-                    onChange={e => setTrackingNumber(e.target.value)}
+                    onChange={e => {
+                      isFormDirtyRef.current = true;
+                      setTrackingNumber(e.target.value);
+                    }}
                     placeholder="e.g. 5252sf252, JNT1948293810"
                     className="w-full px-3.5 py-2.5 rounded-xl bg-[#141414] border border-white/[0.08] text-xs font-mono text-white placeholder-neutral-600 focus:outline-none focus:border-[#f3aa18] transition-colors"
                   />
@@ -1763,7 +1850,10 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                   <input
                     type="text"
                     value={trackingNumber}
-                    onChange={e => setTrackingNumber(e.target.value)}
+                    onChange={e => {
+                      isFormDirtyRef.current = true;
+                      setTrackingNumber(e.target.value);
+                    }}
                     placeholder="e.g. GB123456789"
                     className="w-full px-3.5 py-2.5 rounded-xl bg-[#141414] border border-white/[0.08] text-xs font-mono text-white placeholder-neutral-600 focus:outline-none focus:border-[#f3aa18] transition-colors"
                   />
@@ -1779,7 +1869,10 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                   <input
                     type="text"
                     value={customTrackingUrl}
-                    onChange={e => setCustomTrackingUrl(e.target.value)}
+                    onChange={e => {
+                      isFormDirtyRef.current = true;
+                      setCustomTrackingUrl(e.target.value);
+                    }}
                     placeholder="https://carrier.com/track?no=%s"
                     className="w-full px-3.5 py-2.5 rounded-xl bg-[#141414] border border-white/[0.08] text-xs font-mono text-white placeholder-neutral-600 focus:outline-none focus:border-[#f3aa18] transition-colors"
                   />
@@ -3011,9 +3104,12 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
       {/* 48-Hour Installation Warranty Review Modal */}
       {order && (
         <WarrantyReviewModal
-          orderId={order.id}
+          orderId={reviewTargetOrderId || order.id}
           isOpen={isWarrantyReviewModalOpen}
-          onClose={() => setIsWarrantyReviewModalOpen(false)}
+          onClose={() => {
+            setIsWarrantyReviewModalOpen(false);
+            setReviewTargetOrderId(null);
+          }}
           onClaimReviewed={() => {
             onOrderUpdated?.();
           }}

@@ -1243,6 +1243,13 @@ class Exacoat_Email_Engine {
 </body>
 </html>";
 
+		// Final Safety: Replace any stray unsubscribe tags with valid cart link before stripping orphan tags
+		$storefront_base = function_exists( 'exacoat_storefront_url' ) ? exacoat_storefront_url() : home_url();
+		$cart_unsub_url  = trailingslashit( $storefront_base ) . 'cart/';
+		$html = preg_replace( '/(?:https?:\/\/)?(?:%7B%7B|\{\{)\s*(?:unsubscribe_url|unsubscribe)\s*(?:%7D%7D|\}\})\/?/i', $cart_unsub_url, $html );
+		$html = preg_replace( '/(?:https?:\/\/)?\{\s*(?:unsubscribe_url|unsubscribe)\s*\}\/?/i', $cart_unsub_url, $html );
+		$html = str_replace( '*|UNSUBSCRIBE_URL|*', $cart_unsub_url, $html );
+
 		// Final Pass: Ensure ZERO raw template tags exist anywhere in output HTML or Subject
 		$html    = preg_replace( '/\{\{[a-zA-Z0-9_-]+\}\}|\{[a-zA-Z0-9_-]+\}/', '', $html );
 		$subject = preg_replace( '/\{\{[a-zA-Z0-9_-]+\}\}|\{[a-zA-Z0-9_-]+\}/', '', $subject );
@@ -2850,7 +2857,13 @@ class Exacoat_Email_Engine {
 		$title           = esc_html( $data['title'] ?? $tmpl['title'] ?? 'Did you leave something behind?' );
 		$cta_text        = esc_html( $data['cta_text'] ?? $tmpl['cta_text'] ?? 'Return to Checkout' );
 		$restore_url     = esc_url( $data['restore_url'] ?? home_url( '/checkout/' ) );
-		$unsubscribe_url = esc_url( $data['unsubscribe_url'] ?? home_url( '/cart/' ) );
+		$raw_unsub       = (string) ( $data['unsubscribe_url'] ?? '' );
+		$storefront_base = function_exists( 'exacoat_storefront_url' ) ? exacoat_storefront_url() : home_url();
+		if ( empty( $raw_unsub ) || strpos( $raw_unsub, 'unsubscribe_url' ) !== false || strpos( $raw_unsub, '*|' ) !== false ) {
+			$unsubscribe_url = trailingslashit( $storefront_base ) . 'cart/';
+		} else {
+			$unsubscribe_url = esc_url( $raw_unsub );
+		}
 		$is_second_email = ( $event === 'customer_cart_abandoned_2' || ( $data['sequence'] ?? '' ) === '2' );
 
 		$subject        = str_replace( array_keys( $replacements ), array_values( $replacements ), $tmpl['subject'] );
@@ -3045,6 +3058,11 @@ class Exacoat_Email_Engine {
 </body>
 </html>";
 
+		// Final Safety: Guarantee no raw or broken unsubscribe placeholder exists in final HTML
+		$html = preg_replace( '/(?:https?:\/\/)?(?:%7B%7B|\{\{)\s*(?:unsubscribe_url|unsubscribe)\s*(?:%7D%7D|\}\})\/?/i', $unsubscribe_url, $html );
+		$html = preg_replace( '/(?:https?:\/\/)?\{\s*(?:unsubscribe_url|unsubscribe)\s*\}\/?/i', $unsubscribe_url, $html );
+		$html = str_replace( '*|UNSUBSCRIBE_URL|*', $unsubscribe_url, $html );
+
 		return [
 			'subject'   => $subject,
 			'html'      => $html,
@@ -3139,6 +3157,17 @@ class Exacoat_Email_Engine {
 	public static function send_email( string $event, string $recipient_email, string $recipient_name = '', array $data = [] ): array {
 		if ( ! is_email( $recipient_email ) ) {
 			return [ 'success' => false, 'message' => 'Invalid recipient email address' ];
+		}
+
+		// Temporary disable: 'customer_order_delivered' email is suppressed per admin request while tracking is being resolved
+		if ( 'customer_order_delivered' === $event ) {
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::info( 'email', "Delivery email dispatch suppressed for {$recipient_email}: customer_order_delivered is temporarily disabled." );
+			}
+			return [
+				'success' => false,
+				'message' => 'Delivery email (customer_order_delivered) is temporarily disabled by admin.',
+			];
 		}
 
 		$config     = self::get_config();
@@ -3501,6 +3530,69 @@ class Exacoat_Email_Engine {
 	}
 
 	/**
+	 * Normalize Acumbamail Campaign HTML.
+	 * Replaces any broken or legacy tags like https://{{unsubscribe_url}}/, {{unsubscribe_url}}, etc.
+	 * with Acumbamail's official merge tags: *|UNSUBSCRIBE_URL|* and *|BROWSER_VIEW|*.
+	 */
+	public static function normalize_acumbamail_campaign_html( string $html ): string {
+		if ( empty( $html ) ) {
+			return '';
+		}
+
+		// Normalize Unsubscribe variations
+		$html = preg_replace(
+			'/(?:https?:\/\/)?(?:%7B%7B|\{\{)\s*(?:unsubscribe_url|unsubscribe)\s*(?:%7D%7D|\}\})\/?/i',
+			'*|UNSUBSCRIBE_URL|*',
+			$html
+		);
+		$html = preg_replace(
+			'/(?:https?:\/\/)?\{\s*(?:unsubscribe_url|unsubscribe)\s*\}\/?/i',
+			'*|UNSUBSCRIBE_URL|*',
+			$html
+		);
+		$html = preg_replace( '/\*\|UNSUBSCRIBE\|\*/i', '*|UNSUBSCRIBE_URL|*', $html );
+
+		// Normalize Webview / Browser View variations
+		$html = preg_replace(
+			'/(?:https?:\/\/)?(?:%7B%7B|\{\{)\s*(?:webview_url|webview|browser_view)\s*(?:%7D%7D|\}\})\/?/i',
+			'*|BROWSER_VIEW|*',
+			$html
+		);
+		$html = preg_replace(
+			'/(?:https?:\/\/)?\{\s*(?:webview_url|webview|browser_view)\s*\}\/?/i',
+			'*|BROWSER_VIEW|*',
+			$html
+		);
+		$html = preg_replace( '/\*\|(?:WEBVIEW|WEBVIEW_URL)\|\*/i', '*|BROWSER_VIEW|*', $html );
+
+		return $html;
+	}
+
+	/**
+	 * Normalize Acumbamail Single 1-to-1 Email HTML.
+	 * Because sendOne lacks subscriber list / campaign context, Acumbamail does not replace merge tags.
+	 * Convert placeholders and merge tags to valid URLs so recipients never receive raw broken tags.
+	 */
+	public static function normalize_acumbamail_single_html( string $html, string $fallback_unsub = '', string $fallback_webview = '' ): string {
+		if ( empty( $html ) ) {
+			return '';
+		}
+
+		$storefront_base = function_exists( 'exacoat_storefront_url' ) ? exacoat_storefront_url() : home_url();
+		$unsub_url       = ! empty( $fallback_unsub ) ? $fallback_unsub : trailingslashit( $storefront_base ) . 'cart/';
+		$webview_url     = ! empty( $fallback_webview ) ? $fallback_webview : $storefront_base;
+
+		// First normalize to standard tags
+		$html = self::normalize_acumbamail_campaign_html( $html );
+
+		// Then swap tags with working absolute URLs
+		$html = str_replace( '*|UNSUBSCRIBE_URL|*', $unsub_url, $html );
+		$html = str_replace( '*|BROWSER_VIEW|*', $webview_url, $html );
+
+		return $html;
+	}
+
+	/**
 	 * Send bulk campaign via Acumbamail
 	 */
 	public static function create_acumbamail_campaign( array $args ): array {
@@ -3515,7 +3607,8 @@ class Exacoat_Email_Engine {
 		$from_name  = sanitize_text_field( $args['from_name'] ?? $config['from_name'] );
 		$from_email = sanitize_email( $args['from_email'] ?? $config['from_email'] );
 		$subject    = sanitize_text_field( $args['subject'] ?? 'Exacoat Update' );
-		$content    = $args['content'] ?? $args['html'] ?? '';
+		$raw_content= $args['content'] ?? $args['html'] ?? '';
+		$content    = self::normalize_acumbamail_campaign_html( $raw_content );
 		$lists      = $args['lists'] ?? ( ! empty( $config['default_list'] ) ? [ $config['default_list'] ] : [] );
 
 		if ( empty( $content ) ) {
@@ -3597,7 +3690,7 @@ class Exacoat_Email_Engine {
 			'from_name'     => $sender_name,
 			'to_email'      => $to_email,
 			'subject'       => $subject,
-			'body'          => $html,
+			'body'          => self::normalize_acumbamail_single_html( $html ),
 		];
 
 		$start = microtime( true );

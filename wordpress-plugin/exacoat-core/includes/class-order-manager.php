@@ -541,6 +541,15 @@ class Exacoat_Order_Manager {
 					$args['meta_query'] = [
 						'relation' => 'OR',
 						[
+							'key'     => '_has_warranty_claim',
+							'value'   => 'yes',
+							'compare' => '=',
+						],
+						[
+							'key'     => '_warranty_replacement_order_id',
+							'compare' => 'EXISTS',
+						],
+						[
 							'key'     => '_is_warranty_claim',
 							'value'   => 'yes',
 							'compare' => '=',
@@ -560,6 +569,15 @@ class Exacoat_Order_Manager {
 					$args['status'] = [ 'pending', 'on-hold', 'processing', 'preparing-order', 'in-production', 'ready-to-ship', 'shipped', 'completed' ];
 					$args['meta_query'] = [
 						'relation' => 'OR',
+						[
+							'key'     => '_has_redeem_claim',
+							'value'   => 'yes',
+							'compare' => '=',
+						],
+						[
+							'key'     => '_redeem_replacement_order_id',
+							'compare' => 'EXISTS',
+						],
 						[
 							'key'     => '_rma_order_type',
 							'value'   => 'Redeem',
@@ -2334,12 +2352,40 @@ class Exacoat_Order_Manager {
 				'claim_reason'          => $order->get_meta( '_rma_claim_reason' ) ?: $order->get_meta( '_warranty_claim_reason' ),
 				'video_proof_url'       => $order->get_meta( '_rma_video_proof_url' ) ?: $order->get_meta( '_warranty_video_url' ),
 				'video_file_path'       => $order->get_meta( '_rma_video_file_path' ) ?: $order->get_meta( '_warranty_video_file_path' ),
-				'status'                => $order->get_meta( '_rma_status' ) ?: 'pending',
+				'status'                => $order->get_meta( '_rma_status' ) ?: 'pending_review',
 				'video_deleted'         => 'yes' === (string) $order->get_meta( '_rma_video_deleted' ),
 				'video_deleted_at'      => $order->get_meta( '_rma_video_deleted_at' ) ?: null,
 				'reviewed_by'           => $order->get_meta( '_rma_reviewed_by' ) ?: null,
 				'reviewed_at'           => $order->get_meta( '_rma_reviewed_at' ) ?: null,
 				'rejection_reason'      => $order->get_meta( '_rma_rejection_reason' ) ?: null,
+			];
+		}
+
+		$has_warranty_claim    = ( 'yes' === (string) $order->get_meta( '_has_warranty_claim' ) );
+		$rep_warranty_order_id = $order->get_meta( '_warranty_replacement_order_id' );
+		$has_redeem_claim      = ( 'yes' === (string) $order->get_meta( '_has_redeem_claim' ) );
+		$rep_redeem_order_id   = $order->get_meta( '_redeem_replacement_order_id' );
+
+		if ( empty( $rma_data ) && ( $has_warranty_claim || ! empty( $rep_warranty_order_id ) || $has_redeem_claim || ! empty( $rep_redeem_order_id ) ) ) {
+			$is_redeem_parent = $has_redeem_claim || ! empty( $rep_redeem_order_id );
+			$rep_id = $is_redeem_parent ? $rep_redeem_order_id : $rep_warranty_order_id;
+			$claim_status = (string) $order->get_meta( '_warranty_claim_status' );
+
+			if ( empty( $claim_status ) && ! empty( $rep_id ) ) {
+				$rep_order = wc_get_order( $rep_id );
+				if ( $rep_order ) {
+					$claim_status = (string) $rep_order->get_meta( '_rma_status' );
+					if ( empty( $claim_status ) ) {
+						$claim_status = $rep_order->has_status( [ 'processing', 'completed', 'shipped', 'ready-to-ship' ] ) ? 'approved' : ( $rep_order->has_status( [ 'cancelled', 'failed' ] ) ? 'rejected' : 'pending_review' );
+					}
+				}
+			}
+
+			$rma_data = [
+				'order_type'           => $is_redeem_parent ? 'Redeem' : 'Warranty',
+				'is_parent_order'      => true,
+				'replacement_order_id' => $rep_id ? (int) $rep_id : null,
+				'status'               => $claim_status ?: 'pending_review',
 			];
 		}
 
@@ -2399,6 +2445,9 @@ class Exacoat_Order_Manager {
 			'review_invited_at'          => $order->get_meta( '_artmatter_review_invited_at' ) ?: null,
 			'meta_data'                  => $order_meta_data,
 			'rma'                        => $rma_data,
+			'has_warranty_claim'         => $has_warranty_claim || ! empty( $rep_warranty_order_id ),
+			'warranty_claim_status'      => (string) $order->get_meta( '_warranty_claim_status' ) ?: ( ( $rma_data && ! empty( $rma_data['is_parent_order'] ) ) ? ( $rma_data['status'] ?? 'pending_review' ) : '' ),
+			'warranty_replacement_order_id' => $rep_warranty_order_id ? (int) $rep_warranty_order_id : null,
 		];
 	}
 
@@ -3013,19 +3062,9 @@ class Exacoat_Order_Manager {
 					);
 				}
 			} else {
-				$dedup_key = "{$order_id}_customer_order_delivered";
-				if ( empty( self::$sent_status_emails[ $dedup_key ] ) ) {
-					self::$sent_status_emails[ $dedup_key ] = true;
-					$email_class::send_email(
-						'customer_order_delivered',
-						$customer_email,
-						$customer_name,
-						self::get_email_order_payload( $order, [
-							'courier'         => (string) $carrier_display,
-							'tracking_number' => (string) $tracking_num,
-							'tracking_url'    => self::get_order_tracking_url( $order ),
-						] )
-					);
+				// Suppressed: customer_order_delivered is temporarily disabled per admin request while tracking is being resolved.
+				if ( class_exists( 'Exacoat_Logger' ) ) {
+					Exacoat_Logger::info( 'order', "Suppressed customer_order_delivered email for order #{$order_id} (delivered email disabled)." );
 				}
 			}
 
