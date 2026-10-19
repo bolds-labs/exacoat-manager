@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Fix customer password reset email delivery via Zoho ZeptoMail API with authorized support@exacoat.com sender\n- Route password reset link directly to Next.js storefront (/login?mode=reset)\n- Fix client IP rate limiting header inspection across proxies`,
+      changelog: `### Version ${version}\n- Add Endorsement (Influencer PR) order creation and management workflow\n- Support multi-item complimentary packages with waived courier shipping\n- Silence automated WhatsApp notifications for endorsement orders`,
     },
   };
 

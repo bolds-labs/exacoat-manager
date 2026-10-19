@@ -868,6 +868,14 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
     const orderMetaList = Array.isArray(order.meta_data) ? order.meta_data : [];
     const findOrderMeta = (k: string) => orderMetaList.find(m => m.key === k)?.value;
 
+    const isEndorsement =
+      orderMetaList.some((m: any) => (m.key === '_order_badge' && m.value === 'ENDORSEMENT') || (m.key === '_is_endorsement' && m.value === 'yes'));
+    const influencerName = findOrderMeta('_influencer_name');
+    const influencerHandle = findOrderMeta('_influencer_handle');
+    const endorsementPlatform = findOrderMeta('_endorsement_platform');
+    const campaignName = findOrderMeta('_campaign_name');
+    const adminEndorsementNotes = findOrderMeta('_admin_notes');
+
     const rawShippingPriceStr = findOrderMeta('_shipping_raw_price') || findOrderMeta('_shipping_biteship_original_rate') || findOrderMeta('_shipping_biteship_courier_rate');
     const shippingDiscountStr = findOrderMeta('_shipping_discount_amount') || findOrderMeta('_shipping_biteship_discount');
     const shippingDiscount = shippingDiscountStr ? Math.abs(parseFloat(String(shippingDiscountStr))) : 0;
@@ -897,6 +905,12 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                 <Copy className="w-4 h-4" />
               )}
             </button>
+            {isEndorsement && (
+              <span className="inline-flex h-6 items-center whitespace-nowrap text-[11px] leading-none font-mono font-bold text-purple-400 bg-purple-500/20 px-2.5 rounded-full border border-purple-500/40 shadow-xs">
+                <Sparkles className="w-3.5 h-3.5 mr-1 text-purple-400" />
+                ENDORSEMENT
+              </span>
+            )}
             {rmaDetails?.order_type === 'Redeem' && (
               <span className="inline-flex h-6 items-center whitespace-nowrap text-[11px] leading-none font-mono font-bold text-amber-400 bg-amber-500/20 px-2.5 rounded-full border border-amber-500/40 shadow-xs">
                 <RotateCcw className="w-3.5 h-3.5 mr-1 text-amber-400" />
@@ -934,6 +948,46 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
       subtitle={`Created on ${formatDateTime(order.created_at)} • via ${order.payment_method_title || order.payment_method || 'Direct Payment'}${order.customer_ip ? ` • IP: ${order.customer_ip}` : ''}`}
     >
       <div className="space-y-6">
+
+        {/* Influencer Endorsement PR Card */}
+        {isEndorsement && (
+          <div className="p-4 rounded-2xl border border-purple-500/30 bg-purple-950/20 shadow-[0_0_20px_rgba(168,85,247,0.1)]">
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div className="flex items-start gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl border border-purple-500/30 bg-purple-500/15 text-purple-400 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-bold text-white font-sans">
+                      Influencer Endorsement PR Order
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                      VIP Collaboration
+                    </span>
+                  </div>
+                  <div className="text-xs text-neutral-300 font-mono mt-1 space-x-2">
+                    <span>Creator: <strong className="text-white">{influencerName || order.customer_name}</strong></span>
+                    {influencerHandle && (
+                      <span className="text-purple-400 font-bold">({influencerHandle})</span>
+                    )}
+                    {endorsementPlatform && (
+                      <span className="text-neutral-400">• Platform: <span className="text-neutral-200">{endorsementPlatform}</span></span>
+                    )}
+                  </div>
+                  {campaignName && (
+                    <div className="text-xs text-neutral-400 mt-1 font-sans">
+                      Campaign: <span className="text-white font-medium">{campaignName}</span>
+                      {adminEndorsementNotes && (
+                        <span> • Notes: <span className="italic text-neutral-300">{adminEndorsementNotes}</span></span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* RMA Installation Warranty or Redeem Replacement Card */}
         {(rmaDetails?.order_type === 'Warranty' || rmaDetails?.order_type === 'Redeem') && (

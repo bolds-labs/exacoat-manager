@@ -75,6 +75,9 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
     .trim();
 
   const metaList = Array.isArray(order.meta_data) ? order.meta_data : [];
+  const isEndorsementOrder =
+    metaList.some((m: any) => (m.key === '_order_badge' && m.value === 'ENDORSEMENT') || (m.key === '_is_endorsement' && m.value === 'yes'));
+  const influencerHandle = metaList.find((m: any) => m.key === '_influencer_handle')?.value;
   const isWarrantyOrder =
     metaList.some((m: any) => (m.key === '_order_badge' && m.value === 'WARRANTY') || (m.key === '_rma_order_type' && m.value === 'Warranty') || (m.key === '_is_warranty' && m.value === 'yes'));
   const isRedeemOrder =
@@ -82,7 +85,9 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
   const rmaMarketplace = metaList.find((m: any) => m.key === '_rma_marketplace_channel')?.value;
   const rmaOrigInvoice = metaList.find((m: any) => m.key === '_rma_original_invoice' || m.key === '_rma_original_order_id' || m.key === '_rma_original_order_number')?.value;
 
-  const channelBadgeHtml = isWarrantyOrder
+  const channelBadgeHtml = isEndorsementOrder
+    ? `<span class="badge-channel" style="background: #f3e8ff; color: #7e22ce; border-color: #d8b4fe; font-weight: 800;">Endorsement PR ${influencerHandle ? `(${influencerHandle})` : ''}</span>`
+    : isWarrantyOrder
     ? `<span class="badge-channel" style="background: #e0f2fe; color: #0369a1; border-color: #7dd3fc; font-weight: 800;">${rmaMarketplace ? `${rmaMarketplace} Warranty` : 'Installation Warranty'}</span>`
     : isRedeemOrder
     ? `<span class="badge-channel" style="background: #fef3c7; color: #b45309; border-color: #fcd34d; font-weight: 800;">Redeem Replacement</span>`
@@ -406,6 +411,11 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
                 <span className="inline-block px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-[9px] font-extrabold font-mono uppercase">
                   {courierName}
                 </span>
+                {isEndorsementOrder && (
+                  <span className="inline-block px-2 py-0.5 rounded bg-purple-100 text-purple-900 border border-purple-300 text-[9px] font-extrabold font-mono uppercase">
+                    Endorsement PR {influencerHandle ? `(${influencerHandle})` : ''}
+                  </span>
+                )}
                 {isWarrantyOrder && (
                   <span className="inline-block px-2 py-0.5 rounded bg-sky-100 text-sky-900 border border-sky-300 text-[9px] font-extrabold font-mono uppercase">
                     {rmaMarketplace ? `${rmaMarketplace} Warranty` : 'Warranty'}

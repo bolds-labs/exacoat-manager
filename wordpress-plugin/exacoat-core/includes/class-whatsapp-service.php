@@ -427,6 +427,10 @@ class Exacoat_WhatsApp_Service {
 		$rma_invoice    = (string) ( $order->get_meta( '_rma_original_invoice' ) ?: '' );
 		$is_rma         = in_array( strtolower( $rma_order_type ), [ 'warranty', 'redeem' ], true );
 
+		// Endorsement (Influencer PR) detection
+		$is_endorsement = ( 'yes' === (string) $order->get_meta( '_is_endorsement' ) )
+			|| ( 'ENDORSEMENT' === strtoupper( (string) $order->get_meta( '_order_badge' ) ) );
+
 		// ---------------------------------------------------------------------
 		// Branch 1: PROCESSING (Payment Confirmed)
 		// ---------------------------------------------------------------------
@@ -434,6 +438,15 @@ class Exacoat_WhatsApp_Service {
 			// 1. Auto-allocate tracking number if empty
 			if ( class_exists( 'Exacoat_Tracking_Pool' ) ) {
 				Exacoat_Tracking_Pool::auto_assign_order_tracking( $order_id_num );
+			}
+
+			// If Endorsement order: Add note and skip customer WhatsApp notification
+			if ( $is_endorsement ) {
+				$influencer_ref = (string) ( $order->get_meta( '_influencer_handle' ) ?: $order->get_meta( '_influencer_name' ) ?: $customer_name );
+				$order->add_order_note( sprintf( "[Endorsement Order - %s]\nAutomated WhatsApp confirmation skipped for creator VIP privacy.", $influencer_ref ), false );
+				$order->update_meta_data( '_whatsapp_last_notification', $clean_new_status );
+				$order->save();
+				return;
 			}
 
 			// If Warranty or Redeem order: Add note and skip customer WhatsApp notification
@@ -484,7 +497,14 @@ class Exacoat_WhatsApp_Service {
 		// ---------------------------------------------------------------------
 		elseif ( 'completed' === $clean_new_status ) {
 			if ( ! empty( $settings['notify_completed'] ) && ! empty( $billing_phone ) ) {
-				if ( $is_rma ) {
+				if ( $is_endorsement ) {
+					// Endorsement Order: completely silent per user preference
+					$influencer_ref = (string) ( $order->get_meta( '_influencer_handle' ) ?: $order->get_meta( '_influencer_name' ) ?: $customer_name );
+					$order->add_order_note( sprintf( "[Endorsement Order - %s]\nAutomated WhatsApp shipping tracking notification skipped for creator VIP privacy.", $influencer_ref ), false );
+					$order->update_meta_data( '_whatsapp_last_notification', $clean_new_status );
+					$order->save();
+					return;
+				} elseif ( $is_rma ) {
 					// Warranty / Redeem Shipped Notification
 					$body_params = [
 						$customer_name,

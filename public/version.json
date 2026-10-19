@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.189",
+  "version": "0.1.190",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.189.zip?v=0.1.189",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.190.zip?v=0.1.190",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-10-19T10:14:16.519Z",
+  "last_updated": "2026-10-19T15:10:16.567Z",
   "sections": {
-    "changelog": "### Version 0.1.189\n- Fix customer password reset email delivery via Zoho ZeptoMail API with authorized support@exacoat.com sender\n- Route password reset link directly to Next.js storefront (/login?mode=reset)\n- Fix client IP rate limiting header inspection across proxies"
+    "changelog": "### Version 0.1.190\n- Add Endorsement (Influencer PR) order creation and management workflow\n- Support multi-item complimentary packages with waived courier shipping\n- Silence automated WhatsApp notifications for endorsement orders"
   }
 }

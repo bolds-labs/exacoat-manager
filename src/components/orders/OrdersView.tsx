@@ -5,6 +5,7 @@ import { OrderDetailDrawer } from './OrderDetailDrawer';
 import { ExportShipmentsModal } from './ExportShipmentsModal';
 import { TrackingPoolModal } from './TrackingPoolModal';
 import { ManualWarrantyModal } from './ManualWarrantyModal';
+import { EndorsementOrderModal } from './EndorsementOrderModal';
 import { RmaClaimsLogModal } from './RmaClaimsLogModal';
 import { ShopeeOrdersView } from './ShopeeOrdersView';
 import { TikTokOrdersView } from './TikTokOrdersView';
@@ -12,7 +13,7 @@ import { fetchOrdersDirect, fetchOrderDetailDirect, syncActiveShipmentsDirect, S
 import { useToast } from '../../context/ToastContext';
 import { formatCurrency } from '../../lib/formatters';
 import { isStorePickupOrder } from '../../lib/orderUtils';
-import { RefreshCw, FileSpreadsheet, Package, ShieldCheck, RotateCcw, Layers, Tag, HelpCircle } from 'lucide-react';
+import { RefreshCw, FileSpreadsheet, Package, ShieldCheck, RotateCcw, Layers, Tag, HelpCircle, Sparkles } from 'lucide-react';
 import { GlassCard } from '../ui/GlassCard';
 import { PageHeroHeader } from '../ui/PageHeroHeader';
 import { Tooltip } from '../ui/Tooltip';
@@ -41,6 +42,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isTrackingPoolModalOpen, setIsTrackingPoolModalOpen] = useState(false);
   const [isManualWarrantyModalOpen, setIsManualWarrantyModalOpen] = useState(false);
+  const [isEndorsementModalOpen, setIsEndorsementModalOpen] = useState(false);
   const [isRmaLogModalOpen, setIsRmaLogModalOpen] = useState(false);
   const [manualClaimInitialType, setManualClaimInitialType] = useState<'Warranty' | 'Redeem'>('Warranty');
   const [activeChannel, setActiveChannel] = useState<'web' | 'shopee' | 'tiktok'>('web');
@@ -297,6 +299,15 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
             >
               <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
               <span>Redeem</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsEndorsementModalOpen(true)}
+              className="px-3.5 py-2 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 text-xs font-semibold font-sans flex items-center gap-1.5 transition-all shrink-0 self-start sm:self-auto cursor-pointer shadow-xs"
+              title="Create Endorsement / Influencer PR Order"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+              <span>Endorsement</span>
             </button>
             <button
               type="button"
@@ -630,6 +641,13 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
         initialShopeeOrder={selectedShopeeOrder}
         initialTikTokOrder={selectedTikTokOrder}
         initialClaimType={manualClaimInitialType}
+        onSuccess={() => loadOrders(true)}
+      />
+
+      {/* Influencer Endorsement / PR Order Modal */}
+      <EndorsementOrderModal
+        isOpen={isEndorsementModalOpen}
+        onClose={() => setIsEndorsementModalOpen(false)}
         onSuccess={() => loadOrders(true)}
       />
     </div>

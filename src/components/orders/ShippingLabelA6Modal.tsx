@@ -205,8 +205,16 @@ function renderSinglePageHtml(
         cleanItemName.toLowerCase().includes('warranty') ||
         (ord.meta_data || []).some((m: any) => (m.key === '_order_badge' && m.value === 'WARRANTY') || (m.key === '_is_warranty' && m.value === 'yes'));
 
+      const isEndorsementItem =
+        cleanItemName.toLowerCase().includes('endorsement') ||
+        (ord.meta_data || []).some((m: any) => (m.key === '_order_badge' && m.value === 'ENDORSEMENT') || (m.key === '_is_endorsement' && m.value === 'yes'));
+
       let finalRefSpecs = refSpecs;
-      if (!finalRefSpecs && isWarrantyItem) {
+      if (!finalRefSpecs && isEndorsementItem) {
+        const influencerHandle = (ord.meta_data || []).find((m: any) => m.key === '_influencer_handle')?.value;
+        const platform = (ord.meta_data || []).find((m: any) => m.key === '_endorsement_platform')?.value;
+        finalRefSpecs = `VIP PR Endorsement • ${influencerHandle ? `${influencerHandle} ` : ''}(${platform || 'Creator'})`;
+      } else if (!finalRefSpecs && isWarrantyItem) {
         const rmaChannel = (ord.meta_data || []).find((m: any) => m.key === '_rma_marketplace_channel')?.value;
         const rmaInvoice = (ord.meta_data || []).find((m: any) => m.key === '_rma_original_invoice' || m.key === '_rma_original_order_id')?.value;
         if (rmaInvoice) {

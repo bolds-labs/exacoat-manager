@@ -6727,6 +6727,75 @@ export async function createManualWarrantyClaimDirect(
   }
 }
 
+export interface EndorsementItemPayload {
+  product_id: number;
+  name: string;
+  quantity: number;
+  configuration?: string;
+  configurator_data?: any[];
+  device_model?: string;
+  item_note?: string;
+  note?: string;
+}
+
+export interface EndorsementOrderPayload {
+  influencer_name: string;
+  influencer_handle: string;
+  platform: 'Instagram' | 'TikTok' | 'YouTube' | 'X / Twitter' | 'Other' | string;
+  campaign_name?: string;
+  admin_notes?: string;
+  admin_name?: string;
+  customer_phone: string;
+  customer_email?: string;
+  shipping_address: {
+    address_1: string;
+    city?: string;
+    state?: string;
+    postcode: string;
+    country?: string;
+  };
+  items: EndorsementItemPayload[];
+  courier_id: string;
+  courier_label: string;
+  actual_shipping_cost: number;
+}
+
+export async function createEndorsementOrderDirect(
+  payload: EndorsementOrderPayload
+): Promise<{
+  success: boolean;
+  order_id?: number;
+  order_number?: string;
+  message?: string;
+  error?: string;
+}> {
+  const base = getWordPressBaseUrl();
+  const url = `${base}/wp-json/exacoat-core/v1/endorsement/create`;
+
+  try {
+    const res = await authenticatedFetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        order_id: data.order_id,
+        order_number: data.order_number,
+        message: data.message,
+      };
+    }
+    return { success: false, error: data?.message || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 export async function fetchRmaClaimsLogDirect(params?: {
   type?: 'all' | 'Warranty' | 'Redeem';
   status?: 'all' | 'pending_review' | 'approved' | 'rejected';

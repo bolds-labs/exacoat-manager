@@ -64,6 +64,7 @@ export interface UnifiedFinancialRecord {
   customerCity?: string;
   paymentMethod?: string;
   couponCodes?: string[];
+  isEndorsement?: boolean;
 }
 
 export interface ChannelMetrics {
@@ -290,6 +291,9 @@ export function normalizeWebstoreOrder(order: Order): UnifiedFinancialRecord {
     customerCity: order.shipping?.city || order.billing?.city,
     paymentMethod: order.payment_method_title || order.payment_method || 'Online Payment',
     couponCodes: order.coupon_codes || [],
+    isEndorsement: (order.meta_data || []).some(
+      (m: any) => (m.key === '_order_badge' && m.value === 'ENDORSEMENT') || (m.key === '_is_endorsement' && m.value === 'yes')
+    ),
   };
 }
 
@@ -560,7 +564,7 @@ export function aggregateFinancialMetrics(
 
   inWindowRecords.sort((a, b) => a.timestamp - b.timestamp);
 
-  const filtered = inWindowRecords.filter(rec => rec.isPaid && rec.statusNormalized === 'paid');
+  const filtered = inWindowRecords.filter(rec => rec.isPaid && rec.statusNormalized === 'paid' && !rec.isEndorsement);
 
   let totalGross = 0;
   let totalClean = 0;

@@ -32,6 +32,7 @@ import {
   Layers,
   Store,
   PackageCheck,
+  Sparkles,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -244,12 +245,18 @@ export const OrderTable: React.FC<OrderTableProps> = ({
     let completed = 0;
     let warranty = 0;
     let redeem = 0;
+    let endorsement = 0;
 
     orders.forEach((o) => {
       const cleanStatus = String(o.status || '').replace('wc-', '').toLowerCase();
       const rma = getOrderRma(o);
       if (rma?.order_type === 'Warranty') warranty++;
       if (rma?.order_type === 'Redeem') redeem++;
+
+      const isEndorsement = (o.meta_data || []).some(
+        (m: any) => (m.key === '_order_badge' && m.value === 'ENDORSEMENT') || (m.key === '_is_endorsement' && m.value === 'yes')
+      );
+      if (isEndorsement) endorsement++;
 
       const isPickup = isStorePickupOrder(o);
 
@@ -294,7 +301,8 @@ export const OrderTable: React.FC<OrderTableProps> = ({
       shipped, 
       completed, 
       warranty, 
-      redeem 
+      redeem,
+      endorsement
     };
   }, [orders]);
 
@@ -408,6 +416,11 @@ export const OrderTable: React.FC<OrderTableProps> = ({
         } else if (activeStatus === 'redeem') {
           const rma = getOrderRma(order);
           if (rma?.order_type !== 'Redeem') return false;
+        } else if (activeStatus === 'endorsement') {
+          const isEndorsement = (order.meta_data || []).some(
+            (m: any) => (m.key === '_order_badge' && m.value === 'ENDORSEMENT') || (m.key === '_is_endorsement' && m.value === 'yes')
+          );
+          if (!isEndorsement) return false;
         } else if (['store-pickup', 'store-pickup-ready', 'store-pickup-picked'].includes(activeStatus)) {
           // Already filtered above
         } else if (activeStatus === 'ready-to-ship') {
@@ -655,6 +668,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
             { key: 'completed', label: 'Completed' },
             { key: 'warranty', label: 'Warranty Claims' },
             { key: 'redeem', label: 'Redeem' },
+            { key: 'endorsement', label: 'Endorsements', count: statusCounts.endorsement },
           ].map((tab) => (
             <button
               key={tab.key}
@@ -675,9 +689,13 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                     activeStatus === tab.key
                       ? tab.key === 'redeem'
                         ? 'bg-amber-500 text-black font-extrabold'
+                        : tab.key === 'endorsement'
+                        ? 'bg-purple-600 text-white font-extrabold'
                         : 'bg-white/20 text-white dark:bg-black/20 dark:text-black'
                       : tab.key === 'redeem'
                       ? 'bg-amber-500/20 text-amber-500 dark:text-amber-400 border border-amber-500/30'
+                      : tab.key === 'endorsement'
+                      ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
                       : 'bg-zinc-200 dark:bg-white/10 text-zinc-700 dark:text-zinc-300 border border-zinc-300 dark:border-white/10'
                   )}
                 >
@@ -1010,6 +1028,10 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                   const isPrinted = printedOrderIds.has(order.id);
                   const isConfirmed = isOrderConfirmed(order.status);
                   const isCompleted = String(order.status || '').replace(/^wc-/, '').toLowerCase().trim() === 'completed';
+                  const isEndorsement = (order.meta_data || []).some(
+                    (m: any) => (m.key === '_order_badge' && m.value === 'ENDORSEMENT') || (m.key === '_is_endorsement' && m.value === 'yes')
+                  );
+                  const influencerHandle = (order.meta_data || []).find((m: any) => m.key === '_influencer_handle')?.value;
 
                   return (
                     <tr
@@ -1037,6 +1059,12 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                           <span className="font-mono font-bold text-zinc-900 dark:text-white">
                             #{String(order.order_number || order.id).replace(/^#+/, '')}
                           </span>
+                          {isEndorsement && (
+                            <span className="inline-flex items-center gap-0.5 text-[8px] font-mono font-bold text-purple-400 bg-purple-500/15 border border-purple-500/30 px-1 py-0.5 rounded shadow-xs">
+                              <Sparkles className="w-2.5 h-2.5 text-purple-400" />
+                              ENDORSEMENT
+                            </span>
+                          )}
                           {getOrderRma(order)?.order_type === 'Redeem' && (
                             <span className="inline-flex items-center gap-0.5 text-[8px] font-mono font-bold text-amber-500 dark:text-amber-400 bg-amber-500/15 border border-amber-500/30 px-1 py-0.5 rounded shadow-xs">
                               <RotateCcw className="w-2.5 h-2.5 text-amber-400" />
@@ -1062,8 +1090,13 @@ export const OrderTable: React.FC<OrderTableProps> = ({
 
                       {/* Customer Name & Destination */}
                       <td className="py-3.5 px-4">
-                        <p className="font-medium text-zinc-900 dark:text-white">
-                          {order.customer_name || 'Customer'}
+                        <p className="font-medium text-zinc-900 dark:text-white flex items-center gap-1.5 flex-wrap">
+                          <span>{order.customer_name || 'Customer'}</span>
+                          {influencerHandle && (
+                            <span className="text-[10px] font-mono text-purple-400 font-semibold bg-purple-500/10 px-1.5 py-0.2 rounded border border-purple-500/20">
+                              {influencerHandle}
+                            </span>
+                          )}
                         </p>
                         <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate max-w-[180px]">
                           {isPickup ? (
@@ -1251,6 +1284,12 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                       <span className="font-mono font-bold text-xs text-zinc-900 dark:text-white">
                         #{String(order.order_number || order.id).replace(/^#+/, '')}
                       </span>
+                      {(order.meta_data || []).some((m: any) => (m.key === '_order_badge' && m.value === 'ENDORSEMENT') || (m.key === '_is_endorsement' && m.value === 'yes')) && (
+                        <span className="inline-flex items-center gap-0.5 text-[8px] font-mono font-bold text-purple-400 bg-purple-500/20 border border-purple-500/40 px-1 py-0.2 rounded">
+                          <Sparkles className="w-2 h-2 text-purple-400" />
+                          ENDORSEMENT
+                        </span>
+                      )}
                       {getOrderRma(order)?.order_type === 'Redeem' && (
                         <span className="inline-flex items-center gap-0.5 text-[8px] font-mono font-bold text-amber-500 dark:text-amber-400 bg-amber-500/20 border border-amber-500/40 px-1 py-0.2 rounded">
                           <RotateCcw className="w-2 h-2 text-amber-400" />

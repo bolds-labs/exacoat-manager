@@ -238,6 +238,15 @@ class Exacoat_Warranty_Manager {
 				'permission_callback' => '__return_true',
 			],
 		] );
+
+		// Admin / Manager: Create Endorsement (Influencer PR) order
+		register_rest_route( 'exacoat-core/v1', '/endorsement/create', [
+			[
+				'methods'             => \WP_REST_Server::CREATABLE,
+				'callback'            => [ __CLASS__, 'rest_create_endorsement_order' ],
+				'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
+			],
+		] );
 	}
 
 	/**
@@ -2701,6 +2710,191 @@ class Exacoat_Warranty_Manager {
 			return new \WP_REST_Response( [
 				'success' => false,
 				'message' => 'Failed to create manual warranty claim: ' . $e->getMessage(),
+			], 500 );
+		}
+	}
+
+	/**
+	 * Admin / Manager: Create Endorsement (Influencer PR) order
+	 */
+	public static function rest_create_endorsement_order( \WP_REST_Request $request ): \WP_REST_Response {
+		$influencer_name   = sanitize_text_field( $request->get_param( 'influencer_name' ) ?: '' );
+		$influencer_handle = sanitize_text_field( $request->get_param( 'influencer_handle' ) ?: '' );
+		$platform          = sanitize_text_field( $request->get_param( 'platform' ) ?: 'Instagram' );
+		$campaign_name     = sanitize_text_field( $request->get_param( 'campaign_name' ) ?: 'Influencer Endorsement' );
+		$admin_notes       = sanitize_textarea_field( $request->get_param( 'admin_notes' ) ?: '' );
+		$admin_name        = sanitize_text_field( $request->get_param( 'admin_name' ) ?: 'Operations Manager' );
+
+		$customer_phone    = sanitize_text_field( $request->get_param( 'customer_phone' ) ?: '' );
+		$customer_email    = sanitize_email( $request->get_param( 'customer_email' ) ?: '' );
+		$shipping_addr     = (array) $request->get_param( 'shipping_address' );
+		$items             = (array) $request->get_param( 'items' );
+
+		$courier_id           = sanitize_text_field( $request->get_param( 'courier_id' ) ?: 'jne_reg' );
+		$courier_label        = sanitize_text_field( $request->get_param( 'courier_label' ) ?: 'JNE Regular' );
+		$actual_shipping_cost = max( 0, floatval( $request->get_param( 'actual_shipping_cost' ) ?: 0 ) );
+
+		if ( empty( $influencer_name ) || empty( $customer_phone ) ) {
+			return new \WP_REST_Response( [
+				'success' => false,
+				'message' => 'Influencer name and phone number are required.',
+			], 400 );
+		}
+
+		if ( empty( $items ) ) {
+			return new \WP_REST_Response( [
+				'success' => false,
+				'message' => 'Please select at least one skin/device to include in the PR package.',
+			], 400 );
+		}
+
+		try {
+			$prefix_note = sprintf(
+				'[ENDORSEMENT - INFLUENCER PR] Influencer: %s (%s | %s) | Campaign: %s. Free products & shipping issued.',
+				$influencer_name,
+				$influencer_handle ?: '-',
+				$platform,
+				$campaign_name
+			);
+			$full_customer_note = ! empty( $admin_notes ) ? "{$prefix_note}\n\nNotes: {$admin_notes}" : $prefix_note;
+
+			$order = wc_create_order( [
+				'status'        => 'processing',
+				'customer_note' => $full_customer_note,
+			] );
+
+			if ( is_wp_error( $order ) ) {
+				return new \WP_REST_Response( [
+					'success' => false,
+					'message' => 'Order creation failed: ' . $order->get_error_message(),
+				], 500 );
+			}
+
+			$name_parts = explode( ' ', trim( $influencer_name ), 2 );
+			$first_name = $name_parts[0] ?? '';
+			$last_name  = $name_parts[1] ?? '';
+
+			$clean_email = $customer_email ?: ( sanitize_title( $influencer_handle ?: $influencer_name ) . '@endorsement.internal' );
+
+			$addr = [
+				'first_name' => $first_name,
+				'last_name'  => $last_name,
+				'address_1'  => sanitize_text_field( $shipping_addr['address_1'] ?? '' ),
+				'city'       => sanitize_text_field( $shipping_addr['city'] ?? '' ),
+				'state'      => sanitize_text_field( $shipping_addr['state'] ?? '' ),
+				'postcode'   => sanitize_text_field( $shipping_addr['postcode'] ?? '' ),
+				'country'    => sanitize_text_field( $shipping_addr['country'] ?? 'ID' ),
+				'phone'      => $customer_phone,
+				'email'      => $clean_email,
+			];
+
+			$order->set_address( $addr, 'billing' );
+			$order->set_address( $addr, 'shipping' );
+
+			$added_count = 0;
+			foreach ( $items as $it ) {
+				$product_id = absint( $it['product_id'] ?? 0 );
+				$product    = $product_id ? wc_get_product( $product_id ) : null;
+				$quantity   = max( 1, intval( $it['quantity'] ?? 1 ) );
+
+				if ( $product ) {
+					$order_item_id = $order->add_product( $product, $quantity, [
+						'subtotal' => 0,
+						'total'    => 0,
+					] );
+
+					if ( $order_item_id ) {
+						$order_item  = $order->get_item( $order_item_id );
+						$base_config = sanitize_text_field( $it['configuration'] ?? 'Standard Endorsement Skin' );
+						$new_config  = sprintf( '[ENDORSEMENT PR] %s', $base_config );
+
+						$order_item->add_meta_data( '_is_endorsement', 'yes', true );
+						$order_item->add_meta_data( 'Configuration', trim( $new_config ), true );
+
+						if ( ! empty( $it['configurator_data'] ) ) {
+							$order_item->add_meta_data( '_configurator_data', $it['configurator_data'], true );
+							$order_item->add_meta_data( '_configurator_data_raw', $it['configurator_data'], true );
+						}
+						if ( ! empty( $it['device_model'] ) ) {
+							$order_item->add_meta_data( 'device_model', sanitize_text_field( $it['device_model'] ), true );
+						}
+						if ( ! empty( $it['note'] ) || ! empty( $it['item_note'] ) ) {
+							$item_note_val = sanitize_text_field( $it['note'] ?? $it['item_note'] );
+							$order_item->add_meta_data( '_item_note', $item_note_val, true );
+							$order_item->add_meta_data( 'note', $item_note_val, true );
+						}
+						$order_item->save();
+						$added_count++;
+					}
+				}
+			}
+
+			if ( 0 === $added_count ) {
+				$order->delete( true );
+				return new \WP_REST_Response( [
+					'success' => false,
+					'message' => 'Failed to add items to the order. Please verify product selections.',
+				], 400 );
+			}
+
+			// Add shipping method line
+			$shipping_item = new \WC_Order_Item_Shipping();
+			$shipping_item->set_method_title( $courier_label );
+			$shipping_item->set_method_id( $courier_id );
+			$shipping_item->set_total( $actual_shipping_cost );
+			$order->add_item( $shipping_item );
+
+			// Add negative fee line to balance courier cost to Rp 0
+			if ( $actual_shipping_cost > 0 ) {
+				$waiver_fee = new \WC_Order_Item_Fee();
+				$waiver_fee->set_name( 'Endorsement Shipping Waiver (Borne by Exacoat Marketing)' );
+				$waiver_fee->set_amount( -1 * $actual_shipping_cost );
+				$waiver_fee->set_total( -1 * $actual_shipping_cost );
+				$waiver_fee->set_tax_status( 'none' );
+				$waiver_fee->add_meta_data( '_is_shipping_waiver', 'yes', true );
+				$waiver_fee->add_meta_data( '_covered_courier_cost', $actual_shipping_cost, true );
+				$order->add_item( $waiver_fee );
+			}
+
+			$order->set_currency( 'IDR' );
+			$order->calculate_totals();
+
+			$order_id = $order->get_id();
+			$order->update_meta_data( '_order_badge', 'ENDORSEMENT' );
+			$order->update_meta_data( '_is_endorsement', 'yes' );
+			$order->update_meta_data( '_influencer_name', $influencer_name );
+			$order->update_meta_data( '_influencer_handle', $influencer_handle );
+			$order->update_meta_data( '_endorsement_platform', $platform );
+			$order->update_meta_data( '_campaign_name', $campaign_name );
+			$order->update_meta_data( '_admin_notes', $admin_notes );
+			$order->update_meta_data( '_created_by_admin', $admin_name );
+			$order->update_meta_data( '_actual_shipping_cost', $actual_shipping_cost );
+			$order->update_meta_data( '_shipping_waived', 'yes' );
+
+			$order->add_order_note( sprintf(
+				'⭐ [ENDORSEMENT ORDER - INFLUENCER PR] Influencer: %s (%s | %s). Campaign: %s. Courier: %s (Rp %s, Waived via Exacoat Marketing Expense). Created by %s. Direct to production queue.',
+				$influencer_name,
+				$influencer_handle ?: '-',
+				$platform,
+				$campaign_name,
+				$courier_label,
+				number_format( $actual_shipping_cost, 0, ',', '.' ),
+				$admin_name
+			) );
+
+			$order->save();
+
+			return new \WP_REST_Response( [
+				'success'      => true,
+				'order_id'     => $order_id,
+				'order_number' => $order->get_order_number(),
+				'message'      => sprintf( 'Endorsement order #%s created successfully.', $order->get_order_number() ),
+			], 200 );
+
+		} catch ( \Throwable $e ) {
+			return new \WP_REST_Response( [
+				'success' => false,
+				'message' => 'Endorsement creation error: ' . $e->getMessage(),
 			], 500 );
 		}
 	}
