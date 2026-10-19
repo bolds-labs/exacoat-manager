@@ -6342,6 +6342,12 @@ export interface WarrantyClaimDetails {
   success: boolean;
   order_id: number;
   order_number: string;
+  order_key?: string;
+  payment_url?: string;
+  shipping_cost?: number;
+  is_paid?: boolean;
+  order_status?: string;
+  courier_name?: string;
   parent_order_id: number | string;
   parent_order_number: string;
   channel?: string;
@@ -6399,7 +6405,16 @@ export async function reviewWarrantyClaimDirect(
   reason?: string,
   adminName?: string,
   allowResubmit?: boolean
-): Promise<{ success: boolean; rma_status?: string; video_deleted?: boolean; message?: string; error?: string }> {
+): Promise<{
+  success: boolean;
+  rma_status?: string;
+  video_deleted?: boolean;
+  payment_url?: string;
+  shipping_cost?: number;
+  is_paid?: boolean;
+  message?: string;
+  error?: string;
+}> {
   const base = getWordPressBaseUrl();
   const url = `${base}/wp-json/exacoat-core/v1/warranty/review`;
 
@@ -6414,7 +6429,7 @@ export async function reviewWarrantyClaimDirect(
         order_id: orderId,
         action,
         reason: reason || '',
-        admin_name: adminName || 'Operations Manager',
+        admin_name: adminName || 'Aurelia',
         allow_resubmit: !!allowResubmit,
       }),
     });
@@ -6424,6 +6439,9 @@ export async function reviewWarrantyClaimDirect(
         success: true,
         rma_status: data.rma_status,
         video_deleted: data.video_deleted,
+        payment_url: data.payment_url,
+        shipping_cost: data.shipping_cost,
+        is_paid: data.is_paid,
         message: data.message,
       };
     }

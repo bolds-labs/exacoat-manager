@@ -1723,8 +1723,11 @@ class Exacoat_Warranty_Manager {
 		$parent_id    = $order->get_meta( '_rma_original_invoice' );
 		$parent_order = $parent_id ? wc_get_order( $parent_id ) : null;
 
+		$payment_url = 'https://exacoat.com/pay/' . $order_id . '?key=' . $order->get_order_key();
+
 		if ( 'approve' === $action ) {
 			$order->update_meta_data( '_rma_status', 'approved' );
+			$order->update_meta_data( '_warranty_payment_url', $payment_url );
 			$order->update_meta_data( '_rma_reviewed_by', $admin_name );
 			$order->update_meta_data( '_rma_reviewed_at', current_time( 'mysql' ) );
 
@@ -1733,10 +1736,61 @@ class Exacoat_Warranty_Manager {
 				$parent_order->save();
 			}
 
-			if ( 'Redeem' === $order_type || $order->is_paid() || in_array( $order->get_status(), [ 'processing', 'on-hold' ], true ) ) {
+			$shipping_total = (float) $order->get_shipping_total();
+
+			if ( 'Redeem' === $order_type || $order->is_paid() || $shipping_total <= 0 ) {
 				$order->set_status( 'processing', sprintf( '%s claim approved by %s. Moving to production.', $order_type, $admin_name ) );
 			} else {
-				$order->add_order_note( sprintf( '%s claim approved by %s. Awaiting customer shipping fee payment.', $order_type, $admin_name ) );
+				$order->add_order_note( sprintf( '%s claim approved by %s. Payment link: %s. Awaiting customer shipping fee payment (Rp %s).', $order_type, $admin_name, $payment_url, number_format( $shipping_total, 0, ',', '.' ) ) );
+
+				// Dispatch automated approval email with official payment link
+				$recipient_email = $order->get_billing_email();
+				$recipient_name  = $order->get_formatted_billing_full_name() ?: 'Customer';
+				if ( ! empty( $recipient_email ) && is_email( $recipient_email ) ) {
+					$shipping_fmt = 'Rp ' . number_format( $shipping_total, 0, ',', '.' );
+					$order_ref    = $parent_id ? (string) $parent_id : (string) $order->get_order_number();
+					$approval_subject = '[Exacoat] Klaim Garansi Pemasangan Disetujui #' . $order_ref;
+					$approval_html = '
+					<div style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px; color: #18181b; background-color: #ffffff; border-radius: 12px; border: 1px solid #e4e4e7;">
+						<div style="margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid #f3aa18;">
+							<h2 style="margin: 0; color: #18181b; font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">EXACOAT</h2>
+							<p style="margin: 4px 0 0; color: #71717a; font-size: 13px; font-weight: 500;">Installation Warranty &amp; Quality Control</p>
+						</div>
+						<div style="font-size: 15px; line-height: 1.6; color: #27272a;">
+							<p>Halo kak ' . esc_html( $recipient_name ) . ',</p>
+							<p>Klaim garansi pemasangan Exacoat Anda untuk pesanan <strong>#' . esc_html( $order_ref ) . '</strong> telah ditinjau dan <strong>disetujui</strong> oleh tim Quality Control kami.</p>
+							<p>Silakan selesaikan pembayaran ongkos kirim ekspedisi sebesar <strong>' . esc_html( $shipping_fmt ) . '</strong> melalui tautan resmi Exacoat berikut agar pesanan penggantian dapat segera kami jadwalkan untuk proses produksi dan pengiriman:</p>
+							<div style="margin: 24px 0; text-align: center;">
+								<a href="' . esc_url( $payment_url ) . '" style="display: inline-block; background-color: #f3aa18; color: #000000; font-weight: 700; font-size: 14px; padding: 14px 28px; border-radius: 8px; text-decoration: none;">Bayar Ongkos Kirim (' . esc_html( $shipping_fmt ) . ')</a>
+							</div>
+							<p style="font-size: 12px; color: #71717a; word-break: break-all;">Tautan langsung: <a href="' . esc_url( $payment_url ) . '" style="color: #f3aa18;">' . esc_url( $payment_url ) . '</a></p>
+							<br />
+							<p style="margin-bottom: 0;">Best Regards,<br />Aurelia<br />Exacoat Customer Support</p>
+						</div>
+					</div>';
+
+					if ( class_exists( 'Exacoat_Email_Engine' ) ) {
+						Exacoat_Email_Engine::send_email(
+							'warranty_approved',
+							$recipient_email,
+							$recipient_name,
+							[
+								'subject'    => $approval_subject,
+								'html'       => $approval_html,
+								'htmlbody'   => $approval_html,
+								'from_email' => 'support@exacoat.com',
+								'from_name'  => 'Exacoat Customer Support',
+								'order_id'   => $order_id,
+							]
+						);
+					} else {
+						$headers = [
+							'Content-Type: text/html; charset=UTF-8',
+							'From: Exacoat Customer Support <support@exacoat.com>',
+						];
+						wp_mail( $recipient_email, $approval_subject, $approval_html, $headers );
+					}
+				}
 			}
 
 		} elseif ( 'reject' === $action ) {
@@ -1777,6 +1831,9 @@ class Exacoat_Warranty_Manager {
 			'success'       => true,
 			'order_id'      => $order_id,
 			'rma_status'    => $order->get_meta( '_rma_status' ),
+			'payment_url'   => $payment_url,
+			'shipping_cost' => (float) $order->get_shipping_total(),
+			'is_paid'       => $order->is_paid(),
 			'video_deleted' => $deleted,
 			'message'       => sprintf( '%s claim successfully %sd. Proof video has been deleted from server.', $order_type, $action ),
 		], 200 );
@@ -1930,10 +1987,18 @@ class Exacoat_Warranty_Manager {
 			];
 		}
 
+		$payment_url = 'https://exacoat.com/pay/' . $order_id . '?key=' . $order->get_order_key();
+
 		return new \WP_REST_Response( [
 			'success'                 => true,
 			'order_id'                => $order_id,
 			'order_number'            => $order->get_order_number(),
+			'order_key'               => $order->get_order_key(),
+			'payment_url'             => $payment_url,
+			'shipping_cost'           => (float) $order->get_shipping_total(),
+			'is_paid'                 => $order->is_paid(),
+			'order_status'            => $order->get_status(),
+			'courier_name'            => $order->get_shipping_method(),
 			'parent_order_id'         => $parent_id,
 			'parent_order_number'     => $parent_order ? $parent_order->get_order_number() : $parent_id,
 			'channel'                 => $channel,

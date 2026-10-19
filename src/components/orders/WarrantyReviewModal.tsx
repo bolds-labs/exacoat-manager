@@ -19,9 +19,13 @@ import {
   Send,
   Phone,
   KeyRound,
+  CreditCard,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { formatOrderNumber } from '../../lib/orderUtils';
+import { formatCurrency } from '../../lib/formatters';
 import {
   fetchWarrantyClaimDetails,
   reviewWarrantyClaimDirect,
@@ -32,15 +36,27 @@ import { useToast } from '../../context/ToastContext';
 import { cleanItemTitle } from '../../lib/orderItems';
 import { getWordPressBaseUrl } from '../../lib/env';
 
+export type CommTemplateKey = 'cut_incorrect' | 'missing_skins' | 'unclear_video' | 'payment_link';
+
 const COMM_TEMPLATES = {
+  payment_link: {
+    labelId: 'Kirim Link Pembayaran Ongkir',
+    labelEn: 'Send Shipping Payment Link',
+    subjectId: (ref: string) => `[Exacoat] Klaim Garansi #${ref} Disetujui - Link Pembayaran Ongkir`,
+    subjectEn: (ref: string) => `[Exacoat] Warranty Claim #${ref} Approved - Shipping Payment Link`,
+    textId: (name: string, ref: string, payUrl?: string) =>
+      `Halo kak ${name},\n\nKabar baik! Klaim garansi pemasangan Exacoat untuk pesanan #${ref} telah disetujui oleh tim kami.\n\nProduk pengganti Anda gratis (Rp 0). Silakan lakukan pembayaran ongkos kirim melalui link resmi Exacoat berikut:\n${payUrl || 'https://exacoat.com/pay'}\n\nSetelah pembayaran diterima, pesanan pengganti akan segera kami jadwalkan untuk pengiriman. Terima kasih!\n\nBest Regards,\nAurelia\nExacoat Customer Support`,
+    textEn: (name: string, ref: string, payUrl?: string) =>
+      `Hi ${name},\n\nGreat news! Your Exacoat installation warranty claim for order #${ref} has been approved.\n\nYour replacement skin is covered at Rp 0. Please complete the courier shipping payment using our secure payment link:\n${payUrl || 'https://exacoat.com/pay'}\n\nOnce paid, your replacement package will be scheduled for dispatch. Thank you!\n\nBest Regards,\nAurelia\nExacoat Customer Support`,
+  },
   cut_incorrect: {
     labelId: 'Video Potongan Skin Tidak Sesuai',
     labelEn: 'Skin Cut Proof Incorrect',
     subjectId: (ref: string) => `[Exacoat] Permintaan Video Ulang Klaim Garansi #${ref}`,
     subjectEn: (ref: string) => `[Exacoat] Video Clarification for Installation Warranty Claim #${ref}`,
-    textId: (name: string, ref: string) =>
+    textId: (name: string, ref: string, _payUrl?: string) =>
       `Halo kak ${name},\n\nTerima kasih telah mengajukan klaim garansi pemasangan Exacoat untuk pesanan #${ref}.\n\nSetelah tim kami meninjau video bukti yang diunggah, pemotongan skin belum sesuai ketentuan garansi (produk skin asli harus dipotong, bukan hanya lapisan pelindung atau kertas alasnya, dan terlihat jelas pada video).\n\nMohon bantu kirimkan video pemotongan produk skin yang sesuai melalui WhatsApp/email ini agar klaim penggantian dapat segera kami proses. Terima kasih!\n\nBest Regards,\nAurelia\nExacoat Customer Support`,
-    textEn: (name: string, ref: string) =>
+    textEn: (name: string, ref: string, _payUrl?: string) =>
       `Hi ${name},\n\nThank you for submitting your Exacoat installation warranty claim for order #${ref}.\n\nUpon review, the uploaded video proof does not show the actual skin cut as required (the actual skin material must be cut, not just the backing sheet or protective layers, and shown clearly on video).\n\nPlease send an updated video showing the cut skin product so we can approve your replacement. Thank you!\n\nBest Regards,\nAurelia\nExacoat Customer Support`,
   },
   missing_skins: {
@@ -48,9 +64,9 @@ const COMM_TEMPLATES = {
     labelEn: 'Missing Claimed Skin Parts in Video',
     subjectId: (ref: string) => `[Exacoat] Video Bukti Belum Lengkap untuk Klaim Garansi #${ref}`,
     subjectEn: (ref: string) => `[Exacoat] Incomplete Proof Video for Warranty Claim #${ref}`,
-    textId: (name: string, ref: string) =>
+    textId: (name: string, ref: string, _payUrl?: string) =>
       `Halo kak ${name},\n\nMengenai pengajuan garansi pemasangan Exacoat untuk pesanan #${ref}.\n\nKami melihat masih ada bagian skin yang belum dipotong di dalam video bukti yang dilampirkan. Sesuai ketentuan garansi, seluruh bagian skin yang diajukan penggantian harus dipotong hingga terpisah.\n\nMohon kirimkan video pemotongan untuk seluruh bagian skin yang diklaim agar dapat kami setujui segera. Terima kasih!\n\nBest Regards,\nAurelia\nExacoat Customer Support`,
-    textEn: (name: string, ref: string) =>
+    textEn: (name: string, ref: string, _payUrl?: string) =>
       `Hi ${name},\n\nRegarding your Exacoat warranty replacement claim for order #${ref}.\n\nWe noticed that some of the claimed skin parts are missing from the cutting proof video. According to our warranty terms, all skins requested for replacement must be cut.\n\nPlease send a video showing all claimed skin parts cut so we can proceed with your replacement. Thank you!\n\nBest Regards,\nAurelia\nExacoat Customer Support`,
   },
   unclear_video: {
@@ -58,9 +74,9 @@ const COMM_TEMPLATES = {
     labelEn: 'Video Unplayable or Unclear',
     subjectId: (ref: string) => `[Exacoat] Video Bukti Buram / Tidak Dapat Diputar #${ref}`,
     subjectEn: (ref: string) => `[Exacoat] Video Proof Unclear or Unplayable #${ref}`,
-    textId: (name: string, ref: string) =>
+    textId: (name: string, ref: string, _payUrl?: string) =>
       `Halo kak ${name},\n\nTerkait pengajuan garansi pemasangan Exacoat untuk pesanan #${ref}.\n\nVideo bukti yang diunggah tidak dapat kami putar atau resolusinya kurang jelas sehingga tim QC belum dapat melakukan verifikasi.\n\nBisa tolong kirimkan video bukti pemotongan skin secara langsung ke WhatsApp/email ini? Kami akan segera memproses penggantian setelah video diverifikasi. Terima kasih!\n\nBest Regards,\nAurelia\nExacoat Customer Support`,
-    textEn: (name: string, ref: string) =>
+    textEn: (name: string, ref: string, _payUrl?: string) =>
       `Hi ${name},\n\nRegarding your Exacoat warranty claim for order #${ref}.\n\nWe were unable to play or clearly view the uploaded proof video, preventing our team from verifying the claim.\n\nCould you please send the video showing the cut skin directly in response to this message? We will process your replacement right away once verified. Thank you!\n\nBest Regards,\nAurelia\nExacoat Customer Support`,
   },
 };
@@ -98,11 +114,12 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
   const [showRejectInput, setShowRejectInput] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [allowResubmit, setAllowResubmit] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   // Manual Customer Follow-up State (WhatsApp or Email)
   const [commChannel, setCommChannel] = useState<'whatsapp' | 'email' | null>(null);
   const [commLanguage, setCommLanguage] = useState<'id' | 'en'>('id');
-  const [templateKey, setTemplateKey] = useState<'cut_incorrect' | 'missing_skins' | 'unclear_video'>('cut_incorrect');
+  const [templateKey, setTemplateKey] = useState<CommTemplateKey>('cut_incorrect');
   const [commMessage, setCommMessage] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
@@ -110,26 +127,38 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
   const [emailSubject, setEmailSubject] = useState('');
   const [isSendingEmail, setIsSendingEmail] = useState(false);
 
+  const handleCopyLink = (url: string) => {
+    navigator.clipboard.writeText(url);
+    setCopiedLink(true);
+    showToast('success', 'Link Copied', 'Payment link copied to clipboard.');
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
+
   const getOrderRef = (details: WarrantyClaimDetails | null) => {
     return String(details?.parent_order_number || details?.parent_order_id || details?.order_number || '');
   };
 
   const generateCommMessage = (
-    tplKey: 'cut_incorrect' | 'missing_skins' | 'unclear_video',
+    tplKey: CommTemplateKey,
     lang: 'id' | 'en',
     details: WarrantyClaimDetails | null
   ) => {
     const rawName = (details?.customer_name || '').trim();
     const firstName = rawName.split(' ')[0] || (lang === 'id' ? 'Kak' : 'Customer');
     const orderRef = getOrderRef(details);
+    const payUrl =
+      details?.payment_url ||
+      (details?.order_id
+        ? `https://exacoat.com/pay/${details.order_id}${details.order_key ? `?key=${details.order_key}` : ''}`
+        : 'https://exacoat.com/pay');
 
     const tpl = COMM_TEMPLATES[tplKey];
     if (!tpl) return '';
-    return lang === 'id' ? tpl.textId(firstName, orderRef) : tpl.textEn(firstName, orderRef);
+    return lang === 'id' ? tpl.textId(firstName, orderRef, payUrl) : tpl.textEn(firstName, orderRef, payUrl);
   };
 
   const generateEmailSubject = (
-    tplKey: 'cut_incorrect' | 'missing_skins' | 'unclear_video',
+    tplKey: CommTemplateKey,
     lang: 'id' | 'en',
     details: WarrantyClaimDetails | null
   ) => {
@@ -139,7 +168,7 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
     return lang === 'id' ? tpl.subjectId(orderRef) : tpl.subjectEn(orderRef);
   };
 
-  const handleSelectTemplate = (tplKey: 'cut_incorrect' | 'missing_skins' | 'unclear_video') => {
+  const handleSelectTemplate = (tplKey: CommTemplateKey) => {
     setTemplateKey(tplKey);
     setCommMessage(generateCommMessage(tplKey, commLanguage, claim));
     setEmailSubject(generateEmailSubject(tplKey, commLanguage, claim));
@@ -272,7 +301,7 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
     setIsProcessing(false);
 
     if (res.success) {
-      showToast('success', 'Claim Approved', 'Warranty claim approved and video proof deleted from disk.');
+      showToast('success', 'Claim Approved', 'Warranty claim approved. Payment link generated and email sent to customer.');
       if (onClaimReviewed) onClaimReviewed();
       loadDetails();
     } else {
@@ -518,6 +547,125 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
               )}
             </div>
           </div>
+
+          {/* Official Payment Link Card */}
+          {(claim.payment_url || claim.rma_status === 'approved' || typeof claim.is_paid === 'boolean') && (
+            (() => {
+              const payUrl =
+                claim.payment_url ||
+                `https://exacoat.com/pay/${claim.order_id}${claim.order_key ? `?key=${claim.order_key}` : ''}`;
+              const shippingFormatted = formatCurrency(claim.shipping_cost || 0, 'IDR');
+              const isPaid = !!claim.is_paid;
+
+              return (
+                <div
+                  className={clsx(
+                    'rounded-xl border p-4 space-y-3 transition-colors',
+                    isPaid
+                      ? 'border-emerald-500/30 bg-emerald-950/20'
+                      : 'border-amber-500/30 bg-amber-950/20'
+                  )}
+                >
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className={clsx(
+                          'flex h-7 w-7 items-center justify-center rounded-lg shrink-0',
+                          isPaid ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
+                        )}
+                      >
+                        <CreditCard className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-xs text-white">
+                            Official Payment Link
+                          </span>
+                          <span
+                            className={clsx(
+                              'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide',
+                              isPaid
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                            )}
+                          >
+                            {isPaid ? 'Shipping Paid' : 'Pending Shipping Payment'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-neutral-400 mt-0.5">
+                          {isPaid
+                            ? `Courier shipping (${shippingFormatted}) has been settled. Order is ready for dispatch.`
+                            : `Replacement skin is Rp 0. Customer only pays courier shipping (${shippingFormatted}).`}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTemplateKey('payment_link');
+                          setCommChannel('whatsapp');
+                          setCommMessage(generateCommMessage('payment_link', commLanguage, claim));
+                          setEmailSubject(generateEmailSubject('payment_link', commLanguage, claim));
+                          if (claim.customer_phone) setCustomerPhone(claim.customer_phone);
+                        }}
+                        className="flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1.5 text-[11px] font-medium text-emerald-300 hover:bg-emerald-500/20 transition-colors cursor-pointer"
+                        title="Send payment link to customer on WhatsApp"
+                      >
+                        <MessageSquare className="h-3.5 w-3.5" />
+                        <span>WhatsApp Link</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTemplateKey('payment_link');
+                          setCommChannel('email');
+                          setCommMessage(generateCommMessage('payment_link', commLanguage, claim));
+                          setEmailSubject(generateEmailSubject('payment_link', commLanguage, claim));
+                          if (claim.customer_email) setCustomerEmail(claim.customer_email);
+                        }}
+                        className="flex items-center gap-1 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2.5 py-1.5 text-[11px] font-medium text-sky-300 hover:bg-sky-500/20 transition-colors cursor-pointer"
+                        title="Send payment link email to customer"
+                      >
+                        <Mail className="h-3.5 w-3.5" />
+                        <span>Email Link</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Copyable link input */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={payUrl}
+                      className="h-8 flex-1 rounded border border-neutral-700 bg-neutral-900/90 px-2.5 font-mono text-[11px] text-neutral-200 select-all focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleCopyLink(payUrl)}
+                      className="flex items-center gap-1 rounded border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-[11px] font-medium text-neutral-200 hover:bg-neutral-700 transition-colors cursor-pointer whitespace-nowrap"
+                    >
+                      {copiedLink ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                      <span>{copiedLink ? 'Copied' : 'Copy Link'}</span>
+                    </button>
+                    <a
+                      href={payUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 rounded border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-[11px] font-medium text-neutral-200 hover:bg-neutral-700 transition-colors whitespace-nowrap"
+                      title="Open payment page in new tab"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      <span>Open</span>
+                    </a>
+                  </div>
+                </div>
+              );
+            })()
+          )}
 
           {/* WhatsApp Interactive Assistant Panel */}
           {commChannel === 'whatsapp' && (
