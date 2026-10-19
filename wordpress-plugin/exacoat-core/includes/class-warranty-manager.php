@@ -2749,18 +2749,11 @@ class Exacoat_Warranty_Manager {
 		}
 
 		try {
-			$prefix_note = sprintf(
-				'[ENDORSEMENT - INFLUENCER PR] Influencer: %s (%s | %s) | Campaign: %s. Free products & shipping issued.',
-				$influencer_name,
-				$influencer_handle ?: '-',
-				$platform,
-				$campaign_name
-			);
-			$full_customer_note = ! empty( $admin_notes ) ? "{$prefix_note}\n\nNotes: {$admin_notes}" : $prefix_note;
-
+			// Customer note should only contain actual customer delivery note (if any).
+			// Influencer details are strictly private internal order notes.
 			$order = wc_create_order( [
 				'status'        => 'processing',
-				'customer_note' => $full_customer_note,
+				'customer_note' => $admin_notes,
 			] );
 
 			if ( is_wp_error( $order ) ) {
@@ -2769,6 +2762,16 @@ class Exacoat_Warranty_Manager {
 					'message' => 'Order creation failed: ' . $order->get_error_message(),
 				], 500 );
 			}
+
+			// Add private internal order note for admin tracking
+			$order->add_order_note( sprintf(
+				'[ENDORSEMENT - INFLUENCER PR] Influencer: %s (%s | %s) | Campaign: %s. Free products & shipping issued by %s.',
+				$influencer_name,
+				$influencer_handle ?: '-',
+				$platform,
+				$campaign_name,
+				$admin_name
+			) );
 
 			$name_parts = explode( ' ', trim( $influencer_name ), 2 );
 			$first_name = $name_parts[0] ?? '';
@@ -2804,12 +2807,12 @@ class Exacoat_Warranty_Manager {
 					] );
 
 					if ( $order_item_id ) {
-						$order_item  = $order->get_item( $order_item_id );
-						$base_config = sanitize_text_field( $it['configuration'] ?? 'Standard Endorsement Skin' );
-						$new_config  = sprintf( '[ENDORSEMENT PR] %s', $base_config );
+						$order_item   = $order->get_item( $order_item_id );
+						$base_config  = sanitize_text_field( $it['configuration'] ?? 'Standard Endorsement Skin' );
+						$clean_config = trim( preg_replace( '/\[\s*ENDORSEMENT(?:\s*PR)?\s*\]\s*/i', '', $base_config ) );
 
 						$order_item->add_meta_data( '_is_endorsement', 'yes', true );
-						$order_item->add_meta_data( 'Configuration', trim( $new_config ), true );
+						$order_item->add_meta_data( 'Configuration', $clean_config, true );
 
 						if ( ! empty( $it['configurator_data'] ) ) {
 							$order_item->add_meta_data( '_configurator_data', $it['configurator_data'], true );

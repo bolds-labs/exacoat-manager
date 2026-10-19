@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.190",
+  "version": "0.1.191",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.190.zip?v=0.1.190",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.191.zip?v=0.1.191",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-10-19T15:10:16.567Z",
+  "last_updated": "2026-10-19T17:15:54.572Z",
   "sections": {
-    "changelog": "### Version 0.1.190\n- Add Endorsement (Influencer PR) order creation and management workflow\n- Support multi-item complimentary packages with waived courier shipping\n- Silence automated WhatsApp notifications for endorsement orders"
+    "changelog": "### Version 0.1.191\n- Completely scrub endorsement, VIP PR, and influencer handles from physical A6 shipping labels\n- Ensure endorsement order details remain strictly private in admin internal order notes"
   }
 }

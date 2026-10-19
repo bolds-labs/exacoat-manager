@@ -72,6 +72,7 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
   const totalItemsCount = (order.items || []).reduce((sum, item) => sum + (item.quantity || 1), 0);
   const cleanCustomerNote = (order.customer_note || '')
     .replace(/(?:shipping courier|jasa kirim|courier)\s*:\s*[^\r\n]+/gi, '')
+    .replace(/\[ENDORSEMENT\s*-\s*INFLUENCER\s*PR\][^\r\n]*/gi, '')
     .trim();
 
   const metaList = Array.isArray(order.meta_data) ? order.meta_data : [];

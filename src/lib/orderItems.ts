@@ -37,9 +37,16 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
   const seen = new Set<string>();
 
   const addSpec = (label: string, value: string) => {
-    const cleanLabel = String(label || '').trim();
-    const cleanVal = String(value || '').trim();
+    const cleanLabel = String(label || '')
+      .replace(/\[\s*ENDORSEMENT(?:\s*PR)?\s*\]\s*/gi, '')
+      .trim();
+    const cleanVal = String(value || '')
+      .replace(/\[\s*ENDORSEMENT(?:\s*PR)?\s*\]\s*/gi, '')
+      .trim();
     if (!cleanLabel || !cleanVal) return;
+
+    // Skip internal endorsement markers
+    if (/^(endorsement|is_endorsement)$/i.test(cleanLabel)) return;
 
     // Skip internal WooCommerce or WordPress keys starting with underscore
     if (cleanLabel.startsWith('_')) return;
@@ -115,7 +122,7 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
   // Helper to parse joined configuration strings (e.g. Back: Shadow Camo • Sides: Matte White)
   const parseConfigurationString = (val: string) => {
     if (!val || typeof val !== 'string') return;
-    const cleanVal = val.trim();
+    const cleanVal = val.replace(/\[\s*ENDORSEMENT(?:\s*PR)?\s*\]\s*/gi, '').trim();
     if (!cleanVal || /^(custom|default|none)$/i.test(cleanVal)) return;
 
     // Split on bullet (• or &bull;), newline, HTML break, or pipe
@@ -484,6 +491,9 @@ export function formatSeparatedItemSpecs(
 
 export function cleanItemTitle(name?: string): string {
   if (!name) return '';
-  return decodeHtmlEntities(name).replace(/\[\s*EXACOAT\s*\]\s*/gi, '').trim();
+  return decodeHtmlEntities(name)
+    .replace(/\[\s*EXACOAT\s*\]\s*/gi, '')
+    .replace(/\[\s*ENDORSEMENT(?:\s*PR)?\s*\]\s*/gi, '')
+    .trim();
 }
 

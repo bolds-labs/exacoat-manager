@@ -173,7 +173,8 @@ function renderSinglePageHtml(
   const isPickup = isStorePickupOrder(ord);
   const cOrderNum = String(ord.order_number || ord.id || '').replace(/^#+/, '');
   const shp = ord.shipping || {};
-  const rName = formatCleanText(ord.customer_name || `${shp.first_name || ''} ${shp.last_name || ''}`.trim() || 'Customer');
+  const rawRName = formatCleanText(ord.customer_name || `${shp.first_name || ''} ${shp.last_name || ''}`.trim() || 'Customer');
+  const rName = rawRName.replace(/^@+/, '');
   const rPhone = ord.customer_phone || shp.phone || '-';
   const rAddrLines = [
     formatCleanText(shp.address_1 || 'Address on file'),
@@ -191,11 +192,28 @@ function renderSinglePageHtml(
     .join('');
 
   const renderItemRowsHtml = (itemsList: any[]) => {
+    // Extract influencer handle from order metadata if present, so we can guarantee it never leaks onto the physical shipping label
+    const influencerHandleMeta = (ord.meta_data || []).find((m: any) => m.key === '_influencer_handle')?.value;
+    const cleanHandleRaw = influencerHandleMeta ? String(influencerHandleMeta).replace(/^@+/, '').trim() : '';
+
+    const scrubText = (text: string) => {
+      if (!text) return '';
+      let cleaned = text
+        .replace(/\[\s*ENDORSEMENT(?:\s*PR)?\s*\]/gi, '')
+        .replace(/\bVIP\s+PR(?:\s+Endorsement)?\b/gi, '')
+        .replace(/\bendorsement\b/gi, '')
+        .trim();
+      if (cleanHandleRaw) {
+        cleaned = cleaned.replace(new RegExp(`@?${cleanHandleRaw}\\b`, 'gi'), '').trim();
+      }
+      return cleaned.replace(/\s{2,}/g, ' ').replace(/^[:•\-\s]+|[:•\-\s]+$/g, '').trim();
+    };
+
     return (itemsList || []).map((item) => {
       const itemSku = item.sku 
         ? item.sku 
         : (item.product_id ? `SKU${item.product_id}` : `SKU${item.id || '72572'}`);
-      const cleanItemName = cleanItemTitle(String(item.name || 'Precision Device Skin'))
+      const cleanItemName = scrubText(cleanItemTitle(String(item.name || 'Precision Device Skin')))
         .replace(/\r?\n+/g, ' ')
         .replace(/\s{2,}/g, ' ')
         .trim();
@@ -205,16 +223,13 @@ function renderSinglePageHtml(
         cleanItemName.toLowerCase().includes('warranty') ||
         (ord.meta_data || []).some((m: any) => (m.key === '_order_badge' && m.value === 'WARRANTY') || (m.key === '_is_warranty' && m.value === 'yes'));
 
-      const isEndorsementItem =
-        cleanItemName.toLowerCase().includes('endorsement') ||
-        (ord.meta_data || []).some((m: any) => (m.key === '_order_badge' && m.value === 'ENDORSEMENT') || (m.key === '_is_endorsement' && m.value === 'yes'));
+      // Do NOT show VIP PR endorsement, influencer handles, or campaign info on A6 shipping labels
+      let finalRefSpecs = refSpecs || '';
+      if (/endorsement|influencer|vip|@/i.test(finalRefSpecs)) {
+        finalRefSpecs = '';
+      }
 
-      let finalRefSpecs = refSpecs;
-      if (!finalRefSpecs && isEndorsementItem) {
-        const influencerHandle = (ord.meta_data || []).find((m: any) => m.key === '_influencer_handle')?.value;
-        const platform = (ord.meta_data || []).find((m: any) => m.key === '_endorsement_platform')?.value;
-        finalRefSpecs = `VIP PR Endorsement • ${influencerHandle ? `${influencerHandle} ` : ''}(${platform || 'Creator'})`;
-      } else if (!finalRefSpecs && isWarrantyItem) {
+      if (!finalRefSpecs && isWarrantyItem) {
         const rmaChannel = (ord.meta_data || []).find((m: any) => m.key === '_rma_marketplace_channel')?.value;
         const rmaInvoice = (ord.meta_data || []).find((m: any) => m.key === '_rma_original_invoice' || m.key === '_rma_original_order_id')?.value;
         if (rmaInvoice) {
@@ -224,20 +239,30 @@ function renderSinglePageHtml(
         }
       }
 
+      // Sanitize partList for A6 manifest
+      const sanitizedPartList = (partList || [])
+        .map(s => ({
+          label: scrubText(s.label),
+          value: scrubText(s.value),
+        }))
+        .filter(s => s.label && s.value && !/^(endorsement|vip|influencer)$/i.test(s.label) && !/^(endorsement|vip|influencer)$/i.test(s.value));
+
+      const sanitizedPartSpecs = scrubText(partSpecs || '');
+
       // Line-by-line specs formatting: larger text, bold values for production readability
       let specsHtml = '';
-      if (partList && partList.length > 0) {
+      if (sanitizedPartList && sanitizedPartList.length > 0) {
         specsHtml = `
           <div style="margin-top: 2px;">
-            ${partList.map(s => `
+            ${sanitizedPartList.map(s => `
               <div style="font-size: 9.5px; line-height: 1.25; color: #111;">
                 <span style="font-weight: 700; color: #333;">${s.label}:</span> <span style="font-weight: 900; color: #000;">${s.value}</span>
               </div>
             `).join('')}
           </div>
         `;
-      } else if (partSpecs) {
-        specsHtml = `<div style="font-size: 9.5px; color: #000; font-weight: 800; line-height: 1.25; margin-top: 2px;">${partSpecs}</div>`;
+      } else if (sanitizedPartSpecs) {
+        specsHtml = `<div style="font-size: 9.5px; color: #000; font-weight: 800; line-height: 1.25; margin-top: 2px;">${sanitizedPartSpecs}</div>`;
       }
 
       return `

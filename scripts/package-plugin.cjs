@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Add Endorsement (Influencer PR) order creation and management workflow\n- Support multi-item complimentary packages with waived courier shipping\n- Silence automated WhatsApp notifications for endorsement orders`,
+      changelog: `### Version ${version}\n- Completely scrub endorsement, VIP PR, and influencer handles from physical A6 shipping labels\n- Ensure endorsement order details remain strictly private in admin internal order notes`,
     },
   };
 
