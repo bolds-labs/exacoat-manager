@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.195] - 2026-10-21
+
+### Google Pixel Single Cut Architecture Aligned with Galaxy Fold 8
+- **Single Cut Architecture for Google Pixel**:
+  - Aligned all 7 Google Pixel variants (Pixel 6, 6 Pro, 7, 7 Pro, 8, 8 Pro, 8a) with the Galaxy Z Fold 8 configuration (`coverage_type: 'none'`, `has_model_cut: false`, `model_360_extra_price: 0`).
+  - Removed custom coverage mode (`model_cut_only`) and device-specific UI locks from `ConfiguratorStudioPage.tsx` and `class-configurator-engine.php` in favor of standard single-cut handling.
+  - Cleared legacy model cut mask URLs (`view.model_cut_mask_url`) on Pixel 6 / 6 Pro views while preserving standard camera/back alpha masks and Google 'G' logo cutouts.
+- **Backend & Database Synchronization**:
+  - Saved normalized single-cut profiles across all Pixel devices on `cms.exacoat.com` and `staging.exacoat.com`.
+  - Revalidated Next.js ISR tags on `exacoat.com` and `web.exacoat.com` and purged Cloudflare edge cache.
+  - Updated `AGENTS.md` and `docs/CONFIGURATOR_SYSTEM.md` to document the unified Galaxy Fold 8 single-cut paradigm.
+
+---
+
 ## [0.1.194] - 2026-10-21
 
 ### Tokopedia/TikTok & Shopee Orders Search and Token Auto-Renewal

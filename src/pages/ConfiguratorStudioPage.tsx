@@ -4803,8 +4803,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
     });
 
     // Coverage upcharge (e.g. Model 360 wrap)
-    const isPixelDevice = /\b(pixel)\b/i.test(`${editingProfile.device_name || ''} ${editingProfile.device_slug || ''}`);
-    const covType = (isPixelDevice || editingProfile.family === 'foldable') ? 'model_cut_only' : (editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : 'none'));
+    const covType = editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : 'none');
     if (covType === 'model_cut_and_360' && selectedCoverage === 'model_360') {
       const extra360 = Number(editingProfile.coverage_and_cutouts?.model_360_extra_price) || 40000;
       total += extra360;
@@ -8456,10 +8455,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 }
                               }
 
-                              const isPixelDevice = /\b(pixel)\b/i.test(`${editingProfile.device_name || ''} ${editingProfile.device_slug || ''}`);
-                              const covMode = (isPixelDevice || editingProfile.family === 'foldable') ? 'model_cut_only' : (editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : 'none'));
+                              const covMode = editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : 'none');
                               const isModelCutOnly = covMode === 'model_cut_only';
-                              const hasCoverageOptions = covMode === 'model_cut_and_360' && !isPixelDevice && editingProfile.family !== 'foldable';
+                              const hasCoverageOptions = covMode === 'model_cut_and_360';
                               const shouldApplyModelCut = isModelCutOnly || (hasCoverageOptions && selectedCoverage === 'model_cut');
                               const isCurrentViewForModelCut = Boolean(resolvedModelCutMask && (isSingleAngleView || isExplicitModelCutView || isLikelyModelCutView || currentView?.model_cut_mask_url || assets.model_cutout_url));
                               const effectiveModelCutout = (shouldApplyModelCut && isCurrentViewForModelCut) ? resolvedModelCutMask : undefined;
@@ -8944,11 +8942,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
                             if (!isViewForModelCut && !currentView?.model_cut_mask_url) return null;
 
                             const hasModelCutMask = Boolean(currentView?.model_cut_mask_url || (isViewForModelCut && editingProfile.coverage_and_cutouts?.model_cut_mask_url));
-                            const isPixelDevice = /\b(pixel)\b/i.test(`${editingProfile.device_name || ''} ${editingProfile.device_slug || ''}`);
-                            const covType = (isPixelDevice || editingProfile.family === 'foldable') ? 'model_cut_only' : (editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : (hasModelCutMask ? 'model_cut_and_360' : 'none')));
+                            const covType = editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : (hasModelCutMask ? 'model_cut_and_360' : 'none'));
                             if (covType === 'none') return null;
 
-                            if (covType === 'model_cut_only' || editingProfile.family === 'foldable' || isPixelDevice) {
+                            if (covType === 'model_cut_only' || editingProfile.family === 'foldable') {
                               return (
                                 <div className="flex items-center gap-1.5 bg-zinc-900/80 px-2.5 py-1 rounded-xl border border-white/10 text-xs">
                                   <span className="text-[11px] text-zinc-400 font-medium">Coverage:</span>
@@ -11790,8 +11787,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      const isPixelDevice = /\b(pixel)\b/i.test(`${editingProfile.device_name || ''} ${editingProfile.device_slug || ''}`);
-                                      const currentCov = (isPixelDevice || editingProfile.family === 'foldable') ? 'model_cut_only' : (editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : 'none'));
+                                      const currentCov = editingProfile.coverage_and_cutouts?.coverage_type || (editingProfile.coverage_and_cutouts?.has_model_cut ? 'model_cut_and_360' : 'none');
                                       const isEnabled = currentCov !== 'none';
                                       if (isEnabled) {
                                         handleSetCoverageAndCutouts({
@@ -11800,7 +11796,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                         });
                                       } else {
                                         handleSetCoverageAndCutouts({
-                                          coverage_type: (isPixelDevice || editingProfile.family === 'foldable') ? 'model_cut_only' : 'model_cut_and_360',
+                                          coverage_type: 'model_cut_and_360',
                                           has_model_cut: true,
                                         });
                                       }
@@ -11826,11 +11822,11 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               </div>
 
                               {/* Coverage Mode Selection */}
-                              {editingProfile.family === 'foldable' || /\b(pixel)\b/i.test(`${editingProfile.device_name || ''} ${editingProfile.device_slug || ''}`) ? (
+                              {editingProfile.family === 'foldable' ? (
                                 <div className="space-y-1.5">
                                   <span className="text-[11px] text-zinc-400 font-medium">Coverage Mode</span>
                                   <div className="p-2.5 rounded-lg bg-zinc-950/60 border border-white/5 text-xs text-zinc-300 flex items-center justify-between">
-                                    <span>Model Cut Only ({/\b(pixel)\b/i.test(`${editingProfile.device_name || ''} ${editingProfile.device_slug || ''}`) ? 'Google Pixel' : 'Foldable / Flip'} - No 360 wrap)</span>
+                                    <span>Model Cut Only (Foldable / Flip - No 360 wrap)</span>
                                     <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30 text-[10px]">
                                       Locked
                                     </span>
@@ -11872,7 +11868,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               )}
 
                                 {/* Upcharge for Model 360 */}
-                                {editingProfile.family !== 'foldable' && !/\b(pixel)\b/i.test(`${editingProfile.device_name || ''} ${editingProfile.device_slug || ''}`) && (editingProfile.coverage_and_cutouts?.coverage_type === 'model_cut_and_360' ||
+                                {editingProfile.family !== 'foldable' && (editingProfile.coverage_and_cutouts?.coverage_type === 'model_cut_and_360' ||
                                   (!editingProfile.coverage_and_cutouts?.coverage_type && editingProfile.coverage_and_cutouts?.has_model_cut)) && (
                                   <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-950/60 border border-white/5 text-xs mt-2">
                                     <div className="flex items-center gap-1.5">

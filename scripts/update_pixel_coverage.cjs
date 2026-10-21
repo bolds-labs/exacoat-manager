@@ -53,7 +53,7 @@ function request(url, options = {}, data = null) {
 
 async function updatePixelCoverage() {
   console.log('===============================================================');
-  console.log('   UPDATING ALL GOOGLE PIXEL VARIANTS TO MODEL CUT ONLY        ');
+  console.log('   CONFIGURING GOOGLE PIXEL LIKE GALAXY FOLD 8 (SINGLE CUT)    ');
   console.log('===============================================================\n');
 
   for (const pid of PIXEL_PRODUCT_IDS) {
@@ -71,20 +71,28 @@ async function updatePixelCoverage() {
     console.log(`    Found: "${profile.device_name}" (${profile.device_slug})`);
     console.log(`    Previous Coverage: ${profile.coverage_and_cutouts?.coverage_type || 'none'} | 360 Extra: IDR ${profile.coverage_and_cutouts?.model_360_extra_price ?? 0}`);
 
-    // 2. Set strictly model_cut_only, has_model_cut: true, model_360_extra_price: 0
+    // 2. Follow Galaxy Fold 8 configuration:
+    // coverage_type: "none", has_model_cut: false, model_360_extra_price: 0
     if (!profile.coverage_and_cutouts) {
       profile.coverage_and_cutouts = {};
     }
-    profile.coverage_and_cutouts.coverage_type = 'model_cut_only';
-    profile.coverage_and_cutouts.has_model_cut = true;
+    profile.coverage_and_cutouts.coverage_type = 'none';
+    profile.coverage_and_cutouts.has_model_cut = false;
     profile.coverage_and_cutouts.model_360_extra_price = 0;
+    delete profile.coverage_and_cutouts.model_cutout_url;
+    delete profile.coverage_and_cutouts.model_cut_mask_url;
+
+    // Clear model_cut_mask_url on all views (e.g. Pixel 6 / 6 Pro)
+    if (Array.isArray(profile.views)) {
+      profile.views.forEach(v => {
+        delete v.model_cut_mask_url;
+      });
+    }
 
     // Clean any presets with model_360 coverage
     if (Array.isArray(profile.presets)) {
       profile.presets.forEach(pr => {
-        if (pr.coverage === 'model_360') {
-          pr.coverage = 'model_cut';
-        }
+        delete pr.coverage;
       });
     }
 
@@ -93,7 +101,7 @@ async function updatePixelCoverage() {
     const saveRes = await request(saveUrl, { method: 'POST' }, profile);
 
     if (saveRes.status === 200 && saveRes.data?.success) {
-      console.log(`    [SUCCESS] Saved on CMS: coverage_type = "model_cut_only", model_360_extra_price = 0`);
+      console.log(`    [SUCCESS] Saved on CMS: coverage_type = "none", has_model_cut = false, model_360_extra_price = 0`);
       if (saveRes.data?.revalidation?.nextjs) {
         console.log(`    [REVALIDATE] Next.js ISR purge triggered for ${profile.device_slug}`);
       }
@@ -134,6 +142,7 @@ async function updatePixelCoverage() {
     console.log(`  coverage_type: ${p?.coverage_and_cutouts?.coverage_type}`);
     console.log(`  has_model_cut: ${p?.coverage_and_cutouts?.has_model_cut}`);
     console.log(`  model_360_extra_price: ${p?.coverage_and_cutouts?.model_360_extra_price}`);
+    console.log(`  view mask: ${p?.views?.[0]?.model_cut_mask_url}`);
   }
 
   console.log('\nDone!');

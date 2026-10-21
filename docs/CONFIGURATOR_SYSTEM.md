@@ -186,15 +186,15 @@ All endpoints are registered under `/wp-json/exacoat-core/v1/`:
 
 ---
 
-## 9. Coverage Rules: Google Pixel (Model Cut Only)
+## 9. Coverage Rules: Google Pixel (Single Cut Only like Galaxy Fold 8)
 
-* **Google Pixel Invariant**:
-  * Google Pixel devices (Pixel 6, 6 Pro, 7, 7 Pro, 8, 8 Pro, 8a, and future Pixel variants) strictly offer **Model Cut Only** coverage (Back Only).
-  * Model 360 Full Wrap is permanently disabled and excluded for all Pixel devices.
+* **Google Pixel Architecture**:
+  * Google Pixel devices (Pixel 6, 6 Pro, 7, 7 Pro, 8, 8 Pro, 8a, etc.) follow the exact architecture of Galaxy Z Fold 8 (Single Cut Only) without creating custom coverage modes or special UI locks.
 * **Persistent Post Meta**:
-  * `coverage_and_cutouts.coverage_type`: `'model_cut_only'`
-  * `coverage_and_cutouts.has_model_cut`: `true`
+  * `coverage_and_cutouts.coverage_type`: `'none'`
+  * `coverage_and_cutouts.has_model_cut`: `false`
   * `coverage_and_cutouts.model_360_extra_price`: `0`
-* **Automated Guardrails**:
-  * `class-configurator-engine.php` auto-heals any Pixel device profile to `model_cut_only` upon retrieval (`rest_get_product_configurator`) and enforces `model_cut_only` upon save (`rest_save_product_configurator`).
-  * In Configurator Studio, Coverage Mode displays as locked: `Model Cut Only (Google Pixel - No 360 wrap)`, the 360 upcharge field is omitted, and simulator renders calculate Model Cut without surcharge.
+  * `views[].model_cut_mask_url`: `undefined`
+* **Storefront & Studio Experience**:
+  * On the webstore, "Buyer Choice on Webstore" is disabled. The buyer is not prompted for a 360 wrap choice and receives the precision Model Cut back skin.
+  * In Configurator Studio, the device cleanly reports "Coverage choice disabled on webstore (Single cut only)" with 0 IDR surcharge.

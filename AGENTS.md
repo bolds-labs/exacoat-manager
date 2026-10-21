@@ -1572,19 +1572,19 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 
 ---
 
-## 53. Google Pixel Coverage Invariant: Model Cut Only (No Model 360 Full Wrap)
+## 53. Google Pixel Coverage Architecture: Single Cut Only (Following Galaxy Fold 8)
 
 - **Domain Rule**:
-  - Google Pixel devices feature unique visor camera bars and curved chassis geometries where Exacoat strictly provides precision Model Cut (Back Only) skin coverage.
-  - Model 360 Full Wrap is not supported or offered for any Google Pixel variant.
-- **Database & Post Meta**:
-  - All Google Pixel devices (Pixel 6, 6 Pro, 7, 7 Pro, 8, 8 Pro, 8a, and all future Pixel variants) have `coverage_type` set to `'model_cut_only'`, `has_model_cut` set to `true`, and `model_360_extra_price` set to `0` in `_exacoat_configurator_profile`.
-- **Backend Enforcement (`class-configurator-engine.php`)**:
-  - `convert_mkl_to_profile`: Detects Pixel devices via `/\b(pixel)\b/i` and assigns `coverage_type = 'model_cut_only'`, `has_model_cut = true`, and zero 360 price.
-  - `rest_get_product_configurator`: Auto-heals any Pixel device whose metadata has `coverage_type !== 'model_cut_only'` or nonzero 360 price, automatically saving the corrected profile to post meta.
-  - `rest_save_product_configurator`: Strictly forces `coverage_type = 'model_cut_only'`, `has_model_cut = true`, and `model_360_extra_price = 0` whenever a Pixel device profile is saved, while converting any presets with `coverage = 'model_360'` to `'model_cut'`.
-  - `sync_device_families`: Catalog-wide batch synchronization automatically converts Pixel coverage to `model_cut_only` and zeroes 360 extra pricing.
-- **Frontend Studio & Simulator (`ConfiguratorStudioPage.tsx`)**:
-  - Inspecting a Google Pixel device displays Coverage Mode locked to `Model Cut Only (Google Pixel - No 360 wrap)` with a `Locked` amber badge.
-  - The 360 extra price input field is hidden.
-  - Viewport canvas and simulator price calculator strictly apply Model Cut with IDR 0 coverage surcharge.
+  - Google Pixel devices feature unique camera visor bars and curved edge geometries where Exacoat strictly provides precision Model Cut (Back Only) skin coverage without Model 360 Full Wrap.
+  - Rather than creating a separate custom coverage mode or device-specific UI locks, Google Pixel follows the exact architectural pattern used by Galaxy Z Fold 8 (Single Cut Only).
+- **Database & Post Meta Configuration**:
+  - All Google Pixel devices (Pixel 6, 6 Pro, 7, 7 Pro, 8, 8 Pro, 8a, etc.) maintain:
+    - `coverage_type: 'none'`
+    - `has_model_cut: false`
+    - `model_360_extra_price: 0`
+    - View masks (`view.model_cut_mask_url`) and `model_cutout_url` are cleared/empty.
+    - `has_logo_cutout: true` and `logo_cutout_mask_url` are preserved for the G logo cutout.
+- **Storefront & Configurator Behavior**:
+  - On the storefront and in Configurator Studio, "Buyer Choice on Webstore" is disabled (`coverage_type === 'none'`).
+  - No 360 wrap choice or coverage toggle is presented to the customer.
+  - Customers simply order the standard skin (which is the model cut), exactly like Galaxy Z Fold 8, with 0 IDR coverage surcharge.
