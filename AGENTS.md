@@ -168,6 +168,12 @@ export function cleanItemTitle(name?: string): string {
 - **Disk Purge Invariant**: When a warranty claim is reviewed (approved or rejected via `reviewWarrantyClaimDirect`), the uploaded video proof file is immediately purged from disk via WordPress REST API to comply with disk limits and privacy.
 - **CPT Table Status Prefix**: When querying WooCommerce classic CPT tables (`shop_order`) in WordPress via `WP_Query`, post statuses are prefixed with `wc-` (`wc-pending`, `wc-processing`, etc.). Omitting `wc-` causes queries to return empty results.
 - **Deduplication Check**: Queries across `_rma_original_invoice`, `_rma_original_order_id`, and `_rma_original_order_number` to prevent duplicate replacements on the same order.
+- **Specialized Virtual Tabs vs HPOS Query Invariant**:
+  - In WooCommerce HPOS (`wp_wc_orders` / `wp_wc_orders_meta`), `wc_get_orders()` drops complex `meta_query` structures when querying custom virtual statuses.
+  - Backend must resolve specialized order IDs directly via SQL using `Exacoat_Order_Manager::get_specialized_order_ids( string $tab )` and inject them into `post__in` and `include` while unsetting `$args['status']`.
+- **Parent Order Exclusion Invariant from Warranty Fulfillment**:
+  - Authentic warranty replacement orders are zero-priced fulfillment orders stamped with `_order_badge = 'WARRANTY'`, `_rma_order_type = 'Warranty'`, and `_is_warranty = 'yes'`, containing only the claimed replacement item.
+  - Original customer orders (parent orders) stamped with `_has_warranty_claim = 'yes'` or `_warranty_replacement_order_id` must NEVER be included in the Warranty Claims fulfillment tab or counted as warranty fulfillment orders, preventing non-warranty items from the customer's original purchase from being displayed.
 
 ---
 

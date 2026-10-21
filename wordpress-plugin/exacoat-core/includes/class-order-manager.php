@@ -180,6 +180,77 @@ class Exacoat_Order_Manager {
 	}
 
 	/**
+	 * Retrieve order IDs for specialized virtual fulfillment tabs (warranty, redeem, endorsement).
+	 * Strictly targets replacement fulfillment orders, excluding original parent orders.
+	 *
+	 * @param string $tab 'warranty' | 'redeem' | 'endorsement'
+	 * @return int[]
+	 */
+	public static function get_specialized_order_ids( string $tab ): array {
+		global $wpdb;
+
+		$hpos_meta_table = "{$wpdb->prefix}wc_orders_meta";
+		$has_hpos        = ( $wpdb->get_var( "SHOW TABLES LIKE '{$hpos_meta_table}'" ) === $hpos_meta_table );
+		$meta_table      = $has_hpos ? $hpos_meta_table : $wpdb->postmeta;
+		$id_col          = $has_hpos ? 'order_id' : 'post_id';
+
+		$matched_ids = [];
+
+		if ( 'warranty' === $tab ) {
+			// Strictly match warranty replacement fulfillment orders.
+			// Exclude parent orders (orders with _has_warranty_claim = 'yes' or _warranty_replacement_order_id).
+			$sql = "SELECT DISTINCT m.{$id_col}
+			        FROM {$meta_table} m
+			        WHERE (
+			            (m.meta_key = '_order_badge' AND m.meta_value = 'WARRANTY')
+			            OR (m.meta_key = '_is_warranty' AND m.meta_value = 'yes')
+			            OR (m.meta_key = '_rma_order_type' AND m.meta_value = 'Warranty')
+			        )
+			        AND m.{$id_col} NOT IN (
+			            SELECT p.{$id_col} FROM {$meta_table} p
+			            WHERE p.meta_key IN ('_has_warranty_claim', '_warranty_replacement_order_id')
+			              AND p.meta_value IS NOT NULL AND p.meta_value != '' AND p.meta_value != 'no'
+			        )";
+			$ids = $wpdb->get_col( $sql );
+			if ( ! empty( $ids ) ) {
+				$matched_ids = array_map( 'intval', $ids );
+			}
+		} elseif ( 'redeem' === $tab ) {
+			// Strictly match redeem replacement fulfillment orders.
+			// Exclude parent orders (orders with _has_redeem_claim = 'yes' or _redeem_replacement_order_id).
+			$sql = "SELECT DISTINCT m.{$id_col}
+			        FROM {$meta_table} m
+			        WHERE (
+			            (m.meta_key = '_order_badge' AND m.meta_value = 'REDEEM')
+			            OR (m.meta_key = '_is_redeem' AND m.meta_value = 'yes')
+			            OR (m.meta_key = '_rma_order_type' AND m.meta_value = 'Redeem')
+			        )
+			        AND m.{$id_col} NOT IN (
+			            SELECT p.{$id_col} FROM {$meta_table} p
+			            WHERE p.meta_key IN ('_has_redeem_claim', '_redeem_replacement_order_id')
+			              AND p.meta_value IS NOT NULL AND p.meta_value != '' AND p.meta_value != 'no'
+			        )";
+			$ids = $wpdb->get_col( $sql );
+			if ( ! empty( $ids ) ) {
+				$matched_ids = array_map( 'intval', $ids );
+			}
+		} elseif ( 'endorsement' === $tab ) {
+			$sql = "SELECT DISTINCT m.{$id_col}
+			        FROM {$meta_table} m
+			        WHERE (
+			            (m.meta_key = '_order_badge' AND m.meta_value = 'ENDORSEMENT')
+			            OR (m.meta_key = '_is_endorsement' AND m.meta_value = 'yes')
+			        )";
+			$ids = $wpdb->get_col( $sql );
+			if ( ! empty( $ids ) ) {
+				$matched_ids = array_map( 'intval', $ids );
+			}
+		}
+
+		return array_values( array_unique( $matched_ids ) );
+	}
+
+	/**
 	 * Search order IDs by order number, customer name, email, phone, tracking number, or item names.
 	 *
 	 * @param string $search
@@ -522,9 +593,40 @@ class Exacoat_Order_Manager {
 				$args['date_created'] = '<=' . $date_before;
 			}
 
+			$is_specialized_tab = false;
+			$specialized_ids    = [];
+
 			if ( 'any' !== $status && ! empty( $status ) ) {
 				$clean_status = str_replace( 'wc-', '', $status );
-				if ( 'ready-to-ship' === $clean_status ) {
+				if ( in_array( $clean_status, [ 'warranty', 'redeem', 'endorsement' ], true ) ) {
+					$is_specialized_tab = true;
+					unset( $args['status'] );
+					$specialized_ids = self::get_specialized_order_ids( $clean_status );
+					if ( empty( $specialized_ids ) ) {
+						return rest_ensure_response( [
+							'success'      => true,
+							'orders'       => [],
+							'total_orders' => 0,
+							'max_pages'    => 1,
+							'current_page' => $page,
+						] );
+					}
+					$existing_ids = ! empty( $args['post__in'] ) ? $args['post__in'] : ( ! empty( $args['include'] ) ? $args['include'] : [] );
+					if ( ! empty( $existing_ids ) ) {
+						$specialized_ids = array_values( array_intersect( $existing_ids, $specialized_ids ) );
+						if ( empty( $specialized_ids ) ) {
+							return rest_ensure_response( [
+								'success'      => true,
+								'orders'       => [],
+								'total_orders' => 0,
+								'max_pages'    => 1,
+								'current_page' => $page,
+							] );
+						}
+					}
+					$args['post__in'] = $specialized_ids;
+					$args['include']  = $specialized_ids;
+				} elseif ( 'ready-to-ship' === $clean_status ) {
 					$args['status'] = [ 'ready-to-ship', 'awaiting-pickup' ];
 				} elseif ( 'preparing-order' === $clean_status ) {
 					$args['status'] = [ 'preparing-order', 'in-production' ];
@@ -536,64 +638,6 @@ class Exacoat_Order_Manager {
 					$args['status'] = [ 'smb-picked' ];
 				} elseif ( 'on-hold' === $clean_status ) {
 					$args['status'] = [ 'on-hold', 'pending' ];
-				} elseif ( 'warranty' === $clean_status ) {
-					$args['status'] = [ 'pending', 'on-hold', 'processing', 'preparing-order', 'in-production', 'ready-to-ship', 'shipped', 'completed' ];
-					$args['meta_query'] = [
-						'relation' => 'OR',
-						[
-							'key'     => '_has_warranty_claim',
-							'value'   => 'yes',
-							'compare' => '=',
-						],
-						[
-							'key'     => '_warranty_replacement_order_id',
-							'compare' => 'EXISTS',
-						],
-						[
-							'key'     => '_is_warranty_claim',
-							'value'   => 'yes',
-							'compare' => '=',
-						],
-						[
-							'key'     => '_is_warranty',
-							'value'   => 'yes',
-							'compare' => '=',
-						],
-						[
-							'key'     => '_rma_order_type',
-							'value'   => 'Warranty',
-							'compare' => '=',
-						],
-					];
-				} elseif ( 'redeem' === $clean_status ) {
-					$args['status'] = [ 'pending', 'on-hold', 'processing', 'preparing-order', 'in-production', 'ready-to-ship', 'shipped', 'completed' ];
-					$args['meta_query'] = [
-						'relation' => 'OR',
-						[
-							'key'     => '_has_redeem_claim',
-							'value'   => 'yes',
-							'compare' => '=',
-						],
-						[
-							'key'     => '_redeem_replacement_order_id',
-							'compare' => 'EXISTS',
-						],
-						[
-							'key'     => '_rma_order_type',
-							'value'   => 'Redeem',
-							'compare' => '=',
-						],
-						[
-							'key'     => '_is_redeem_claim',
-							'value'   => 'yes',
-							'compare' => '=',
-						],
-						[
-							'key'     => '_is_redeem',
-							'value'   => 'yes',
-							'compare' => '=',
-						],
-					];
 				} else {
 					$args['status'] = $clean_status;
 				}
@@ -668,12 +712,14 @@ class Exacoat_Order_Manager {
 					) ) );
 				}
 
-				if ( empty( $matched_ids ) ) {
-					$args['post__in'] = [ 0 ];
-					$args['include']  = [ 0 ];
+				$active_existing = ! empty( $args['post__in'] ) ? $args['post__in'] : ( ! empty( $args['include'] ) ? $args['include'] : [] );
+				if ( ! empty( $active_existing ) ) {
+					$intersected = array_values( array_intersect( $active_existing, $matched_ids ) );
+					$args['post__in'] = ! empty( $intersected ) ? $intersected : [ 0 ];
+					$args['include']  = ! empty( $intersected ) ? $intersected : [ 0 ];
 				} else {
-					$args['post__in'] = $matched_ids;
-					$args['include']  = $matched_ids;
+					$args['post__in'] = ! empty( $matched_ids ) ? $matched_ids : [ 0 ];
+					$args['include']  = ! empty( $matched_ids ) ? $matched_ids : [ 0 ];
 				}
 			}
 
@@ -775,6 +821,12 @@ class Exacoat_Order_Manager {
 				} ) );
 				$search_pool_count = ! empty( $args['include'] ) ? count( $args['include'] ) : count( $matched_search_ids );
 				$total_orders = $search_pool_count;
+				$max_pages    = max( 1, (int) ceil( $total_orders / $per_page ) );
+			}
+
+			// Guarantee total_orders is accurate for specialized tabs when search is empty
+			if ( $is_specialized_tab && empty( $search ) ) {
+				$total_orders = ! empty( $args['include'] ) ? count( $args['include'] ) : count( $specialized_ids );
 				$max_pages    = max( 1, (int) ceil( $total_orders / $per_page ) );
 			}
 
@@ -2341,32 +2393,14 @@ class Exacoat_Order_Manager {
 			}
 		}
 
-		$rma_data = null;
-		$rma_type = $order->get_meta( '_rma_order_type' ) ?: ( 'yes' === (string) $order->get_meta( '_is_warranty' ) || 'yes' === (string) $order->get_meta( '_is_warranty_claim' ) ? 'Warranty' : '' );
-		if ( ! empty( $rma_type ) || ! empty( $order->get_meta( '_rma_status' ) ) || ! empty( $order->get_meta( '_warranty_video_url' ) ) ) {
-			$rma_data = [
-				'order_type'            => $rma_type ?: 'Warranty',
-				'original_order_id'     => $order->get_meta( '_rma_original_order_id' ) ?: $order->get_meta( '_original_order_id' ),
-				'original_invoice'      => $order->get_meta( '_rma_original_invoice' ),
-				'original_order_number' => $order->get_meta( '_rma_original_order_number' ),
-				'claim_reason'          => $order->get_meta( '_rma_claim_reason' ) ?: $order->get_meta( '_warranty_claim_reason' ),
-				'video_proof_url'       => $order->get_meta( '_rma_video_proof_url' ) ?: $order->get_meta( '_warranty_video_url' ),
-				'video_file_path'       => $order->get_meta( '_rma_video_file_path' ) ?: $order->get_meta( '_warranty_video_file_path' ),
-				'status'                => $order->get_meta( '_rma_status' ) ?: 'pending_review',
-				'video_deleted'         => 'yes' === (string) $order->get_meta( '_rma_video_deleted' ),
-				'video_deleted_at'      => $order->get_meta( '_rma_video_deleted_at' ) ?: null,
-				'reviewed_by'           => $order->get_meta( '_rma_reviewed_by' ) ?: null,
-				'reviewed_at'           => $order->get_meta( '_rma_reviewed_at' ) ?: null,
-				'rejection_reason'      => $order->get_meta( '_rma_rejection_reason' ) ?: null,
-			];
-		}
-
 		$has_warranty_claim    = ( 'yes' === (string) $order->get_meta( '_has_warranty_claim' ) );
 		$rep_warranty_order_id = $order->get_meta( '_warranty_replacement_order_id' );
 		$has_redeem_claim      = ( 'yes' === (string) $order->get_meta( '_has_redeem_claim' ) );
 		$rep_redeem_order_id   = $order->get_meta( '_redeem_replacement_order_id' );
+		$is_parent_order       = $has_warranty_claim || ! empty( $rep_warranty_order_id ) || $has_redeem_claim || ! empty( $rep_redeem_order_id );
 
-		if ( empty( $rma_data ) && ( $has_warranty_claim || ! empty( $rep_warranty_order_id ) || $has_redeem_claim || ! empty( $rep_redeem_order_id ) ) ) {
+		$rma_data = null;
+		if ( $is_parent_order ) {
 			$is_redeem_parent = $has_redeem_claim || ! empty( $rep_redeem_order_id );
 			$rep_id = $is_redeem_parent ? $rep_redeem_order_id : $rep_warranty_order_id;
 			$claim_status = (string) $order->get_meta( '_warranty_claim_status' );
@@ -2387,6 +2421,32 @@ class Exacoat_Order_Manager {
 				'replacement_order_id' => $rep_id ? (int) $rep_id : null,
 				'status'               => $claim_status ?: 'pending_review',
 			];
+		} else {
+			$order_badge = strtoupper( trim( (string) $order->get_meta( '_order_badge' ) ) );
+			$rma_type = $order->get_meta( '_rma_order_type' ) ?: (
+				'WARRANTY' === $order_badge || 'yes' === (string) $order->get_meta( '_is_warranty' ) || 'yes' === (string) $order->get_meta( '_is_warranty_claim' )
+					? 'Warranty'
+					: ( 'REDEEM' === $order_badge || 'yes' === (string) $order->get_meta( '_is_redeem' ) || 'yes' === (string) $order->get_meta( '_is_redeem_claim' )
+						? 'Redeem'
+						: '' )
+			);
+			if ( ! empty( $rma_type ) || ! empty( $order->get_meta( '_rma_status' ) ) || ! empty( $order->get_meta( '_warranty_video_url' ) ) ) {
+				$rma_data = [
+					'order_type'            => $rma_type ?: 'Warranty',
+					'original_order_id'     => $order->get_meta( '_rma_original_order_id' ) ?: $order->get_meta( '_original_order_id' ),
+					'original_invoice'      => $order->get_meta( '_rma_original_invoice' ),
+					'original_order_number' => $order->get_meta( '_rma_original_order_number' ),
+					'claim_reason'          => $order->get_meta( '_rma_claim_reason' ) ?: $order->get_meta( '_warranty_claim_reason' ),
+					'video_proof_url'       => $order->get_meta( '_rma_video_proof_url' ) ?: $order->get_meta( '_warranty_video_url' ),
+					'video_file_path'       => $order->get_meta( '_rma_video_file_path' ) ?: $order->get_meta( '_warranty_video_file_path' ),
+					'status'                => $order->get_meta( '_rma_status' ) ?: 'pending_review',
+					'video_deleted'         => 'yes' === (string) $order->get_meta( '_rma_video_deleted' ),
+					'video_deleted_at'      => $order->get_meta( '_rma_video_deleted_at' ) ?: null,
+					'reviewed_by'           => $order->get_meta( '_rma_reviewed_by' ) ?: null,
+					'reviewed_at'           => $order->get_meta( '_rma_reviewed_at' ) ?: null,
+					'rejection_reason'      => $order->get_meta( '_rma_rejection_reason' ) ?: null,
+				];
+			}
 		}
 
 		return [

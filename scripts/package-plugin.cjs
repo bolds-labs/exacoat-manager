@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Ensure model_cut_only coverage strictly enforces model_360_extra_price = 0 on save and get\n- Auto-sanitize presets with model_360 coverage to model_cut when coverage_type is model_cut_only\n- Revalidate Galaxy S25 Edge and Next.js storefront cache`,
+      changelog: `### Version ${version}\n- Fix HPOS wc_get_orders query for specialized virtual fulfillment tabs (warranty, redeem, endorsement) by querying order IDs via direct SQL\n- Exclude parent orders with _has_warranty_claim from displaying in the Warranty Claims fulfillment tab\n- Enforce client-side filtering safeguard in OrderTable and getOrderRma to ensure only authentic warranty replacement items are shown`,
     },
   };
 

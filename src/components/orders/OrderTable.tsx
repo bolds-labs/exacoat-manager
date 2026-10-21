@@ -250,8 +250,9 @@ export const OrderTable: React.FC<OrderTableProps> = ({
     orders.forEach((o) => {
       const cleanStatus = String(o.status || '').replace('wc-', '').toLowerCase();
       const rma = getOrderRma(o);
-      if (rma?.order_type === 'Warranty') warranty++;
-      if (rma?.order_type === 'Redeem') redeem++;
+      const isParentRma = Boolean(rma?.is_parent_order || (o as any).has_warranty_claim || (o as any).has_redeem_claim);
+      if (rma?.order_type === 'Warranty' && !isParentRma) warranty++;
+      if (rma?.order_type === 'Redeem' && !isParentRma) redeem++;
 
       const isEndorsement = (o.meta_data || []).some(
         (m: any) => (m.key === '_order_badge' && m.value === 'ENDORSEMENT') || (m.key === '_is_endorsement' && m.value === 'yes')
@@ -408,20 +409,28 @@ export const OrderTable: React.FC<OrderTableProps> = ({
         }
       }
 
+      // Specialized virtual tabs (warranty, redeem, endorsement) must ALWAYS enforce strict client-side validation
+      // whether searching or not, ensuring no parent orders or non-warranty items slip through:
+      if (activeStatus === 'warranty') {
+        const rma = getOrderRma(order);
+        const orderBadge = String((order.meta_data || []).find((m: any) => m.key === '_order_badge')?.value || '').toUpperCase();
+        const isWarranty = rma?.order_type === 'Warranty' || orderBadge === 'WARRANTY';
+        if (!isWarranty || rma?.is_parent_order || (order as any).has_warranty_claim) return false;
+      } else if (activeStatus === 'redeem') {
+        const rma = getOrderRma(order);
+        const orderBadge = String((order.meta_data || []).find((m: any) => m.key === '_order_badge')?.value || '').toUpperCase();
+        const isRedeem = rma?.order_type === 'Redeem' || orderBadge === 'REDEEM';
+        if (!isRedeem || rma?.is_parent_order || (order as any).has_redeem_claim) return false;
+      } else if (activeStatus === 'endorsement') {
+        const isEndorsement = (order.meta_data || []).some(
+          (m: any) => (m.key === '_order_badge' && String(m.value).toUpperCase() === 'ENDORSEMENT') || (m.key === '_is_endorsement' && m.value === 'yes')
+        );
+        if (!isEndorsement) return false;
+      }
+
       // If parent didn't handle status filtering on server, filter client-side (bypassed if searching):
       if (!hasSearch && !onStatusFilterChange && activeStatus !== 'all') {
-        if (activeStatus === 'warranty') {
-          const rma = getOrderRma(order);
-          if (rma?.order_type !== 'Warranty') return false;
-        } else if (activeStatus === 'redeem') {
-          const rma = getOrderRma(order);
-          if (rma?.order_type !== 'Redeem') return false;
-        } else if (activeStatus === 'endorsement') {
-          const isEndorsement = (order.meta_data || []).some(
-            (m: any) => (m.key === '_order_badge' && m.value === 'ENDORSEMENT') || (m.key === '_is_endorsement' && m.value === 'yes')
-          );
-          if (!isEndorsement) return false;
-        } else if (['store-pickup', 'store-pickup-ready', 'store-pickup-picked'].includes(activeStatus)) {
+        if (['store-pickup', 'store-pickup-ready', 'store-pickup-picked', 'warranty', 'redeem', 'endorsement'].includes(activeStatus)) {
           // Already filtered above
         } else if (activeStatus === 'ready-to-ship') {
           if (!['ready-to-ship', 'ready_to_ship', 'awaiting-pickup', 'awaiting_pickup'].includes(cleanStatus)) return false;

@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.196",
+  "version": "0.1.197",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.196.zip?v=0.1.196",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.197.zip?v=0.1.197",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-10-21T06:45:56.296Z",
+  "last_updated": "2026-10-21T10:18:42.342Z",
   "sections": {
-    "changelog": "### Version 0.1.196\n- Ensure model_cut_only coverage strictly enforces model_360_extra_price = 0 on save and get\n- Auto-sanitize presets with model_360 coverage to model_cut when coverage_type is model_cut_only\n- Revalidate Galaxy S25 Edge and Next.js storefront cache"
+    "changelog": "### Version 0.1.197\n- Fix HPOS wc_get_orders query for specialized virtual fulfillment tabs (warranty, redeem, endorsement) by querying order IDs via direct SQL\n- Exclude parent orders with _has_warranty_claim from displaying in the Warranty Claims fulfillment tab\n- Enforce client-side filtering safeguard in OrderTable and getOrderRma to ensure only authentic warranty replacement items are shown"
   }
 }

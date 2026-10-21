@@ -325,21 +325,13 @@ export function getOrderRma(order: Order | null): OrderRmaDetails | null {
   const meta = order.meta_data || [];
   const findMeta = (k: string) => meta.find((m) => m.key === k)?.value;
 
-  const orderType = findMeta('_rma_order_type') || (order as any)._rma_order_type;
-  const originalInvoice = findMeta('_rma_original_invoice') || (order as any)._rma_original_invoice;
-  const originalOrderId = findMeta('_rma_original_order_id') || (order as any)._rma_original_order_id;
-
   const hasWarrantyClaim = findMeta('_has_warranty_claim') === 'yes' || (order as any).has_warranty_claim;
   const warrantyReplacementId = findMeta('_warranty_replacement_order_id') || (order as any).warranty_replacement_order_id;
   const hasRedeemClaim = findMeta('_has_redeem_claim') === 'yes';
   const redeemReplacementId = findMeta('_redeem_replacement_order_id');
 
-  if (!orderType && !originalInvoice && !originalOrderId && !hasWarrantyClaim && !warrantyReplacementId && !hasRedeemClaim && !redeemReplacementId) {
-    return null;
-  }
-
-  // Parent order fallback
-  if (!orderType && (hasWarrantyClaim || warrantyReplacementId || hasRedeemClaim || redeemReplacementId)) {
+  // Check parent order first: parent orders are original orders that had claims filed against them
+  if (hasWarrantyClaim || warrantyReplacementId || hasRedeemClaim || redeemReplacementId) {
     const isRedeem = Boolean(hasRedeemClaim || redeemReplacementId);
     const repId = isRedeem ? redeemReplacementId : warrantyReplacementId;
     const claimStatus = findMeta('_warranty_claim_status') || (order as any).warranty_claim_status || 'pending_review';
@@ -349,6 +341,17 @@ export function getOrderRma(order: Order | null): OrderRmaDetails | null {
       replacement_order_id: repId ? Number(repId) : undefined,
       status: claimStatus,
     };
+  }
+
+  const orderBadge = String(findMeta('_order_badge') || '').toUpperCase();
+  const orderType = findMeta('_rma_order_type') || (order as any)._rma_order_type ||
+    (orderBadge === 'WARRANTY' || findMeta('_is_warranty') === 'yes' ? 'Warranty' :
+     (orderBadge === 'REDEEM' || findMeta('_is_redeem') === 'yes' ? 'Redeem' : undefined));
+  const originalInvoice = findMeta('_rma_original_invoice') || (order as any)._rma_original_invoice;
+  const originalOrderId = findMeta('_rma_original_order_id') || (order as any)._rma_original_order_id;
+
+  if (!orderType && !originalInvoice && !originalOrderId) {
+    return null;
   }
 
   return {

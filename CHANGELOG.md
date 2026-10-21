@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.197] - 2026-10-21
+
+### Specialized Orders Query Architecture and Warranty Tab Hygiene
+- **Direct SQL Order ID Resolution for Virtual Tabs (`class-order-manager.php`)**:
+  - Implemented `get_specialized_order_ids( string $tab )` to resolve order IDs directly via MySQL/HPOS meta table queries for virtual fulfillment tabs (`warranty`, `redeem`, `endorsement`).
+  - Fixed issue where WooCommerce HPOS dropped complex `meta_query` structures inside `wc_get_orders()`, previously resulting in storewide orders (e.g. regular webstore purchases like Poco X8 Pro) leaking into the Warranty Claims tab.
+  - Excluded original customer parent orders (`_has_warranty_claim = 'yes'` or `_warranty_replacement_order_id`) from the Warranty Claims fulfillment list so only authentic zero-priced replacement orders are shown.
+  - Protected courier filter by intersecting active IDs rather than overwriting `post__in` and `include`.
+- **Parent Order Classification Guard (`class-order-manager.php`, `src/types/index.ts`)**:
+  - Updated `format_order_for_manager` and `getOrderRma` to evaluate parent order markers before checking replacement metadata, preventing parent orders with `_is_warranty_claim` from losing their `is_parent_order: true` flag.
+  - Added support for detecting `_order_badge = 'WARRANTY'` and `_order_badge = 'REDEEM'`.
+- **Client-Side Defense Safeguards (`OrderTable.tsx`)**:
+  - Enforced client-side filtering on virtual fulfillment tabs (`warranty`, `redeem`, `endorsement`) unconditionally, ensuring non-warranty items or parent orders are excluded even when server filter handlers are active.
+  - Updated status tab counters to strictly count authentic replacement orders without parent order contamination.
+
+---
+
 ## [0.1.196] - 2026-10-21
 
 ### Enforce Zero Upcharge and Preset Normalization for Model Cut Only Coverage
