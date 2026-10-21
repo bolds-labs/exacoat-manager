@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Fix HPOS wc_get_orders query for specialized virtual fulfillment tabs (warranty, redeem, endorsement) by querying order IDs via direct SQL\n- Exclude parent orders with _has_warranty_claim from displaying in the Warranty Claims fulfillment tab\n- Enforce client-side filtering safeguard in OrderTable and getOrderRma to ensure only authentic warranty replacement items are shown`,
+      changelog: `### Version ${version}\n- Synchronize _warranty_claim_status with _rma_status on claim approval or rejection in rest_review_claim\n- Prioritize authoritative _rma_status over stale _warranty_claim_status in format_order_for_manager with DB auto-healing\n- Update OrderTable to show CLAIM APPROVED badge instead of PENDING REVIEW when warranty replacement is approved and awaiting customer shipping payment`,
     },
   };
 

@@ -1736,6 +1736,7 @@ class Exacoat_Warranty_Manager {
 
 		if ( 'approve' === $action ) {
 			$order->update_meta_data( '_rma_status', 'approved' );
+			$order->update_meta_data( '_warranty_claim_status', 'approved' );
 			$order->update_meta_data( '_warranty_payment_url', $payment_url );
 			$order->update_meta_data( '_rma_reviewed_by', $admin_name );
 			$order->update_meta_data( '_rma_reviewed_at', current_time( 'mysql' ) );
@@ -1804,6 +1805,7 @@ class Exacoat_Warranty_Manager {
 
 		} elseif ( 'reject' === $action ) {
 			$order->update_meta_data( '_rma_status', 'rejected' );
+			$order->update_meta_data( '_warranty_claim_status', 'rejected' );
 			$order->update_meta_data( '_rma_rejection_reason', $reason );
 			$order->update_meta_data( '_rma_reviewed_by', $admin_name );
 			$order->update_meta_data( '_rma_reviewed_at', current_time( 'mysql' ) );

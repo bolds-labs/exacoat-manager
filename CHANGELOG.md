@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.198] - 2026-10-21
+
+### Synchronize RMA Claim Decision Status and UI Badges
+- **Decision Synchronization in Review Endpoint (`class-warranty-manager.php`)**:
+  - In `rest_review_claim`, ensure both `_rma_status` and `_warranty_claim_status` on the replacement order are synchronously updated to `'approved'` or `'rejected'`.
+  - Previously, `rest_review_claim` only updated `_rma_status` on the replacement order while attempting to update `_warranty_claim_status` on the parent order (which was null for marketplace orders like Shopee invoice numbers), leaving `_warranty_claim_status = 'pending_review'` stranded on the replacement order.
+- **Authoritative Status Evaluation and Auto-Healing (`class-order-manager.php`)**:
+  - In `format_order_for_manager()`, replacement orders now prioritize the authoritative `_rma_status` over stale `_warranty_claim_status`.
+  - Added on-the-fly database auto-healing that corrects any mismatched `_warranty_claim_status` in postmeta whenever a replacement order is formatted for the API.
+- **Clear UI Claim Status Badges (`OrderTable.tsx`)**:
+  - Updated desktop and mobile order table rows so that approved claims (`rma.status === 'approved'`) never show the amber `PENDING REVIEW` badge.
+  - Added an emerald `CLAIM APPROVED` badge alongside the `Pending Payment` status badge when a warranty replacement is approved and awaiting customer shipping payment.
+
+---
+
 ## [0.1.197] - 2026-10-21
 
 ### Specialized Orders Query Architecture and Warranty Tab Hygiene

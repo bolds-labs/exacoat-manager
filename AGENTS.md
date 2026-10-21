@@ -174,6 +174,10 @@ export function cleanItemTitle(name?: string): string {
 - **Parent Order Exclusion Invariant from Warranty Fulfillment**:
   - Authentic warranty replacement orders are zero-priced fulfillment orders stamped with `_order_badge = 'WARRANTY'`, `_rma_order_type = 'Warranty'`, and `_is_warranty = 'yes'`, containing only the claimed replacement item.
   - Original customer orders (parent orders) stamped with `_has_warranty_claim = 'yes'` or `_warranty_replacement_order_id` must NEVER be included in the Warranty Claims fulfillment tab or counted as warranty fulfillment orders, preventing non-warranty items from the customer's original purchase from being displayed.
+- **RMA Review Status Synchronization Invariant**:
+  - When an admin reviews a claim in `rest_review_claim`, the replacement order's `_rma_status` and `_warranty_claim_status` must both be updated to `'approved'` or `'rejected'`.
+  - In `format_order_for_manager()`, replacement orders must prioritize the authoritative `_rma_status` over stale `_warranty_claim_status` in postmeta, auto-healing any mismatch in the database.
+  - In `OrderTable.tsx`, an order with `rma.status === 'approved'` must never display `PENDING REVIEW`. If awaiting shipping payment (`order.status === 'pending'`), it displays an emerald `CLAIM APPROVED` badge alongside `Pending Payment`.
 
 ---
 

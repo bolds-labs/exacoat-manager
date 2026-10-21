@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.197",
+  "version": "0.1.198",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.197.zip?v=0.1.197",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.198.zip?v=0.1.198",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-10-21T10:18:42.342Z",
+  "last_updated": "2026-10-21T10:31:40.884Z",
   "sections": {
-    "changelog": "### Version 0.1.197\n- Fix HPOS wc_get_orders query for specialized virtual fulfillment tabs (warranty, redeem, endorsement) by querying order IDs via direct SQL\n- Exclude parent orders with _has_warranty_claim from displaying in the Warranty Claims fulfillment tab\n- Enforce client-side filtering safeguard in OrderTable and getOrderRma to ensure only authentic warranty replacement items are shown"
+    "changelog": "### Version 0.1.198\n- Synchronize _warranty_claim_status with _rma_status on claim approval or rejection in rest_review_claim\n- Prioritize authoritative _rma_status over stale _warranty_claim_status in format_order_for_manager with DB auto-healing\n- Update OrderTable to show CLAIM APPROVED badge instead of PENDING REVIEW when warranty replacement is approved and awaiting customer shipping payment"
   }
 }

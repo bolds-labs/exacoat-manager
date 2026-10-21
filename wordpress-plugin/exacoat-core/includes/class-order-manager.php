@@ -2449,6 +2449,18 @@ class Exacoat_Order_Manager {
 			}
 		}
 
+		$effective_claim_status = ( ! empty( $rma_data ) && empty( $rma_data['is_parent_order'] ) )
+			? ( $rma_data['status'] ?: (string) $order->get_meta( '_rma_status' ) ?: (string) $order->get_meta( '_warranty_claim_status' ) ?: 'pending_review' )
+			: ( (string) $order->get_meta( '_warranty_claim_status' ) ?: ( $rma_data['status'] ?? '' ) );
+
+		// Auto-heal replacement order _warranty_claim_status if out of sync with _rma_status
+		if ( ! empty( $rma_data ) && empty( $rma_data['is_parent_order'] ) && ! empty( $rma_data['status'] ) ) {
+			if ( (string) $order->get_meta( '_warranty_claim_status' ) !== $rma_data['status'] ) {
+				$order->update_meta_data( '_warranty_claim_status', $rma_data['status'] );
+				$order->save();
+			}
+		}
+
 		return [
 			'id'                            => $order_id,
 			'order_number'                  => '#' . $order->get_order_number(),
@@ -2506,7 +2518,7 @@ class Exacoat_Order_Manager {
 			'meta_data'                  => $order_meta_data,
 			'rma'                        => $rma_data,
 			'has_warranty_claim'         => $has_warranty_claim || ! empty( $rep_warranty_order_id ),
-			'warranty_claim_status'      => (string) $order->get_meta( '_warranty_claim_status' ) ?: ( ( $rma_data && ! empty( $rma_data['is_parent_order'] ) ) ? ( $rma_data['status'] ?? 'pending_review' ) : '' ),
+			'warranty_claim_status'      => $effective_claim_status,
 			'warranty_replacement_order_id' => $rep_warranty_order_id ? (int) $rep_warranty_order_id : null,
 		];
 	}

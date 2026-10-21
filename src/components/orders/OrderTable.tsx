@@ -1151,15 +1151,36 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                           ) : (
                             <Badge type="orderStatus" value={order.status} size="xs" />
                           )}
-                          {(getOrderRma(order)?.status === 'pending_review' || order.warranty_claim_status === 'pending_review') && (
-                            <span
-                              className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-amber-500 dark:text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded border border-amber-500/30 whitespace-nowrap shadow-xs"
-                              title="Warranty claim proof pending review"
-                            >
-                              <ShieldAlert className="w-2.5 h-2.5 text-amber-400 shrink-0" />
-                              PENDING REVIEW
-                            </span>
-                          )}
+                          {(() => {
+                            const rma = getOrderRma(order);
+                            const isRmaClaim = Boolean(rma?.order_type === 'Warranty' || rma?.order_type === 'Redeem');
+                            const effectiveStatus = rma?.status || order.warranty_claim_status;
+                            const isPendingReview = isRmaClaim && effectiveStatus === 'pending_review' && rma?.status !== 'approved' && rma?.status !== 'rejected';
+                            const isApprovedAwaitingPayment = isRmaClaim && rma?.status === 'approved' && order.status === 'pending';
+
+                            return (
+                              <>
+                                {isPendingReview && (
+                                  <span
+                                    className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-amber-500 dark:text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded border border-amber-500/30 whitespace-nowrap shadow-xs"
+                                    title="Warranty claim proof pending review"
+                                  >
+                                    <ShieldAlert className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+                                    PENDING REVIEW
+                                  </span>
+                                )}
+                                {isApprovedAwaitingPayment && (
+                                  <span
+                                    className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-emerald-500 dark:text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded border border-emerald-500/30 whitespace-nowrap shadow-xs"
+                                    title="Claim approved, awaiting customer shipping payment"
+                                  >
+                                    <ShieldCheck className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
+                                    CLAIM APPROVED
+                                  </span>
+                                )}
+                              </>
+                            );
+                          })()}
                           {isPickup && (
                             <span className="inline-flex items-center text-[9px] font-mono font-semibold text-[#f3aa18] bg-[#f3aa18]/10 px-1.5 py-0.5 rounded border border-[#f3aa18]/20 whitespace-nowrap">
                               Store Pickup (SMB)
@@ -1332,12 +1353,30 @@ export const OrderTable: React.FC<OrderTableProps> = ({
                       ) : (
                         <Badge type="orderStatus" value={order.status} size="xs" />
                       )}
-                      {(getOrderRma(order)?.status === 'pending_review' || order.warranty_claim_status === 'pending_review') && (
-                        <span className="inline-flex items-center gap-1 text-[8.5px] font-mono font-bold text-amber-500 dark:text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded border border-amber-500/30 whitespace-nowrap shadow-xs">
-                          <ShieldAlert className="w-2 h-2 text-amber-400" />
-                          PENDING REVIEW
-                        </span>
-                      )}
+                      {(() => {
+                        const rma = getOrderRma(order);
+                        const isRmaClaim = Boolean(rma?.order_type === 'Warranty' || rma?.order_type === 'Redeem');
+                        const effectiveStatus = rma?.status || order.warranty_claim_status;
+                        const isPendingReview = isRmaClaim && effectiveStatus === 'pending_review' && rma?.status !== 'approved' && rma?.status !== 'rejected';
+                        const isApprovedAwaitingPayment = isRmaClaim && rma?.status === 'approved' && order.status === 'pending';
+
+                        return (
+                          <>
+                            {isPendingReview && (
+                              <span className="inline-flex items-center gap-1 text-[8.5px] font-mono font-bold text-amber-500 dark:text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded border border-amber-500/30 whitespace-nowrap shadow-xs">
+                                <ShieldAlert className="w-2 h-2 text-amber-400" />
+                                PENDING REVIEW
+                              </span>
+                            )}
+                            {isApprovedAwaitingPayment && (
+                              <span className="inline-flex items-center gap-1 text-[8.5px] font-mono font-bold text-emerald-500 dark:text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded border border-emerald-500/30 whitespace-nowrap shadow-xs">
+                                <ShieldCheck className="w-2 h-2 text-emerald-400" />
+                                CLAIM APPROVED
+                              </span>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
 
