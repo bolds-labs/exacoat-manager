@@ -143,9 +143,13 @@ When you see this error during order sync or shop detection:
    - TikTok redirects to the callback with query parameter `code`.
    - Backend calls `GET https://auth.tiktok-shops.com/api/v2/token/get` with `app_key`, `app_secret`, and `auth_code`.
    - Returns `access_token` (valid 7 days) and `refresh_token` (valid 30 days).
+   - **Critical Expiry Timestamp Invariant**: In TikTok Shop Open Platform, `access_token_expire_in` is an **absolute Unix epoch timestamp** in seconds (e.g. `1792022983`), NOT relative seconds. The backend checks `if ($raw_expires > 1000000000)` and treats it directly as `$token_expires_at`. Adding `time() + $raw_expires` corrupts the expiry timestamp to year 2083, permanently disabling automatic token refresh.
 2. **Auto-Refresh Routine**:
-   - Before any Open API request, `ensure_valid_token()` checks if `token_expires_at <= time() + 3600` (1-hour safety buffer).
-   - When renewal is required, it automatically calls `GET https://auth.tiktok-shops.com/api/v2/token/refresh` with `grant_type=refresh_token`, saves the new token to options, and proceeds seamlessly without interrupting work.
+   - Before any Open API request, `ensure_valid_token()` checks if `token_expires_at <= time() + 3600` (1-hour safety buffer), and guards against corrupt timestamps exceeding 30 days in the future.
+   - When renewal is required, it calls `GET https://auth.tiktok-shops.com/api/v2/token/refresh` with `grant_type=refresh_token`, saves the new token to options, and proceeds seamlessly without interrupting work.
+3. **Self-Healing Error Interceptor**:
+   - If TikTok API returns error code `105002`, `105001`, or "Expired credentials", `call_api()` automatically catches this in flight, invokes `ensure_valid_token(true)` to force-refresh via the refresh token, and immediately retries the request once.
+   - Endpoint `POST /wp-json/exacoat-core/v1/tiktok/refresh-token` provides manual on-demand token refresh for administrators.
 
 ---
 

@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.193",
+  "version": "0.1.194",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.193.zip?v=0.1.193",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.194.zip?v=0.1.194",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-10-21T03:13:57.715Z",
+  "last_updated": "2026-10-21T03:18:01.295Z",
   "sections": {
-    "changelog": "### Version 0.1.193\n- Enforced model_cut_only coverage for all Google Pixel devices (no Model 360 full wrap)\n- Auto-healed and saved all Google Pixel variants with model_360_extra_price = 0\n- Locked Coverage Mode in Configurator Studio for Google Pixel devices\n- Revalidated Next.js ISR and purged edge cache for all Google Pixel models"
+    "changelog": "### Version 0.1.194\n- Fix TikTok Shop access token expiry calculation (epoch timestamp vs relative seconds) preventing silent auth expiration\n- Add self-healing automatic token refresh and retry on expired credentials in TikTok client\n- Add dedicated POST /tiktok/refresh-token endpoint for on-demand token renewal\n- Enhance Tokopedia/TikTok and Shopee orders search to query across all order statuses\n- Add Enter key handler and dedicated live search button with loading spinner\n- Add recipient name and phone number to backend order search filtering"
   }
 }

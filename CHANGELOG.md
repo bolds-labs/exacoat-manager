@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.194] - 2026-10-21
+
+### Tokopedia/TikTok & Shopee Orders Search and Token Auto-Renewal
+- **TikTok Shop OAuth Token Lifecycle & Self-Healing (`class-tiktok-client.php`)**:
+  - Corrected TikTok Shop `access_token_expire_in` interpretation: TikTok returns an absolute Unix epoch timestamp, not relative seconds. The previous `time() + $expires_in` resulted in an expiry in the year 2083, which completely bypassed token auto-refresh.
+  - Added self-healing retry in `Exacoat_TikTok_Client::call_api()`: automatically catches error code `105002`/`105001` ("Expired credentials") and forces an immediate token refresh and retry before returning an error.
+  - Hardened `ensure_valid_token($force_refresh)` with sanity checks against corrupt expiry timestamps in the far future (`> now + 30 days`).
+  - Added dedicated `POST /tiktok/refresh-token` REST endpoint for on-demand token refresh from admin controls.
+- **Cross-Status Order Search (`TikTokOrdersView.tsx` & `ShopeeOrdersView.tsx`)**:
+  - Fixed search filter scoping: when an explicit search query is entered, search filters across all cached orders rather than being constrained to `ordersInActiveTab`.
+  - Added Enter key (`onKeyDown`) handler on search inputs to trigger live search directly against remote marketplace APIs.
+  - Added interactive "Cari" button and clear button (`X`) with loading spinner (`Loader2`) to search input bars.
+  - Automatically switches active tab to `Semua` (`ALL`) when a live search finds a matching order so the card is rendered immediately.
+- **Backend Search Ingestion**:
+  - Included `recipient_name` and `recipient_phone` in backend `rest_get_orders` filtering for both TikTok and Shopee clients, enabling seamless lookup by customer name and phone number.
+
+---
+
 ## [0.1.193] - 2026-10-21
 
 ### Google Pixel Model Cut Invariant in Configurator

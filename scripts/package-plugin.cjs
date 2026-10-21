@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Enforced model_cut_only coverage for all Google Pixel devices (no Model 360 full wrap)\n- Auto-healed and saved all Google Pixel variants with model_360_extra_price = 0\n- Locked Coverage Mode in Configurator Studio for Google Pixel devices\n- Revalidated Next.js ISR and purged edge cache for all Google Pixel models`,
+      changelog: `### Version ${version}\n- Fix TikTok Shop access token expiry calculation (epoch timestamp vs relative seconds) preventing silent auth expiration\n- Add self-healing automatic token refresh and retry on expired credentials in TikTok client\n- Add dedicated POST /tiktok/refresh-token endpoint for on-demand token renewal\n- Enhance Tokopedia/TikTok and Shopee orders search to query across all order statuses\n- Add Enter key handler and dedicated live search button with loading spinner\n- Add recipient name and phone number to backend order search filtering`,
     },
   };
 

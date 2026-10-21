@@ -118,6 +118,24 @@ Exacoat operations run across multiple admins using different physical PCs simul
 
 ---
 
+## 4b. TikTok Shop Open Platform & Token Auto-Renewal
+
+### Token Expiration Timestamp Invariant
+- In TikTok Shop Open Platform API, `access_token_expire_in` returned by `/api/v2/token/get` and `/api/v2/token/refresh` is an **absolute Unix epoch timestamp** in seconds (e.g. `1792022983`), NOT relative seconds.
+- Code must never do `time() + $expires_in` when `$raw_expires > 1000000000`. Doing so stores an expiration timestamp in the year 2083, which completely bypasses the auto-refresh check in `ensure_valid_token()`.
+- `ensure_valid_token(bool $force_refresh = false)` bounds valid expiry timestamps to between `now + 300` and `now + 30 days`, protecting against poisoned historical values.
+
+### Self-Healing Token Refresh
+- In `Exacoat_TikTok_Client::call_api()`, when TikTok returns error code `105002`, `105001`, or "Expired credentials", the client intercepts the failure, executes `ensure_valid_token(true)` using the stored `refresh_token`, and retries the API request once.
+- REST endpoint `POST /wp-json/exacoat-core/v1/tiktok/refresh-token` is available for on-demand token renewal.
+
+### Cross-Status Order Search Architecture
+- In `TikTokOrdersView.tsx` and `ShopeeOrdersView.tsx`, when an operator enters a search query, `filteredOrders` searches across all cached `orders` rather than being restricted to `ordersInActiveTab`. This ensures orders in `SHIPPED`, `COMPLETED`, or other statuses can be discovered regardless of which tab the operator is viewing.
+- Search inputs include an `onKeyDown` Enter key handler and an interactive "Cari" button with `Loader2` spinner to query the remote marketplace API on-demand (`fetchTikTokOrdersDirect({ search: q })`).
+- When a live order is found via API, the component automatically sets `activeTab` to `'ALL'` so the order card is immediately visible.
+
+---
+
 ## 5. Cancelled Orders Policy across Marketplaces
 
 In both Shopee and TikTok views:
