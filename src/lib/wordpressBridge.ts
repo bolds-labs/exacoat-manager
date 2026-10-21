@@ -7215,6 +7215,10 @@ export async function fetchShopeeOrdersDirect(params?: {
   success: boolean;
   orders?: ShopeeOrder[];
   total?: number;
+  total_cached?: number;
+  oldest_order_timestamp?: number;
+  newest_order_timestamp?: number;
+  last_synced_at?: string;
   error?: string;
 }> {
   const base = getWordPressBaseUrl();
@@ -7234,6 +7238,10 @@ export async function fetchShopeeOrdersDirect(params?: {
         success: true,
         orders: data.orders || [],
         total: data.total || (data.orders || []).length,
+        total_cached: data.total_cached ?? (data.orders || []).length,
+        oldest_order_timestamp: data.oldest_order_timestamp,
+        newest_order_timestamp: data.newest_order_timestamp,
+        last_synced_at: data.last_synced_at,
       };
     }
     return {
@@ -7658,6 +7666,10 @@ export async function fetchTikTokOrdersDirect(params?: {
   success: boolean;
   orders?: TikTokOrder[];
   total?: number;
+  total_cached?: number;
+  oldest_order_timestamp?: number;
+  newest_order_timestamp?: number;
+  last_synced_at?: string;
   error?: string;
 }> {
   const base = getWordPressBaseUrl();
@@ -7677,6 +7689,10 @@ export async function fetchTikTokOrdersDirect(params?: {
         success: true,
         orders: data.orders || [],
         total: data.total || (data.orders || []).length,
+        total_cached: data.total_cached ?? (data.orders || []).length,
+        oldest_order_timestamp: data.oldest_order_timestamp,
+        newest_order_timestamp: data.newest_order_timestamp,
+        last_synced_at: data.last_synced_at,
       };
     }
     return {

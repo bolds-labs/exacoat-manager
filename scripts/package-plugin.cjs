@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Completely scrub endorsement, VIP PR, and influencer handles from physical A6 shipping labels\n- Ensure endorsement order details remain strictly private in admin internal order notes`,
+      changelog: `### Version ${version}\n- Dynamic horizon-aware historical Shopee and TikTok order synchronization in Financial Reports\n- Increased hourly cron sync and cache retention up to 3,000 orders with 300s execution timeout protection\n- Added Shopee order date coverage analysis banner in Reports page for seamless 1-click historical backfills`,
     },
   };
 

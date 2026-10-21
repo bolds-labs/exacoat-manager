@@ -7,7 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.1.54] - 2026-09-25
+## [0.1.192] - 2026-10-21
+
+### Multi-Month Historical Marketplace Sync in Financial Reports
+- **Horizon-Aware Shopee & TikTok Sync**:
+  - Dynamically calculates required synchronization days from the active Date Horizon selector (`requiredHorizonDays`, up to 365 days) instead of hardcoding 60 days.
+  - Added Shopee cache date coverage detection: automatically detects when the selected horizon reaches further back than cached marketplace data and displays an inline 1-click sync banner (`Sync [N] Days from Shopee`).
+  - Top header "Refresh & Sync" button now syncs live marketplace orders matching the active date horizon.
+- **Backend Sync Hardening (`class-shopee-client.php` & `class-tiktok-client.php`)**:
+  - Increased automated hourly cron sync from 100 orders (15 days) to 500 orders (30 days) to prevent premature cutoffs on active stores.
+  - Increased maximum order fetch ceiling and cache retention from 1,000 orders to 3,000 orders.
+  - Added `@set_time_limit(300)` and `wp_raise_memory_limit('admin')` to protect multi-month batch syncs against PHP execution timeouts.
+  - Augmented `rest_get_orders` to return `oldest_order_timestamp`, `newest_order_timestamp`, and `total_cached` metadata for precise client-side coverage auditing.
+- **Rule File Hygiene**:
+  - Fixed non-UTF-8 middle dot bytes (`0xB7`) in `AGENTS.md` to valid UTF-8 (`0xC2 0xB7`), resolving agent parser crashes.
+
 
 ### Strict Free Shipping Carrier Protection & Multi-Zone Wildcard Matching
 - **Courier-Safe Free Shipping Discount**:

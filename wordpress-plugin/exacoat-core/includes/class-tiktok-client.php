@@ -42,7 +42,7 @@ class Exacoat_TikTok_Client {
 		if ( empty( $settings['access_token'] ) && empty( $settings['shop_cipher'] ) ) {
 			return;
 		}
-		$res = self::sync_orders( 15, 100 );
+		$res = self::sync_orders( 30, 500 );
 		if ( class_exists( 'Exacoat_Logger' ) ) {
 			Exacoat_Logger::log(
 				'info',
@@ -501,9 +501,15 @@ class Exacoat_TikTok_Client {
 	 * Synchronize orders from TikTok Shop Open Platform
 	 */
 	public static function sync_orders( int $days_back = 30, int $max_orders = 500 ): array {
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 300 );
+		}
+		if ( function_exists( 'wp_raise_memory_limit' ) ) {
+			wp_raise_memory_limit( 'admin' );
+		}
 		$start_time = microtime( true );
 		$s = self::get_settings();
-		$max_fetch = min( 1000, max( 50, $max_orders ) );
+		$max_fetch = min( 3000, max( 50, $max_orders ) );
 
 		if ( class_exists( 'Exacoat_Logger' ) ) {
 			Exacoat_Logger::log(
@@ -678,7 +684,7 @@ class Exacoat_TikTok_Client {
 		usort( $all_cached_orders, function( $a, $b ) {
 			return ( $b['create_timestamp'] ?? 0 ) <=> ( $a['create_timestamp'] ?? 0 );
 		});
-		$all_cached_orders = array_slice( $all_cached_orders, 0, 1000 ); // Retain up to 1,000 orders
+		$all_cached_orders = array_slice( $all_cached_orders, 0, 3000 ); // Retain up to 3,000 orders
 
 		update_option( self::ORDERS_CACHE_KEY, $all_cached_orders );
 		self::save_settings([ 'last_synced_at' => time() ]);
@@ -1464,19 +1470,37 @@ class Exacoat_TikTok_Client {
 			return ( $b['create_timestamp'] ?? 0 ) <=> ( $a['create_timestamp'] ?? 0 );
 		});
 
+		$oldest_ts = null;
+		$newest_ts = null;
+		if ( ! empty( $cached ) ) {
+			foreach ( $cached as $c_item ) {
+				$ts = (int) ( $c_item['create_timestamp'] ?? 0 );
+				if ( $ts > 0 ) {
+					if ( $oldest_ts === null || $ts < $oldest_ts ) $oldest_ts = $ts;
+					if ( $newest_ts === null || $ts > $newest_ts ) $newest_ts = $ts;
+				}
+			}
+		}
+
 		$s = self::get_settings();
 
 		return rest_ensure_response([
-			'success'        => true,
-			'orders'         => array_values( $filtered ),
-			'total'          => count( $filtered ),
-			'last_synced_at' => $s['last_synced_at'] ? date( 'Y-m-d H:i:s', $s['last_synced_at'] ) : null,
-			'is_connected'   => ! empty( $s['access_token'] ),
-			'shop_name'      => $s['shop_name'],
+			'success'                 => true,
+			'orders'                  => array_values( $filtered ),
+			'total'                   => count( $filtered ),
+			'total_cached'            => count( $cached ),
+			'oldest_order_timestamp'  => $oldest_ts,
+			'newest_order_timestamp'  => $newest_ts,
+			'last_synced_at'          => $s['last_synced_at'] ? date( 'Y-m-d H:i:s', $s['last_synced_at'] ) : null,
+			'is_connected'            => ! empty( $s['access_token'] ),
+			'shop_name'               => $s['shop_name'],
 		]);
 	}
 
 	public static function rest_sync_orders( \WP_REST_Request $request ): \WP_REST_Response {
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 300 );
+		}
 		$days = (int) ( $request->get_param( 'days' ) ?: 30 );
 		$limit = (int) ( $request->get_param( 'limit' ) ?: 500 );
 		$res = self::sync_orders( $days, $limit );

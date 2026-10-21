@@ -165,6 +165,14 @@ export function cleanItemTitle(name?: string): string {
 
 - **Strict Exclusion**: All sales reports, revenue aggregations, and financial analytics must strictly exclude cancelled, refunded, and unpaid orders across all sales channels (Webstore, Shopee, TikTok Shop).
 - Multi-channel financial reports must respect channel and timespan filters without double-counting adjustments or warranty replacement orders.
+- **Marketplace Historical Sync & Date Horizon Architecture**:
+  - WooCommerce orders exist permanently in MySQL tables (wp_posts / wp_wc_orders), while marketplace orders (Shopee and TikTok Shop) are cached in WordPress wp_options (_exacoat_shopee_orders_cache and _exacoat_tiktok_orders_cache).
+  - Shopee Open Platform API v2 endpoint /api/v2/order/get_order_list strictly limits 	ime_to - time_from to a maximum of 15 days per request. The backend partitions wider date ranges into sequential 14-day sliding windows.
+  - Financial Reports (ReportsPage.tsx) computes 
+equiredHorizonDays dynamically from the active Date Horizon selector (startMs to 
+ow, up to 365 days).
+  - When the active horizon extends further back than the oldest order in the local marketplace cache, an inline coverage notice is displayed offering 1-click historical backfill (Sync [N] Days from Shopee).
+  - The hourly cron sync (cron_sync_orders) syncs 30 days and up to 500 orders, and cache retention retains up to 3,000 orders. All manual and cron syncs are guarded with @set_time_limit(300) to prevent PHP execution timeouts during multi-month batch order and escrow processing.
 
 ---
 
@@ -1531,7 +1539,7 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
     - Demonstrates to marketplace buyers that extensive skin variations exist beyond the listing's main hero image.
   - **Bottom Row (3 Horizontal Feature Cards)**:
     - 3 cards side by side along the bottom (width: 420px, height: 185px, margin: 60px).
-    - Natural, non-slop copywriting: "3M Material (USA · Japan · Italy)", "Accurate fit (Zero gap precision cut)", "Garansi Pemasangan (Bebas gelembung & presisi)".
+    - Natural, non-slop copywriting: "3M Material (USA Â· Japan Â· Italy)", "Accurate fit (Zero gap precision cut)", "Garansi Pemasangan (Bebas gelembung & presisi)".
     - Circular top-right icon badge with green vector glyphs (material layers, precision crosshairs, guarantee shield).
 - **Background Pipeline**:
   - **Exacoat Monogram Light**: Studio radial gradient lighting with subtle 3-leaf clover geometric monogram vector pattern.

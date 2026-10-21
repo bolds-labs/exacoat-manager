@@ -70,6 +70,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
   const [error, setError] = useState<string | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
   const hasAutoSyncedEscrowRef = useRef(false);
+  const initialLoadRef = useRef(false);
 
   const { startMs, endMs, dateLabel } = useMemo(() => {
     const todayKey = getStoreDateKey(Date.now());
@@ -168,16 +169,61 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
     };
   }, [datePreset, customStart, customEnd]);
 
-  const loadFinancialData = useCallback(async (quiet = false, syncChannels = false) => {
+  // Compute days required to cover the selected date horizon
+  const requiredHorizonDays = useMemo(() => {
+    const now = Date.now();
+    const diffMs = Math.max(0, now - startMs);
+    const days = Math.ceil(diffMs / (24 * 60 * 60 * 1000));
+    // 2-day buffer, minimum 7 days, maximum 365 days
+    return Math.max(7, Math.min(365, days + 2));
+  }, [startMs]);
+
+  // Evaluate Shopee order cache date coverage against active horizon
+  const shopeeCoverage = useMemo(() => {
+    if (shopeeOrders.length === 0) {
+      return {
+        hasOrders: false,
+        oldestMs: 0,
+        coverageDays: 0,
+        missingCoverage: false,
+      };
+    }
+    const timestamps = shopeeOrders
+      .map(o => (o.create_timestamp ? o.create_timestamp * 1000 : 0))
+      .filter(t => t > 0);
+    if (timestamps.length === 0) {
+      return {
+        hasOrders: false,
+        oldestMs: 0,
+        coverageDays: 0,
+        missingCoverage: false,
+      };
+    }
+    const oldestMs = Math.min(...timestamps);
+    const coverageDays = Math.max(1, Math.floor((Date.now() - oldestMs) / (24 * 60 * 60 * 1000)));
+    // If selected horizon start date is older than oldest cached Shopee order by > 24h
+    const missingCoverage = startMs < oldestMs - (24 * 60 * 60 * 1000);
+    return {
+      hasOrders: true,
+      oldestMs,
+      coverageDays,
+      missingCoverage,
+    };
+  }, [shopeeOrders, startMs]);
+
+  const loadFinancialData = useCallback(async (quiet = false, syncChannels = false, customDays?: number) => {
     if (!quiet) setIsLoading(true);
     else setIsRefreshing(true);
     setError(null);
+
+    const daysToSync = customDays || Math.max(30, requiredHorizonDays);
+    const limitToSync = Math.min(3000, Math.max(500, daysToSync * 15));
 
     try {
       const webPromise = fetchOrdersDirect({ per_page: 500 });
 
       const shopeePromise = syncChannels
-        ? syncShopeeOrdersDirect(60, 500)
+        ? syncShopeeOrdersDirect(daysToSync, limitToSync)
             .then(res => {
               if (res.success && Array.isArray(res.orders)) return res;
               return fetchShopeeOrdersDirect();
@@ -186,7 +232,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
         : fetchShopeeOrdersDirect();
 
       const tiktokPromise = syncChannels
-        ? syncTikTokOrdersDirect(60, 500)
+        ? syncTikTokOrdersDirect(daysToSync, limitToSync)
             .then(res => {
               if (res.success && Array.isArray(res.orders)) return res;
               return fetchTikTokOrdersDirect();
@@ -234,7 +280,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
         );
         if (needsShopeeEscrow || needsTikTokEscrow) {
           hasAutoSyncedEscrowRef.current = true;
-          loadFinancialData(true, true);
+          loadFinancialData(true, true, daysToSync);
         }
       }
     } catch (err: any) {
@@ -246,10 +292,13 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
         setIsRefreshing(false);
       }
     }
-  }, []);
+  }, [requiredHorizonDays]);
 
   useEffect(() => {
-    loadFinancialData();
+    if (!initialLoadRef.current) {
+      initialLoadRef.current = true;
+      loadFinancialData();
+    }
   }, [loadFinancialData]);
 
   const allRecords = useMemo(() => {
@@ -337,13 +386,13 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
           )}
           <button
             type="button"
-            onClick={() => loadFinancialData(true, true)}
+            onClick={() => loadFinancialData(true, true, requiredHorizonDays)}
             disabled={isLoading || isRefreshing}
             className="min-h-11 px-3.5 rounded-xl border border-white/10 bg-[#121316] text-neutral-200 hover:bg-white/[0.06] hover:text-white text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer shadow-xs disabled:opacity-50"
-            title="Sync live Shopee and TikTok Shop orders & escrow settlement fees"
+            title={`Sync live Shopee and TikTok Shop orders & escrow settlements for ${dateLabel} (${requiredHorizonDays} days)`}
           >
             <RefreshCw className={clsx('w-3.5 h-3.5', (isLoading || isRefreshing) && 'animate-spin text-[#f3aa18]')} />
-            <span>{isRefreshing ? 'Syncing Escrow...' : 'Refresh & Sync'}</span>
+            <span>{isRefreshing ? `Syncing ${requiredHorizonDays}d...` : 'Refresh & Sync'}</span>
           </button>
         </div>
       </header>
@@ -380,6 +429,36 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
           </span>
         </div>
       </GlassCard>
+
+      {/* 3b. Shopee Historical Horizon Coverage Notice */}
+      {!isLoading && !error && selectedChannels.includes('shopee') && shopeeCoverage.missingCoverage && (
+        <GlassCard className="p-4 border-amber-500/25 bg-amber-500/[0.03] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 font-sans">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0 mt-0.5">
+              <AlertCircle className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-white">
+                Shopee sales cache currently covers the latest {shopeeCoverage.coverageDays} days
+              </p>
+              <p className="text-[11px] text-neutral-400 mt-0.5 leading-relaxed">
+                Your selected horizon ({dateLabel}) reaches back further than cached orders.
+                Click below to fetch full historical orders and escrow settlements from Shopee API.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => loadFinancialData(true, true, requiredHorizonDays)}
+            disabled={isRefreshing}
+            className="min-h-10 px-4 rounded-xl bg-[#f3aa18] text-zinc-950 hover:bg-[#d9940e] font-semibold text-xs flex items-center justify-center gap-2 shrink-0 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+            title={`Sync ${requiredHorizonDays} days of orders from Shopee API`}
+          >
+            <RefreshCw className={clsx('w-3.5 h-3.5', isRefreshing && 'animate-spin')} />
+            <span>{isRefreshing ? 'Syncing Shopee API...' : `Sync ${requiredHorizonDays} Days from Shopee`}</span>
+          </button>
+        </GlassCard>
+      )}
 
       {/* 4. Loading State */}
       {isLoading && (
