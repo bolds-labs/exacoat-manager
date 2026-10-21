@@ -178,6 +178,11 @@ export function cleanItemTitle(name?: string): string {
   - When an admin reviews a claim in `rest_review_claim`, the replacement order's `_rma_status` and `_warranty_claim_status` must both be updated to `'approved'` or `'rejected'`.
   - In `format_order_for_manager()`, replacement orders must prioritize the authoritative `_rma_status` over stale `_warranty_claim_status` in postmeta, auto-healing any mismatch in the database.
   - In `OrderTable.tsx`, an order with `rma.status === 'approved'` must never display `PENDING REVIEW`. If awaiting shipping payment (`order.status === 'pending'`), it displays an emerald `CLAIM APPROVED` badge alongside `Pending Payment`.
+- **Warranty Approved Email Notification & Pay Portal Architecture**:
+  - When a claim is approved in `rest_review_claim`, `Exacoat_Email_Engine::send_email('warranty_approved', ...)` is triggered with claim details, QC approval badge, and direct payment URL (`https://exacoat.com/pay/{id}?key={order_key}`).
+  - Both `class-email-engine.php` and Manager's `emailRenderer.ts` register and render the unified light-mode `warranty_approved` template.
+  - On the web pay portal (`/pay/[id]`), global header and footer are suppressed via `SUPPRESSED_ROUTES` in `site-layout-wrapper.tsx` to prevent double header and footer.
+  - Pay portal fetches live rates from `/api/warranty/shipping-rates`, requires active courier shipping option selection, and calls `/api/commerce/update-order-shipping` before initiating Midtrans Snap payment.
 
 ---
 

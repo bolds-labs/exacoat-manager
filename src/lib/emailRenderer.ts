@@ -28,6 +28,8 @@ export function renderEmailHtmlLocally(event: string, customData: Record<string,
     return renderAbandonedCartEmail(event, customData);
   } else if (event.startsWith('customer_order_')) {
     return renderCustomerOrderEmail(event, customData);
+  } else if (event === 'warranty_approved') {
+    return renderWarrantyApprovedEmail(customData);
   } else {
     return renderFallbackEmail(event, customData);
   }
@@ -1764,6 +1766,202 @@ function renderAbandonedCartEmail(event: string, data: Record<string, any>): Ren
       <td height="48" style="height:48px;line-height:48px;font-size:0;mso-line-height-rule:exactly;">&nbsp;</td>
     </tr>
   </tbody>
+  </table>
+</body>
+</html>`;
+
+  return { subject, html, isLightMode: true };
+}
+
+function renderWarrantyApprovedEmail(data: Record<string, any>): RenderedEmail {
+  const custName = escapeHtml(data.customer_first_name || data.customer_name || 'Customer');
+  const orderNum = escapeHtml(String(data.order_number || data.order_id || ''));
+  const parentNum = escapeHtml(String(data.parent_order_number || data.parent_order_id || ''));
+  const shippingCost = Number(data.shipping_cost || 0);
+  const shippingFmt = escapeHtml(data.shipping_cost_fmt || (shippingCost > 0 ? `Rp ${shippingCost.toLocaleString('id-ID')}` : 'Rp 9.000'));
+  const courierName = escapeHtml(data.courier_name || 'Standard Courier');
+  const paymentUrl = escapeHtml(data.payment_url || `https://exacoat.com/pay/${orderNum}`);
+  const badgeText = escapeHtml(data.badge_text || 'Installation Warranty & QC');
+  const orderRef = parentNum || orderNum || 'Order';
+
+  const subject = `[Exacoat] Klaim Garansi Pemasangan Disetujui #${orderRef}`;
+
+  const items = Array.isArray(data.items) ? data.items : [];
+  let itemsHtml = '';
+  if (items.length > 0) {
+    itemsHtml = items
+      .map((it: any) => {
+        const itName = escapeHtml(it.name || 'Exacoat Skin Replacement');
+        const parts = Array.isArray(it.claimed_parts)
+          ? it.claimed_parts.map((p: any) => escapeHtml(String(p))).join(', ')
+          : escapeHtml(it.note || '');
+        return `
+        <div style="padding:12px 14px;background:#ffffff;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:8px;">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td valign="middle">
+                <p style="margin:0;font-size:13.5px;font-weight:600;color:#111827;">${itName}</p>
+                ${parts ? `<p style="margin:3px 0 0;font-size:12px;color:#6b7280;">Bagian: <strong style="color:#374151;">${parts}</strong></p>` : ''}
+              </td>
+              <td align="right" valign="middle">
+                <span style="display:inline-block;padding:3px 9px;font-size:11px;font-weight:700;background:#ecfdf5;color:#059669;border-radius:9999px;border:1px solid #a7f3d0;">Rp 0 (Garansi)</span>
+              </td>
+            </tr>
+          </table>
+        </div>`;
+      })
+      .join('');
+  } else {
+    itemsHtml = `
+      <div style="padding:12px 14px;background:#ffffff;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:8px;">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td valign="middle">
+              <p style="margin:0;font-size:13.5px;font-weight:600;color:#111827;">Exacoat Skin Replacement</p>
+            </td>
+            <td align="right" valign="middle">
+              <span style="display:inline-block;padding:3px 9px;font-size:11px;font-weight:700;background:#ecfdf5;color:#059669;border-radius:9999px;border:1px solid #a7f3d0;">Rp 0 (Garansi)</span>
+            </td>
+          </tr>
+        </table>
+      </div>`;
+  }
+
+  const parentRefHtml =
+    parentNum && parentNum !== orderNum
+      ? `
+      <tr>
+        <td style="padding:6px 0;font-size:12.5px;color:#6b7280;">Invoice Pembelian Asal</td>
+        <td align="right" style="padding:6px 0;font-size:13px;font-weight:600;color:#374151;font-family:ui-monospace,Menlo,monospace;">#${parentNum}</td>
+      </tr>`
+      : '';
+
+  const html = `<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(subject)}</title>
+  <style>
+    body { margin:0; padding:0; width:100% !important; background-color:#f8f8fa; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; }
+    table { border-collapse:collapse; }
+    img { border:0; display:block; }
+    @media only screen and (max-width:620px) {
+      .container-table { width:100% !important; border-radius:0 !important; }
+      .mobile-padding { padding:24px 20px !important; }
+    }
+  </style>
+</head>
+<body style="margin:0;padding:0;background-color:#f8f8fa;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f8f8fa" style="border-collapse:collapse;background-color:#f8f8fa;">
+    <tbody>
+      <tr>
+        <td height="40" style="height:40px;line-height:40px;font-size:0;">&nbsp;</td>
+      </tr>
+      <tr>
+        <td align="center" style="padding:0 16px;">
+        <table class="container-table" width="580" cellpadding="0" cellspacing="0" border="0" style="max-width:580px;background:#ffffff;border:1px solid #eaeaea;border-radius:18px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.03);">
+          <tbody>
+            <!-- Header with Logo & QC Badge -->
+            <tr>
+              <td style="padding:26px 36px 20px;border-bottom:1px solid #f0f0f2;" class="mobile-padding">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td valign="middle">
+                      ${BRAND_LOGO_HTML}
+                    </td>
+                    <td align="right" valign="middle">
+                      <span style="display:inline-block;padding:5px 12px;background:#fef3c7;color:#92400e;font-size:11px;font-weight:700;border-radius:9999px;border:1px solid #fde68a;letter-spacing:0.2px;">${badgeText}</span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Main Content -->
+            <tr>
+              <td style="padding:32px 36px 28px;" class="mobile-padding">
+                <h1 style="margin:0 0 16px;font-size:23px;font-weight:700;color:#111827;letter-spacing:-0.4px;line-height:1.3;">Klaim Garansi Pemasangan Disetujui</h1>
+                <p style="margin:0 0 14px;font-size:15px;font-weight:600;color:#18181b;">Halo kak ${custName},</p>
+                <p style="margin:0 0 16px;font-size:14px;line-height:1.7;color:#374151;">
+                  Klaim garansi pemasangan 48 jam Exacoat Anda untuk pesanan <strong>#${orderRef}</strong> telah ditinjau dan <strong>disetujui</strong> oleh tim Quality Control kami.
+                </p>
+                <p style="margin:0 0 24px;font-size:14px;line-height:1.7;color:#374151;">
+                  Silakan selesaikan pembayaran ongkos kirim ekspedisi kurir sebesar <strong>${shippingFmt}</strong> melalui tautan resmi di bawah ini agar pesanan penggantian Anda dapat langsung kami jadwalkan untuk proses produksi dan pengemasan:
+                </p>
+
+                <!-- Prominent Action CTA -->
+                <div style="text-align:center;margin:28px 0;">
+                  <a href="${paymentUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:15px 34px;background:#f3aa18;color:#000000;font-size:14.5px;font-weight:700;border-radius:100px;text-decoration:none;letter-spacing:0.2px;box-shadow:0 4px 14px rgba(243,170,24,0.35);">
+                    Bayar Ongkos Kirim (${shippingFmt}) &rarr;
+                  </a>
+                </div>
+
+                <!-- Order Breakdown Card -->
+                <table width="100%" cellpadding="0" cellspacing="0" style="background:#fafafa;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;margin-bottom:24px;">
+                  <tr>
+                    <td style="padding:18px 20px;">
+                      <p style="margin:0 0 12px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;">Rincian Penggantian Garansi</p>
+                      ${itemsHtml}
+                      <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #e5e7eb;margin-top:12px;padding-top:10px;">
+                        <tr>
+                          <td style="padding:6px 0;font-size:12.5px;color:#6b7280;">No. Pesanan Penggantian</td>
+                          <td align="right" style="padding:6px 0;font-size:13px;font-weight:600;color:#374151;font-family:ui-monospace,Menlo,monospace;">#${orderNum}</td>
+                        </tr>
+                        ${parentRefHtml}
+                        <tr>
+                          <td style="padding:6px 0;font-size:12.5px;color:#6b7280;">Status</td>
+                          <td align="right" style="padding:6px 0;font-size:12px;font-weight:700;color:#059669;">Disetujui QC (Menunggu Pembayaran Ongkir)</td>
+                        </tr>
+                        <tr>
+                          <td style="padding:6px 0;font-size:12.5px;color:#6b7280;">Biaya Skin Penggantian</td>
+                          <td align="right" style="padding:6px 0;font-size:13px;font-weight:700;color:#059669;">Rp 0 (Garansi)</td>
+                        </tr>
+                        <tr>
+                          <td style="padding:6px 0;font-size:12.5px;color:#6b7280;">Ongkos Kirim Kurir (${courierName})</td>
+                          <td align="right" style="padding:6px 0;font-size:13px;font-weight:600;color:#111827;">${shippingFmt}</td>
+                        </tr>
+                        <tr>
+                          <td style="padding:10px 0 4px;font-size:13.5px;font-weight:700;color:#111827;border-top:1px dashed #e5e7eb;">Total Pelunasan Ongkir</td>
+                          <td align="right" style="padding:10px 0 4px;font-size:16px;font-weight:800;color:#d97706;border-top:1px dashed #e5e7eb;font-family:ui-monospace,Menlo,monospace;">${shippingFmt}</td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+
+                <p style="margin:0 0 16px;font-size:12px;color:#9ca3af;word-break:break-all;line-height:1.5;">
+                  Tautan tidak dapat diklik? Salin tautan berikut ke browser Anda:<br>
+                  <a href="${paymentUrl}" style="color:#d97706;text-decoration:underline;">${paymentUrl}</a>
+                </p>
+
+                <div style="border-top:1px solid #f0f0f2;padding-top:20px;margin-top:24px;">
+                  <p style="margin:0 0 2px;font-size:13.5px;color:#4b5563;">Best regards,</p>
+                  <p style="margin:0;font-size:14px;font-weight:700;color:#111827;">Aurelia</p>
+                  <p style="margin:2px 0 0;font-size:12.5px;color:#6b7280;">Exacoat Customer Support</p>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Footer -->
+            <tr>
+              <td style="padding:20px 36px 24px;background:#f9fafb;border-top:1px solid #f0f0f2;text-align:center;" class="mobile-padding">
+                <p style="margin:0 0 6px;font-size:11.5px;color:#9ca3af;">
+                  &copy; ${new Date().getFullYear()} Exacoat. All rights reserved.
+                </p>
+                <p style="margin:0;font-size:11.5px;color:#9ca3af;">
+                  Pertanyaan seputar klaim garansi? Hubungi kami di <a href="mailto:support@exacoat.com" style="color:#6b7280;text-decoration:underline;">support@exacoat.com</a>
+                </p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        </td>
+      </tr>
+      <tr>
+        <td height="40" style="height:40px;line-height:40px;font-size:0;">&nbsp;</td>
+      </tr>
+    </tbody>
   </table>
 </body>
 </html>`;

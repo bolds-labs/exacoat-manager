@@ -646,6 +646,40 @@ class Exacoat_Email_Engine {
 					'dashboard_url'       => 'https://exacoat.com/?portal=affiliate',
 				],
 			],
+
+			// 8. Installation Warranty & RMA Notifications
+			'warranty_approved' => [
+				'category'       => 'Warranty & RMA',
+				'label'          => 'Warranty Claim Approved (Awaiting Shipping Payment)',
+				'subject'        => '[Exacoat] Klaim Garansi Pemasangan Disetujui #{{order_number}}',
+				'badge'          => 'Installation Warranty & QC',
+				'icon'           => 'document_verified',
+				'title'          => 'Klaim Garansi Disetujui',
+				'body_primary'   => 'Klaim garansi pemasangan 48 jam Exacoat Anda untuk pesanan #{{order_number}} telah ditinjau dan disetujui oleh tim Quality Control kami.',
+				'body_secondary' => 'Silakan selesaikan pembayaran ongkos kirim ekspedisi kurir sebesar {{shipping_cost_fmt}} melalui tautan resmi di bawah ini agar pesanan penggantian dapat segera kami proses dan kirimkan.',
+				'cta_text'       => 'Bayar Ongkos Kirim',
+				'type'           => 'warranty_approved',
+				'defaults'       => [
+					'customer_name'       => 'Celine',
+					'customer_first_name' => 'Celine',
+					'order_id'            => '542699',
+					'order_number'        => '542699',
+					'parent_order_id'     => '2610192AB512H7',
+					'parent_order_number' => '2610192AB512H7',
+					'shipping_cost'       => 9000,
+					'shipping_cost_fmt'   => 'Rp 9.000',
+					'courier_name'        => 'SICEPAT - REG',
+					'payment_url'         => 'https://exacoat.com/pay/542699?key=wc_order_demo',
+					'items'               => [
+						[
+							'name'          => 'Samsung Galaxy S24 Ultra Skin',
+							'quantity'      => 1,
+							'claimed_parts' => [ 'Back' ],
+							'note'          => 'Back skin misalignment',
+						],
+					],
+				],
+			],
 		];
 	}
 
@@ -795,6 +829,11 @@ class Exacoat_Email_Engine {
 		// Branch directly to Creator / Affiliate Program Layout
 		if ( $type === 'creator' || str_starts_with( $event, 'creator_' ) || str_starts_with( $event, 'affiliate_' ) ) {
 			return self::render_creator_email_html( $event, $merged_data, $tmpl );
+		}
+
+		// Branch directly to Warranty Claim Approved Layout
+		if ( $event === 'warranty_approved' || $type === 'warranty_approved' ) {
+			return self::render_warranty_approved_html( $merged_data, $tmpl );
 		}
 
 		$customer_name = esc_html( $merged_data['customer_name'] ?? $merged_data['display_name'] ?? 'Customer' );
@@ -2467,6 +2506,193 @@ class Exacoat_Email_Engine {
 </table>
 </body>
 </html>";
+
+		return [
+			'subject'   => $subject,
+			'html'      => $html,
+			'tmpl_info' => $tmpl,
+		];
+	}
+
+	/**
+	 * Render Professional Light-Mode Warranty Claim Approved Notification Email
+	 */
+	public static function render_warranty_approved_html( array $data, array $tmpl = [] ): array {
+		$cust_name     = esc_html( $data['customer_first_name'] ?? ( $data['customer_name'] ?? 'Customer' ) );
+		$order_num     = esc_html( (string) ( $data['order_number'] ?? ( $data['order_id'] ?? '' ) ) );
+		$parent_num    = esc_html( (string) ( $data['parent_order_number'] ?? ( $data['parent_order_id'] ?? '' ) ) );
+		$shipping_cost = (float) ( $data['shipping_cost'] ?? 0 );
+		$shipping_fmt  = esc_html( $data['shipping_cost_fmt'] ?? ( 'Rp ' . number_format( $shipping_cost, 0, ',', '.' ) ) );
+		$courier_name  = esc_html( $data['courier_name'] ?? 'Standard Courier' );
+		$payment_url   = esc_url( $data['payment_url'] ?? ( 'https://exacoat.com/pay/' . $order_num ) );
+		$badge_text    = esc_html( $data['badge_text'] ?? ( $tmpl['badge'] ?? 'Installation Warranty & QC' ) );
+		$order_ref     = ! empty( $parent_num ) ? $parent_num : $order_num;
+
+		$subject = "[Exacoat] Klaim Garansi Pemasangan Disetujui #{$order_ref}";
+
+		// Extract items
+		$items = $data['items'] ?? [];
+		$items_html = '';
+		if ( ! empty( $items ) && is_array( $items ) ) {
+			foreach ( $items as $it ) {
+				$it_name = esc_html( $it['name'] ?? 'Exacoat Skin Replacement' );
+				$parts   = ! empty( $it['claimed_parts'] ) && is_array( $it['claimed_parts'] ) ? implode( ', ', array_map( 'esc_html', $it['claimed_parts'] ) ) : ( ! empty( $it['note'] ) ? esc_html( $it['note'] ) : '' );
+
+				$items_html .= '
+				<div style="padding:12px 14px;background:#ffffff;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:8px;">
+					<table width="100%" cellpadding="0" cellspacing="0">
+						<tr>
+							<td valign="middle">
+								<p style="margin:0;font-size:13.5px;font-weight:600;color:#111827;">' . $it_name . '</p>' .
+								( $parts ? '<p style="margin:3px 0 0;font-size:12px;color:#6b7280;">Bagian: <strong style="color:#374151;">' . $parts . '</strong></p>' : '' ) . '
+							</td>
+							<td align="right" valign="middle">
+								<span style="display:inline-block;padding:3px 9px;font-size:11px;font-weight:700;background:#ecfdf5;color:#059669;border-radius:9999px;border:1px solid #a7f3d0;">Rp 0 (Garansi)</span>
+							</td>
+						</tr>
+					</table>
+				</div>';
+			}
+		}
+
+		$parent_ref_html = '';
+		if ( ! empty( $parent_num ) && $parent_num !== $order_num ) {
+			$parent_ref_html = '
+			<tr>
+				<td style="padding:6px 0;font-size:12.5px;color:#6b7280;">Invoice Pembelian Asal</td>
+				<td align="right" style="padding:6px 0;font-size:13px;font-weight:600;color:#374151;font-family:ui-monospace,Menlo,monospace;">#' . $parent_num . '</td>
+			</tr>';
+		}
+
+		$html = '<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>' . esc_html( $subject ) . '</title>
+  <style>
+    body { margin:0; padding:0; width:100% !important; background-color:#f8f8fa; font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,Helvetica,Arial,sans-serif; }
+    table { border-collapse:collapse; }
+    img { border:0; display:block; }
+    @media only screen and (max-width:620px) {
+      .container-table { width:100% !important; border-radius:0 !important; }
+      .mobile-padding { padding:24px 20px !important; }
+    }
+  </style>
+</head>
+<body style="margin:0;padding:0;background-color:#f8f8fa;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f8f8fa" style="border-collapse:collapse;background-color:#f8f8fa;">
+    <tbody>
+      <tr>
+        <td height="40" style="height:40px;line-height:40px;font-size:0;">&nbsp;</td>
+      </tr>
+      <tr>
+        <td align="center" style="padding:0 16px;">
+        <table class="container-table" width="580" cellpadding="0" cellspacing="0" border="0" style="max-width:580px;background:#ffffff;border:1px solid #eaeaea;border-radius:18px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.03);">
+          <tbody>
+            <!-- Header with Logo & QC Badge -->
+            <tr>
+              <td style="padding:26px 36px 20px;border-bottom:1px solid #f0f0f2;" class="mobile-padding">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td valign="middle">
+                      ' . self::get_brand_logo_html() . '
+                    </td>
+                    <td align="right" valign="middle">
+                      <span style="display:inline-block;padding:5px 12px;background:#fef3c7;color:#92400e;font-size:11px;font-weight:700;border-radius:9999px;border:1px solid #fde68a;letter-spacing:0.2px;">' . $badge_text . '</span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Main Content -->
+            <tr>
+              <td style="padding:32px 36px 28px;" class="mobile-padding">
+                <h1 style="margin:0 0 16px;font-size:23px;font-weight:700;color:#111827;letter-spacing:-0.4px;line-height:1.3;">Klaim Garansi Pemasangan Disetujui</h1>
+                <p style="margin:0 0 14px;font-size:15px;font-weight:600;color:#18181b;">Halo kak ' . $cust_name . ',</p>
+                <p style="margin:0 0 16px;font-size:14px;line-height:1.7;color:#374151;">
+                  Klaim garansi pemasangan 48 jam Exacoat Anda untuk pesanan <strong>#' . $order_ref . '</strong> telah ditinjau dan <strong>disetujui</strong> oleh tim Quality Control kami.
+                </p>
+                <p style="margin:0 0 24px;font-size:14px;line-height:1.7;color:#374151;">
+                  Silakan selesaikan pembayaran ongkos kirim ekspedisi kurir sebesar <strong>' . $shipping_fmt . '</strong> melalui tautan resmi di bawah ini agar pesanan penggantian Anda dapat langsung kami jadwalkan untuk proses produksi dan pengemasan:
+                </p>
+
+                <!-- Prominent Action CTA -->
+                <div style="text-align:center;margin:28px 0;">
+                  <a href="' . $payment_url . '" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:15px 34px;background:#f3aa18;color:#000000;font-size:14.5px;font-weight:700;border-radius:100px;text-decoration:none;letter-spacing:0.2px;box-shadow:0 4px 14px rgba(243,170,24,0.35);">
+                    Bayar Ongkos Kirim (' . $shipping_fmt . ') &rarr;
+                  </a>
+                </div>
+
+                <!-- Order Breakdown Card -->
+                <table width="100%" cellpadding="0" cellspacing="0" style="background:#fafafa;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;margin-bottom:24px;">
+                  <tr>
+                    <td style="padding:18px 20px;">
+                      <p style="margin:0 0 12px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;">Rincian Penggantian Garansi</p>
+                      ' . $items_html . '
+                      <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #e5e7eb;margin-top:12px;padding-top:10px;">
+                        <tr>
+                          <td style="padding:6px 0;font-size:12.5px;color:#6b7280;">No. Pesanan Penggantian</td>
+                          <td align="right" style="padding:6px 0;font-size:13px;font-weight:600;color:#374151;font-family:ui-monospace,Menlo,monospace;">#' . $order_num . '</td>
+                        </tr>
+                        ' . $parent_ref_html . '
+                        <tr>
+                          <td style="padding:6px 0;font-size:12.5px;color:#6b7280;">Status</td>
+                          <td align="right" style="padding:6px 0;font-size:12px;font-weight:700;color:#059669;">Disetujui QC (Menunggu Pembayaran Ongkir)</td>
+                        </tr>
+                        <tr>
+                          <td style="padding:6px 0;font-size:12.5px;color:#6b7280;">Biaya Skin Penggantian</td>
+                          <td align="right" style="padding:6px 0;font-size:13px;font-weight:700;color:#059669;">Rp 0 (Garansi)</td>
+                        </tr>
+                        <tr>
+                          <td style="padding:6px 0;font-size:12.5px;color:#6b7280;">Ongkos Kirim Kurir (' . $courier_name . ')</td>
+                          <td align="right" style="padding:6px 0;font-size:13px;font-weight:600;color:#111827;">' . $shipping_fmt . '</td>
+                        </tr>
+                        <tr>
+                          <td style="padding:10px 0 4px;font-size:13.5px;font-weight:700;color:#111827;border-top:1px dashed #e5e7eb;">Total Pelunasan Ongkir</td>
+                          <td align="right" style="padding:10px 0 4px;font-size:16px;font-weight:800;color:#d97706;border-top:1px dashed #e5e7eb;font-family:ui-monospace,Menlo,monospace;">' . $shipping_fmt . '</td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+
+                <p style="margin:0 0 16px;font-size:12px;color:#9ca3af;word-break:break-all;line-height:1.5;">
+                  Tautan tidak dapat diklik? Salin tautan berikut ke browser Anda:<br>
+                  <a href="' . $payment_url . '" style="color:#d97706;text-decoration:underline;">' . $payment_url . '</a>
+                </p>
+
+                <div style="border-top:1px solid #f0f0f2;padding-top:20px;margin-top:24px;">
+                  <p style="margin:0 0 2px;font-size:13.5px;color:#4b5563;">Best regards,</p>
+                  <p style="margin:0;font-size:14px;font-weight:700;color:#111827;">Aurelia</p>
+                  <p style="margin:2px 0 0;font-size:12.5px;color:#6b7280;">Exacoat Customer Support</p>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Footer -->
+            <tr>
+              <td style="padding:20px 36px 24px;background:#f9fafb;border-top:1px solid #f0f0f2;text-align:center;" class="mobile-padding">
+                <p style="margin:0 0 6px;font-size:11.5px;color:#9ca3af;">
+                  &copy; ' . date( 'Y' ) . ' Exacoat. All rights reserved.
+                </p>
+                <p style="margin:0;font-size:11.5px;color:#9ca3af;">
+                  Pertanyaan seputar klaim garansi? Hubungi kami di <a href="mailto:support@exacoat.com" style="color:#6b7280;text-decoration:underline;">support@exacoat.com</a>
+                </p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        </td>
+      </tr>
+      <tr>
+        <td height="40" style="height:40px;line-height:40px;font-size:0;">&nbsp;</td>
+      </tr>
+    </tbody>
+  </table>
+</body>
+</html>';
 
 		return [
 			'subject'   => $subject,

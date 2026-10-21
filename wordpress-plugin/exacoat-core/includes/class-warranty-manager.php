@@ -1760,45 +1760,53 @@ class Exacoat_Warranty_Manager {
 					$shipping_fmt = 'Rp ' . number_format( $shipping_total, 0, ',', '.' );
 					$order_ref    = $parent_id ? (string) $parent_id : (string) $order->get_order_number();
 					$approval_subject = '[Exacoat] Klaim Garansi Pemasangan Disetujui #' . $order_ref;
-					$approval_html = '
-					<div style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px; color: #18181b; background-color: #ffffff; border-radius: 12px; border: 1px solid #e4e4e7;">
-						<div style="margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid #f3aa18;">
-							<h2 style="margin: 0; color: #18181b; font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">EXACOAT</h2>
-							<p style="margin: 4px 0 0; color: #71717a; font-size: 13px; font-weight: 500;">Installation Warranty &amp; Quality Control</p>
-						</div>
-						<div style="font-size: 15px; line-height: 1.6; color: #27272a;">
-							<p>Halo kak ' . esc_html( $recipient_name ) . ',</p>
-							<p>Klaim garansi pemasangan Exacoat Anda untuk pesanan <strong>#' . esc_html( $order_ref ) . '</strong> telah ditinjau dan <strong>disetujui</strong> oleh tim Quality Control kami.</p>
-							<p>Silakan selesaikan pembayaran ongkos kirim ekspedisi sebesar <strong>' . esc_html( $shipping_fmt ) . '</strong> melalui tautan resmi Exacoat berikut agar pesanan penggantian dapat segera kami jadwalkan untuk proses produksi dan pengiriman:</p>
-							<div style="margin: 24px 0; text-align: center;">
-								<a href="' . esc_url( $payment_url ) . '" style="display: inline-block; background-color: #f3aa18; color: #000000; font-weight: 700; font-size: 14px; padding: 14px 28px; border-radius: 8px; text-decoration: none;">Bayar Ongkos Kirim (' . esc_html( $shipping_fmt ) . ')</a>
-							</div>
-							<p style="font-size: 12px; color: #71717a; word-break: break-all;">Tautan langsung: <a href="' . esc_url( $payment_url ) . '" style="color: #f3aa18;">' . esc_url( $payment_url ) . '</a></p>
-							<br />
-							<p style="margin-bottom: 0;">Best Regards,<br />Aurelia<br />Exacoat Customer Support</p>
-						</div>
-					</div>';
+
+					// Collect item details for the email
+					$email_items = [];
+					foreach ( $order->get_items() as $item ) {
+						$claimed_parts = $item->get_meta( '_claimed_parts' );
+						$item_note     = $item->get_meta( '_claimed_part_note' ) ?: ( $item->get_meta( 'Part' ) ?: '' );
+						$email_items[] = [
+							'name'          => $item->get_name(),
+							'quantity'      => $item->get_quantity(),
+							'claimed_parts' => is_array( $claimed_parts ) ? $claimed_parts : [],
+							'note'          => $item_note,
+						];
+					}
+
+					$email_data = [
+						'subject'             => $approval_subject,
+						'customer_name'       => $recipient_name,
+						'customer_first_name' => $order->get_billing_first_name() ?: $recipient_name,
+						'order_id'            => $order_id,
+						'order_number'        => (string) $order->get_order_number(),
+						'order_key'           => $order->get_order_key(),
+						'parent_order_id'     => $parent_id,
+						'parent_order_number' => $parent_order ? $parent_order->get_order_number() : $parent_id,
+						'shipping_cost'       => $shipping_total,
+						'shipping_cost_fmt'   => $shipping_fmt,
+						'courier_name'        => $order->get_shipping_method() ?: 'Standard Courier',
+						'payment_url'         => $payment_url,
+						'items'               => $email_items,
+						'from_email'          => 'support@exacoat.com',
+						'from_name'           => 'Exacoat Customer Support',
+					];
 
 					if ( class_exists( 'Exacoat_Email_Engine' ) ) {
 						Exacoat_Email_Engine::send_email(
 							'warranty_approved',
 							$recipient_email,
 							$recipient_name,
-							[
-								'subject'    => $approval_subject,
-								'html'       => $approval_html,
-								'htmlbody'   => $approval_html,
-								'from_email' => 'support@exacoat.com',
-								'from_name'  => 'Exacoat Customer Support',
-								'order_id'   => $order_id,
-							]
+							$email_data
 						);
 					} else {
+						$rendered = class_exists( 'Exacoat_Email_Engine' ) ? Exacoat_Email_Engine::render_warranty_approved_html( $email_data ) : [ 'html' => '' ];
+						$fallback_html = $rendered['html'] ?: '<p>Klaim garansi disetujui. Bayar ongkos kirim: <a href="' . esc_url( $payment_url ) . '">' . esc_url( $payment_url ) . '</a></p>';
 						$headers = [
 							'Content-Type: text/html; charset=UTF-8',
 							'From: Exacoat Customer Support <support@exacoat.com>',
 						];
-						wp_mail( $recipient_email, $approval_subject, $approval_html, $headers );
+						wp_mail( $recipient_email, $approval_subject, $fallback_html, $headers );
 					}
 				}
 			}

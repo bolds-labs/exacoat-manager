@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Synchronize _warranty_claim_status with _rma_status on claim approval or rejection in rest_review_claim\n- Prioritize authoritative _rma_status over stale _warranty_claim_status in format_order_for_manager with DB auto-healing\n- Update OrderTable to show CLAIM APPROVED badge instead of PENDING REVIEW when warranty replacement is approved and awaiting customer shipping payment`,
+      changelog: `### Version ${version}\n- Register and implement branded warranty_approved email notification template with QC approval badge, replacement details, and payment CTA\n- Dispatch warranty_approved email automatically upon claim approval in rest_review_claim\n- Add warranty_approved template to Manager email catalog under Warranty & RMA category`,
     },
   };
 

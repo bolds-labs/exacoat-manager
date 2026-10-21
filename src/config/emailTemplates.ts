@@ -453,7 +453,42 @@ export const EMAIL_TEMPLATES_CATALOG: { category: string; items: EmailTemplateIt
         },
       },
     ],
-  }
+  },
+  {
+    category: '🛡️ Warranty & RMA',
+    items: [
+      {
+        key: 'warranty_approved',
+        name: 'Warranty Claim Approved (Payment Required)',
+        category: '🛡️ Warranty & RMA',
+        badge: 'QC Approved',
+        badgeVariant: 'amber',
+        subject: '[Exacoat] Klaim Garansi Pemasangan Disetujui #{order_number}',
+        trigger: 'Dispatched immediately when an admin approves a warranty replacement claim in Exacoat Manager, delivering the official courier shipping settlement link.',
+        payload: '{ "event": "warranty_approved", "recipient_email": "customer@gmail.com", "customer_name": "Celine", "order_number": "542699", "parent_order_number": "2610192AB512H7", "shipping_cost": 9000, "shipping_cost_fmt": "Rp 9.000", "courier_name": "SICEPAT - REG", "payment_url": "https://exacoat.com/pay/542699?key=wc_order_demo" }',
+        defaults: {
+          customer_name: 'Celine',
+          customer_first_name: 'Celine',
+          order_id: '542699',
+          order_number: '542699',
+          parent_order_id: '2610192AB512H7',
+          parent_order_number: '2610192AB512H7',
+          shipping_cost: 9000,
+          shipping_cost_fmt: 'Rp 9.000',
+          courier_name: 'SICEPAT - REG',
+          payment_url: 'https://exacoat.com/pay/542699?key=wc_order_demo',
+          items: [
+            {
+              name: 'Samsung Galaxy S24 Ultra Skin',
+              quantity: 1,
+              claimed_parts: ['Back'],
+              note: 'Back skin misalignment',
+            },
+          ],
+        },
+      },
+    ],
+  },
 ];
 
 export const ALL_EMAIL_TEMPLATES: EmailTemplateItem[] = EMAIL_TEMPLATES_CATALOG.flatMap(c => c.items);

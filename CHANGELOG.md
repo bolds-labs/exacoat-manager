@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.199] - 2026-10-21
+
+### Branded Warranty Approved Email Notification & Shipping Selection Enforcement
+- **Branded `warranty_approved` Email Template (`class-email-engine.php` & `emailRenderer.ts`)**:
+  - Registered and implemented an elegant light-mode email template for approved warranty claims across the WordPress plugin and Exacoat Manager preview engine.
+  - Features verified QC approval badge, replacement product breakdown with specs, clear settlement instructions, and prominent golden CTA button directly linking to customer payment portal (`/pay/{id}?key={key}`).
+  - Dispatches automatically from `Exacoat_Warranty_Manager::rest_review_claim()` upon admin approval.
+- **Manager Email Templates Catalog (`emailTemplates.ts`)**:
+  - Added new `Warranty & RMA` template category in Manager settings containing the interactive `warranty_approved` preview and test email sender.
+- **Customer Shipping Selection & Double Header/Footer Fix (`exacoat-web`)**:
+  - Suppressed root site layout header and footer on `/pay/*` routes in `site-layout-wrapper.tsx` to eliminate duplicate headers and footers.
+  - Integrated dynamic rate fetching from `/api/warranty/shipping-rates` on pay order portal.
+  - Enforced required courier shipping selection before payment can be initiated via Midtrans Snap or BCA bank transfer.
+  - Implemented `/api/commerce/update-order-shipping` to synchronize selected courier shipping line and cost to WooCommerce before payment execution.
+
+---
+
 ## [0.1.198] - 2026-10-21
 
 ### Synchronize RMA Claim Decision Status and UI Badges

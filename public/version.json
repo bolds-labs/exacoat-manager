@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.198",
+  "version": "0.1.199",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.198.zip?v=0.1.198",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.199.zip?v=0.1.199",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-10-21T10:31:40.884Z",
+  "last_updated": "2026-10-21T11:02:14.458Z",
   "sections": {
-    "changelog": "### Version 0.1.198\n- Synchronize _warranty_claim_status with _rma_status on claim approval or rejection in rest_review_claim\n- Prioritize authoritative _rma_status over stale _warranty_claim_status in format_order_for_manager with DB auto-healing\n- Update OrderTable to show CLAIM APPROVED badge instead of PENDING REVIEW when warranty replacement is approved and awaiting customer shipping payment"
+    "changelog": "### Version 0.1.199\n- Register and implement branded warranty_approved email notification template with QC approval badge, replacement details, and payment CTA\n- Dispatch warranty_approved email automatically upon claim approval in rest_review_claim\n- Add warranty_approved template to Manager email catalog under Warranty & RMA category"
   }
 }
