@@ -2634,13 +2634,14 @@ class Exacoat_Configurator_Engine {
 		$primary_logo_url = reset( $logo_cutout_by_view ) ?: '';
 		$is_phone = ( $family === 'phone' || preg_match( '/\b(iphone|galaxy|pixel|xiaomi|redmi|poco|oppo|vivo|realme|infinix|oneplus|phone)\b/i', "{$product->get_name()} {$product->get_slug()}" ) );
 		$is_foldable = ( $family === 'foldable' || preg_match( '/\b(fold|flip)\b/i', "{$product->get_name()} {$product->get_slug()}" ) );
+		$is_pixel = (bool) preg_match( '/\b(pixel)\b/i', "{$product->get_name()} {$product->get_slug()}" );
 
 		$cov_type = 'none';
 		$has_cut = false;
 		if ( $has_coverage_layer ) {
 			$cov_type = 'model_cut_and_360';
 			$has_cut = true;
-		} elseif ( $is_foldable ) {
+		} elseif ( $is_foldable || $is_pixel ) {
 			$cov_type = 'model_cut_only';
 			$has_cut = true;
 		} elseif ( $is_phone ) {
@@ -3096,12 +3097,13 @@ class Exacoat_Configurator_Engine {
 			if ( ! empty( $profile['coverage_and_cutouts'] ) && is_array( $profile['coverage_and_cutouts'] ) ) {
 				$dev_fam = $profile['family'] ?? '';
 				$cur_cov = $profile['coverage_and_cutouts']['coverage_type'] ?? '';
+				$is_pixel_device = (bool) preg_match( '/\b(pixel)\b/i', "{$p_name} {$p_slug}" );
 
 				if ( in_array( $dev_fam, [ 'laptop', 'macbook', 'tablet', 'ipad', 'console', 'audio', 'charger', 'keyboard' ], true ) ) {
 					$profile['coverage_and_cutouts']['coverage_type'] = 'none';
 					$profile['coverage_and_cutouts']['has_model_cut'] = false;
 					$profile['coverage_and_cutouts']['model_360_extra_price'] = 0;
-				} elseif ( $dev_fam === 'foldable' ) {
+				} elseif ( $dev_fam === 'foldable' || $is_pixel_device ) {
 					if ( $cur_cov !== 'none' && $cur_cov !== 'model_cut_only' ) {
 						$profile['coverage_and_cutouts']['coverage_type'] = 'model_cut_only';
 						$profile['coverage_and_cutouts']['has_model_cut'] = true;
@@ -3411,9 +3413,15 @@ class Exacoat_Configurator_Engine {
 			return new WP_REST_Response( [ 'success' => false, 'message' => 'Valid product_id is required' ], 400 );
 		}
 
+		$post_obj = get_post( $product_id );
+		$wc_product = wc_get_product( $product_id );
+		$dev_slug = ! empty( $params['device_slug'] ) ? sanitize_title( $params['device_slug'] ) : ( $post_obj ? $post_obj->post_name : '' );
+		$dev_name = ! empty( $params['device_name'] ) ? sanitize_text_field( self::decode_entities( $params['device_name'] ) ) : ( $post_obj ? self::decode_entities( $post_obj->post_title ) : '' );
+		$is_pixel_device = (bool) preg_match( '/\b(pixel)\b/i', "{$dev_name} {$dev_slug}" );
+
 		$raw_coverage = is_array( $params['coverage_and_cutouts'] ?? null ) ? $params['coverage_and_cutouts'] : null;
 		if ( is_array( $raw_coverage ) ) {
-			if ( ( $params['family'] ?? '' ) === 'foldable' ) {
+			if ( ( $params['family'] ?? '' ) === 'foldable' || $is_pixel_device ) {
 				$raw_coverage['coverage_type'] = ( ( $raw_coverage['coverage_type'] ?? '' ) === 'none' ) ? 'none' : 'model_cut_only';
 				$raw_coverage['has_model_cut'] = ( $raw_coverage['coverage_type'] !== 'none' );
 				$raw_coverage['model_360_extra_price'] = 0;
@@ -3438,11 +3446,6 @@ class Exacoat_Configurator_Engine {
 			}
 		}
 
-		$post_obj = get_post( $product_id );
-		$wc_product = wc_get_product( $product_id );
-		$dev_slug = ! empty( $params['device_slug'] ) ? sanitize_title( $params['device_slug'] ) : ( $post_obj ? $post_obj->post_name : '' );
-		$dev_name = ! empty( $params['device_name'] ) ? sanitize_text_field( self::decode_entities( $params['device_name'] ) ) : ( $post_obj ? self::decode_entities( $post_obj->post_title ) : '' );
-
 		$raw_price = isset( $params['base_price'] ) ? (float) $params['base_price'] : 0;
 		if ( $raw_price <= 0 && $wc_product ) {
 			$raw_price = self::get_product_base_price( $wc_product );
@@ -3459,7 +3462,7 @@ class Exacoat_Configurator_Engine {
 		}
 
 		$raw_presets = is_array( $params['presets'] ?? null ) ? self::sanitize_presets( $params['presets'] ) : [];
-		if ( in_array( $params['family'] ?? '', [ 'foldable', 'laptop' ], true ) ) {
+		if ( in_array( $params['family'] ?? '', [ 'foldable', 'laptop' ], true ) || $is_pixel_device ) {
 			foreach ( $raw_presets as &$p ) {
 				if ( is_array( $p ) && isset( $p['coverage'] ) && $p['coverage'] === 'model_360' ) {
 					$p['coverage'] = 'model_cut';
@@ -3836,8 +3839,9 @@ class Exacoat_Configurator_Engine {
 				$needs_save = true;
 			}
 
-			// Foldable coverage: strictly model_cut_only, no 360 wrap, no 360 price
-			if ( $next_fam === 'foldable' ) {
+			// Foldable & Google Pixel coverage: strictly model_cut_only, no 360 wrap, no 360 price
+			$is_pixel = (bool) preg_match( '/\b(pixel)\b/i', "{$p_name} {$p_slug}" );
+			if ( $next_fam === 'foldable' || $is_pixel ) {
 				if ( ! isset( $profile_data['coverage_and_cutouts'] ) || ! is_array( $profile_data['coverage_and_cutouts'] ) ) {
 					$profile_data['coverage_and_cutouts'] = [];
 				}

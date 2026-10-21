@@ -179,6 +179,22 @@ All endpoints are registered under `/wp-json/exacoat-core/v1/`:
   * URLs and technical identifiers
 
 ### Strict Antislop & Copywriting Rules
-* **No Em Dashes (`—`)**: Never use the em dash character (`—`) in UI copy, buttons, labels, toasts, or comments. Use colons, commas, parentheses, or periods instead.
+* **No Em Dashes**: Never use the em dash character in UI copy, buttons, labels, toasts, or comments. Use colons, commas, parentheses, or periods instead.
 * **Primary Buttons**: Follow the Flatter 3D Button specification defined in `DESIGN.md`: amber gradient (`from-[#f6b328] to-[#ea9c0f]`), bold uppercase sans-serif text, and `#08090b` high-contrast dark foreground (9.6:1 WCAG AAA compliance).
 * **Keyboard Accessibility**: ESC must close all open dialogs, drawers, and studio overlays.
+
+
+---
+
+## 9. Coverage Rules: Google Pixel (Model Cut Only)
+
+* **Google Pixel Invariant**:
+  * Google Pixel devices (Pixel 6, 6 Pro, 7, 7 Pro, 8, 8 Pro, 8a, and future Pixel variants) strictly offer **Model Cut Only** coverage (Back Only).
+  * Model 360 Full Wrap is permanently disabled and excluded for all Pixel devices.
+* **Persistent Post Meta**:
+  * `coverage_and_cutouts.coverage_type`: `'model_cut_only'`
+  * `coverage_and_cutouts.has_model_cut`: `true`
+  * `coverage_and_cutouts.model_360_extra_price`: `0`
+* **Automated Guardrails**:
+  * `class-configurator-engine.php` auto-heals any Pixel device profile to `model_cut_only` upon retrieval (`rest_get_product_configurator`) and enforces `model_cut_only` upon save (`rest_save_product_configurator`).
+  * In Configurator Studio, Coverage Mode displays as locked: `Model Cut Only (Google Pixel - No 360 wrap)`, the 360 upcharge field is omitted, and simulator renders calculate Model Cut without surcharge.

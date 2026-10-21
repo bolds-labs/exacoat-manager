@@ -47,6 +47,7 @@ import {
   X,
   ArrowRight,
   XCircle,
+  Loader2,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -237,6 +238,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
           res.orders!.forEach((o) => map.set(o.order_sn, o));
           return Array.from(map.values());
         });
+        setActiveTab('ALL');
         showToast('success', 'Order Found', `Found order #${q} directly from Shopee API.`);
       } else {
         showToast('info', 'Order Not Found', `No live order found on Shopee for "${q}".`);
@@ -516,9 +518,16 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
 
   // Filtered orders computation
   const filteredOrders = useMemo(() => {
-    return ordersInActiveTab.filter((order) => {
+    const q = searchQuery.toLowerCase().trim();
+    const baseOrders = q ? orders : ordersInActiveTab;
+
+    return baseOrders.filter((order) => {
       // Grouped / Individual Courier filter
-      if (!matchesCourierFilter(order.shipping_carrier, courierFilter)) return false;
+      if (courierFilter !== 'all' && !matchesCourierFilter(order.shipping_carrier, courierFilter)) {
+        if (!q || !(order.order_sn || '').toLowerCase().includes(q)) {
+          return false;
+        }
+      }
 
       // Print status filter (Label Pengiriman)
       if (printFilter !== 'all') {
@@ -528,8 +537,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
       }
 
       // Search filter
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
+      if (q) {
         const sn = (order.order_sn || '').toLowerCase();
         const buyer = (order.buyer_username || '').toLowerCase();
         const recipient = (order.recipient_name || '').toLowerCase();
@@ -553,7 +561,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
 
       return true;
     });
-  }, [ordersInActiveTab, courierFilter, printFilter, searchQuery]);
+  }, [orders, ordersInActiveTab, courierFilter, printFilter, searchQuery]);
 
   const totalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
   const pagedOrders = useMemo(() => {

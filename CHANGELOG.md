@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.193] - 2026-10-21
+
+### Google Pixel Model Cut Invariant in Configurator
+- **Enforced Model Cut Only across all Google Pixel Variants**:
+  - Updated all 7 active Google Pixel models on `cms.exacoat.com` and `staging.exacoat.com` (Pixel 6, 6 Pro, 7, 7 Pro, 8, 8 Pro, 8a) to `coverage_type = 'model_cut_only'`, `has_model_cut = true`, and `model_360_extra_price = 0`.
+  - Converted all existing presets with `model_360` coverage to `model_cut`.
+  - Revalidated Next.js ISR tags (`/products/...`, `/api/configurator/...`) and purged edge caches on `exacoat.com` and `web.exacoat.com`.
+- **Backend Guardrails (`class-configurator-engine.php`)**:
+  - Added auto-healing logic in `rest_get_product_configurator` to automatically enforce `model_cut_only` and 0 IDR 360 price for any Pixel product matching `/\b(pixel)\b/i`.
+  - Added strict enforcement in `rest_save_product_configurator` and `sync_device_families` preventing 360 coverage from being saved for Pixel devices.
+- **Configurator Studio (`ConfiguratorStudioPage.tsx`)**:
+  - Locked Coverage Mode in Inspector to `Model Cut Only (Google Pixel - No 360 wrap)` with `Locked` badge.
+  - Hidden 360 extra price input field for Pixel devices.
+  - Studio canvas preview and simulator price calculator strictly apply Model Cut without 360 upcharge.
+
+---
+
 ## [0.1.192] - 2026-10-21
 
 ### Multi-Month Historical Marketplace Sync in Financial Reports

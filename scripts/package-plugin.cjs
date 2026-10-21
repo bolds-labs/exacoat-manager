@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Dynamic horizon-aware historical Shopee and TikTok order synchronization in Financial Reports\n- Increased hourly cron sync and cache retention up to 3,000 orders with 300s execution timeout protection\n- Added Shopee order date coverage analysis banner in Reports page for seamless 1-click historical backfills`,
+      changelog: `### Version ${version}\n- Enforced model_cut_only coverage for all Google Pixel devices (no Model 360 full wrap)\n- Auto-healed and saved all Google Pixel variants with model_360_extra_price = 0\n- Locked Coverage Mode in Configurator Studio for Google Pixel devices\n- Revalidated Next.js ISR and purged edge cache for all Google Pixel models`,
     },
   };
 

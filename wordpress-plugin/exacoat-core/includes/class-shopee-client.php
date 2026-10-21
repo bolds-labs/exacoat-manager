@@ -1891,11 +1891,13 @@ class Exacoat_Shopee_Client {
 				$sn = strtolower( $o['order_sn'] ?? '' );
 				$buyer = strtolower( $o['buyer_username'] ?? '' );
 				$resi = strtolower( $o['tracking_number'] ?? '' );
+				$recipient = strtolower( $o['recipient_name'] ?? '' );
+				$phone = strtolower( $o['recipient_phone'] ?? '' );
 				$prod = '';
 				foreach ( ( $o['items'] ?? [] ) as $item ) {
-					$prod .= ' ' . strtolower( $item['item_name'] . ' ' . $item['model_name'] );
+					$prod .= ' ' . strtolower( ( $item['item_name'] ?? '' ) . ' ' . ( $item['model_name'] ?? '' ) );
 				}
-				return str_contains( $sn, $search_lower ) || str_contains( $buyer, $search_lower ) || str_contains( $resi, $search_lower ) || str_contains( $prod, $search_lower );
+				return str_contains( $sn, $search_lower ) || str_contains( $buyer, $search_lower ) || str_contains( $resi, $search_lower ) || str_contains( $recipient, $search_lower ) || str_contains( $phone, $search_lower ) || str_contains( $prod, $search_lower );
 			});
 
 			// If no match in cache and search string looks like an order SN, attempt on-demand live lookup from Shopee API

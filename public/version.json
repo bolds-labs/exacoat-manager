@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.192",
+  "version": "0.1.193",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.192.zip?v=0.1.192",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.193.zip?v=0.1.193",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-10-21T01:47:09.973Z",
+  "last_updated": "2026-10-21T03:13:57.715Z",
   "sections": {
-    "changelog": "### Version 0.1.192\n- Dynamic horizon-aware historical Shopee and TikTok order synchronization in Financial Reports\n- Increased hourly cron sync and cache retention up to 3,000 orders with 300s execution timeout protection\n- Added Shopee order date coverage analysis banner in Reports page for seamless 1-click historical backfills"
+    "changelog": "### Version 0.1.193\n- Enforced model_cut_only coverage for all Google Pixel devices (no Model 360 full wrap)\n- Auto-healed and saved all Google Pixel variants with model_360_extra_price = 0\n- Locked Coverage Mode in Configurator Studio for Google Pixel devices\n- Revalidated Next.js ISR and purged edge cache for all Google Pixel models"
   }
 }

@@ -45,6 +45,7 @@ import {
   X,
   Layers,
   XCircle,
+  Loader2,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -229,6 +230,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
           res.orders!.forEach((o) => map.set(o.order_id, o));
           return Array.from(map.values());
         });
+        setActiveTab('ALL');
         showToast('success', 'Pesanan Ditemukan', `Ditemukan pesanan #${q} langsung dari API TikTok Shop.`);
       } else {
         showToast('info', 'Pesanan Tidak Ditemukan', `Tidak ditemukan pesanan langsung dari TikTok Shop untuk "${q}".`);
@@ -417,9 +419,16 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
   }, [ordersInActiveTab, courierFilter, trackingFilter, tabWithResiCount, tabNoResiCount]);
 
   const filteredOrders = useMemo(() => {
-    return ordersInActiveTab.filter((order) => {
+    const q = searchQuery.toLowerCase().trim();
+    const baseOrders = q ? orders : ordersInActiveTab;
+
+    return baseOrders.filter((order) => {
       // Grouped / Individual Courier filter
-      if (!matchesCourierFilter(order.shipping_carrier, courierFilter)) return false;
+      if (courierFilter !== 'all' && !matchesCourierFilter(order.shipping_carrier, courierFilter)) {
+        if (!q || !(order.order_id || '').toLowerCase().includes(q)) {
+          return false;
+        }
+      }
 
       // Tracking Resi filter
       if (trackingFilter !== 'all') {
@@ -429,21 +438,21 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
       }
 
       // Search filter
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
+      if (q) {
         const matchesId = (order.order_id || '').toLowerCase().includes(q);
         const matchesBuyer = (order.buyer_username || '').toLowerCase().includes(q);
         const matchesName = (order.recipient_name || '').toLowerCase().includes(q);
+        const matchesPhone = (order.recipient_phone || '').toLowerCase().includes(q);
         const matchesResi = (order.tracking_number || '').toLowerCase().includes(q);
         const matchesItem = (order.items || []).some((item) =>
           `${item.item_name} ${item.sku_name}`.toLowerCase().includes(q)
         );
-        return matchesId || matchesBuyer || matchesName || matchesResi || matchesItem;
+        return matchesId || matchesBuyer || matchesName || matchesPhone || matchesResi || matchesItem;
       }
 
       return true;
     });
-  }, [orders, activeTab, courierFilter, trackingFilter, searchQuery]);
+  }, [orders, ordersInActiveTab, courierFilter, trackingFilter, searchQuery]);
 
   const totalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
   const pagedOrders = useMemo(() => {
@@ -673,15 +682,51 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
           ))}
         </div>
 
-        <div className="relative w-full sm:w-72">
+        <div className="relative w-full sm:w-80">
           <Search className="w-4 h-4 text-zinc-400 dark:text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleLiveSearch();
+              }
+            }}
             placeholder="Cari No. Pesanan, Pembeli, Resi..."
-            className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-white dark:bg-neutral-900 border border-zinc-200 dark:border-white/10 text-xs text-zinc-900 dark:text-neutral-100 placeholder-zinc-400 dark:placeholder-neutral-500 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
+            className="w-full pl-9 pr-20 py-1.5 rounded-xl bg-white dark:bg-neutral-900 border border-zinc-200 dark:border-white/10 text-xs text-zinc-900 dark:text-neutral-100 placeholder-zinc-400 dark:placeholder-neutral-500 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
           />
+          <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-neutral-200 rounded-md cursor-pointer"
+                title="Hapus pencarian"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={isLiveSearching || !searchQuery.trim()}
+              onClick={handleLiveSearch}
+              className={clsx(
+                "px-2 py-0.5 rounded-md text-[11px] font-medium transition-colors flex items-center gap-1 cursor-pointer",
+                searchQuery.trim()
+                  ? "bg-rose-500 text-white hover:bg-rose-600 shadow-xs"
+                  : "bg-zinc-100 dark:bg-neutral-800 text-zinc-400 dark:text-neutral-500 cursor-not-allowed"
+              )}
+              title="Cari langsung ke API TikTok Shop"
+            >
+              {isLiveSearching ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <span>Cari</span>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 

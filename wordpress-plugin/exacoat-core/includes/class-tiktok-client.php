@@ -153,7 +153,17 @@ class Exacoat_TikTok_Client {
 		$token_data = $data['data'] ?? [];
 		$access_token = $token_data['access_token'] ?? '';
 		$refresh_token = $token_data['refresh_token'] ?? '';
-		$expires_in = (int) ( $token_data['access_token_expire_in'] ?? 604800 ); // default 7 days
+		
+		// In TikTok Shop Open Platform, access_token_expire_in is an absolute Unix epoch timestamp!
+		$raw_expires = (int) ( $token_data['access_token_expire_in'] ?? 0 );
+		$now = time();
+		if ( $raw_expires > 1000000000 ) {
+			$token_expires_at = $raw_expires;
+		} elseif ( $raw_expires > 0 ) {
+			$token_expires_at = $now + $raw_expires;
+		} else {
+			$token_expires_at = $now + 86400;
+		}
 
 		if ( empty( $access_token ) ) {
 			return [ 'success' => false, 'error' => 'No access token returned from TikTok.' ];
@@ -162,7 +172,7 @@ class Exacoat_TikTok_Client {
 		self::save_settings([
 			'access_token'     => $access_token,
 			'refresh_token'    => $refresh_token,
-			'token_expires_at' => time() + $expires_in,
+			'token_expires_at' => $token_expires_at,
 			'shop_name'        => $token_data['seller_name'] ?? $s['shop_name'],
 		]);
 
@@ -316,14 +326,19 @@ class Exacoat_TikTok_Client {
 	/**
 	 * Ensure valid access token, auto-refreshing if expiring within 1 hour
 	 */
-	public static function ensure_valid_token(): array {
+	public static function ensure_valid_token( bool $force_refresh = false ): array {
 		$s = self::get_settings();
 		if ( empty( $s['access_token'] ) ) {
 			return [ 'success' => false, 'error' => 'TikTok Shop is not connected. Please authorize first.' ];
 		}
 
-		// Valid for more than 1 hour (3600 seconds)
-		if ( $s['token_expires_at'] > ( time() + 3600 ) ) {
+		$now = time();
+		$expires_at = (int) ( $s['token_expires_at'] ?? 0 );
+		// Valid if not forced and token_expires_at is reasonably in the future (between now+300 and now+30days)
+		// Protect against corrupt epoch timestamps (e.g. year 2083) that bypass refresh
+		$is_valid_time = ( $expires_at > ( $now + 300 ) && $expires_at < ( $now + 30 * 86400 ) );
+
+		if ( ! $force_refresh && $is_valid_time ) {
 			return [
 				'success'      => true,
 				'access_token' => $s['access_token'],
@@ -331,7 +346,7 @@ class Exacoat_TikTok_Client {
 			];
 		}
 
-		// Token expiring soon or expired, refresh it
+		// Token expiring soon, expired, corrupt expiry timestamp, or force refresh requested
 		if ( empty( $s['refresh_token'] ) ) {
 			return [ 'success' => false, 'error' => 'TikTok refresh token missing. Re-authorization required.' ];
 		}
@@ -356,19 +371,29 @@ class Exacoat_TikTok_Client {
 			return [
 				'success' => false,
 				'error'   => $data['message'] ?? 'Failed to refresh TikTok access token.',
+				'raw'     => $data,
 			];
 		}
 
 		$token_data = $data['data'] ?? [];
 		$new_access = $token_data['access_token'] ?? '';
 		$new_refresh = $token_data['refresh_token'] ?? $s['refresh_token'];
-		$expires_in = (int) ( $token_data['access_token_expire_in'] ?? 604800 );
+		
+		// In TikTok Shop Open Platform, access_token_expire_in is an absolute Unix epoch timestamp!
+		$raw_expires = (int) ( $token_data['access_token_expire_in'] ?? 0 );
+		if ( $raw_expires > 1000000000 ) {
+			$token_expires_at = $raw_expires;
+		} elseif ( $raw_expires > 0 ) {
+			$token_expires_at = $now + $raw_expires;
+		} else {
+			$token_expires_at = $now + 86400;
+		}
 
 		if ( ! empty( $new_access ) ) {
 			self::save_settings([
 				'access_token'     => $new_access,
 				'refresh_token'    => $new_refresh,
-				'token_expires_at' => time() + $expires_in,
+				'token_expires_at' => $token_expires_at,
 			]);
 
 			return [
@@ -471,9 +496,23 @@ class Exacoat_TikTok_Client {
 			];
 		}
 
-		// Self-healing: if error says shop_cipher is missing or invalid, try fetching shop_cipher and retrying once
+		// Self-healing: auto-refresh expired token or invalid shop_cipher and retry once
 		if ( isset( $data['code'] ) && (int) $data['code'] !== 0 ) {
 			$err_msg = (string) ( $data['message'] ?? '' );
+			$is_token_err = (
+				(int) $data['code'] === 105002 ||
+				(int) $data['code'] === 105001 ||
+				str_contains( strtolower( $err_msg ), 'expired credentials' ) ||
+				str_contains( strtolower( $err_msg ), 'access_token' )
+			);
+
+			if ( $is_token_err && $retry_count < 1 ) {
+				$refresh_res = self::ensure_valid_token( true );
+				if ( ! empty( $refresh_res['success'] ) ) {
+					return self::call_api( $path, $method, $query, $body, $retry_count + 1 );
+				}
+			}
+
 			$is_cipher_err = ( (int) $data['code'] === 106013 || str_contains( strtolower( $err_msg ), 'shop_cipher' ) );
 
 			if ( $is_cipher_err && $retry_count < 1 && $path !== '/authorization/202309/shops' ) {
@@ -1227,6 +1266,13 @@ class Exacoat_TikTok_Client {
 			'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
 		]);
 
+		// 5b. POST /tiktok/refresh-token
+		register_rest_route( $ns, '/tiktok/refresh-token', [
+			'methods'             => 'POST',
+			'callback'            => [ __CLASS__, 'rest_refresh_token' ],
+			'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
+		]);
+
 		// 6. POST /tiktok/ship-package
 		register_rest_route( $ns, '/tiktok/ship-package', [
 			'methods'             => 'POST',
@@ -1450,11 +1496,13 @@ class Exacoat_TikTok_Client {
 				$oid = strtolower( $o['order_id'] ?? '' );
 				$buyer = strtolower( $o['buyer_username'] ?? '' );
 				$resi = strtolower( $o['tracking_number'] ?? '' );
+				$recipient = strtolower( $o['recipient_name'] ?? '' );
+				$phone = strtolower( $o['recipient_phone'] ?? '' );
 				$prod = '';
 				foreach ( ( $o['items'] ?? [] ) as $item ) {
 					$prod .= ' ' . strtolower( ( $item['item_name'] ?? '' ) . ' ' . ( $item['sku_name'] ?? '' ) );
 				}
-				return str_contains( $oid, $search_lower ) || str_contains( $buyer, $search_lower ) || str_contains( $resi, $search_lower ) || str_contains( $prod, $search_lower );
+				return str_contains( $oid, $search_lower ) || str_contains( $buyer, $search_lower ) || str_contains( $resi, $search_lower ) || str_contains( $recipient, $search_lower ) || str_contains( $phone, $search_lower ) || str_contains( $prod, $search_lower );
 			});
 
 			// If no match in cache and search string looks like a TikTok order ID, attempt on-demand live lookup
@@ -1504,6 +1552,11 @@ class Exacoat_TikTok_Client {
 		$days = (int) ( $request->get_param( 'days' ) ?: 30 );
 		$limit = (int) ( $request->get_param( 'limit' ) ?: 500 );
 		$res = self::sync_orders( $days, $limit );
+		return rest_ensure_response( $res );
+	}
+
+	public static function rest_refresh_token( \WP_REST_Request $request ): \WP_REST_Response {
+		$res = self::ensure_valid_token( true );
 		return rest_ensure_response( $res );
 	}
 
