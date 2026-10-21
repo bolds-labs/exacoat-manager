@@ -3116,7 +3116,10 @@ class Exacoat_Configurator_Engine {
 					}
 				} else {
 					if ( $cur_cov === 'none' || $cur_cov === 'model_cut_only' ) {
-						$profile['coverage_and_cutouts']['model_360_extra_price'] = 0;
+						if ( ! empty( $profile['coverage_and_cutouts']['model_360_extra_price'] ) ) {
+							$profile['coverage_and_cutouts']['model_360_extra_price'] = 0;
+							$needs_save = true;
+						}
 					} elseif ( ! isset( $profile['coverage_and_cutouts']['model_360_extra_price'] ) || ! is_numeric( $profile['coverage_and_cutouts']['model_360_extra_price'] ) ) {
 						$profile['coverage_and_cutouts']['model_360_extra_price'] = 40000;
 					}
@@ -3126,9 +3129,10 @@ class Exacoat_Configurator_Engine {
 						$profile['coverage_and_cutouts']['coverage_type'] = 'model_cut_and_360';
 						$profile['coverage_and_cutouts']['has_model_cut'] = true;
 						$profile['coverage_and_cutouts']['model_360_extra_price'] = 40000;
-						if ( ! empty( $modern_profile ) ) {
-							update_post_meta( $product_id, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $profile, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ) );
-						}
+						$needs_save = true;
+					}
+					if ( $needs_save && ! empty( $modern_profile ) ) {
+						update_post_meta( $product_id, self::PROFILE_META_KEY, wp_slash( wp_json_encode( $profile, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ) );
 					}
 				}
 			}
@@ -3442,6 +3446,10 @@ class Exacoat_Configurator_Engine {
 				$raw_coverage['has_model_cut'] = false;
 				$raw_coverage['model_360_extra_price'] = 0;
 			}
+			if ( isset( $raw_coverage['coverage_type'] ) && $raw_coverage['coverage_type'] === 'model_cut_only' ) {
+				$raw_coverage['has_model_cut'] = true;
+				$raw_coverage['model_360_extra_price'] = 0;
+			}
 		}
 
 		$raw_price = isset( $params['base_price'] ) ? (float) $params['base_price'] : 0;
@@ -3460,7 +3468,7 @@ class Exacoat_Configurator_Engine {
 		}
 
 		$raw_presets = is_array( $params['presets'] ?? null ) ? self::sanitize_presets( $params['presets'] ) : [];
-		if ( in_array( $params['family'] ?? '', [ 'foldable', 'laptop' ], true ) ) {
+		if ( in_array( $params['family'] ?? '', [ 'foldable', 'laptop' ], true ) || ( $raw_coverage['coverage_type'] ?? '' ) === 'model_cut_only' ) {
 			foreach ( $raw_presets as &$p ) {
 				if ( is_array( $p ) && isset( $p['coverage'] ) && $p['coverage'] === 'model_360' ) {
 					$p['coverage'] = 'model_cut';

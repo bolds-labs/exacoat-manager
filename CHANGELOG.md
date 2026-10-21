@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.196] - 2026-10-21
+
+### Enforce Zero Upcharge and Preset Normalization for Model Cut Only Coverage
+- **Backend Model Cut Only Normalization (`class-configurator-engine.php`)**:
+  - In `rest_save_product_configurator`, strictly enforce `model_360_extra_price = 0` whenever `coverage_type === 'model_cut_only'`.
+  - Automatically convert any presets with `coverage === 'model_360'` to `'model_cut'` when `coverage_type` is `'model_cut_only'`.
+  - In `rest_get_product_configurator`, auto-heal and persist `model_360_extra_price = 0` if nonzero on devices with `coverage_type === 'model_cut_only'`.
+- **Storefront Engine Reflection (`exacoat-web`)**:
+  - Updated `device-skin-configurator.tsx` and `presets-modal.tsx` to dynamically check `covType === 'model_cut_only'` in `isNoModel360Device` and `hasModelCoverageOption`.
+  - Suppressed Model 360 option card and accordion on devices configured with `model_cut_only` (such as Galaxy S25 Edge) while preserving the active Model Cut mask on canvas.
+
+---
+
 ## [0.1.195] - 2026-10-21
 
 ### Google Pixel Single Cut Architecture Aligned with Galaxy Fold 8

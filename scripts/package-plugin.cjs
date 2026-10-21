@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Align Google Pixel coverage architecture with Galaxy Fold 8 (single cut only without custom mode)\n- Set coverage_type to none and has_model_cut to false across all 7 Google Pixel variants\n- Clear legacy model cut masks and purge 360 wrap presets\n- Revalidate Next.js ISR tags and purge storefront edge caches on exacoat.com`,
+      changelog: `### Version ${version}\n- Ensure model_cut_only coverage strictly enforces model_360_extra_price = 0 on save and get\n- Auto-sanitize presets with model_360 coverage to model_cut when coverage_type is model_cut_only\n- Revalidate Galaxy S25 Edge and Next.js storefront cache`,
     },
   };
 

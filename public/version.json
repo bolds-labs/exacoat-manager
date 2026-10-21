@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.195",
+  "version": "0.1.196",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.195.zip?v=0.1.195",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.196.zip?v=0.1.196",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-10-21T04:32:11.050Z",
+  "last_updated": "2026-10-21T06:45:56.296Z",
   "sections": {
-    "changelog": "### Version 0.1.195\n- Align Google Pixel coverage architecture with Galaxy Fold 8 (single cut only without custom mode)\n- Set coverage_type to none and has_model_cut to false across all 7 Google Pixel variants\n- Clear legacy model cut masks and purge 360 wrap presets\n- Revalidate Next.js ISR tags and purge storefront edge caches on exacoat.com"
+    "changelog": "### Version 0.1.196\n- Ensure model_cut_only coverage strictly enforces model_360_extra_price = 0 on save and get\n- Auto-sanitize presets with model_360 coverage to model_cut when coverage_type is model_cut_only\n- Revalidate Galaxy S25 Edge and Next.js storefront cache"
   }
 }

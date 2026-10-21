@@ -1588,3 +1588,16 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - On the storefront and in Configurator Studio, "Buyer Choice on Webstore" is disabled (`coverage_type === 'none'`).
   - No 360 wrap choice or coverage toggle is presented to the customer.
   - Customers simply order the standard skin (which is the model cut), exactly like Galaxy Z Fold 8, with 0 IDR coverage surcharge.
+
+---
+
+## 54. Coverage Invariant: Model Cut Only (`model_cut_only`) Storefront Engine Reflection
+
+- **Domain Rule**:
+  - When an operator or device profile specifies `coverage_type: 'model_cut_only'` (e.g. Galaxy S25 Edge or devices engineered specifically for precision back cut without side wraps), the device must strictly not present Model 360 Full Wrap to customers on the webstore.
+  - The storefront engine (`exacoat-web`) reflects this configuration directly: `isNoModel360Device` checks `covType === 'model_cut_only'` and suppresses `hasModelCoverageOption`.
+  - The Model 360 accordion card is suppressed on the product page, and any preset with `model_360` coverage automatically reverts to `model_cut`.
+- **Backend Enforcement (`class-configurator-engine.php`)**:
+  - In `rest_save_product_configurator`, saving a device with `coverage_type === 'model_cut_only'` strictly forces `has_model_cut = true` and `model_360_extra_price = 0`.
+  - Presets with `coverage === 'model_360'` are automatically sanitized to `model_cut`.
+  - In `rest_get_product_configurator`, any device with `coverage_type === 'model_cut_only'` that contains a lingering nonzero `model_360_extra_price` is auto-healed to `0` and persisted to post meta.
