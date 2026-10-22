@@ -2489,9 +2489,39 @@ class Exacoat_Order_Manager {
 			'customer_ip'                   => $order->get_customer_ip_address() ?: '',
 			'customer_id'                   => $cust_id,
 			'customer_store_credit_balance' => $store_credit_balance,
-			'customer_name'                 => trim( ( $shipping['first_name'] ?? '' ) . ' ' . ( $shipping['last_name'] ?? '' ) ) ?: ( trim( ( $billing['first_name'] ?? '' ) . ' ' . ( $billing['last_name'] ?? '' ) ) ?: 'Store Customer' ),
-			'customer_email'                => $order->get_billing_email(),
-			'customer_phone'                => $order->get_billing_phone(),
+			'customer_name'                 => ( function() use ( $order, $shipping, $billing ) {
+				$m_name = trim( (string) $order->get_meta( '_customer_name' ) );
+				if ( ! empty( $m_name ) && ! str_contains( $m_name, '*' ) && ! str_contains( $m_name, '@' ) ) {
+					return $m_name;
+				}
+				$s_name = trim( ( $shipping['first_name'] ?? '' ) . ' ' . ( $shipping['last_name'] ?? '' ) );
+				if ( ! empty( $s_name ) && ! str_contains( $s_name, '*' ) && ! str_contains( $s_name, '@' ) ) {
+					return $s_name;
+				}
+				$b_name = trim( ( $billing['first_name'] ?? '' ) . ' ' . ( $billing['last_name'] ?? '' ) );
+				if ( ! empty( $b_name ) && ! str_contains( $b_name, '*' ) && ! str_contains( $b_name, '@' ) ) {
+					return $b_name;
+				}
+				return $s_name ?: ( $b_name ?: 'Store Customer' );
+			} )(),
+			'customer_email'                => ( function() use ( $order ) {
+				$m_email = trim( (string) ( $order->get_meta( '_customer_email' ) ?: $order->get_meta( '_warranty_email' ) ) );
+				if ( ! empty( $m_email ) && ! str_contains( $m_email, '@marketplace.internal' ) && ! str_contains( $m_email, '@scs2.tiktok.com' ) ) {
+					return $m_email;
+				}
+				return $order->get_billing_email();
+			} )(),
+			'customer_phone'                => ( function() use ( $order, $billing, $shipping ) {
+				$m_phone = trim( (string) ( $order->get_meta( '_customer_phone' ) ?: $order->get_meta( '_warranty_phone' ) ) );
+				if ( ! empty( $m_phone ) && ! str_contains( $m_phone, '*' ) ) {
+					return $m_phone;
+				}
+				$b_phone = trim( (string) ( $order->get_billing_phone() ?: ( $billing['phone'] ?? '' ) ) );
+				if ( ! empty( $b_phone ) && ! str_contains( $b_phone, '*' ) ) {
+					return $b_phone;
+				}
+				return $shipping['phone'] ?? $b_phone;
+			} )(),
 			'customer_note'                 => ( function() use ( $order ) {
 				$raw_cust_note = trim( preg_replace( '/(?:shipping courier|jasa kirim|courier)\s*:\s*[^\r\n]+/i', '', (string) $order->get_customer_note() ) );
 				$decoded = html_entity_decode( $raw_cust_note, ENT_QUOTES | ENT_HTML5, 'UTF-8' );

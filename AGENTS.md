@@ -190,6 +190,12 @@ export function cleanItemTitle(name?: string): string {
   - When a customer selects BCA, `/api/commerce/update-order-shipping` restores the unique code fee line and updates `order.total`.
   - In `class-bca-payment-webhook.php`, BCA bank mutations compare directly against `(int) round( (float) $order->get_total() )`, enabling automated webhook matching and instant transition to processing.
   - Pay portal header summary displays `activeTab === 'bca' ? currentFormattedTotal : currentFormattedShipping`.
+- **Marketplace Warranty Claim Customer Contact & Destination Address Invariant**:
+  - For warranty claims originating from marketplaces (Shopee and TikTok Shop), eligibility endpoints (`/warranty/check-eligibility`, `check_shopee_eligibility`, `check_tiktok_eligibility`) must never return masked asterisks (`*`), proxy emails (`@scs2.tiktok.com`), or buyer account usernames as recipient address data.
+  - The frontend wizard (`warranty-claim-wizard.tsx`) sanitizes eligibility address data and must never overwrite user-entered fields in `marketplaceAddress` during initial check or warranty extension code redemption (`handleApplyWarrantyCode`).
+  - Both client-side Step 5 and the server-side submission endpoint (`handleSubmitClaim` in `app/api/warranty/[action]/route.ts`) strictly enforce real recipient name (no `@` or `*`), active phone number (no `*`, min 9 digits), active personal email (rejecting `@marketplace.internal` and `@scs2.tiktok.com`), and complete destination address (min 10 characters without `*`).
+  - Order creation assigns verified user inputs directly to WooCommerce `billing` and `shipping` objects and metadata (`_customer_name`, `_customer_phone`, `_customer_email`, `_warranty_phone`, `_warranty_email`, `_warranty_destination_address`).
+  - Exacoat Manager order and RMA endpoints (`format_order_for_manager`, `rest_get_claim_details`, `rest_get_claims_log`) prioritize clean metadata keys over stale or masked order defaults, ensuring operators always see the true customer contact and shipping details.
 
 ---
 

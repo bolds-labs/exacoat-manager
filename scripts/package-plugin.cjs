@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Synchronize warranty replacement order BCA unique payment code fee line and total in rest_submit_claim\n- Align approved claim notification payable total with exact order total including unique code`,
+      changelog: `### Version ${version}\n- Prioritize user-entered recipient name, phone, email, and destination address for marketplace warranty claims\n- Sanitize marketplace eligibility outputs to prevent masked asterisks and proxy usernames from polluting order recipient details\n- Include formatted destination shipping address and customer contact metadata in RMA claims endpoints`,
     },
   };
 

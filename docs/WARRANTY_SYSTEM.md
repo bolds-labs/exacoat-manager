@@ -52,3 +52,22 @@
 * **Automated BCA Webhook Reconciliation (`class-bca-payment-webhook.php`)**:
   - Automated bank mutation listener matches against `(int) round( (float) $order->get_total() )`.
   - Because `order.total` is accurately set to `shipping_total + uniqueCode`, the bank mutation matches cleanly and automatically transitions the warranty order to `processing` for fulfillment.
+
+---
+
+## 4. Marketplace Warranty Claim Contact & Destination Address Invariant
+
+* **The Problem**:
+  - Marketplace Open Platform APIs (Shopee and TikTok Shop) mask customer personal data after delivery to protect buyer privacy (e.g. `recipient_name: "A******a"`, `recipient_phone: "******5711"`, `recipient_address: "Jl. Bunga ******"`).
+  - TikTok Shop sets `buyer_username` to proxy emails like `v4bG3X6BRS7WXONMNVJMD5NX5XU2I@scs2.tiktok.com`, and Shopee sets it to account usernames like `agniamarth`.
+  - Previously, eligibility check endpoints returned these proxy strings or usernames as `shipping_address`, pre-filling form inputs and tricking customers or overwriting what they typed when applying warranty codes. Furthermore, missing emails defaulted to internal dummy formats (`@marketplace.internal`).
+* **The Invariant**:
+  - For marketplace orders (Shopee, TikTok Shop), the eligibility check endpoints (`/warranty/check-eligibility`, `check_shopee_eligibility`, `check_tiktok_eligibility`) must strip masked asterisks (`*`), proxy emails, and usernames from `shipping_address`, returning clean empty strings.
+  - The frontend warranty wizard (`warranty-claim-wizard.tsx`) sanitizes eligibility address data and must NEVER overwrite user-typed inputs in `marketplaceAddress` during initial check or warranty extension code redemption (`handleApplyWarrantyCode`).
+  - Step 5 and the submission API (`handleSubmitClaim` in `app/api/warranty/[action]/route.ts`) strictly enforce:
+    1. **Recipient Name**: Real name without `@`, without `*`, at least 2 characters (rejecting marketplace usernames).
+    2. **Phone Number**: Real active number without `*`, at least 9 numeric digits.
+    3. **Email**: Real active personal email (rejecting `@marketplace.internal` and `@scs2.tiktok.com`).
+    4. **Destination Address**: Complete street address without `*`, at least 10 characters, with 5-digit postal code.
+  - User-inputted values are assigned directly to WooCommerce `billing` and `shipping` objects and persisted in metadata (`_customer_name`, `_customer_phone`, `_customer_email`, `_warranty_phone`, `_warranty_email`, `_warranty_destination_address`).
+  - Exacoat Manager order and RMA endpoints (`format_order_for_manager`, `rest_get_claim_details`, `rest_get_claims_log`) prioritize clean metadata keys over stale or masked order defaults, ensuring operators always see the true customer contact and shipping details.

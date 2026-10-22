@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.201] - 2026-10-22
+
+### Marketplace Warranty Claim Contact & Destination Address Prioritization
+- **Sanitized Eligibility Address Pre-fill (`warranty-claim-wizard.tsx` & `class-warranty-manager.php`)**:
+  - Stripped masked asterisks (`*`), proxy emails (`@scs2.tiktok.com`), and account usernames from marketplace eligibility checks, returning clean empty fields.
+  - Prevented initial check and warranty code redemption (`handleApplyWarrantyCode`) from overwriting user-typed name, phone, email, or address fields in `marketplaceAddress`.
+- **Strict Client & Server Validation (`warranty-claim-wizard.tsx` & `route.ts`)**:
+  - Enforced real recipient full name (no `@` or `*`, min 2 characters, rejecting usernames).
+  - Enforced valid WhatsApp / phone number (no `*`, min 9 numeric digits).
+  - Enforced active personal email address (rejecting `@marketplace.internal` and `@scs2.tiktok.com`).
+  - Enforced complete street address (min 10 characters without `*`) with 5-digit postal code.
+  - Added inline field-level validation errors and styling for real-time customer guidance.
+- **Direct Order Assignment & Metadata Persistence (`route.ts` & `class-order-manager.php`)**:
+  - Assigned verified user inputs directly to WooCommerce `billing` and `shipping` objects and metadata (`_customer_name`, `_customer_phone`, `_customer_email`, `_warranty_phone`, `_warranty_email`, `_warranty_destination_address`).
+  - Updated `format_order_for_manager`, `rest_get_claim_details`, and `rest_get_claims_log` to prioritize clean customer contact and shipping address metadata.
+
+---
+
 ## [0.1.200] - 2026-10-22
 
 ### Warranty Order Unique Payment Code & Total Synchronization

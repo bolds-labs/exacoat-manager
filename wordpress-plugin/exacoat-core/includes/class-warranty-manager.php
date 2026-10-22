@@ -888,6 +888,19 @@ class Exacoat_Warranty_Manager {
 		$hours_left = floor( $remaining_secs / 3600 );
 		$mins_left  = floor( ( $remaining_secs % 3600 ) / 60 );
 
+		$clean_rec_name = sanitize_text_field( $ord['recipient_name'] ?? '' );
+		if ( str_contains( $clean_rec_name, '*' ) || str_contains( $clean_rec_name, '@' ) || preg_match( '/^(?:shopee|tiktok|tokopedia)?\s*customer$/i', $clean_rec_name ) ) {
+			$clean_rec_name = '';
+		}
+		$clean_rec_phone = sanitize_text_field( $ord['recipient_phone'] ?? '' );
+		if ( str_contains( $clean_rec_phone, '*' ) || strlen( preg_replace( '/\D/', '', $clean_rec_phone ) ) < 9 ) {
+			$clean_rec_phone = '';
+		}
+		$clean_rec_address = sanitize_text_field( $ord['recipient_address'] ?? '' );
+		if ( str_contains( $clean_rec_address, '*' ) || strlen( $clean_rec_address ) < 5 ) {
+			$clean_rec_address = '';
+		}
+
 		$res_payload = [
 			'success'            => true,
 			'eligible'           => true,
@@ -901,14 +914,15 @@ class Exacoat_Warranty_Manager {
 			'remaining_text'     => $is_code_override ? 'Warranty Code Applied' : "{$hours_left}h {$mins_left}m remaining",
 			'expires_at'         => date( 'Y-m-d H:i:s', $delivered_ts + self::WARRANTY_WINDOW_SECS ),
 			'buyer_note'         => $ord['buyer_note'] ?? '',
+			'buyer_username'     => $ord['buyer_username'] ?? '',
 			'shipping_address'   => [
-				'first_name' => $ord['recipient_name'] ?? ( $ord['buyer_username'] ?? 'Customer' ),
+				'first_name' => $clean_rec_name,
 				'last_name'  => '',
-				'address_1'  => $ord['recipient_address'] ?? '',
+				'address_1'  => $clean_rec_address,
 				'city'       => $ord['recipient_city'] ?? '',
 				'postcode'   => $ord['recipient_postcode'] ?? '',
 				'country'    => 'ID',
-				'phone'      => $ord['recipient_phone'] ?? '',
+				'phone'      => $clean_rec_phone,
 				'email'      => '',
 			],
 			'eligible_items'     => $eligible_items,
@@ -1041,6 +1055,19 @@ class Exacoat_Warranty_Manager {
 		$hours_left = floor( $remaining_secs / 3600 );
 		$mins_left  = floor( ( $remaining_secs % 3600 ) / 60 );
 
+		$clean_rec_name = sanitize_text_field( $ord['recipient_name'] ?? '' );
+		if ( str_contains( $clean_rec_name, '*' ) || str_contains( $clean_rec_name, '@' ) || preg_match( '/^(?:shopee|tiktok|tokopedia)?\s*customer$/i', $clean_rec_name ) ) {
+			$clean_rec_name = '';
+		}
+		$clean_rec_phone = sanitize_text_field( $ord['recipient_phone'] ?? '' );
+		if ( str_contains( $clean_rec_phone, '*' ) || strlen( preg_replace( '/\D/', '', $clean_rec_phone ) ) < 9 ) {
+			$clean_rec_phone = '';
+		}
+		$clean_rec_address = sanitize_text_field( $ord['recipient_address'] ?? '' );
+		if ( str_contains( $clean_rec_address, '*' ) || strlen( $clean_rec_address ) < 5 ) {
+			$clean_rec_address = '';
+		}
+
 		$res_payload = [
 			'success'            => true,
 			'eligible'           => true,
@@ -1054,14 +1081,15 @@ class Exacoat_Warranty_Manager {
 			'remaining_text'     => $is_code_override ? 'Warranty Code Applied' : "{$hours_left}h {$mins_left}m remaining",
 			'expires_at'         => date( 'Y-m-d H:i:s', $delivered_ts + self::WARRANTY_WINDOW_SECS ),
 			'buyer_note'         => $ord['buyer_note'] ?? ( $ord['buyer_message'] ?? '' ),
+			'buyer_username'     => $ord['buyer_username'] ?? '',
 			'shipping_address'   => [
-				'first_name' => $ord['recipient_name'] ?? ( $ord['buyer_username'] ?? 'Customer' ),
+				'first_name' => $clean_rec_name,
 				'last_name'  => '',
-				'address_1'  => $ord['recipient_address'] ?? '',
+				'address_1'  => $clean_rec_address,
 				'city'       => $ord['recipient_city'] ?? '',
 				'postcode'   => $ord['recipient_postcode'] ?? '',
 				'country'    => 'ID',
-				'phone'      => $ord['recipient_phone'] ?? '',
+				'phone'      => $clean_rec_phone,
 				'email'      => '',
 			],
 			'eligible_items'     => $eligible_items,
@@ -2049,10 +2077,43 @@ class Exacoat_Warranty_Manager {
 			'reviewed_at'             => $order->get_meta( '_rma_reviewed_at' ),
 			'rejection_reason'        => $order->get_meta( '_rma_rejection_reason' ),
 			'items'                   => $items,
-			'customer_name'           => $order->get_formatted_billing_full_name(),
-			'customer_phone'          => $order->get_billing_phone(),
-			'customer_email'          => $order->get_billing_email(),
-			'shipping_address'        => $order->get_formatted_shipping_address(),
+			'customer_name'           => ( function() use ( $order ) {
+				$m_name = trim( (string) $order->get_meta( '_customer_name' ) );
+				if ( ! empty( $m_name ) && ! str_contains( $m_name, '*' ) && ! str_contains( $m_name, '@' ) ) {
+					return $m_name;
+				}
+				$full = trim( $order->get_formatted_billing_full_name() );
+				if ( ! empty( $full ) && ! str_contains( $full, '*' ) && ! str_contains( $full, '@' ) ) {
+					return $full;
+				}
+				$ship = trim( $order->get_shipping_first_name() . ' ' . $order->get_shipping_last_name() );
+				return ( ! empty( $ship ) && ! str_contains( $ship, '*' ) && ! str_contains( $ship, '@' ) ) ? $ship : ( $full ?: 'Customer' );
+			} )(),
+			'customer_phone'          => ( function() use ( $order ) {
+				$m_phone = trim( (string) ( $order->get_meta( '_customer_phone' ) ?: $order->get_meta( '_warranty_phone' ) ) );
+				if ( ! empty( $m_phone ) && ! str_contains( $m_phone, '*' ) ) {
+					return $m_phone;
+				}
+				$b_phone = trim( (string) $order->get_billing_phone() );
+				if ( ! empty( $b_phone ) && ! str_contains( $b_phone, '*' ) ) {
+					return $b_phone;
+				}
+				return $order->get_shipping_phone() ?: $b_phone;
+			} )(),
+			'customer_email'          => ( function() use ( $order ) {
+				$m_email = trim( (string) ( $order->get_meta( '_customer_email' ) ?: $order->get_meta( '_warranty_email' ) ) );
+				if ( ! empty( $m_email ) && ! str_contains( $m_email, '@marketplace.internal' ) && ! str_contains( $m_email, '@scs2.tiktok.com' ) ) {
+					return $m_email;
+				}
+				return $order->get_billing_email();
+			} )(),
+			'shipping_address'        => ( function() use ( $order ) {
+				$meta_dest = trim( (string) $order->get_meta( '_warranty_destination_address' ) );
+				if ( ! empty( $meta_dest ) && ! str_contains( $meta_dest, '*' ) ) {
+					return $meta_dest;
+				}
+				return $order->get_formatted_shipping_address() ?: ( $order->get_formatted_billing_address() ?: '' );
+			} )(),
 			'used_warranty_code'      => (string) ( $order->get_meta( '_used_warranty_code' ) ?: '' ),
 		], 200 );
 	}
@@ -3315,9 +3376,43 @@ class Exacoat_Warranty_Manager {
 				'channel'          => $mp_channel,
 				'original_invoice' => $orig_number,
 				'buyer_note'       => $order->get_meta( '_shopee_buyer_note' ) ?: ( $order->get_meta( '_buyer_note' ) ?: '' ),
-				'customer_name'    => $order->get_formatted_billing_full_name() ?: ( $order->get_shipping_first_name() . ' ' . $order->get_shipping_last_name() ),
-				'customer_phone'   => $order->get_billing_phone(),
-				'customer_email'   => $order->get_billing_email(),
+				'customer_name'    => ( function() use ( $order ) {
+					$m_name = trim( (string) $order->get_meta( '_customer_name' ) );
+					if ( ! empty( $m_name ) && ! str_contains( $m_name, '*' ) && ! str_contains( $m_name, '@' ) ) {
+						return $m_name;
+					}
+					$full = trim( $order->get_formatted_billing_full_name() );
+					if ( ! empty( $full ) && ! str_contains( $full, '*' ) && ! str_contains( $full, '@' ) ) {
+						return $full;
+					}
+					$ship = trim( $order->get_shipping_first_name() . ' ' . $order->get_shipping_last_name() );
+					return ( ! empty( $ship ) && ! str_contains( $ship, '*' ) && ! str_contains( $ship, '@' ) ) ? $ship : ( $full ?: 'Customer' );
+				} )(),
+				'customer_phone'   => ( function() use ( $order ) {
+					$m_phone = trim( (string) ( $order->get_meta( '_customer_phone' ) ?: $order->get_meta( '_warranty_phone' ) ) );
+					if ( ! empty( $m_phone ) && ! str_contains( $m_phone, '*' ) ) {
+						return $m_phone;
+					}
+					$b_phone = trim( (string) $order->get_billing_phone() );
+					if ( ! empty( $b_phone ) && ! str_contains( $b_phone, '*' ) ) {
+						return $b_phone;
+					}
+					return $order->get_shipping_phone() ?: $b_phone;
+				} )(),
+				'customer_email'   => ( function() use ( $order ) {
+					$m_email = trim( (string) ( $order->get_meta( '_customer_email' ) ?: $order->get_meta( '_warranty_email' ) ) );
+					if ( ! empty( $m_email ) && ! str_contains( $m_email, '@marketplace.internal' ) && ! str_contains( $m_email, '@scs2.tiktok.com' ) ) {
+						return $m_email;
+					}
+					return $order->get_billing_email();
+				} )(),
+				'shipping_address' => ( function() use ( $order ) {
+					$meta_dest = trim( (string) $order->get_meta( '_warranty_destination_address' ) );
+					if ( ! empty( $meta_dest ) && ! str_contains( $meta_dest, '*' ) ) {
+						return $meta_dest;
+					}
+					return $order->get_formatted_shipping_address() ?: ( $order->get_formatted_billing_address() ?: '' );
+				} )(),
 				'claim_reason'     => $claim_reason,
 				'customer_notes'   => $order->get_customer_note(),
 				'shipping_cost'    => $shipping_total,

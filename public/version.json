@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.200",
+  "version": "0.1.201",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.200.zip?v=0.1.200",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.201.zip?v=0.1.201",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-10-22T08:20:51.879Z",
+  "last_updated": "2026-10-22T08:46:15.314Z",
   "sections": {
-    "changelog": "### Version 0.1.200\n- Synchronize warranty replacement order BCA unique payment code fee line and total in rest_submit_claim\n- Align approved claim notification payable total with exact order total including unique code"
+    "changelog": "### Version 0.1.201\n- Prioritize user-entered recipient name, phone, email, and destination address for marketplace warranty claims\n- Sanitize marketplace eligibility outputs to prevent masked asterisks and proxy usernames from polluting order recipient details\n- Include formatted destination shipping address and customer contact metadata in RMA claims endpoints"
   }
 }
