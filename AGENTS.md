@@ -183,6 +183,13 @@ export function cleanItemTitle(name?: string): string {
   - Both `class-email-engine.php` and Manager's `emailRenderer.ts` register and render the unified light-mode `warranty_approved` template.
   - On the web pay portal (`/pay/[id]`), global header and footer are suppressed via `SUPPRESSED_ROUTES` in `site-layout-wrapper.tsx` to prevent double header and footer.
   - Pay portal fetches live rates from `/api/warranty/shipping-rates`, requires active courier shipping option selection, and calls `/api/commerce/update-order-shipping` before initiating Midtrans Snap payment.
+- **Warranty BCA Unique Payment Code & Total Synchronization Invariant**:
+  - In WooCommerce, `meta_data` (`_bca_unique_code`) does not alter `order.total`. Only `fee_lines` adjusts the order total in the database.
+  - When replacement orders are generated (`handleSubmitClaim`, `handleSubmitClaimWeb`, and `rest_submit_claim`), if delivery shipping is required, the order is initialized with `payment_method = 'bacs'`, `_bca_unique_code = code`, and `fee_lines: [{ name: 'Unique Payment Code', total: String(uniqueCode), tax_status: 'none' }]`, guaranteeing that `order.total` in WooCommerce, Exacoat Manager, and emails equals `shipping_total + uniqueCode` from creation.
+  - When a customer switches to Midtrans on the pay portal (`/pay/[id]`), `/api/commerce/update-order-shipping` and `/api/commerce/pay-order` zero the fee line (`total: "0"`), updating `order.total` to pure shipping cost.
+  - When a customer selects BCA, `/api/commerce/update-order-shipping` restores the unique code fee line and updates `order.total`.
+  - In `class-bca-payment-webhook.php`, BCA bank mutations compare directly against `(int) round( (float) $order->get_total() )`, enabling automated webhook matching and instant transition to processing.
+  - Pay portal header summary displays `activeTab === 'bca' ? currentFormattedTotal : currentFormattedShipping`.
 
 ---
 

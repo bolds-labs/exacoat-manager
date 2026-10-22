@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Register and implement branded warranty_approved email notification template with QC approval badge, replacement details, and payment CTA\n- Dispatch warranty_approved email automatically upon claim approval in rest_review_claim\n- Add warranty_approved template to Manager email catalog under Warranty & RMA category`,
+      changelog: `### Version ${version}\n- Synchronize warranty replacement order BCA unique payment code fee line and total in rest_submit_claim\n- Align approved claim notification payable total with exact order total including unique code`,
     },
   };
 

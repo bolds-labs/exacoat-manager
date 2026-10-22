@@ -36,3 +36,19 @@
 * **Approval / Rejection Workflow**:
   - Approve: Transitions replacement order to processing for production.
   - Reject: Prompts for rejection reason (e.g. *"skin not cut into 5 pieces"*) and updates order status.
+
+---
+
+## 3. Shipping Payment & Unique Code Architecture
+
+* **Order Creation & Unique Code Attachment**:
+  - When a customer submits a claim with delivery shipping, the replacement order is generated with `payment_method = 'bacs'`, `_bca_unique_code = code`, and `fee_lines: [{ name: 'Unique Payment Code', total: String(uniqueCode), tax_status: 'none' }]`.
+  - In WooCommerce, `meta_data` alone does not alter `order.total`. Attaching the unique code in `fee_lines` guarantees `order.total` matches `shipping_total + uniqueCode` (e.g. Rp 10.029) from the moment of order generation.
+* **Customer Pay Portal (`/pay/[id]`)**:
+  - Shows exact courier options and payment method selector (Midtrans vs Bank BCA).
+  - Top header card displays `activeTab === 'bca' ? totalWithCode : shippingCost`.
+  - Switching tabs to Midtrans automatically zeroes the unique code fee line (`total: "0"`), updating order total to pure shipping cost for card/QRIS gateways.
+  - Switching tabs to Bank BCA restores the unique code fee line and total.
+* **Automated BCA Webhook Reconciliation (`class-bca-payment-webhook.php`)**:
+  - Automated bank mutation listener matches against `(int) round( (float) $order->get_total() )`.
+  - Because `order.total` is accurately set to `shipping_total + uniqueCode`, the bank mutation matches cleanly and automatically transitions the warranty order to `processing` for fulfillment.

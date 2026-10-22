@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.200] - 2026-10-22
+
+### Warranty Order Unique Payment Code & Total Synchronization
+- **WooCommerce Order Fee Line Attachment (`class-warranty-manager.php` & `app/api/warranty/[action]/route.ts`)**:
+  - Attached deterministic unique payment code (1-50 IDR) as an authentic `fee_lines` entry (`Unique Payment Code`) during replacement order generation across both web and marketplace claim flows.
+  - Ensures `order.total` in WooCommerce, Exacoat Manager, and confirmation emails equals `shipping_total + uniqueCode` (e.g. Rp 10.029) from the moment the claim order is created.
+- **Pay Portal Payment Method Synchronization (`pay-order-view.tsx` & `update-order-shipping/route.ts`)**:
+  - Updated `/api/commerce/update-order-shipping` to maintain `fee_lines`: attaches the unique code fee when BCA transfer is selected, and zeroes the fee line (`total: "0"`) when Midtrans is chosen.
+  - Dynamically updates top summary header card to display `activeTab === 'bca' ? totalWithCode : shippingCost`.
+  - Added real-time tab switching handler and mount auto-heal effect to synchronize payment method and unique code fee to the WooCommerce database in the background.
+  - In `pay-order/route.ts`, guaranteed that Midtrans charges only the pure shipping amount and zeroes out any BCA unique fee line.
+
+---
+
 ## [0.1.199] - 2026-10-21
 
 ### Branded Warranty Approved Email Notification & Shipping Selection Enforcement

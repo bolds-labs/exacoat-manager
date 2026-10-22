@@ -1633,6 +1633,20 @@ class Exacoat_Warranty_Manager {
 			$shipping_item->set_total( $shipping_cost );
 			$replacement_order->add_item( $shipping_item );
 
+			// Add Unique Payment Code fee line for Bank BCA transfer if shipping fee is required
+			if ( $shipping_cost > 0 ) {
+				$unique_code = ( ( absint( $parent_order_id ) * 7 ) % 49 ) + 1;
+				$fee_item    = new \WC_Order_Item_Fee();
+				$fee_item->set_name( 'Unique Payment Code' );
+				$fee_item->set_total( (string) $unique_code );
+				$fee_item->set_tax_status( 'none' );
+				$replacement_order->add_item( $fee_item );
+
+				$replacement_order->set_payment_method( 'bacs' );
+				$replacement_order->set_payment_method_title( 'Direct Bank Transfer (BCA)' );
+				$replacement_order->update_meta_data( '_bca_unique_code', (string) $unique_code );
+			}
+
 			$replacement_order->set_currency( 'IDR' );
 			$replacement_order->calculate_totals();
 
@@ -1747,17 +1761,19 @@ class Exacoat_Warranty_Manager {
 			}
 
 			$shipping_total = (float) $order->get_shipping_total();
+			$order_total    = (float) $order->get_total();
+			$payable_total  = $order_total > 0 ? $order_total : $shipping_total;
 
 			if ( 'Redeem' === $order_type || $order->is_paid() || $shipping_total <= 0 ) {
 				$order->set_status( 'processing', sprintf( '%s claim approved by %s. Moving to production.', $order_type, $admin_name ) );
 			} else {
-				$order->add_order_note( sprintf( '%s claim approved by %s. Payment link: %s. Awaiting customer shipping fee payment (Rp %s).', $order_type, $admin_name, $payment_url, number_format( $shipping_total, 0, ',', '.' ) ) );
+				$order->add_order_note( sprintf( '%s claim approved by %s. Payment link: %s. Awaiting customer shipping fee payment (Rp %s).', $order_type, $admin_name, $payment_url, number_format( $payable_total, 0, ',', '.' ) ) );
 
 				// Dispatch automated approval email with official payment link
 				$recipient_email = $order->get_billing_email();
 				$recipient_name  = $order->get_formatted_billing_full_name() ?: 'Customer';
 				if ( ! empty( $recipient_email ) && is_email( $recipient_email ) ) {
-					$shipping_fmt = 'Rp ' . number_format( $shipping_total, 0, ',', '.' );
+					$shipping_fmt = 'Rp ' . number_format( $payable_total, 0, ',', '.' );
 					$order_ref    = $parent_id ? (string) $parent_id : (string) $order->get_order_number();
 					$approval_subject = '[Exacoat] Klaim Garansi Pemasangan Disetujui #' . $order_ref;
 

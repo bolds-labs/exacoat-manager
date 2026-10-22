@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.199",
+  "version": "0.1.200",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.199.zip?v=0.1.199",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.200.zip?v=0.1.200",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-10-21T11:02:14.458Z",
+  "last_updated": "2026-10-22T08:20:51.879Z",
   "sections": {
-    "changelog": "### Version 0.1.199\n- Register and implement branded warranty_approved email notification template with QC approval badge, replacement details, and payment CTA\n- Dispatch warranty_approved email automatically upon claim approval in rest_review_claim\n- Add warranty_approved template to Manager email catalog under Warranty & RMA category"
+    "changelog": "### Version 0.1.200\n- Synchronize warranty replacement order BCA unique payment code fee line and total in rest_submit_claim\n- Align approved claim notification payable total with exact order total including unique code"
   }
 }
