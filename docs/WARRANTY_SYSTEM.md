@@ -49,6 +49,8 @@
   - Top header card displays `activeTab === 'bca' ? totalWithCode : shippingCost`.
   - Switching tabs to Midtrans automatically zeroes the unique code fee line (`total: "0"`), updating order total to pure shipping cost for card/QRIS gateways.
   - Switching tabs to Bank BCA restores the unique code fee line and total.
+  - Component parameter destructuring: `PayOrderView` destructs `totalAmount = 0` to prevent runtime reference crashes on mount.
+  - Paid status evaluation: `isPaid` recognizes authentic fulfillment statuses (`preparing-order`, `in-production`, `ready-to-ship`, `smb-ready`, `smb-picked`, `awaiting-pickup`) and `date_paid` to display order confirmation rather than re-prompting settled customers.
 * **Automated BCA Webhook Reconciliation (`class-bca-payment-webhook.php`)**:
   - Automated bank mutation listener matches against `(int) round( (float) $order->get_total() )`.
   - Because `order.total` is accurately set to `shipping_total + uniqueCode`, the bank mutation matches cleanly and automatically transitions the warranty order to `processing` for fulfillment.
