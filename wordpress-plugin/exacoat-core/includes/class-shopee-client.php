@@ -1125,28 +1125,32 @@ class Exacoat_Shopee_Client {
 	 * Check if a Shopee Order SN has already been processed for Warranty or Redeem
 	 */
 	public static function check_existing_claim( string $order_sn ): array {
+		if ( class_exists( 'Exacoat_Warranty_Manager' ) ) {
+			return Exacoat_Warranty_Manager::check_invoice_claimed( $order_sn );
+		}
+
 		$clean = trim( preg_replace( '/^#+/', '', $order_sn ) );
 		if ( empty( $clean ) ) {
 			return [ 'already_claimed' => false ];
 		}
 
-		// Query WooCommerce orders with matching marketplace invoice
 		$orders = wc_get_orders([
 			'limit'      => 1,
-			'meta_key'   => '_marketplace_invoice',
+			'meta_key'   => '_rma_original_invoice',
 			'meta_value' => $clean,
-			'status'     => [ 'wc-processing', 'wc-completed', 'wc-shipped', 'wc-on-hold' ],
+			'status'     => [ 'wc-pending', 'wc-processing', 'wc-completed', 'wc-shipped', 'wc-on-hold' ],
 		]);
 
 		if ( ! empty( $orders ) ) {
 			$ord = $orders[0];
-			$is_redeem = $ord->get_meta( '_is_redeem_order' ) === 'yes';
+			$is_redeem = ( 'yes' === (string) $ord->get_meta( '_is_redeem' ) ) || ( 'REDEEM' === (string) $ord->get_meta( '_order_badge' ) );
 			return [
 				'already_claimed'     => true,
 				'existing_order_id'   => $ord->get_id(),
 				'existing_order_num'  => $ord->get_order_number(),
 				'claim_type'          => $is_redeem ? 'Redeem' : 'Warranty',
 				'created_at'          => $ord->get_date_created() ? ( function_exists( 'wp_date' ) ? wp_date( 'Y-m-d H:i', $ord->get_date_created()->getTimestamp() ) : date_i18n( 'Y-m-d H:i', $ord->get_date_created()->getTimestamp() ) ) : '',
+				'message'             => sprintf( 'This Shopee order (%s) has already been processed for replacement under Order #%s (%s).', $clean, $ord->get_order_number(), $is_redeem ? 'Redeem' : 'Warranty' ),
 			];
 		}
 

@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Prioritize user-entered recipient name, phone, email, and destination address for marketplace warranty claims\n- Sanitize marketplace eligibility outputs to prevent masked asterisks and proxy usernames from polluting order recipient details\n- Include formatted destination shipping address and customer contact metadata in RMA claims endpoints`,
+      changelog: `### Version ${version}\n- Authoritative RMA claim deduplication across _rma_original_invoice, _rma_original_order_id, _rma_original_order_number, and _marketplace_invoice\n- Include pending and all fulfillment stages in active claim checks to block immediate duplicate warranty claims\n- Public /warranty/check-claimed endpoint and unified check_invoice_claimed logic across Shopee and TikTok clients`,
     },
   };
 

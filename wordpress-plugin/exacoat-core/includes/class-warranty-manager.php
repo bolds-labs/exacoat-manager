@@ -185,6 +185,15 @@ class Exacoat_Warranty_Manager {
 			],
 		] );
 
+		// Public: Check if an invoice has already been claimed for warranty / redeem
+		register_rest_route( 'exacoat-core/v1', '/warranty/check-claimed', [
+			[
+				'methods'             => \WP_REST_Server::READABLE,
+				'callback'            => [ __CLASS__, 'rest_check_claimed_public' ],
+				'permission_callback' => '__return_true',
+			],
+		] );
+
 		// Admin / Manager: Get all warranty codes
 		register_rest_route( 'exacoat-core/v1', '/warranty/codes', [
 			[
@@ -3033,6 +3042,160 @@ class Exacoat_Warranty_Manager {
 	}
 
 	/**
+	 * Authoritative check whether an invoice / order number has already been claimed for Warranty or Redeem
+	 */
+	public static function check_invoice_claimed( string $invoice ): array {
+		$clean = trim( ltrim( trim( $invoice ), '#' ) );
+		if ( empty( $clean ) ) {
+			return [ 'already_claimed' => false ];
+		}
+
+		if ( ! function_exists( 'wc_get_orders' ) ) {
+			return [ 'already_claimed' => false ];
+		}
+
+		$invoice_meta_query = [
+			'relation' => 'OR',
+			[
+				'key'     => '_rma_original_invoice',
+				'value'   => $clean,
+				'compare' => '=',
+			],
+			[
+				'key'     => '_rma_original_order_id',
+				'value'   => $clean,
+				'compare' => '=',
+			],
+			[
+				'key'     => '_rma_original_order_number',
+				'value'   => $clean,
+				'compare' => '=',
+			],
+			[
+				'key'     => '_marketplace_invoice',
+				'value'   => $clean,
+				'compare' => '=',
+			],
+		];
+
+		$active_statuses = [
+			'pending',
+			'processing',
+			'on-hold',
+			'completed',
+			'shipped',
+			'ready-to-ship',
+			'delivered',
+			'preparing-order',
+			'in-production',
+			'smb-ready',
+			'smb-picked',
+			'awaiting-pickup',
+		];
+
+		$existing_order_ids = self::query_order_ids_by_meta( $invoice_meta_query, [
+			'limit'  => 5,
+			'status' => $active_statuses,
+		] );
+
+		if ( empty( $existing_order_ids ) && $clean !== trim( $invoice ) ) {
+			$raw_meta_query = [
+				'relation' => 'OR',
+				[
+					'key'     => '_rma_original_invoice',
+					'value'   => trim( $invoice ),
+					'compare' => '=',
+				],
+				[
+					'key'     => '_rma_original_order_id',
+					'value'   => trim( $invoice ),
+					'compare' => '=',
+				],
+				[
+					'key'     => '_rma_original_order_number',
+					'value'   => trim( $invoice ),
+					'compare' => '=',
+				],
+				[
+					'key'     => '_marketplace_invoice',
+					'value'   => trim( $invoice ),
+					'compare' => '=',
+				],
+			];
+			$existing_order_ids = self::query_order_ids_by_meta( $raw_meta_query, [
+				'limit'  => 5,
+				'status' => $active_statuses,
+			] );
+		}
+
+		if ( empty( $existing_order_ids ) ) {
+			return [ 'already_claimed' => false ];
+		}
+
+		$existing_orders = array_filter( array_map( 'wc_get_order', $existing_order_ids ) );
+
+		foreach ( $existing_orders as $ord ) {
+			if ( ! $ord ) {
+				continue;
+			}
+			$status_lower = strtolower( (string) $ord->get_status() );
+			$rma_status   = strtolower( (string) $ord->get_meta( '_rma_status' ) );
+
+			// If explicitly rejected and cancelled, skip
+			if ( 'rejected' === $rma_status && in_array( $status_lower, [ 'cancelled', 'trash', 'failed' ], true ) ) {
+				continue;
+			}
+
+			// Found active claim
+			$is_redeem = ( 'yes' === (string) $ord->get_meta( '_is_redeem' ) ) ||
+			             ( 'REDEEM' === (string) $ord->get_meta( '_order_badge' ) ) ||
+			             ( 'yes' === (string) $ord->get_meta( '_is_redeem_order' ) );
+			$claim_type = $is_redeem ? 'Redeem' : ( $ord->get_meta( '_rma_order_type' ) ?: 'Warranty' );
+			$order_date = $ord->get_date_created() ? ( function_exists( 'wp_date' ) ? wp_date( 'd M Y', $ord->get_date_created()->getTimestamp() ) : date_i18n( 'd M Y', $ord->get_date_created()->getTimestamp() ) ) : '';
+
+			return [
+				'already_claimed'     => true,
+				'existing_order_id'   => $ord->get_id(),
+				'existing_order_num'  => $ord->get_order_number(),
+				'claim_type'          => $claim_type,
+				'rma_status'          => $rma_status ?: $status_lower,
+				'created_at'          => $order_date,
+				'message'             => sprintf(
+					'This order (%s) has already been processed for replacement under Order #%s (%s%s). Duplicate claims are prohibited.',
+					$clean,
+					$ord->get_order_number(),
+					$claim_type,
+					$order_date ? " on {$order_date}" : ''
+				),
+			];
+		}
+
+		return [ 'already_claimed' => false ];
+	}
+
+	/**
+	 * Public REST: Check if an invoice has already been claimed for warranty / redeem
+	 * GET /wp-json/exacoat-core/v1/warranty/check-claimed?invoice=...
+	 */
+	public static function rest_check_claimed_public( \WP_REST_Request $request ): \WP_REST_Response {
+		$invoice = sanitize_text_field( $request->get_param( 'invoice' ) ?: '' );
+		$clean   = trim( ltrim( trim( $invoice ), '#' ) );
+
+		if ( empty( $clean ) ) {
+			return new \WP_REST_Response( [
+				'success' => false,
+				'message' => 'Invoice parameter is required.',
+			], 400 );
+		}
+
+		$claim_info = self::check_invoice_claimed( $clean );
+
+		return new \WP_REST_Response( array_merge( [
+			'success' => true,
+		], $claim_info ), 200 );
+	}
+
+	/**
 	 * Admin / Manager: Check marketplace invoice availability to prevent duplicates
 	 */
 	public static function rest_check_invoice( \WP_REST_Request $request ): \WP_REST_Response {
@@ -3056,78 +3219,16 @@ class Exacoat_Warranty_Manager {
 			], 500 );
 		}
 
-		// Query existing active RMA claims across _rma_original_invoice, _rma_original_order_id, and _rma_original_order_number
-		$invoice_meta_query = [
-			'relation' => 'OR',
-			[
-				'key'     => '_rma_original_invoice',
-				'value'   => $clean_invoice,
-				'compare' => '=',
-			],
-			[
-				'key'     => '_rma_original_order_id',
-				'value'   => $clean_invoice,
-				'compare' => '=',
-			],
-			[
-				'key'     => '_rma_original_order_number',
-				'value'   => $clean_invoice,
-				'compare' => '=',
-			],
-		];
-
-		$existing_order_ids = self::query_order_ids_by_meta( $invoice_meta_query, [
-			'limit'  => 1,
-			'status' => [ 'pending', 'processing', 'on-hold', 'completed', 'shipped', 'ready-to-ship', 'delivered' ],
-		] );
-
-		if ( empty( $existing_order_ids ) && $clean_invoice !== trim( $invoice ) ) {
-			$raw_meta_query = [
-				'relation' => 'OR',
-				[
-					'key'     => '_rma_original_invoice',
-					'value'   => trim( $invoice ),
-					'compare' => '=',
-				],
-				[
-					'key'     => '_rma_original_order_id',
-					'value'   => trim( $invoice ),
-					'compare' => '=',
-				],
-				[
-					'key'     => '_rma_original_order_number',
-					'value'   => trim( $invoice ),
-					'compare' => '=',
-				],
-			];
-			$existing_order_ids = self::query_order_ids_by_meta( $raw_meta_query, [
-				'limit'  => 1,
-				'status' => [ 'pending', 'processing', 'on-hold', 'completed', 'shipped', 'ready-to-ship', 'delivered' ],
-			] );
-		}
-
-		$existing_orders = array_filter( array_map( 'wc_get_order', $existing_order_ids ) );
-
-		if ( ! empty( $existing_orders ) ) {
-			$existing_order = reset( $existing_orders );
-			$existing_type  = $existing_order->get_meta( '_rma_order_type' ) ?: 'Warranty / Redeem';
-			$existing_num   = $existing_order->get_order_number();
-			$order_date     = $existing_order->get_date_created() ? $existing_order->get_date_created()->date( 'd M Y' ) : '';
-
+		$claim_info = self::check_invoice_claimed( $clean_invoice );
+		if ( $claim_info['already_claimed'] ) {
 			return new \WP_REST_Response( [
 				'success'               => true,
 				'available'             => false,
-				'existing_order_id'     => $existing_order->get_id(),
-				'existing_order_number' => $existing_num,
-				'existing_order_type'   => $existing_type,
-				'order_date'            => $order_date,
-				'message'               => sprintf(
-					'Invoice "%s" was already redeemed/claimed under replacement order #%s (%s%s). Duplicate claims are prohibited.',
-					$clean_invoice,
-					$existing_num,
-					$existing_type,
-					$order_date ? " on {$order_date}" : ''
-				),
+				'existing_order_id'     => $claim_info['existing_order_id'],
+				'existing_order_number' => $claim_info['existing_order_num'],
+				'existing_order_type'   => $claim_info['claim_type'],
+				'order_date'            => $claim_info['created_at'],
+				'message'               => $claim_info['message'],
 			], 200 );
 		}
 

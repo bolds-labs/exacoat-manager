@@ -73,3 +73,19 @@
     4. **Destination Address**: Complete street address without `*`, at least 10 characters, with 5-digit postal code.
   - User-inputted values are assigned directly to WooCommerce `billing` and `shipping` objects and persisted in metadata (`_customer_name`, `_customer_phone`, `_customer_email`, `_warranty_phone`, `_warranty_email`, `_warranty_destination_address`).
   - Exacoat Manager order and RMA endpoints (`format_order_for_manager`, `rest_get_claim_details`, `rest_get_claims_log`) prioritize clean metadata keys over stale or masked order defaults, ensuring operators always see the true customer contact and shipping details.
+
+---
+
+## 5. Authoritative RMA Claim Deduplication Architecture
+
+* **The Problem**:
+  - Customers could submit multiple claims on the same purchase invoice within minutes because:
+    1. Marketplace verification checks (`check_existing_claim()` in `class-shopee-client.php` and `class-tiktok-client.php`) previously queried non-existent meta key `_marketplace_invoice` and excluded `pending` orders.
+    2. Client-side checks called WooCommerce REST API `/orders?search=...`, which never searches custom metadata like `_rma_original_invoice`.
+    3. `handleSubmitClaim` lacked a pre-creation duplicate guard.
+* **The Invariant**:
+  - `Exacoat_Warranty_Manager::check_invoice_claimed( $invoice )` is the central authoritative deduplication method.
+  - Queries across `_rma_original_invoice`, `_rma_original_order_id`, `_rma_original_order_number`, and `_marketplace_invoice`.
+  - Checks all active non-rejected statuses: `pending`, `processing`, `on-hold`, `completed`, `shipped`, `ready-to-ship`, `delivered`, `preparing-order`, `in-production`, `smb-ready`, `smb-picked`, and `awaiting-pickup`.
+  - Endpoint `GET /wp-json/exacoat-core/v1/warranty/check-claimed?invoice=...` is publicly available for frontend verification.
+  - `handleSubmitClaim` in `exacoat-web` validates this endpoint before issuing `POST /wp-json/wc/v3/orders`, rejecting duplicate attempts with HTTP 400.

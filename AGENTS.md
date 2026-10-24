@@ -167,7 +167,12 @@ export function cleanItemTitle(name?: string): string {
 - **Video Proof URL Normalization**: URLs starting with `/` must be resolved to `https://exacoat.com/...`; Exacoat Manager runs on `manager.exacoat.com` and relative URLs will 404.
 - **Disk Purge Invariant**: When a warranty claim is reviewed (approved or rejected via `reviewWarrantyClaimDirect`), the uploaded video proof file is immediately purged from disk via WordPress REST API to comply with disk limits and privacy.
 - **CPT Table Status Prefix**: When querying WooCommerce classic CPT tables (`shop_order`) in WordPress via `WP_Query`, post statuses are prefixed with `wc-` (`wc-pending`, `wc-processing`, etc.). Omitting `wc-` causes queries to return empty results.
-- **Deduplication Check**: Queries across `_rma_original_invoice`, `_rma_original_order_id`, and `_rma_original_order_number` to prevent duplicate replacements on the same order.
+- **Authoritative RMA Claim Deduplication Invariant**:
+  - Multiple claims on the same original purchase are strictly prohibited across all sales channels.
+  - Verification queries execute across `_rma_original_invoice`, `_rma_original_order_id`, `_rma_original_order_number`, and `_marketplace_invoice` via `Exacoat_Warranty_Manager::check_invoice_claimed()`.
+  - Active claim checks must evaluate all in-flight and fulfilled order statuses: `pending`, `processing`, `on-hold`, `completed`, `shipped`, `ready-to-ship`, `delivered`, `preparing-order`, `in-production`, `smb-ready`, `smb-picked`, and `awaiting-pickup`. Excluding `pending` allows customers to submit duplicate claims within minutes while awaiting QC review.
+  - Standard WooCommerce REST API endpoint `GET /wp-json/wc/v3/orders?search=...` only searches post content and customer billing/shipping details, never custom order meta. Client-side eligibility and submission checks must call the authoritative WordPress endpoint `GET /wp-json/exacoat-core/v1/warranty/check-claimed?invoice=...` rather than `/orders?search=...`.
+  - `handleSubmitClaim` must always execute an authoritative pre-creation duplicate check before issuing `POST /wp-json/wc/v3/orders` to prevent concurrent or repeated form submissions.
 - **Specialized Virtual Tabs vs HPOS Query Invariant**:
   - In WooCommerce HPOS (`wp_wc_orders` / `wp_wc_orders_meta`), `wc_get_orders()` drops complex `meta_query` structures when querying custom virtual statuses.
   - Backend must resolve specialized order IDs directly via SQL using `Exacoat_Order_Manager::get_specialized_order_ids( string $tab )` and inject them into `post__in` and `include` while unsetting `$args['status']`.
