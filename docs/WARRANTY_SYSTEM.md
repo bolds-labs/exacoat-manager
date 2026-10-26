@@ -102,3 +102,18 @@
   - **Eliminated Black Camo Defaults**: Claimed layers start unselected, requiring deliberate selection or inheriting the order item's actual finish.
   - **Intelligent Device Resolution**: In `EditOrderItemModal.tsx`, `extractDeviceKeywords` cleans marketplace listing titles and resolves authentic configurator profiles via WooCommerce or high-fidelity synthesized fallbacks, guaranteeing full configurator capabilities (swatches, coverage, cutouts) across all order items.
 
+---
+
+## 7. Web Configurator Parity & Cutout Suppression Invariants
+
+* **The Problem**:
+  - In `EditOrderItemModal.tsx` and `ManualWarrantyModal.tsx`, layers were displayed in flat grids with separate detached swatch catalogs below, unlike the web storefront configurator layout.
+  - When an operator or customer selected only an accent part (e.g. Camera Accent only on iPhone 16 Pro, without Back skin), the system still unconditionally pushed `Coverage: Model Cut` and `Logo: With Logo Cutout` into order specs and warranty claims. This corrupted cut instructions and caused confusion in production.
+* **The Solution**:
+  - **Vertical Layer Accordions**: Skin layers are rendered in a vertical accordion stack identical to the web version (`device-skin-configurator.tsx`). Each layer card features a swatch preview thumbnail, layer name, quick "Include" / "Remove" (or "+ Claim") action pill, and expand chevron.
+  - **Embedded Swatch Selectors**: Swatch pickers with category tabs (`All`, `Signature skins`, `Colors`, `Natural`, `Limited`), search filtering, and 1-click swatch tiles are embedded directly inside each open layer card.
+  - **Explicit 'None' Option**: Coverage, Logo Cutout, and Pencil Cutout cards offer an explicit `None` button.
+  - **Auto-Suppression When Back Skin Omitted**: If the primary back/body layer is not included or claimed:
+    - Informative notices explain that Coverage and Logo Cutout are automatically set to None.
+    - `compiledSpecs` and warranty claim submission (`createManualWarrantyClaimDirect`) strictly omit `Coverage` and `Logo` when the back layer is inactive or when set to `'None'`.
+

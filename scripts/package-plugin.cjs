@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Harmonize global finishes catalog to all 26 store finishes across Signature skins, Colors, Natural, and Limited\n- Intelligent device keyword and configurator profile resolution in EditOrderItemModal for marketplace and warranty items\n- Modern visual finish swatch grid in ManualWarrantyModal with category tabs, search, and elimination of hardcoded black-camo defaults`,
+      changelog: `### Version ${version}\n- Web-inspired vertical layer accordions with embedded finish swatches in EditOrderItemModal and ManualWarrantyModal\n- Support explicit None option for Coverage, Logo Cutout, and Pencil Cutout\n- Automatic suppression of Coverage and Logo options when Back skin is not included or claimed`,
     },
   };
 

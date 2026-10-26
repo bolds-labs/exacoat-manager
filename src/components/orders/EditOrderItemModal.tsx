@@ -323,13 +323,13 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
 
   // Cutouts & Coverage (only active when supported by true profile data)
   const [hasCoverageOption, setHasCoverageOption] = useState(false);
-  const [coverage, setCoverage] = useState<'Model Cut' | '360° Full Coverage' | null>(null);
+  const [coverage, setCoverage] = useState<'Model Cut' | '360° Full Coverage' | 'None' | null>(null);
 
   const [hasLogoOption, setHasLogoOption] = useState(false);
-  const [logoCutout, setLogoCutout] = useState<'With Logo Cutout' | 'No Logo Cutout' | null>(null);
+  const [logoCutout, setLogoCutout] = useState<'With Logo Cutout' | 'No Logo Cutout' | 'None' | null>(null);
 
   const [hasPencilOption, setHasPencilOption] = useState(false);
-  const [pencilCutout, setPencilCutout] = useState<'With Pencil Cutout' | 'No Pencil Cutout' | null>(null);
+  const [pencilCutout, setPencilCutout] = useState<'With Pencil Cutout' | 'No Pencil Cutout' | 'None' | null>(null);
 
   // Custom Specs & Non-Layer Notes (Dynamic key-value pairs)
   const [customSpecs, setCustomSpecs] = useState<CustomSpecEntry[]>([]);
@@ -795,6 +795,24 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
     return Array.from(set);
   }, [allFinishes]);
 
+  // Checks if any back/body/top skin is active with a selected finish
+  const hasActiveBackLayer = useMemo(() => {
+    return layers.some((l) => {
+      const lName = (l.name || '').toLowerCase();
+      const lId = (l.id || '').toLowerCase();
+      const isBackOrMain =
+        lId === 'back' ||
+        lId === 'top' ||
+        lId === 'body' ||
+        lName.includes('back') ||
+        lName.includes('top') ||
+        lName.includes('body') ||
+        lName.includes('plate') ||
+        lName.includes('main');
+      return isBackOrMain && Boolean(layerActive[l.id]) && Boolean(layerFinishes[l.id]?.trim());
+    });
+  }, [layers, layerActive, layerFinishes]);
+
   // Compile final specifications for submission and live preview
   const compiledSpecs = useMemo<ItemCustomizationSpec[]>(() => {
     const list: ItemCustomizationSpec[] = [];
@@ -816,18 +834,18 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
         }
       });
 
-      // 2. Coverage Option (only if device supports coverage choice)
-      if (hasCoverageOption && coverage) {
+      // 2. Coverage Option (only if device supports coverage choice, back layer is active, and coverage is not None)
+      if (hasCoverageOption && hasActiveBackLayer && coverage && coverage !== 'None') {
         list.push({ label: 'Coverage', value: coverage });
       }
 
-      // 3. Logo Cutout (only if device supports logo cutout)
-      if (hasLogoOption && logoCutout) {
+      // 3. Logo Cutout (only if device supports logo cutout, back layer is active, and logo is not None)
+      if (hasLogoOption && hasActiveBackLayer && logoCutout && logoCutout !== 'None') {
         list.push({ label: 'Logo', value: logoCutout });
       }
 
-      // 4. Pencil Cutout (only if device supports pencil cutout)
-      if (hasPencilOption && pencilCutout) {
+      // 4. Pencil Cutout (only if device supports pencil cutout and not None)
+      if (hasPencilOption && pencilCutout && pencilCutout !== 'None') {
         list.push({ label: 'Pencil Cutout', value: pencilCutout });
       }
 
@@ -866,6 +884,7 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
     layers,
     layerActive,
     layerFinishes,
+    hasActiveBackLayer,
     hasCoverageOption,
     coverage,
     hasLogoOption,
@@ -875,16 +894,17 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
     customSpecs,
   ]);
 
-  const handleApplyFinishToActiveLayer = (finish: GlobalFinish) => {
+  const handleApplyFinishToActiveLayer = (finish: GlobalFinish, targetLayerId?: string) => {
+    const layerIdToApply = targetLayerId || activeLayerId;
     if (configMode === 'configurator') {
-      if (!activeLayerId) return;
+      if (!layerIdToApply) return;
       setLayerFinishes((prev) => ({
         ...prev,
-        [activeLayerId]: finish.name,
+        [layerIdToApply]: finish.name,
       }));
       setLayerActive((prev) => ({
         ...prev,
-        [activeLayerId]: true,
+        [layerIdToApply]: true,
       }));
     } else {
       // In Form mode: Apply finish to selected custom spec field
@@ -1467,120 +1487,302 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
                   </div>
                 </div>
               )}
-              <div className="p-4 rounded-xl border border-white/[0.06] bg-[#141417] space-y-3.5">
-                <div className="flex items-center justify-between border-b border-white/[0.06] pb-2">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-2">
+              {/* Vertical Stack of Layer Accordions matching web configurator */}
+              <div className="space-y-2.5 font-sans">
+                <div className="flex items-center justify-between px-1">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300 flex items-center gap-2">
                     <Layers className="w-3.5 h-3.5 text-[#f3aa18]" />
-                    <span>Skin Layers</span>
+                    <span>Skin Layers & Finishes</span>
                   </h4>
-                  <span className="text-[11px] font-mono text-neutral-400">
-                    Click a layer card to pick its finish below
+                  <span className="text-[11px] text-neutral-400 font-mono">
+                    {layers.filter((l) => layerActive[l.id] && layerFinishes[l.id]).length} of {layers.length} parts selected
                   </span>
                 </div>
 
                 {layers.length === 0 ? (
-                  <p className="text-xs text-neutral-500 py-3 text-center">
+                  <div className="p-4 rounded-xl border border-white/[0.06] bg-[#141417] text-center text-xs text-neutral-500">
                     No configurator layers defined for this product. You can switch to Form Specifications above.
-                  </p>
+                  </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+                  <div className="space-y-2">
                     {layers.map((layer) => {
-                      const isSelected = activeLayerId === layer.id;
+                      const isOpen = activeLayerId === layer.id;
                       const isIncluded = Boolean(layerActive[layer.id]);
                       const finishName = layerFinishes[layer.id];
+                      const selectedFinishObj = allFinishes.find(
+                        (f) =>
+                          f.name.toLowerCase() === (finishName || '').toLowerCase() ||
+                          f.slug.toLowerCase() === (finishName || '').toLowerCase()
+                      );
 
                       return (
                         <div
                           key={layer.id}
-                          onClick={() => {
-                            setActiveLayerId(layer.id);
-                            if (!isIncluded) {
-                              setLayerActive((prev) => ({ ...prev, [layer.id]: true }));
-                            }
-                          }}
                           className={clsx(
-                            "p-3 rounded-xl border transition-all cursor-pointer flex flex-col justify-between gap-2.5",
-                            isSelected
-                              ? "border-[#f3aa18] bg-[#f3aa18]/10 shadow-xs"
+                            "rounded-xl border transition-all duration-200 overflow-hidden",
+                            isOpen
+                              ? "border-[#f3aa18]/60 bg-[#161619] shadow-lg shadow-black/40 ring-1 ring-[#f3aa18]/30"
                               : isIncluded
-                              ? "border-white/[0.12] bg-[#101114] hover:border-white/25"
-                              : "border-white/[0.04] bg-[#0c0d10] opacity-60 hover:opacity-100"
+                              ? "border-white/[0.12] bg-[#121215] hover:border-white/25 hover:bg-[#151518]"
+                              : "border-white/[0.05] bg-[#0c0d10]/70 opacity-70 hover:opacity-100 hover:border-white/15"
                           )}
                         >
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-white font-sans">{layer.name}</span>
-                            <input
-                              type="checkbox"
-                              checked={isIncluded}
-                              onChange={(e) => {
-                                e.stopPropagation();
-                                const checked = e.target.checked;
-                                setLayerActive((prev) => ({ ...prev, [layer.id]: checked }));
-                                if (checked) {
-                                  setActiveLayerId(layer.id);
-                                }
-                              }}
-                              className="w-4 h-4 rounded border-white/20 bg-neutral-900 text-[#f3aa18] focus:ring-[#f3aa18] cursor-pointer"
-                              title="Toggle layer included in order"
-                            />
-                          </div>
-                          <div>
-                            {isIncluded ? (
-                              <span
+                          {/* Layer Header Accordion Button */}
+                          <div
+                            onClick={() => {
+                              setActiveLayerId(isOpen ? null : layer.id);
+                              if (!isOpen && !isIncluded) {
+                                setLayerActive((prev) => ({ ...prev, [layer.id]: true }));
+                              }
+                            }}
+                            className="w-full flex items-center justify-between p-3 sm:px-4 cursor-pointer select-none text-left gap-3"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              {/* Swatch preview icon / thumbnail */}
+                              <div className="w-8 h-8 rounded-lg border border-white/10 overflow-hidden bg-black/60 shrink-0 flex items-center justify-center relative">
+                                {isIncluded && selectedFinishObj?.thumbnail ? (
+                                  <img
+                                    src={selectedFinishObj.thumbnail}
+                                    alt={selectedFinishObj.name}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : isIncluded && selectedFinishObj?.color_hex ? (
+                                  <div
+                                    className="w-full h-full"
+                                    style={{ backgroundColor: selectedFinishObj.color_hex }}
+                                  />
+                                ) : (
+                                  <Palette className="w-4 h-4 text-neutral-500" />
+                                )}
+                              </div>
+
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs sm:text-sm font-bold text-white tracking-wide truncate">
+                                    {layer.name}
+                                  </span>
+                                  {layer.is_required && (
+                                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#f3aa18]/15 text-[#f3aa18] font-semibold border border-[#f3aa18]/30">
+                                      Required
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[11px] text-neutral-400 truncate flex items-center gap-1.5 mt-0.5">
+                                  {isIncluded ? (
+                                    finishName ? (
+                                      <>
+                                        <span className="text-neutral-200 font-medium truncate">{finishName}</span>
+                                        {selectedFinishObj?.group && (
+                                          <span className="text-[10px] text-neutral-500 font-mono">
+                                            ({selectedFinishObj.group})
+                                          </span>
+                                        )}
+                                      </>
+                                    ) : (
+                                      <span className="text-amber-400 font-medium">Click to select finish...</span>
+                                    )
+                                  ) : (
+                                    <span className="text-neutral-500 italic">Not Included (Skipped)</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              {/* Quick Include / Remove toggle button */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const nextIncluded = !isIncluded;
+                                  setLayerActive((prev) => ({ ...prev, [layer.id]: nextIncluded }));
+                                  if (nextIncluded) {
+                                    setActiveLayerId(layer.id);
+                                  } else if (isOpen) {
+                                    setActiveLayerId(null);
+                                  }
+                                }}
                                 className={clsx(
-                                  "text-[11px] font-mono px-2 py-0.5 rounded border block truncate",
-                                  finishName
-                                    ? "bg-white/[0.08] text-neutral-200 border-white/10"
-                                    : "bg-amber-500/10 text-amber-300 border-amber-500/30"
+                                  "px-2.5 py-1 rounded-full text-[10px] font-semibold transition-all cursor-pointer",
+                                  isIncluded
+                                    ? "bg-white/[0.08] hover:bg-rose-500/20 hover:text-rose-300 text-neutral-300 border border-white/10 hover:border-rose-500/30"
+                                    : "bg-[#f3aa18]/15 hover:bg-[#f3aa18]/25 text-[#f3aa18] border border-[#f3aa18]/30"
                                 )}
                               >
-                                {finishName || 'Select Finish...'}
-                              </span>
-                            ) : (
-                              <span className="text-[10px] font-mono text-neutral-500">
-                                Not Included
-                              </span>
-                            )}
+                                {isIncluded ? "Remove" : "+ Include"}
+                              </button>
+
+                              <div
+                                className={clsx(
+                                  "w-6 h-6 rounded-full flex items-center justify-center text-neutral-400 transition-transform duration-200",
+                                  isOpen && "rotate-180 text-[#f3aa18]"
+                                )}
+                              >
+                                <ChevronDown className="w-4 h-4" />
+                              </div>
+                            </div>
                           </div>
+
+                          {/* Embedded Swatch Selector when open */}
+                          {isOpen && (
+                            <div className="p-3.5 pt-2 border-t border-white/[0.08] bg-[#0f1013] space-y-3">
+                              {/* Header & Filter Controls */}
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  {finishGroups.map((grp) => (
+                                    <button
+                                      key={grp}
+                                      type="button"
+                                      onClick={() => setActiveFinishGroup(grp)}
+                                      className={clsx(
+                                        "px-2.5 py-1 rounded-md text-[11px] font-sans font-semibold transition-colors cursor-pointer capitalize",
+                                        activeFinishGroup === grp
+                                          ? "bg-[#f3aa18] text-[#08090b] font-bold"
+                                          : "bg-white/[0.05] text-neutral-400 hover:text-white"
+                                      )}
+                                    >
+                                      {grp}
+                                    </button>
+                                  ))}
+                                </div>
+
+                                <div className="relative">
+                                  <Search className="w-3.5 h-3.5 text-neutral-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                                  <input
+                                    type="text"
+                                    value={finishSearch}
+                                    onChange={(e) => setFinishSearch(e.target.value)}
+                                    placeholder="Search finish..."
+                                    className="pl-8 pr-2.5 py-1 rounded-lg bg-black/50 border border-white/10 text-xs text-white placeholder:text-neutral-500 focus:outline-none focus:border-[#f3aa18]"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Swatches Grid */}
+                              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2 max-h-56 overflow-y-auto custom-scrollbar pr-1">
+                                {filteredFinishes.map((finish) => {
+                                  const isSelected = finishName === finish.name;
+
+                                  return (
+                                    <div
+                                      key={finish.id || finish.slug}
+                                      onClick={() => handleApplyFinishToActiveLayer(finish, layer.id)}
+                                      className={clsx(
+                                        "p-2 rounded-xl border flex flex-col items-center gap-1.5 transition-all cursor-pointer relative text-center group",
+                                        isSelected
+                                          ? "border-[#f3aa18] bg-[#f3aa18]/20 shadow-xs ring-1 ring-[#f3aa18]"
+                                          : "border-white/[0.06] bg-[#141518] hover:border-white/20 hover:bg-white/[0.05]"
+                                      )}
+                                    >
+                                      <div className="w-9 h-9 rounded-lg overflow-hidden border border-white/10 flex items-center justify-center relative bg-black/60">
+                                        {finish.thumbnail ? (
+                                          <img
+                                            src={finish.thumbnail}
+                                            alt={finish.name}
+                                            className="w-full h-full object-cover"
+                                          />
+                                        ) : (
+                                          <div
+                                            className="w-full h-full"
+                                            style={{ backgroundColor: finish.color_hex || '#333' }}
+                                          />
+                                        )}
+                                        {isSelected && (
+                                          <div className="absolute inset-0 bg-[#f3aa18]/40 flex items-center justify-center">
+                                            <CheckCircle2 className="w-4 h-4 text-white" />
+                                          </div>
+                                        )}
+                                      </div>
+                                      <span className="text-[11px] font-sans font-semibold text-white truncate max-w-full">
+                                        {finish.name}
+                                      </span>
+                                      {finish.extra_price && finish.extra_price > 0 ? (
+                                        <span className="text-[9px] font-mono text-amber-400">
+                                          +{formatCurrency(finish.extra_price, order?.currency || 'IDR')}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
                   </div>
                 )}
+              </div>
 
-                {/* Coverage & Cutout Options (Rendered ONLY when supported by device) */}
-                {(hasCoverageOption || hasLogoOption || hasPencilOption) && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-3 border-t border-white/[0.06]">
+              {/* Coverage & Cutout Options (Rendered ONLY when supported by device) */}
+              {(hasCoverageOption || hasLogoOption || hasPencilOption) && (
+                <div className="p-4 rounded-xl border border-white/[0.06] bg-[#141417] space-y-3 font-sans">
+                  <div className="flex items-center justify-between border-b border-white/[0.06] pb-2">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300 flex items-center gap-2">
+                      <Sliders className="w-3.5 h-3.5 text-[#f3aa18]" />
+                      <span>Coverage & Cutout Options</span>
+                    </h4>
+                    {!hasActiveBackLayer && (
+                      <span className="text-[11px] text-amber-400/90 font-medium">
+                        Back skin not included: Coverage & Logo set to None
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                     {/* Coverage Option (ONLY for phones/devices that support 360 vs Model Cut) */}
                     {hasCoverageOption && (
-                      <div className="space-y-1.5 font-sans">
-                        <label className="block text-xs font-medium text-zinc-300">
-                          Coverage Option
-                        </label>
-                        <div className="flex items-center gap-1.5">
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="block text-xs font-medium text-zinc-300">
+                            Coverage Option
+                          </label>
+                          {!hasActiveBackLayer && (
+                            <span className="text-[10px] text-neutral-500 italic">No Back</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1">
                           <button
                             type="button"
+                            disabled={!hasActiveBackLayer}
                             onClick={() => setCoverage('Model Cut')}
                             className={clsx(
-                              "flex-1 py-1.5 px-2.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer text-center truncate",
-                              coverage === 'Model Cut'
+                              "flex-1 py-1.5 px-2 rounded-lg border text-[11px] font-semibold transition-all text-center truncate",
+                              !hasActiveBackLayer
+                                ? "bg-white/[0.02] border-white/[0.04] text-neutral-600 cursor-not-allowed"
+                                : coverage === 'Model Cut'
                                 ? "bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]"
-                                : "bg-[#101114] border-white/10 text-neutral-400 hover:text-white"
+                                : "bg-[#101114] border-white/10 text-neutral-400 hover:text-white cursor-pointer"
                             )}
                           >
                             Model Cut
                           </button>
                           <button
                             type="button"
+                            disabled={!hasActiveBackLayer}
                             onClick={() => setCoverage('360° Full Coverage')}
                             className={clsx(
-                              "flex-1 py-1.5 px-2.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer text-center truncate",
-                              coverage === '360° Full Coverage'
+                              "flex-1 py-1.5 px-2 rounded-lg border text-[11px] font-semibold transition-all text-center truncate",
+                              !hasActiveBackLayer
+                                ? "bg-white/[0.02] border-white/[0.04] text-neutral-600 cursor-not-allowed"
+                                : coverage === '360° Full Coverage'
+                                ? "bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]"
+                                : "bg-[#101114] border-white/10 text-neutral-400 hover:text-white cursor-pointer"
+                            )}
+                          >
+                            360° Wrap
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCoverage('None')}
+                            className={clsx(
+                              "py-1.5 px-2.5 rounded-lg border text-[11px] font-semibold transition-all text-center truncate cursor-pointer",
+                              coverage === 'None' || !hasActiveBackLayer
                                 ? "bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]"
                                 : "bg-[#101114] border-white/10 text-neutral-400 hover:text-white"
                             )}
                           >
-                            360° Coverage
+                            None
                           </button>
                         </div>
                       </div>
@@ -1588,34 +1790,57 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
 
                     {/* Logo Cutout (ONLY when device supports logo cutout) */}
                     {hasLogoOption && (
-                      <div className="space-y-1.5 font-sans">
-                        <label className="block text-xs font-medium text-zinc-300">
-                          Logo Cutout
-                        </label>
-                        <div className="flex items-center gap-1.5">
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="block text-xs font-medium text-zinc-300">
+                            Logo Cutout
+                          </label>
+                          {!hasActiveBackLayer && (
+                            <span className="text-[10px] text-neutral-500 italic">No Back</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1">
                           <button
                             type="button"
+                            disabled={!hasActiveBackLayer}
                             onClick={() => setLogoCutout('With Logo Cutout')}
                             className={clsx(
-                              "flex-1 py-1.5 px-2.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer text-center truncate",
-                              logoCutout === 'With Logo Cutout'
+                              "flex-1 py-1.5 px-2 rounded-lg border text-[11px] font-semibold transition-all text-center truncate",
+                              !hasActiveBackLayer
+                                ? "bg-white/[0.02] border-white/[0.04] text-neutral-600 cursor-not-allowed"
+                                : logoCutout === 'With Logo Cutout'
                                 ? "bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]"
-                                : "bg-[#101114] border-white/10 text-neutral-400 hover:text-white"
+                                : "bg-[#101114] border-white/10 text-neutral-400 hover:text-white cursor-pointer"
                             )}
                           >
                             With Logo
                           </button>
                           <button
                             type="button"
+                            disabled={!hasActiveBackLayer}
                             onClick={() => setLogoCutout('No Logo Cutout')}
                             className={clsx(
-                              "flex-1 py-1.5 px-2.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer text-center truncate",
-                              logoCutout === 'No Logo Cutout'
+                              "flex-1 py-1.5 px-2 rounded-lg border text-[11px] font-semibold transition-all text-center truncate",
+                              !hasActiveBackLayer
+                                ? "bg-white/[0.02] border-white/[0.04] text-neutral-600 cursor-not-allowed"
+                                : logoCutout === 'No Logo Cutout'
+                                ? "bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]"
+                                : "bg-[#101114] border-white/10 text-neutral-400 hover:text-white cursor-pointer"
+                            )}
+                          >
+                            No Logo
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setLogoCutout('None')}
+                            className={clsx(
+                              "py-1.5 px-2.5 rounded-lg border text-[11px] font-semibold transition-all text-center truncate cursor-pointer",
+                              logoCutout === 'None' || !hasActiveBackLayer
                                 ? "bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]"
                                 : "bg-[#101114] border-white/10 text-neutral-400 hover:text-white"
                             )}
                           >
-                            No Logo
+                            None
                           </button>
                         </div>
                       </div>
@@ -1623,16 +1848,16 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
 
                     {/* Pencil Cutout (ONLY when device supports pencil cutout) */}
                     {hasPencilOption && (
-                      <div className="space-y-1.5 font-sans">
+                      <div className="space-y-1.5">
                         <label className="block text-xs font-medium text-zinc-300">
                           Pencil Cutout
                         </label>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1">
                           <button
                             type="button"
                             onClick={() => setPencilCutout('With Pencil Cutout')}
                             className={clsx(
-                              "flex-1 py-1.5 px-2.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer text-center truncate",
+                              "flex-1 py-1.5 px-2 rounded-lg border text-[11px] font-semibold transition-all text-center truncate cursor-pointer",
                               pencilCutout === 'With Pencil Cutout'
                                 ? "bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]"
                                 : "bg-[#101114] border-white/10 text-neutral-400 hover:text-white"
@@ -1644,7 +1869,7 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
                             type="button"
                             onClick={() => setPencilCutout('No Pencil Cutout')}
                             className={clsx(
-                              "flex-1 py-1.5 px-2.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer text-center truncate",
+                              "flex-1 py-1.5 px-2 rounded-lg border text-[11px] font-semibold transition-all text-center truncate cursor-pointer",
                               pencilCutout === 'No Pencil Cutout'
                                 ? "bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]"
                                 : "bg-[#101114] border-white/10 text-neutral-400 hover:text-white"
@@ -1652,166 +1877,89 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
                           >
                             No Pencil
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => setPencilCutout('None')}
+                            className={clsx(
+                              "py-1.5 px-2.5 rounded-lg border text-[11px] font-semibold transition-all text-center truncate cursor-pointer",
+                              pencilCutout === 'None'
+                                ? "bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]"
+                                : "bg-[#101114] border-white/10 text-neutral-400 hover:text-white"
+                            )}
+                          >
+                            None
+                          </button>
                         </div>
                       </div>
                     )}
                   </div>
-                )}
-
-                {/* Additional Non-Layer Production Notes & Metadata (Collapsible) */}
-                <div className="pt-2 border-t border-white/[0.06]">
-                  <div className="flex items-center justify-between">
-                    <button
-                      type="button"
-                      onClick={() => setShowCustomNotesSection(!showCustomNotesSection)}
-                      className="text-xs text-neutral-400 hover:text-neutral-200 font-sans flex items-center gap-1.5 transition-colors cursor-pointer"
-                    >
-                      {showCustomNotesSection ? (
-                        <ChevronDown className="w-3.5 h-3.5 text-neutral-400" />
-                      ) : (
-                        <ChevronRight className="w-3.5 h-3.5 text-neutral-400" />
-                      )}
-                      <span>Additional Production Notes / Overrides ({customSpecs.length})</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowCustomNotesSection(true);
-                        handleAddCustomSpec();
-                      }}
-                      className="text-[11px] text-[#f3aa18] hover:text-[#f8ba3a] font-sans flex items-center gap-1 cursor-pointer"
-                    >
-                      <Plus className="w-3 h-3" />
-                      Add Note
-                    </button>
-                  </div>
-
-                  {showCustomNotesSection && (
-                    <div className="mt-3 space-y-2">
-                      {customSpecs.length === 0 ? (
-                        <p className="text-xs text-neutral-500 italic py-1">
-                          No extra notes or metadata attached to this item.
-                        </p>
-                      ) : (
-                        customSpecs.map((spec) => (
-                          <div key={spec.id} className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              value={spec.label}
-                              onChange={(e) => handleUpdateCustomSpec(spec.id, 'label', e.target.value)}
-                              placeholder="Note Label (e.g. Buyer Note, Cutting Instruction)"
-                              className="w-1/3 px-3 py-1.5 rounded-lg bg-[#0c0d10] border border-white/[0.08] text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]"
-                            />
-                            <input
-                              type="text"
-                              value={spec.value}
-                              onChange={(e) => handleUpdateCustomSpec(spec.id, 'value', e.target.value)}
-                              placeholder="Value"
-                              className="flex-1 px-3 py-1.5 rounded-lg bg-[#0c0d10] border border-white/[0.08] text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveCustomSpec(spec.id)}
-                              className="p-1.5 rounded-lg text-neutral-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
-                              title="Remove note"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
                 </div>
-              </div>
+              )}
 
-              {/* Finishes Swatches Grid for Active Layer */}
-              <div className="p-4 rounded-xl border border-white/[0.06] bg-[#141417] space-y-3.5">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/[0.06] pb-2">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-3.5 h-3.5 text-[#f3aa18]" />
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans">
-                      Finishes Catalog for {activeLayer?.name || 'Selected Layer'}
-                    </h4>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={finishSearch}
-                      onChange={(e) => setFinishSearch(e.target.value)}
-                      placeholder="Filter finishes..."
-                      className="px-2.5 py-1 rounded-lg bg-black/40 border border-white/10 text-xs text-white placeholder:text-neutral-500 focus:outline-none focus:border-[#f3aa18]"
-                    />
-                  </div>
+              {/* Additional Non-Layer Production Notes & Metadata (Collapsible) */}
+              <div className="p-4 rounded-xl border border-white/[0.06] bg-[#141417] space-y-3 font-sans">
+                <div className="flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => setShowCustomNotesSection(!showCustomNotesSection)}
+                    className="text-xs text-neutral-400 hover:text-neutral-200 font-sans flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    {showCustomNotesSection ? (
+                      <ChevronDown className="w-3.5 h-3.5 text-neutral-400" />
+                    ) : (
+                      <ChevronRight className="w-3.5 h-3.5 text-neutral-400" />
+                    )}
+                    <span>Additional Production Notes / Overrides ({customSpecs.length})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCustomNotesSection(true);
+                      handleAddCustomSpec();
+                    }}
+                    className="text-[11px] text-[#f3aa18] hover:text-[#f8ba3a] font-sans flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" />
+                    Add Note
+                  </button>
                 </div>
 
-                {/* Finish Group Filter Tabs (Strictly from real backend finish groups) */}
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {finishGroups.map((grp) => (
-                    <button
-                      key={grp}
-                      type="button"
-                      onClick={() => setActiveFinishGroup(grp)}
-                      className={clsx(
-                        "px-2.5 py-1 rounded-md text-[11px] font-sans font-semibold transition-colors cursor-pointer capitalize",
-                        activeFinishGroup === grp
-                          ? "bg-[#f3aa18] text-[#08090b] font-bold"
-                          : "bg-white/[0.05] text-neutral-400 hover:text-white"
-                      )}
-                    >
-                      {grp}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Swatches Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2 max-h-56 overflow-y-auto custom-scrollbar pr-1">
-                  {filteredFinishes.map((finish) => {
-                    const isSelected =
-                      activeLayerId && layerFinishes[activeLayerId] === finish.name;
-
-                    return (
-                      <div
-                        key={finish.id || finish.slug}
-                        onClick={() => handleApplyFinishToActiveLayer(finish)}
-                        className={clsx(
-                          "p-2 rounded-xl border flex flex-col items-center gap-1.5 transition-all cursor-pointer relative text-center group",
-                          isSelected
-                            ? "border-[#f3aa18] bg-[#f3aa18]/15 shadow-xs"
-                            : "border-white/[0.06] bg-[#101114] hover:border-white/20 hover:bg-white/[0.04]"
-                        )}
-                      >
-                        <div className="w-10 h-10 rounded-lg overflow-hidden border border-white/10 flex items-center justify-center relative bg-black/60">
-                          {finish.thumbnail ? (
-                            <img
-                              src={finish.thumbnail}
-                              alt={finish.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div
-                              className="w-full h-full"
-                              style={{ backgroundColor: finish.color_hex || '#333' }}
-                            />
-                          )}
-                          {isSelected && (
-                            <div className="absolute inset-0 bg-[#f3aa18]/30 flex items-center justify-center">
-                              <CheckCircle2 className="w-4 h-4 text-[#f3aa18]" />
-                            </div>
-                          )}
+                {showCustomNotesSection && (
+                  <div className="mt-3 space-y-2">
+                    {customSpecs.length === 0 ? (
+                      <p className="text-xs text-neutral-500 italic py-1">
+                        No extra notes or metadata attached to this item.
+                      </p>
+                    ) : (
+                      customSpecs.map((spec) => (
+                        <div key={spec.id} className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={spec.label}
+                            onChange={(e) => handleUpdateCustomSpec(spec.id, 'label', e.target.value)}
+                            placeholder="Note Label (e.g. Buyer Note, Cutting Instruction)"
+                            className="w-1/3 px-3 py-1.5 rounded-lg bg-[#0c0d10] border border-white/[0.08] text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]"
+                          />
+                          <input
+                            type="text"
+                            value={spec.value}
+                            onChange={(e) => handleUpdateCustomSpec(spec.id, 'value', e.target.value)}
+                            placeholder="Value"
+                            className="flex-1 px-3 py-1.5 rounded-lg bg-[#0c0d10] border border-white/[0.08] text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveCustomSpec(spec.id)}
+                            className="p-1.5 rounded-lg text-neutral-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                            title="Remove note"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
                         </div>
-                        <span className="text-[11px] font-sans font-semibold text-white truncate max-w-full">
-                          {finish.name}
-                        </span>
-                        {finish.extra_price && finish.extra_price > 0 ? (
-                          <span className="text-[9px] font-mono text-amber-400">
-                            +{formatCurrency(finish.extra_price, order.currency)}
-                          </span>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}

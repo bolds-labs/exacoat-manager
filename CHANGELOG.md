@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.204] - 2026-10-26
+
+### Web Configurator Parity, Vertical Layer Accordions & Cutout Suppression Invariants
+- **Web-Inspired Vertical Accordion Stack (`EditOrderItemModal.tsx` & `ManualWarrantyModal.tsx`)**:
+  - Replaced legacy detached finish catalog boxes and flat card grids with vertical accordion stacks mirroring the web storefront configurator layout (`device-skin-configurator.tsx`).
+  - Each skin layer is rendered as an accordion card with layer name, selected finish preview thumbnail/chip, quick "Include" / "Remove" (or "+ Claim") action toggle, and expand chevron.
+  - When expanded, the 26-finish swatch selector (with category tabs `All`, `Signature skins`, `Colors`, `Natural`, `Limited`, filter search, and visual swatch tiles) is embedded directly inside that specific layer card.
+- **Coverage & Cutout Suppression Invariants (Back Skin Dependency)**:
+  - Phone coverage options (`Model Cut` vs `Model 360° Wrap`) and Apple/device logo cutout options are physically dependent on having a back/body skin vinyl cut.
+  - If a customer or operator selects only an accent piece (e.g. Camera Accent only on iPhone 16 Pro, or Inside Palmrest only on a laptop without Top/Back skin), Coverage and Logo Cutout are irrelevant.
+  - In `EditOrderItemModal.tsx` and `ManualWarrantyModal.tsx`, Coverage and Logo Cutout options support an explicit `None` button.
+  - When no back/top/body skin layer is active or claimed (`!hasActiveBackLayer` / `!isBackSkinClaimed`):
+    - Informational notices alert the operator that Coverage and Logo are automatically set to None.
+    - Coverage and Logo options are auto-defaulted to `None`, and active selection pills reflect `None`.
+    - In `compiledSpecs` and warranty claim submission (`createManualWarrantyClaimDirect`), `Coverage` and `Logo` metadata lines are strictly suppressed when the back layer is not active or when set to `None`. This prevents corrupted cut instructions (e.g. `Coverage: Model Cut` on camera-only orders) from leaking into production sheets, packing slips, and order notes.
+
+---
+
 ## [0.1.201] - 2026-10-22
 
 ### Marketplace Warranty Claim Contact & Destination Address Prioritization

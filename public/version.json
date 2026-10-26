@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.203",
+  "version": "0.1.204",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.203.zip?v=0.1.203",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.204.zip?v=0.1.204",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-10-26T07:33:53.689Z",
+  "last_updated": "2026-10-26T07:56:37.881Z",
   "sections": {
-    "changelog": "### Version 0.1.203\n- Harmonize global finishes catalog to all 26 store finishes across Signature skins, Colors, Natural, and Limited\n- Intelligent device keyword and configurator profile resolution in EditOrderItemModal for marketplace and warranty items\n- Modern visual finish swatch grid in ManualWarrantyModal with category tabs, search, and elimination of hardcoded black-camo defaults"
+    "changelog": "### Version 0.1.204\n- Web-inspired vertical layer accordions with embedded finish swatches in EditOrderItemModal and ManualWarrantyModal\n- Support explicit None option for Coverage, Logo Cutout, and Pencil Cutout\n- Automatic suppression of Coverage and Logo options when Back skin is not included or claimed"
   }
 }

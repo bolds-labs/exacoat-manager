@@ -1639,11 +1639,23 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 
 ---
 
-## 55. Order & Warranty Configurator Parity and Visual Finishes Architecture
+## 55. Order & Warranty Configurator Parity, Vertical Layer Accordions & Cutout Suppression Invariants
 
 - **Global Finishes Catalog Parity**:
   - `DEFAULT_GLOBAL_FINISHES` in `src/lib/wordpressBridge.ts` is strictly synchronized to all 26 store finishes across the 4 official groups: `Signature skins`, `Colors`, `Natural`, and `Limited` (including `Burgundy`, `Titanium+`, `Everything`, `Pumpkin Orange`, and `Concrete`).
   - Pruned dead `http://localhost:3020` fallbacks, routing all finish fetch and toggle requests through `VITE_WEB_URL` (`https://exacoat.com`).
+- **Web Configurator Parity & Vertical Accordion Stack (`EditOrderItemModal.tsx` & `ManualWarrantyModal.tsx`)**:
+  - Replaced legacy detached finish catalog boxes and flat card grids with vertical accordion stacks mirroring the web storefront configurator (`device-skin-configurator.tsx`).
+  - Each skin layer is rendered as an accordion card with layer name, selected finish preview thumbnail/chip, quick "Include" / "Remove" (or "+ Claim") action toggle, and expand chevron.
+  - When expanded, the 26-finish swatch selector (with category tabs `All`, `Signature skins`, `Colors`, `Natural`, `Limited`, filter search, and visual swatch tiles) is embedded directly inside that specific layer card.
+- **Coverage & Cutout Suppression Invariant (Back Skin Dependency)**:
+  - Phone coverage options (`Model Cut` vs `Model 360° Wrap`) and Apple/device logo cutout options are physically dependent on having a back/body skin vinyl cut.
+  - If a customer or operator selects only an accent piece (e.g. Camera Accent only on iPhone 16 Pro, or Inside Palmrest only on a laptop without Top/Back skin), Coverage and Logo Cutout are irrelevant.
+  - In `EditOrderItemModal.tsx` and `ManualWarrantyModal.tsx`, Coverage and Logo Cutout options support an explicit `'None'` button.
+  - When no back/top/body skin layer is active or claimed (`!hasActiveBackLayer` / `!isBackSkinClaimed`):
+    - Informational notices alert the operator that Coverage and Logo are automatically set to None.
+    - Coverage and Logo options are auto-defaulted to `'None'`, and active selection pills reflect `None`.
+    - In `compiledSpecs` and warranty claim submission (`createManualWarrantyClaimDirect`), `Coverage` and `Logo` metadata lines are strictly suppressed when the back layer is not active or when set to `'None'`. This prevents corrupted cut instructions (e.g. `Coverage: Model Cut` on camera-only orders) from leaking into production sheets, packing slips, and order notes.
 - **Intelligent Device Keyword & Configurator Profile Resolution (`EditOrderItemModal.tsx`)**:
   - Marketplace orders (Shopee / TikTok) where `product_id` is a remote marketplace item ID or 0, and warranty replacement items with placeholder ID (`507022`), previously failed profile lookups and fell back to raw Form Mode with empty key-value text fields.
   - `loadProductConfig` implements intelligent device keyword extraction (`extractDeviceKeywords`) that strips listing noise (`[EXACOAT]`, `Warranty Replacement -`, `Skin HP`, `Garskin`, `Sticker`) to isolate the true device name (e.g. `iPhone 16 Pro`, `ROG Ally X`, `iPad Pro 11 M4`).
@@ -1652,7 +1664,5 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Resolves single-skin item variations (e.g. `Finish: Swarm` from Shopee) directly to the primary layer (`Back Skin`), eliminating unselected default states.
 - **Manual Warranty Visual Finishes & Elimination of Hardcoded Defaults (`ManualWarrantyModal.tsx`)**:
   - Eliminated hardcoded `'black-camo'` default assignments across initial state, coverage switches, and checkbox handlers. Claimed layers default to empty, requiring intentional finish selection or inheriting the order item's actual finish.
-  - Upgraded Mode A item and finish selection from a plain HTML `<select>` dropdown to an interactive swatch system:
-    - Layer cards show the selected finish with texture thumbnail or color swatch, finish name, and group badge.
-    - An interactive Finishes Catalog panel for the active layer provides category filter tabs (`All`, `Signature skins`, `Colors`, `Natural`, `Limited`), quick search, and visual swatch cards for all 26 finishes with instant 1-click application.
+  - Upgraded Mode A item and finish selection from a plain HTML `<select>` dropdown to an interactive swatch system with embedded per-layer swatch selectors, real-time search, and 1-click application.
 
