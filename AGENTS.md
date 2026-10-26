@@ -214,6 +214,33 @@ export function cleanItemTitle(name?: string): string {
 
 ---
 
+## 8b. Courier Auto-Selection, Tracking Pattern Detection & Select Trigger Sync
+
+- **The Radix Select Trigger Placeholder Invariant**:
+  - In `OrderDetailDrawer.tsx`, Radix UI `<Select value={courier}>` with an empty `<SelectValue placeholder="Select Courier" />` can fail to sync portaled label text during slide-over mount, causing the trigger to fall back to the placeholder text.
+  - The component must explicitly bind the active label as children inside `<SelectValue>`:
+    `{COURIER_PRESETS.find(p => p.value === courier)?.label || (courier === 'custom' ? (customCourierName.trim() || 'Custom / Other') : 'Select Courier')}`.
+  - `courier` state is strictly guaranteed to auto-select the matching courier preset upon drawer opening, falling back cleanly to `jne` instead of remaining empty.
+- **Tracking Number Pattern Recognition Invariant (`detectCourierFromTrackingNumber`)**:
+  - Tracking numbers possess non-overlapping structural signatures that deterministically resolve courier identity even if order meta is incomplete:
+    - `^00\d{10}$` or `TKP`/`SCP` -> SiCepat (`sicepat`)
+    - `^0[1-9]\d{13,15}$` or `TJNE`, `CGK`, `SOC`, `BDO`, `SUB`, `DPS` -> JNE Express (`jne`)
+    - `^(?:JP|JX|JS|JT|JD|JNT)\d{9,14}$` -> J&T Express (`jnt`)
+    - `^SPX(?:ID)?\w+` -> SPX Express (`spx`)
+    - `^1000\d{9,11}$` -> Anteraja (`anteraja`)
+    - `^(?:LP\d+|11-\d{2}-\d+)` -> Lion Parcel (`lion`)
+    - `^(?:NLID|SHP|NINJA)\w+` -> Ninja Xpress (`ninja`)
+    - `^[A-Z]{2}\d{9}ID$` or `^POS\d+` -> POS Indonesia (`pos`)
+    - `^(?:RS|RAY)\w+` -> Rayspeed Asia (`rayspeed`)
+    - `^(?:GOO|GRT)\w+` or `^9[2345]\d{20,24}$` -> Goorita / USPS (`goorita`)
+- **Multi-Source Courier Resolution Invariant (`resolveOrderCourier`)**:
+  - Prioritizes store pickup -> domestic Goorita consolidation -> explicit valid preset carrier IDs -> tracking number pattern recognition -> shipping lines (`method_title`, `method_id`, `instance_id`, `meta_data`) -> order meta (`_warranty_courier`, `_biteship_courier_code`, `_shipping_courier`, `carrier_id`) -> customer notes -> backend detected carriers -> default `jne`.
+  - Never prematurely bail to `custom` when `carrier_id` in meta is empty, generic, or `'custom'`; always inspect shipping lines and tracking patterns first.
+- **Backend Order Manager Sync (`class-order-manager.php`)**:
+  - `format_order_for_manager()` includes tracking number pattern detection, `$s_item->get_instance_id()`, `_warranty_courier`, and returns the full `shipping_lines` array.
+
+---
+
 ## 9. Financial Analytics and Reporting
 
 - **Strict Exclusion**: All sales reports, revenue aggregations, and financial analytics must strictly exclude cancelled, refunded, and unpaid orders across all sales channels (Webstore, Shopee, TikTok Shop).

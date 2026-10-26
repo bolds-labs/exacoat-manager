@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.206] - 2026-10-26
+
+### Courier Auto-Selection, Tracking Pattern Detection & Select Trigger Sync
+- **Tracking Number Pattern Detection (`detectCourierFromTrackingNumber`)**:
+  - Added deterministic regex pattern matcher in `orderUtils.ts` recognizing Indonesian and international carrier tracking numbers:
+    - SiCepat: 12-digit numeric starting with `00` (e.g. `001667226045`), or `TKP`/`SCP` prefixes.
+    - JNE: 15-16 digit numeric starting with `01`..`09` (e.g. `0703632100098334`), or `TJNE`, `CGK`, `SOC`, `BDO`, `SUB`, `DPS` prefixes.
+    - J&T Express: `JP`, `JX`, `JS`, `JT`, `JD`, `JNT` followed by digits.
+    - SPX Express: `SPXID` or `SPX` prefixes.
+    - Anteraja: 13-14 digits starting with `1000`.
+    - Lion Parcel: `LP` prefix or `11-xx-xx` format.
+    - Ninja Xpress: `NLID`, `SHP`, or `NINJA` prefixes.
+    - POS Indonesia: Standard UPU barcode (`[A-Z]{2}\d{9}ID`, e.g. `RR067145554ID`) or `POS` prefix.
+    - Rayspeed Asia: `RS` or `RAY` prefixes.
+    - Goorita / USPS: `GOO`, `GRT`, or 22-digit USPS tracking numbers.
+- **Deepened Courier Resolution (`resolveOrderCourier`)**:
+  - Expanded search sources to inspect all shipping line items (`method_title`, `method_id`, `instance_id`, `meta_data`), order meta (`_warranty_courier`, `_biteship_courier_code`, `_shipping_courier`, `carrier_id`, etc.), customer notes, and tracking number patterns.
+  - Eliminated premature fallback to `custom` when `carrier_id` in meta is empty or generic, allowing true carrier to resolve from customer shipping method or tracking number format.
+- **Radix Select Trigger Placeholder Sync (`OrderDetailDrawer.tsx`)**:
+  - Resolved bug where Radix UI's `<SelectValue placeholder="Select Courier" />` failed to portal the selected item label into the trigger when the select is mounted closed, causing the trigger to display the placeholder "Select Courier".
+  - Explicitly passed the resolved courier label as children to `<SelectValue>`:
+    `{COURIER_PRESETS.find(p => p.value === courier)?.label || (courier === 'custom' ? (customCourierName.trim() || 'Custom / Other') : 'Select Courier')}`.
+  - Initialized and synchronized `courier` state with prioritized resolution (`carrierId` preset -> tracking pattern -> resolved courier -> fallback `jne`), ensuring the dropdown is always auto-selected when an order is opened.
+- **Backend Order Manager (`class-order-manager.php`)**:
+  - Added tracking number regex pattern detection in `format_order_for_manager()`.
+  - Added `$s_item->get_instance_id()` (e.g. `sicepat_reg`, `jne_reg`), `_warranty_courier`, and `_biteship_courier_code` to courier search texts.
+  - Added full `shipping_lines` array to formatted order data.
+
+---
+
 ## [0.1.205] - 2026-10-26
 
 ### Wide Rounded Capsule Pill Swatches (exacoat-web Parity)

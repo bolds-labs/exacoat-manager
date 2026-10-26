@@ -242,6 +242,68 @@ export function normalizeCourierSlug(raw?: string): string {
 }
 
 /**
+ * Detects the courier preset from a given tracking number pattern.
+ * Supports Indonesian and common international courier tracking numbers.
+ */
+export function detectCourierFromTrackingNumber(rawTracking?: string): { courierId: string; courierName: string } | null {
+  if (!rawTracking) return null;
+  const t = String(rawTracking).trim().toUpperCase();
+  if (!t || t === '⚠️' || t.startsWith('FIELD_')) return null;
+
+  // SiCepat: 12 digits starting with '00', or prefix 'TKP', 'SCP'
+  if (/^00\d{10}$/.test(t) || /^(?:TKP|SCP)\w+/i.test(t)) {
+    return { courierId: 'sicepat', courierName: 'SiCepat' };
+  }
+
+  // JNE: 15-16 numeric digits starting with 01..09, or prefix TJNE, CGK, SOC, BDO, SUB, DPS, JNE
+  if (/^0[1-9]\d{13,15}$/.test(t) || /^(?:TJNE|CGK|SOC|BDO|SUB|DPS|JNE)\w+/i.test(t)) {
+    return { courierId: 'jne', courierName: 'JNE Express' };
+  }
+
+  // J&T Express: JP, JX, JS, JT, JD, JNT followed by 9-14 digits
+  if (/^(?:JP|JX|JS|JT|JD|JNT)\d{9,14}$/i.test(t)) {
+    return { courierId: 'jnt', courierName: 'J&T Express' };
+  }
+
+  // SPX (Shopee Express): SPXID or SPX prefix
+  if (/^SPX(?:ID)?\w+/i.test(t)) {
+    return { courierId: 'spx', courierName: 'SPX Express' };
+  }
+
+  // Anteraja: 13-14 digits starting with 1000
+  if (/^1000\d{9,11}$/.test(t)) {
+    return { courierId: 'anteraja', courierName: 'Anteraja' };
+  }
+
+  // Lion Parcel: LP prefix or 11-xx-xx format
+  if (/^(?:LP\d+|11-\d{2}-\d+)/i.test(t)) {
+    return { courierId: 'lion', courierName: 'Lion Parcel' };
+  }
+
+  // Ninja Xpress: NLID, SHP, NINJA
+  if (/^(?:NLID|SHP|NINJA)\w+/i.test(t)) {
+    return { courierId: 'ninja', courierName: 'Ninja Xpress' };
+  }
+
+  // POS Indonesia: standard international UPU barcode (2 letters + 9 digits + ID, e.g. RR067145554ID) or POS prefix
+  if (/^[A-Z]{2}\d{9}ID$/i.test(t) || /^POS\d+/i.test(t)) {
+    return { courierId: 'pos', courierName: 'POS Indonesia' };
+  }
+
+  // Rayspeed: RS, RAY
+  if (/^(?:RS|RAY)\w+/i.test(t)) {
+    return { courierId: 'rayspeed', courierName: 'Rayspeed Asia' };
+  }
+
+  // Goorita / USPS
+  if (/^(?:GOO|GRT)\w+/i.test(t) || /^9[2345]\d{20,24}$/.test(t)) {
+    return { courierId: 'goorita', courierName: 'Goorita Send USA' };
+  }
+
+  return null;
+}
+
+/**
  * Intelligently resolves the intended shipping courier for an order.
  * Inspects customer note (e.g. "Shipping Courier: SICEPAT - BEST"),
  * shipping method name, shipping lines, and order tracking metadata.
@@ -298,9 +360,11 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
   // 3. Check tracking object if already saved on the order with a valid tracking number
   const trackingNumber = String(order.tracking?.tracking_number || order.tracking_number || '').trim();
   const savedCarrierId = String(order.tracking?.carrier_id || order.carrier_id || '').toLowerCase().trim();
+  const detectedFromTrackingNum = detectCourierFromTrackingNumber(trackingNumber);
+
   if (trackingNumber && trackingNumber !== '⚠️' && !trackingNumber.startsWith('field_')) {
     const normCarrierId = normalizeCourierSlug(savedCarrierId);
-    if (savedCarrierId && normCarrierId !== 'custom' && PRESET_MAP[normCarrierId]) {
+    if (savedCarrierId && savedCarrierId !== 'custom' && savedCarrierId !== 'unknown' && normCarrierId !== 'custom' && PRESET_MAP[normCarrierId]) {
       const slTitle = String(order.shipping_lines?.[0]?.method_title || order.shipping_method_name || (order as any).shipping_courier_name || '');
       const serviceMatch = slTitle.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*[-:]\s*([A-Za-z0-9_\s]+)/i) ||
                            slTitle.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*\(([A-Za-z0-9_\s]+)\)/i);
@@ -314,7 +378,7 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
     }
     const savedCourier = String(order.tracking?.courier || (order as any).shipping_courier_name || '').trim();
     const normSavedCourier = normalizeCourierSlug(savedCourier);
-    if (savedCourier && normSavedCourier !== 'custom' && PRESET_MAP[normSavedCourier]) {
+    if (savedCourier && savedCourier !== 'custom' && savedCourier !== 'Custom Courier' && normSavedCourier !== 'custom' && PRESET_MAP[normSavedCourier]) {
       const serviceMatch = savedCourier.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*[-:]\s*([A-Za-z0-9_\s]+)/i) ||
                            savedCourier.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*\(([A-Za-z0-9_\s]+)\)/i);
       return {
@@ -323,13 +387,6 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
         serviceName: serviceMatch ? serviceMatch[1].trim().toUpperCase() : undefined,
         rawMatch: savedCourier,
         isCustom: false,
-      };
-    }
-    if (savedCarrierId === 'custom' || (savedCourier && savedCourier !== 'Express Courier' && savedCourier !== 'Standard' && normSavedCourier === 'custom')) {
-      return {
-        courierId: 'custom',
-        courierName: (savedCourier && savedCourier !== 'Express Courier' && savedCourier !== 'Standard') ? savedCourier : 'Custom Courier',
-        isCustom: true,
       };
     }
   }
@@ -354,11 +411,19 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
   if (order.shipping_method_name) candidateTexts.push(String(order.shipping_method_name));
   if (order.shipping_method) candidateTexts.push(String(order.shipping_method));
 
-  // Shipping lines items
+  // Shipping lines items (method_title, method_id, instance_id, and meta_data)
   if (Array.isArray(order.shipping_lines)) {
     for (const sl of order.shipping_lines) {
       if (sl?.method_title) candidateTexts.push(String(sl.method_title));
       if (sl?.method_id) candidateTexts.push(String(sl.method_id));
+      if (sl?.instance_id) candidateTexts.push(String(sl.instance_id));
+      if (Array.isArray(sl?.meta_data)) {
+        for (const meta of sl.meta_data) {
+          if (meta?.key && /courier|carrier|service/i.test(meta.key) && meta.value && typeof meta.value === 'string') {
+            candidateTexts.push(meta.value);
+          }
+        }
+      }
     }
   }
 
@@ -366,7 +431,7 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
   if (Array.isArray(order.meta_data)) {
     for (const m of order.meta_data) {
       const k = String(m?.key || '').toLowerCase();
-      if (k === 'carrier_id' || k === 'courier' || k === '_biteship_courier_code' || k === 'shipping_carrier') {
+      if (/carrier|courier|biteship|tracking_provider/i.test(k)) {
         if (m?.value && typeof m.value === 'string') candidateTexts.push(m.value);
       }
     }
@@ -507,7 +572,34 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
     }
   }
 
-  // 5. Fallback to tracking courier if non-preset custom name
+  // 5. Fallback to tracking number pattern if recognized
+  if (detectedFromTrackingNum) {
+    return {
+      courierId: detectedFromTrackingNum.courierId,
+      courierName: detectedFromTrackingNum.courierName,
+      isCustom: false,
+    };
+  }
+
+  // 6. Fallback to tracking courier if non-preset custom name
+  if (order.tracking?.courier && order.tracking.courier !== 'Express Courier' && order.tracking.courier !== 'Standard' && order.tracking.courier !== 'Custom Courier') {
+    const norm = normalizeCourierSlug(order.tracking.courier);
+    if (norm !== 'custom' && PRESET_MAP[norm]) {
+      return {
+        courierId: norm,
+        courierName: PRESET_MAP[norm],
+        isCustom: false,
+      };
+    }
+    return {
+      courierId: 'custom',
+      courierName: order.tracking.courier,
+      isCustom: true,
+    };
+  }
+
+  // Default fallback
+  return { courierId: 'jne', courierName: 'JNE Express', isCustom: false };
   if (order.tracking?.courier && order.tracking.courier !== 'Express Courier' && order.tracking.courier !== 'Standard') {
     const norm = normalizeCourierSlug(order.tracking.courier);
     if (norm !== 'custom' && PRESET_MAP[norm]) {

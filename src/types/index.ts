@@ -288,7 +288,7 @@ export interface Order {
   review_invited_at?: string | null;
   number?: string;
   line_items?: OrderItem[];
-  shipping_lines?: Array<{ id?: any; method_id?: string; method_title?: string; total?: string }>;
+  shipping_lines?: Array<{ id?: any; method_id?: string; method_title?: string; instance_id?: string; total?: string; meta_data?: any[] }>;
   meta_data?: Array<{ id?: number; key: string; value: any }>;
   rma?: OrderRmaDetails | null;
   has_warranty_claim?: boolean;

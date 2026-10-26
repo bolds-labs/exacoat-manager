@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Wide rounded capsule pill swatch styling matching exacoat-web with aspect-[1.85/1] pills and compact uppercase typography\n- Web-inspired vertical layer accordions with embedded finish swatches in EditOrderItemModal and ManualWarrantyModal\n- Support explicit None option for Coverage, Logo Cutout, and Pencil Cutout`,
+      changelog: `### Version ${version}\n- Auto-select courier dropdown based on customer shipping method, shipping lines, and tracking number pattern recognition (SiCepat 00..., JNE 07..., J&T, POS ID, Lion, SPX, Anteraja)\n- Fix Radix Select trigger placeholder fallback by explicitly binding selected courier label in OrderDetailDrawer\n- Enrich order shipping lines and courier detection in WordPress exacoat-core backend`,
     },
   };
 

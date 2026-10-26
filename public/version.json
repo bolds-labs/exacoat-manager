@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.205",
+  "version": "0.1.206",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.205.zip?v=0.1.205",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.206.zip?v=0.1.206",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-10-26T08:08:17.963Z",
+  "last_updated": "2026-10-26T10:48:31.698Z",
   "sections": {
-    "changelog": "### Version 0.1.205\n- Wide rounded capsule pill swatch styling matching exacoat-web with aspect-[1.85/1] pills and compact uppercase typography\n- Web-inspired vertical layer accordions with embedded finish swatches in EditOrderItemModal and ManualWarrantyModal\n- Support explicit None option for Coverage, Logo Cutout, and Pencil Cutout"
+    "changelog": "### Version 0.1.206\n- Auto-select courier dropdown based on customer shipping method, shipping lines, and tracking number pattern recognition (SiCepat 00..., JNE 07..., J&T, POS ID, Lion, SPX, Anteraja)\n- Fix Radix Select trigger placeholder fallback by explicitly binding selected courier label in OrderDetailDrawer\n- Enrich order shipping lines and courier detection in WordPress exacoat-core backend"
   }
 }

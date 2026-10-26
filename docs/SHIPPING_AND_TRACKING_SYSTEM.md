@@ -271,3 +271,48 @@ Exacoat operations maintain three standard delivery regions:
 * **Settings Page Tab Persistence**: When saving settings in WordPress admin, the active tab (`data-pane`) is stored in `sessionStorage` and URL hash (`#shipping`), preserving the active view across form POST redirects.
 * **Non-Blocking Form Submission**: Save buttons defer disabling via `setTimeout` during the submit event, preventing browser HTTP request cancellation.
 * **Single Form Hierarchy Invariant**: All shipping zone rows explicitly declare `form="exacoatSettingsForm"` to ensure full payload submission without browser nesting cancellation.
+
+---
+
+## 11. Courier Auto-Selection, Tracking Pattern Detection & Select Trigger Sync
+
+### The Courier Placeholder Bug
+In `OrderDetailDrawer.tsx`, the Radix UI Select component (`<Select value={courier}>`) used `<SelectValue placeholder="Select Courier" />` without children. In Radix UI, when a select is closed on mount, it attempts to portal the selected item label from a hidden `DocumentFragment`. In animated slide-over drawers or when the value initializes prior to DOM portal attachment, the portal fails, causing the component to fall back to the placeholder text `"Select Courier"`.
+
+### The Solution: Direct Child Binding
+Pass the resolved courier preset label directly as a child to `SelectValue`:
+```tsx
+<Select value={courier || 'jne'} onValueChange={handleCourierChange}>
+  <SelectTrigger className="...">
+    <SelectValue placeholder="Select Courier">
+      {COURIER_PRESETS.find(preset => preset.value === courier)?.label || (courier === 'custom' ? (customCourierName.trim() || 'Custom / Other') : 'Select Courier')}
+    </SelectValue>
+  </SelectTrigger>
+  ...
+</Select>
+```
+This guarantees that the trigger renders the active courier label directly and immediately, with zero reliance on portal timing.
+
+### Tracking Number Pattern Detection (`detectCourierFromTrackingNumber`)
+Even when courier metadata is missing or corrupted, tracking numbers themselves have distinct, non-overlapping format signatures:
+* **SiCepat**: 12-digit numeric starting with `00` (e.g. `001667226045`), or `TKP`/`SCP` prefixes.
+* **JNE Express**: 15-16 digit numeric starting with `01`..`09` (e.g. `0703632100098334`), or `TJNE`, `CGK`, `SOC`, `BDO`, `SUB`, `DPS` prefixes.
+* **J&T Express**: `JP`, `JX`, `JS`, `JT`, `JD`, `JNT` followed by 9-14 digits.
+* **SPX Express**: `SPXID` or `SPX` prefixes.
+* **Anteraja**: 13-14 digits starting with `1000`.
+* **Lion Parcel**: `LP` prefix or `11-xx-xx` format.
+* **Ninja Xpress**: `NLID`, `SHP`, or `NINJA` prefixes.
+* **POS Indonesia**: Standard UPU barcode (`[A-Z]{2}\d{9}ID`, e.g. `RR067145554ID`) or `POS` prefix.
+* **Rayspeed Asia**: `RS` or `RAY` prefixes.
+* **Goorita / USPS**: `GOO`, `GRT`, or 22-digit USPS tracking numbers.
+
+### Deepened Multi-Source Courier Resolution (`resolveOrderCourier`)
+Fulfillment extraction evaluates sources in prioritized order:
+1. **Store Pickup**: If pickup flag or store pickup keyword detected, resolves to SMB pickup.
+2. **Consolidation**: Domestic legs to Goorita USA consolidation hub default to JNE.
+3. **Tracking Pattern & Existing Carrier ID**: Valid tracking numbers are parsed with `detectCourierFromTrackingNumber`. Explicit preset carrier IDs are normalized and mapped.
+4. **All Shipping Lines**: Method titles, method IDs, instance IDs (e.g. `sicepat_reg`, `jne_reg`), and metadata items are searched.
+5. **Order Meta**: Checked for `_warranty_courier`, `_biteship_courier_code`, `_shipping_courier`, `carrier_id`, `_carrier_id`.
+6. **Customer Note**: Explicit notes (e.g. `Shipping Courier: SICEPAT - REG`) are parsed.
+7. **Backend Data**: `shipping_courier_name` and `detected_courier`.
+8. **Fallback**: Defaults to `jne` instead of `custom` when standard delivery is specified.

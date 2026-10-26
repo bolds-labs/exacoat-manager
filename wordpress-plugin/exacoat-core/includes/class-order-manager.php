@@ -1925,7 +1925,15 @@ class Exacoat_Order_Manager {
 			$search_texts[] = $ship_method;
 		}
 		foreach ( $order->get_items( 'shipping' ) as $s_item ) {
-			$search_texts[] = (string) $s_item->get_method_title() . ' ' . (string) $s_item->get_method_id();
+			$search_texts[] = (string) $s_item->get_method_title() . ' ' . (string) $s_item->get_method_id() . ' ' . (string) $s_item->get_instance_id();
+		}
+		$w_courier = (string) $order->get_meta( '_warranty_courier' );
+		if ( ! empty( $w_courier ) ) {
+			$search_texts[] = $w_courier;
+		}
+		$bite_code = (string) $order->get_meta( '_biteship_courier_code' );
+		if ( ! empty( $bite_code ) ) {
+			$search_texts[] = $bite_code;
 		}
 
 		foreach ( $search_texts as $st ) {
@@ -1933,9 +1941,9 @@ class Exacoat_Order_Manager {
 			$st_lower = strtolower( $st_clean );
 
 			if ( empty( $detected_service ) ) {
-				if ( preg_match( '/(?:jne|sicepat|pos|goorita|dhl|fedex|lion|j&t|jnt)\s*[-:]\s*([A-Za-z0-9_\s]+)/i', $st_clean, $sm ) ) {
+				if ( preg_match( '/(?:jne|sicepat|pos|goorita|dhl|fedex|lion|j&t|jnt|spx|anteraja|ninja|rayspeed)\s*[-:]\s*([A-Za-z0-9_\s]+)/i', $st_clean, $sm ) ) {
 					$detected_service = strtoupper( trim( $sm[1] ) );
-				} elseif ( preg_match( '/(?:jne|sicepat|pos|goorita|dhl|fedex|lion|j&t|jnt)\s*\(([A-Za-z0-9_\s]+)\)/i', $st_clean, $sm ) ) {
+				} elseif ( preg_match( '/(?:jne|sicepat|pos|goorita|dhl|fedex|lion|j&t|jnt|spx|anteraja|ninja|rayspeed)\s*\(([A-Za-z0-9_\s]+)\)/i', $st_clean, $sm ) ) {
 					$detected_service = strtoupper( trim( $sm[1] ) );
 				}
 			}
@@ -1955,9 +1963,41 @@ class Exacoat_Order_Manager {
 					$detected_carrier = 'dhl';
 				} elseif ( str_contains( $st_lower, 'fedex' ) ) {
 					$detected_carrier = 'fedex';
+				} elseif ( str_contains( $st_lower, 'rayspeed' ) ) {
+					$detected_carrier = 'rayspeed';
+				} elseif ( str_contains( $st_lower, 'spx' ) || str_contains( $st_lower, 'shopee' ) ) {
+					$detected_carrier = 'spx';
+				} elseif ( str_contains( $st_lower, 'anteraja' ) ) {
+					$detected_carrier = 'anteraja';
+				} elseif ( str_contains( $st_lower, 'ninja' ) ) {
+					$detected_carrier = 'ninja';
 				} elseif ( str_contains( $st_lower, 'jne' ) ) {
 					$detected_carrier = 'jne';
 				}
+			}
+		}
+
+		// Also check tracking number pattern if carrier is still unknown
+		if ( empty( $detected_carrier ) && ! empty( $tracking_code ) ) {
+			$t_upper = strtoupper( trim( (string) $tracking_code ) );
+			if ( preg_match( '/^00\d{10}$/', $t_upper ) || preg_match( '/^(?:TKP|SCP)\w+/i', $t_upper ) ) {
+				$detected_carrier = 'sicepat';
+			} elseif ( preg_match( '/^0[1-9]\d{13,15}$/', $t_upper ) || preg_match( '/^(?:TJNE|CGK|SOC|BDO|SUB|DPS|JNE)\w+/i', $t_upper ) ) {
+				$detected_carrier = 'jne';
+			} elseif ( preg_match( '/^(?:JP|JX|JS|JT|JD|JNT)\d{9,14}$/i', $t_upper ) ) {
+				$detected_carrier = 'jnt';
+			} elseif ( preg_match( '/^SPX(?:ID)?\w+/i', $t_upper ) ) {
+				$detected_carrier = 'spx';
+			} elseif ( preg_match( '/^1000\d{9,11}$/', $t_upper ) ) {
+				$detected_carrier = 'anteraja';
+			} elseif ( preg_match( '/^(?:LP\d+|11-\d{2}-\d+)/i', $t_upper ) ) {
+				$detected_carrier = 'lion';
+			} elseif ( preg_match( '/^[A-Z]{2}\d{9}ID$/i', $t_upper ) || preg_match( '/^POS\d+/i', $t_upper ) ) {
+				$detected_carrier = 'pos';
+			} elseif ( preg_match( '/^(?:RS|RAY)\w+/i', $t_upper ) ) {
+				$detected_carrier = 'rayspeed';
+			} elseif ( preg_match( '/^(?:GOO|GRT)\w+/i', $t_upper ) || preg_match( '/^9[2345]\d{20,24}$/', $t_upper ) ) {
+				$detected_carrier = 'goorita';
 			}
 		}
 
@@ -2346,6 +2386,19 @@ class Exacoat_Order_Manager {
 		// Order Notes & Timeline history
 		$notes_data = self::get_formatted_order_notes( $order_id );
 
+		// Shipping Lines Data
+		$shipping_lines_data = [];
+		foreach ( $order->get_items( 'shipping' ) as $s_item_id => $s_item ) {
+			$shipping_lines_data[] = [
+				'id'           => $s_item_id,
+				'method_title' => $s_item->get_method_title(),
+				'method_id'    => $s_item->get_method_id(),
+				'instance_id'  => $s_item->get_instance_id(),
+				'total'        => (string) $s_item->get_total(),
+				'total_tax'    => (string) $s_item->get_total_tax(),
+			];
+		}
+
 		$shipping = self::clean_address_data( $order->get_address( 'shipping' ) );
 		$billing  = self::clean_address_data( $order->get_address( 'billing' ) );
 
@@ -2534,6 +2587,7 @@ class Exacoat_Order_Manager {
 			'payment_method_title'          => $order->get_payment_method_title(),
 			'shipping'                   => $shipping,
 			'billing'                    => $billing,
+			'shipping_lines'             => $shipping_lines_data,
 			'items'                      => $items_data,
 			'item_count'                 => count( $items_data ),
 			'tracking'                   => ( ! $is_store_pickup && is_array( $tracking ) ) ? $tracking : null,

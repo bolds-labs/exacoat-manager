@@ -61,7 +61,7 @@ import {
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { extractItemSpecs } from '../../lib/orderItems';
-import { isStorePickupOrder, toggleLocalStorePickupOrder, resolveOrderCourier, getOrderCourierDisplay, formatOrderNumber, cleanOrderNumber, normalizeCourierSlug } from '../../lib/orderUtils';
+import { isStorePickupOrder, toggleLocalStorePickupOrder, resolveOrderCourier, getOrderCourierDisplay, formatOrderNumber, cleanOrderNumber, normalizeCourierSlug, detectCourierFromTrackingNumber } from '../../lib/orderUtils';
 import { resolveCountryName } from '../../lib/countries';
 import { getWpBaseUrl } from '../../lib/wordpressBridge';
 import { GooritaBookingModal } from './GooritaBookingModal';
@@ -415,24 +415,50 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
             carrierId = 'jne';
           }
 
-          // Prioritize explicit carrierId from tracking/order, falling back to resolvedCourier
-          const rawEffective = (carrierId && (!isConsolidation || carrierId !== 'goorita'))
-            ? carrierId
-            : (resolvedCourier.courierId || 'jne');
-          const normalizedSlug = normalizeCourierSlug(rawEffective);
-          const effectiveCarrierId = (normalizedSlug !== 'custom')
-            ? normalizedSlug
-            : rawEffective;
+          // Detect courier from tracking number pattern if available
+          const trackingCarrierDetected = detectCourierFromTrackingNumber(validTrack || order?.tracking?.tracking_number || (order as any)?.tracking_number);
 
-          const isPreset = COURIER_PRESETS.some(p => p.value === effectiveCarrierId && p.value !== 'custom');
-          
-          if (isPreset) {
-            setCourier(effectiveCarrierId);
+          // Determine high confidence target courier
+          let targetCourier = '';
+
+          // 1. If explicit carrierId is a known preset
+          if (carrierId && carrierId !== 'custom' && carrierId !== 'unknown') {
+            const normCarrierId = normalizeCourierSlug(carrierId);
+            if (normCarrierId !== 'custom' && COURIER_PRESETS.some(p => p.value === normCarrierId && p.value !== 'custom')) {
+              targetCourier = normCarrierId;
+            }
+          }
+
+          // 2. Fall back to tracking number pattern
+          if (!targetCourier && trackingCarrierDetected) {
+            targetCourier = trackingCarrierDetected.courierId;
+          }
+
+          // 3. Fall back to resolvedCourier from shipping method / lines / notes
+          if (!targetCourier && resolvedCourier.courierId && resolvedCourier.courierId !== 'custom' && !resolvedCourier.isCustom) {
+            const normResolved = normalizeCourierSlug(resolvedCourier.courierId);
+            if (normResolved !== 'custom' && COURIER_PRESETS.some(p => p.value === normResolved && p.value !== 'custom')) {
+              targetCourier = normResolved;
+            }
+          }
+
+          // 4. Fall back to custom if resolved as custom or explicit custom
+          if (!targetCourier && (resolvedCourier.isCustom || carrierId === 'custom')) {
+            targetCourier = 'custom';
+          }
+
+          // 5. Final fallback to jne
+          if (!targetCourier) {
+            targetCourier = 'jne';
+          }
+
+          if (targetCourier !== 'custom') {
+            setCourier(targetCourier);
             setCustomCourierName('');
             setCustomTrackingUrl('');
           } else {
             setCourier('custom');
-            const savedCustom = (order.tracking.courier && order.tracking.courier !== 'Express Courier' && order.tracking.courier !== 'Standard' && order.tracking.courier !== 'JNE Express')
+            const savedCustom = (order.tracking.courier && order.tracking.courier !== 'Express Courier' && order.tracking.courier !== 'Standard' && order.tracking.courier !== 'JNE Express' && order.tracking.courier !== 'Custom Courier')
               ? order.tracking.courier
               : (resolvedCourier.isCustom ? resolvedCourier.courierName : '');
             setCustomCourierName(savedCustom);
@@ -1861,9 +1887,11 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                     return null;
                   })()}
                 </div>
-                <Select value={courier} onValueChange={handleCourierChange}>
+                <Select value={courier || 'jne'} onValueChange={handleCourierChange}>
                   <SelectTrigger className="w-full h-10 px-3.5 rounded-xl bg-zinc-50 dark:bg-[#141414] border-zinc-200 dark:border-white/[0.08] text-xs text-zinc-900 dark:text-white">
-                    <SelectValue placeholder="Select Courier" />
+                    <SelectValue placeholder="Select Courier">
+                      {COURIER_PRESETS.find(preset => preset.value === courier)?.label || (courier === 'custom' ? (customCourierName.trim() || 'Custom / Other') : 'Select Courier')}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {COURIER_PRESETS.map(preset => (

@@ -37,7 +37,7 @@ import {
 import { extractItemSpecs } from './orderItems';
 import { normalizeDeviceName } from './seoUtils';
 import { decodeHtmlEntities, decodeDeep, formatCleanText, cleanAddressObject } from './utils';
-import { normalizeCourierSlug, CANONICAL_COURIER_MAP } from './orderUtils';
+import { normalizeCourierSlug, CANONICAL_COURIER_MAP, detectCourierFromTrackingNumber, resolveOrderCourier } from './orderUtils';
 
 
 // ==========================================
@@ -935,13 +935,21 @@ function enrichOrder(order: any): Order {
     }
 
     if (foundTrackingNum) {
+      const detectedByTrack = detectCourierFromTrackingNumber(foundTrackingNum);
+      const resolvedFallback = resolveOrderCourier(order);
       const rawCourier = carrierMeta?.value
         ? String(carrierMeta.value)
-        : (order.shipping_courier_name || order.shipping_lines?.[0]?.method_title || order.shipping_method_name || order.detected_courier || 'Standard');
-      const normSlug = normalizeCourierSlug(rawCourier);
+        : (order.shipping_courier_name || order.shipping_lines?.[0]?.method_title || order.shipping_method_name || order.detected_courier || (detectedByTrack ? detectedByTrack.courierName : (resolvedFallback.courierName || 'Standard')));
+      let normSlug = normalizeCourierSlug(rawCourier);
+      if (normSlug === 'custom' && detectedByTrack) {
+        normSlug = detectedByTrack.courierId;
+      }
+      if (normSlug === 'custom' && resolvedFallback && !resolvedFallback.isCustom && resolvedFallback.courierId !== 'custom') {
+        normSlug = resolvedFallback.courierId;
+      }
       const canonicalCourier = normSlug !== 'custom' && CANONICAL_COURIER_MAP[normSlug]
         ? CANONICAL_COURIER_MAP[normSlug]
-        : rawCourier;
+        : (detectedByTrack ? detectedByTrack.courierName : rawCourier);
 
       tracking = {
         courier: canonicalCourier,
