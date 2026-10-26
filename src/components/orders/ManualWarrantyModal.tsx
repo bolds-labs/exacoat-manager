@@ -1808,22 +1808,24 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
                                   )}
                                 >
                                   <div className="flex items-center gap-3 min-w-0">
-                                    {/* Swatch preview icon / thumbnail */}
-                                    <div className="w-8 h-8 rounded-lg border border-white/10 overflow-hidden bg-black/60 shrink-0 flex items-center justify-center relative">
-                                      {isClaimed && selectedFinishObj?.thumbnail ? (
-                                        <img
-                                          src={selectedFinishObj.thumbnail}
-                                          alt={selectedFinishObj.name}
-                                          className="w-full h-full object-cover"
-                                        />
-                                      ) : isClaimed && selectedFinishObj?.color_hex ? (
-                                        <div
-                                          className="w-full h-full"
-                                          style={{ backgroundColor: selectedFinishObj.color_hex }}
-                                        />
-                                      ) : (
-                                        <Palette className="w-4 h-4 text-neutral-500" />
-                                      )}
+                                    {/* Swatch preview wide mini capsule */}
+                                    <div className="w-10 h-6 rounded-full border border-white/15 overflow-hidden bg-black/60 shrink-0 p-[1.5px] flex items-center justify-center relative">
+                                      <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center">
+                                        {isClaimed && selectedFinishObj?.thumbnail ? (
+                                          <img
+                                            src={selectedFinishObj.thumbnail}
+                                            alt={selectedFinishObj.name}
+                                            className="w-full h-full object-cover"
+                                          />
+                                        ) : isClaimed && selectedFinishObj?.color_hex ? (
+                                          <div
+                                            className="w-full h-full"
+                                            style={{ backgroundColor: selectedFinishObj.color_hex }}
+                                          />
+                                        ) : (
+                                          <Palette className="w-3.5 h-3.5 text-neutral-500" />
+                                        )}
+                                      </div>
                                     </div>
 
                                     <div className="min-w-0">
@@ -1935,8 +1937,8 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
                                       </div>
                                     </div>
 
-                                    {/* Swatches Grid */}
-                                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2 max-h-56 overflow-y-auto custom-scrollbar pr-1">
+                                    {/* Swatches Grid matching exacoat web wide rounded capsule pill */}
+                                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2.5 sm:gap-3 max-h-60 overflow-y-auto custom-scrollbar p-1">
                                       {filteredWarrantyFinishes.map((f) => {
                                         const isSelected =
                                           layerFinishes[layer.id] === f.slug ||
@@ -1944,38 +1946,69 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
                                           layerFinishes[layer.id] === f.name;
 
                                         return (
-                                          <div
-                                            key={f.id}
+                                          <button
+                                            key={f.id || f.slug}
+                                            type="button"
                                             onClick={() => {
                                               setLayerFinishes((prev) => ({ ...prev, [layer.id]: f.name }));
                                               setLayerClaimed((prev) => ({ ...prev, [layer.id]: true }));
                                             }}
-                                            className={clsx(
-                                              'p-2 rounded-xl border flex flex-col items-center gap-1.5 transition-all cursor-pointer relative text-center group',
-                                              isSelected
-                                                ? 'bg-emerald-500/20 border-emerald-500 ring-1 ring-emerald-500 text-white shadow-xs'
-                                                : 'bg-white/[0.02] border-white/[0.06] text-neutral-300 hover:border-white/20 hover:text-white'
-                                            )}
+                                            className="group flex flex-col items-center gap-0.5 p-0 transition-all select-none w-full cursor-pointer text-left"
                                           >
-                                            <div className="w-9 h-9 rounded-lg overflow-hidden border border-white/10 relative">
-                                              {f.thumbnail ? (
-                                                <img src={f.thumbnail} alt={f.name} className="w-full h-full object-cover" />
-                                              ) : (
-                                                <span
-                                                  className="w-full h-full block"
-                                                  style={{ backgroundColor: f.color_hex || '#333' }}
-                                                />
+                                            {/* Full Rounded Capsule Pill with Outer Border & Inset Gap */}
+                                            <div
+                                              className={clsx(
+                                                'relative w-full rounded-full p-[2.5px] border transition-all',
+                                                isSelected
+                                                  ? 'border-emerald-500 bg-[#0a0a0a] ring-1 ring-emerald-500/50 shadow-[0_0_12px_rgba(16,185,129,0.3)]'
+                                                  : 'border-white/25 bg-[#0a0a0a] hover:border-white/45 group-hover:scale-[1.02]'
                                               )}
-                                              {isSelected && (
-                                                <span className="absolute inset-0 bg-emerald-500/50 flex items-center justify-center">
-                                                  <Check className="w-4 h-4 text-white" />
+                                            >
+                                              <div className="relative w-full aspect-[1.85/1] rounded-full overflow-hidden bg-[#141414]">
+                                                {f.thumbnail ? (
+                                                  <img
+                                                    src={f.thumbnail}
+                                                    alt={f.name}
+                                                    className="h-full w-full object-cover select-none"
+                                                    loading="eager"
+                                                    draggable={false}
+                                                  />
+                                                ) : (
+                                                  <div
+                                                    className="w-full h-full flex items-center justify-center text-[10px] text-neutral-400"
+                                                    style={{ backgroundColor: f.color_hex || '#333' }}
+                                                  >
+                                                    ●
+                                                  </div>
+                                                )}
+                                              </div>
+                                              {f.badge_text && (
+                                                <span
+                                                  style={{
+                                                    backgroundColor: f.badge_color || '#10b981',
+                                                    color: '#000000',
+                                                  }}
+                                                  className="pointer-events-none absolute -top-0.5 left-1/2 -translate-x-1/2 z-20 px-2 py-[1.5px] rounded-full text-[7.5px] sm:text-[8px] font-mono font-bold uppercase tracking-wider shadow-md leading-none whitespace-nowrap"
+                                                >
+                                                  {f.badge_text}
                                                 </span>
                                               )}
                                             </div>
-                                            <span className="text-[11px] font-sans font-semibold truncate w-full">
-                                              {f.name}
-                                            </span>
-                                          </div>
+
+                                            {/* Swatch name & extra price underneath */}
+                                            <div className="flex flex-col items-center text-center w-full px-0.5 mt-0.5 min-h-[14px] justify-start">
+                                              <span
+                                                className={clsx(
+                                                  'w-full text-[8px] sm:text-[8.5px] font-medium uppercase tracking-[0.06em] leading-tight truncate',
+                                                  isSelected
+                                                    ? 'text-white font-semibold'
+                                                    : 'text-neutral-300 group-hover:text-white'
+                                                )}
+                                              >
+                                                {f.name}
+                                              </span>
+                                            </div>
+                                          </button>
                                         );
                                       })}
                                     </div>

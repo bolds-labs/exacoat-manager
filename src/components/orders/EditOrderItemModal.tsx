@@ -1538,22 +1538,24 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
                             className="w-full flex items-center justify-between p-3 sm:px-4 cursor-pointer select-none text-left gap-3"
                           >
                             <div className="flex items-center gap-3 min-w-0">
-                              {/* Swatch preview icon / thumbnail */}
-                              <div className="w-8 h-8 rounded-lg border border-white/10 overflow-hidden bg-black/60 shrink-0 flex items-center justify-center relative">
-                                {isIncluded && selectedFinishObj?.thumbnail ? (
-                                  <img
-                                    src={selectedFinishObj.thumbnail}
-                                    alt={selectedFinishObj.name}
-                                    className="w-full h-full object-cover"
-                                  />
-                                ) : isIncluded && selectedFinishObj?.color_hex ? (
-                                  <div
-                                    className="w-full h-full"
-                                    style={{ backgroundColor: selectedFinishObj.color_hex }}
-                                  />
-                                ) : (
-                                  <Palette className="w-4 h-4 text-neutral-500" />
-                                )}
+                              {/* Swatch preview wide mini capsule */}
+                              <div className="w-10 h-6 rounded-full border border-white/15 overflow-hidden bg-black/60 shrink-0 p-[1.5px] flex items-center justify-center relative">
+                                <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center">
+                                  {isIncluded && selectedFinishObj?.thumbnail ? (
+                                    <img
+                                      src={selectedFinishObj.thumbnail}
+                                      alt={selectedFinishObj.name}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : isIncluded && selectedFinishObj?.color_hex ? (
+                                    <div
+                                      className="w-full h-full"
+                                      style={{ backgroundColor: selectedFinishObj.color_hex }}
+                                    />
+                                  ) : (
+                                    <Palette className="w-3.5 h-3.5 text-neutral-500" />
+                                  )}
+                                </div>
                               </div>
 
                               <div className="min-w-0">
@@ -1658,50 +1660,77 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
                                 </div>
                               </div>
 
-                              {/* Swatches Grid */}
-                              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2 max-h-56 overflow-y-auto custom-scrollbar pr-1">
+                              {/* Swatches Grid matching exacoat web wide rounded capsule pill */}
+                              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2.5 sm:gap-3 max-h-60 overflow-y-auto custom-scrollbar p-1">
                                 {filteredFinishes.map((finish) => {
                                   const isSelected = finishName === finish.name;
 
                                   return (
-                                    <div
+                                    <button
                                       key={finish.id || finish.slug}
+                                      type="button"
                                       onClick={() => handleApplyFinishToActiveLayer(finish, layer.id)}
-                                      className={clsx(
-                                        "p-2 rounded-xl border flex flex-col items-center gap-1.5 transition-all cursor-pointer relative text-center group",
-                                        isSelected
-                                          ? "border-[#f3aa18] bg-[#f3aa18]/20 shadow-xs ring-1 ring-[#f3aa18]"
-                                          : "border-white/[0.06] bg-[#141518] hover:border-white/20 hover:bg-white/[0.05]"
-                                      )}
+                                      className="group flex flex-col items-center gap-0.5 p-0 transition-all select-none w-full cursor-pointer text-left"
                                     >
-                                      <div className="w-9 h-9 rounded-lg overflow-hidden border border-white/10 flex items-center justify-center relative bg-black/60">
-                                        {finish.thumbnail ? (
-                                          <img
-                                            src={finish.thumbnail}
-                                            alt={finish.name}
-                                            className="w-full h-full object-cover"
-                                          />
-                                        ) : (
-                                          <div
-                                            className="w-full h-full"
-                                            style={{ backgroundColor: finish.color_hex || '#333' }}
-                                          />
+                                      {/* Full Rounded Capsule Pill with Outer Border & Inset Gap */}
+                                      <div
+                                        className={clsx(
+                                          "relative w-full rounded-full p-[2.5px] border transition-all",
+                                          isSelected
+                                            ? "border-[#f3aa18] bg-[#0a0a0a] ring-1 ring-[#f3aa18]/50 shadow-[0_0_12px_rgba(243,170,24,0.3)]"
+                                            : "border-white/25 bg-[#0a0a0a] hover:border-white/45 group-hover:scale-[1.02]"
                                         )}
-                                        {isSelected && (
-                                          <div className="absolute inset-0 bg-[#f3aa18]/40 flex items-center justify-center">
-                                            <CheckCircle2 className="w-4 h-4 text-white" />
-                                          </div>
+                                      >
+                                        <div className="relative w-full aspect-[1.85/1] rounded-full overflow-hidden bg-[#141414]">
+                                          {finish.thumbnail ? (
+                                            <img
+                                              src={finish.thumbnail}
+                                              alt={finish.name}
+                                              className="h-full w-full object-cover select-none"
+                                              loading="eager"
+                                              draggable={false}
+                                            />
+                                          ) : (
+                                            <div
+                                              className="w-full h-full flex items-center justify-center text-[10px] text-neutral-400"
+                                              style={{ backgroundColor: finish.color_hex || '#333' }}
+                                            >
+                                              ●
+                                            </div>
+                                          )}
+                                        </div>
+                                        {finish.badge_text && (
+                                          <span
+                                            style={{
+                                              backgroundColor: finish.badge_color || "#f3aa18",
+                                              color: "#000000",
+                                            }}
+                                            className="pointer-events-none absolute -top-0.5 left-1/2 -translate-x-1/2 z-20 px-2 py-[1.5px] rounded-full text-[7.5px] sm:text-[8px] font-mono font-bold uppercase tracking-wider shadow-md leading-none whitespace-nowrap"
+                                          >
+                                            {finish.badge_text}
+                                          </span>
                                         )}
                                       </div>
-                                      <span className="text-[11px] font-sans font-semibold text-white truncate max-w-full">
-                                        {finish.name}
-                                      </span>
-                                      {finish.extra_price && finish.extra_price > 0 ? (
-                                        <span className="text-[9px] font-mono text-amber-400">
-                                          +{formatCurrency(finish.extra_price, order?.currency || 'IDR')}
+
+                                      {/* Swatch name & extra price underneath */}
+                                      <div className="flex flex-col items-center text-center w-full px-0.5 mt-0.5 min-h-[14px] justify-start">
+                                        <span
+                                          className={clsx(
+                                            "w-full text-[8px] sm:text-[8.5px] font-medium uppercase tracking-[0.06em] leading-tight truncate",
+                                            isSelected
+                                              ? "text-white font-semibold"
+                                              : "text-neutral-300 group-hover:text-white"
+                                          )}
+                                        >
+                                          {finish.name}
                                         </span>
-                                      ) : null}
-                                    </div>
+                                        {finish.extra_price && finish.extra_price > 0 ? (
+                                          <span className="text-[7px] sm:text-[7.5px] font-mono text-amber-400 mt-0.5 leading-tight">
+                                            +{formatCurrency(finish.extra_price, order?.currency || 'IDR')}
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                    </button>
                                   );
                                 })}
                               </div>
@@ -2161,31 +2190,56 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
                   ))}
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2.5 sm:gap-3 max-h-56 overflow-y-auto custom-scrollbar p-1">
                   {filteredFinishes.map((finish) => (
-                    <div
+                    <button
                       key={finish.id || finish.slug}
+                      type="button"
                       onClick={() => handleApplyFinishToActiveLayer(finish)}
-                      className="p-2 rounded-xl border border-white/[0.06] bg-[#101114] hover:border-[#f3aa18]/60 hover:bg-white/[0.04] flex flex-col items-center gap-1.5 transition-all cursor-pointer text-center group"
+                      className="group flex flex-col items-center gap-0.5 p-0 transition-all select-none w-full cursor-pointer text-left"
                     >
-                      <div className="w-9 h-9 rounded-lg overflow-hidden border border-white/10 flex items-center justify-center bg-black/60">
-                        {finish.thumbnail ? (
-                          <img
-                            src={finish.thumbnail}
-                            alt={finish.name}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div
-                            className="w-full h-full"
-                            style={{ backgroundColor: finish.color_hex || '#333' }}
-                          />
+                      <div className="relative w-full rounded-full p-[2.5px] border border-white/25 bg-[#0a0a0a] hover:border-white/45 group-hover:scale-[1.02] transition-all">
+                        <div className="relative w-full aspect-[1.85/1] rounded-full overflow-hidden bg-[#141414]">
+                          {finish.thumbnail ? (
+                            <img
+                              src={finish.thumbnail}
+                              alt={finish.name}
+                              className="h-full w-full object-cover select-none"
+                              loading="eager"
+                              draggable={false}
+                            />
+                          ) : (
+                            <div
+                              className="w-full h-full flex items-center justify-center text-[10px] text-neutral-400"
+                              style={{ backgroundColor: finish.color_hex || '#333' }}
+                            >
+                              ●
+                            </div>
+                          )}
+                        </div>
+                        {finish.badge_text && (
+                          <span
+                            style={{
+                              backgroundColor: finish.badge_color || "#f3aa18",
+                              color: "#000000",
+                            }}
+                            className="pointer-events-none absolute -top-0.5 left-1/2 -translate-x-1/2 z-20 px-2 py-[1.5px] rounded-full text-[7.5px] sm:text-[8px] font-mono font-bold uppercase tracking-wider shadow-md leading-none whitespace-nowrap"
+                          >
+                            {finish.badge_text}
+                          </span>
                         )}
                       </div>
-                      <span className="text-[11px] font-sans font-semibold text-white truncate max-w-full">
-                        {finish.name}
-                      </span>
-                    </div>
+                      <div className="flex flex-col items-center text-center w-full px-0.5 mt-0.5 min-h-[14px] justify-start">
+                        <span className="w-full text-[8px] sm:text-[8.5px] font-medium uppercase tracking-[0.06em] leading-tight truncate text-neutral-300 group-hover:text-white">
+                          {finish.name}
+                        </span>
+                        {finish.extra_price && finish.extra_price > 0 ? (
+                          <span className="text-[7px] sm:text-[7.5px] font-mono text-amber-400 mt-0.5 leading-tight">
+                            +{formatCurrency(finish.extra_price, order?.currency || 'IDR')}
+                          </span>
+                        ) : null}
+                      </div>
+                    </button>
                   ))}
                 </div>
               </div>

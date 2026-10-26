@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.204",
+  "version": "0.1.205",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.204.zip?v=0.1.204",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.205.zip?v=0.1.205",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-10-26T07:56:37.881Z",
+  "last_updated": "2026-10-26T08:08:17.963Z",
   "sections": {
-    "changelog": "### Version 0.1.204\n- Web-inspired vertical layer accordions with embedded finish swatches in EditOrderItemModal and ManualWarrantyModal\n- Support explicit None option for Coverage, Logo Cutout, and Pencil Cutout\n- Automatic suppression of Coverage and Logo options when Back skin is not included or claimed"
+    "changelog": "### Version 0.1.205\n- Wide rounded capsule pill swatch styling matching exacoat-web with aspect-[1.85/1] pills and compact uppercase typography\n- Web-inspired vertical layer accordions with embedded finish swatches in EditOrderItemModal and ManualWarrantyModal\n- Support explicit None option for Coverage, Logo Cutout, and Pencil Cutout"
   }
 }

@@ -1644,10 +1644,11 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 - **Global Finishes Catalog Parity**:
   - `DEFAULT_GLOBAL_FINISHES` in `src/lib/wordpressBridge.ts` is strictly synchronized to all 26 store finishes across the 4 official groups: `Signature skins`, `Colors`, `Natural`, and `Limited` (including `Burgundy`, `Titanium+`, `Everything`, `Pumpkin Orange`, and `Concrete`).
   - Pruned dead `http://localhost:3020` fallbacks, routing all finish fetch and toggle requests through `VITE_WEB_URL` (`https://exacoat.com`).
-- **Web Configurator Parity & Vertical Accordion Stack (`EditOrderItemModal.tsx` & `ManualWarrantyModal.tsx`)**:
+- **Web Configurator Parity, Vertical Accordion Stack & Wide Capsule Swatches (`EditOrderItemModal.tsx` & `ManualWarrantyModal.tsx`)**:
   - Replaced legacy detached finish catalog boxes and flat card grids with vertical accordion stacks mirroring the web storefront configurator (`device-skin-configurator.tsx`).
   - Each skin layer is rendered as an accordion card with layer name, selected finish preview thumbnail/chip, quick "Include" / "Remove" (or "+ Claim") action toggle, and expand chevron.
   - When expanded, the 26-finish swatch selector (with category tabs `All`, `Signature skins`, `Colors`, `Natural`, `Limited`, filter search, and visual swatch tiles) is embedded directly inside that specific layer card.
+  - Swatch tiles strictly replicate `exacoat-web` (`swatch-selector.tsx`): wide horizontal capsule pills with outer capsule border (`rounded-full p-[2.5px] border`), horizontal inner viewport (`aspect-[1.85/1] rounded-full overflow-hidden bg-[#141414]`), floating badge text for special editions, and compact uppercase title (`text-[8px] sm:text-[8.5px] font-medium uppercase tracking-[0.06em]`).
 - **Coverage & Cutout Suppression Invariant (Back Skin Dependency)**:
   - Phone coverage options (`Model Cut` vs `Model 360° Wrap`) and Apple/device logo cutout options are physically dependent on having a back/body skin vinyl cut.
   - If a customer or operator selects only an accent piece (e.g. Camera Accent only on iPhone 16 Pro, or Inside Palmrest only on a laptop without Top/Back skin), Coverage and Logo Cutout are irrelevant.

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.205] - 2026-10-26
+
+### Wide Rounded Capsule Pill Swatches (exacoat-web Parity)
+- **Wide Rounded Capsule Swatches (`EditOrderItemModal.tsx` & `ManualWarrantyModal.tsx`)**:
+  - Implemented the signature wide rounded capsule pill finish swatches matching `exacoat-web` (`swatch-selector.tsx`):
+    - Outer capsule ring (`rounded-full p-[2.5px] border border-white/25`) with active state (`border-[#f3aa18]` or `border-emerald-500` with glow ring).
+    - Inner horizontal aspect ratio (`aspect-[1.85/1] rounded-full overflow-hidden bg-[#141414]`) for wide vinyl texture display.
+    - Floating pill badge for special finishes (`New`, `Drop`, `Limited`).
+    - Compact uppercase finish name (`text-[8px] sm:text-[8.5px] font-medium uppercase tracking-[0.06em] truncate`) and subtle price addon text underneath.
+  - Applied across layer accordion swatches, Mode A warranty swatches, and Form Mode quick swatch picker.
+
+---
+
 ## [0.1.204] - 2026-10-26
 
 ### Web Configurator Parity, Vertical Layer Accordions & Cutout Suppression Invariants

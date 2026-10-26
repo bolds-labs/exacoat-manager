@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Web-inspired vertical layer accordions with embedded finish swatches in EditOrderItemModal and ManualWarrantyModal\n- Support explicit None option for Coverage, Logo Cutout, and Pencil Cutout\n- Automatic suppression of Coverage and Logo options when Back skin is not included or claimed`,
+      changelog: `### Version ${version}\n- Wide rounded capsule pill swatch styling matching exacoat-web with aspect-[1.85/1] pills and compact uppercase typography\n- Web-inspired vertical layer accordions with embedded finish swatches in EditOrderItemModal and ManualWarrantyModal\n- Support explicit None option for Coverage, Logo Cutout, and Pencil Cutout`,
     },
   };
 
