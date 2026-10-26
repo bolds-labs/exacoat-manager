@@ -618,27 +618,39 @@ export const DEFAULT_FINISH_SURCHARGE_TIERS: FinishSurchargeTier[] = [
 ];
 
 export const DEFAULT_GLOBAL_FINISHES: GlobalFinish[] = [
-  { id: 'swarm', name: 'Swarm', group: 'Signature skins', slug: 'swarm', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Swarm-Texture-Thumbnail.jpg', color_hex: '#1f2024', in_stock: true, extra_price: 30000 },
-  { id: 'black-camo', name: 'Black Camo', group: 'Signature skins', slug: 'black-camo', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg', texture_big_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Big-Black-Camo.jpg', color_hex: '#2a2b2e', in_stock: true, extra_price: 30000 },
-  { id: 'patina', name: 'Patina', group: 'Signature skins', slug: 'patina', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Patina-Texture-Thumbnail.jpg', color_hex: '#325c56', in_stock: false, extra_price: 30000 },
-  { id: 'slate', name: 'Slate', group: 'Signature skins', slug: 'slate', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Slate-Texture-Thumbnail.jpg', color_hex: '#4a4d52', in_stock: true, extra_price: 30000 },
-  { id: 'dragon-black', name: 'Dragon Black', group: 'Signature skins', slug: 'dragon-black', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Dragon-Black-Texture-Thumbnail.jpg', color_hex: '#1c1c1e', in_stock: true, extra_price: 0 },
-  { id: 'carbon-fiber-black', name: 'Carbon Fiber Black', group: 'Signature skins', slug: 'carbon-fiber-black', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Carbon-Fiber-Black-Texture-Thumbnail.jpg', color_hex: '#202022', in_stock: true, extra_price: 0 },
-  { id: 'forged-carbon', name: 'Forged Carbon', group: 'Signature skins', slug: 'forged-carbon', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Forged-Carbon-Texture-Thumbnail.jpg', color_hex: '#2e2e33', in_stock: true, extra_price: 30000 },
-  { id: 'woven', name: 'Woven', group: 'Signature skins', slug: 'woven', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Woven-Texture-Thumbnail.jpg', color_hex: '#2b2d30', in_stock: true, extra_price: 30000 },
-  { id: 'matte-black', name: 'Matte Black', group: 'Colors', slug: 'matte-black', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Matte-Black-Texture-Thumbnail.jpg', color_hex: '#18181b', in_stock: true, extra_price: 0 },
-  { id: 'matte-white', name: 'Matte White', group: 'Colors', slug: 'matte-white', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Matte-White-Texture-Thumbnail.jpg', color_hex: '#f4f4f6', in_stock: true, extra_price: 0, surface_gradient_enabled: true, surface_gradient_opacity: 0.22 },
-  { id: 'arctic-blue', name: 'Arctic Blue', group: 'Colors', slug: 'arctic-blue', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Arctic-Blue-Texture-Thumbnail.jpg', color_hex: '#7ba7c2', in_stock: true, extra_price: 0 },
-  { id: 'glacial-green', name: 'Glacial Green', group: 'Colors', slug: 'glacial-green', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Glacial-Green-Texture-Thumbnail.jpg', color_hex: '#8db4a2', in_stock: true, extra_price: 0 },
-  { id: 'mellow-yellow', name: 'Mellow Yellow', group: 'Colors', slug: 'mellow-yellow', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Mellow-Yellow-Texture-Thumbnail.jpg', color_hex: '#e8ca65', in_stock: true, extra_price: 0 },
-  { id: 'petal-pink', name: 'Petal Pink', group: 'Colors', slug: 'petal-pink', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Petal-Pink-Texture-Thumbnail.jpg', color_hex: '#e5a5b5', in_stock: true, extra_price: 0 },
-  { id: 'blush-pink', name: 'Blush Pink', group: 'Colors', slug: 'blush-pink', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Blush-Pink-Texture-Thumbnail.jpg', color_hex: '#d98299', in_stock: true, extra_price: 0 },
-  { id: 'emerald-green', name: 'Emerald Green', group: 'Colors', slug: 'emerald-green', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Emerald-Green-Texture-Thumbnail.jpg', color_hex: '#1e5631', in_stock: true, extra_price: 0 },
-  { id: 'lust-red', name: 'Lust Red', group: 'Colors', slug: 'lust-red', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Lust-Red-Texture-Thumbnail.jpg', color_hex: '#b22222', in_stock: true, extra_price: 0 },
-  { id: 'lemon-yellow', name: 'Lemon Yellow', group: 'Colors', slug: 'lemon-yellow', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Lemon-Yellow-Texture-Thumbnail.jpg', color_hex: '#f5d033', in_stock: true, extra_price: 0 },
-  { id: 'marble-white', name: 'Marble White', group: 'Natural', slug: 'marble-white', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Marble-White-Texture-Thumbnail.jpg', color_hex: '#e2e4e8', in_stock: true, extra_price: 0 },
-  { id: 'leather-black', name: 'Leather Black', group: 'Natural', slug: 'leather-black', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Leather-Black-Texture-Thumbnail.jpg', color_hex: '#1a1a1c', in_stock: true, extra_price: 0 },
-  { id: 'titanium-black', name: 'Titanium Black', group: 'Natural', slug: 'titanium-black', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Titanium-Black-Texture-Thumbnail.jpg', color_hex: '#262629', in_stock: true, extra_price: 0 }
+  // Signature skins
+  { id: 'swarm', name: 'Swarm', group: 'Signature skins', slug: 'swarm', class_name: 'cfg-swarm', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Swarm-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Swarm.jpg', texture_big_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Big-Swarm.jpg', color_hex: '#1f2024', in_stock: true, extra_price: 30000 },
+  { id: 'black-camo', name: 'Black Camo', group: 'Signature skins', slug: 'black-camo', class_name: 'cfg-black-camo', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Black-Camo.jpg', texture_big_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Big-Black-Camo.jpg', color_hex: '#2a2b2e', in_stock: true, extra_price: 30000 },
+  { id: 'patina', name: 'Patina', group: 'Signature skins', slug: 'patina', class_name: 'cfg-patina', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Patina-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Patina.jpg', texture_big_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Big-Patina.jpg', color_hex: '#325c56', in_stock: false, status: 'out_of_stock', extra_price: 30000 },
+  { id: 'slate', name: 'Slate', group: 'Signature skins', slug: 'slate', class_name: 'cfg-slate', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Slate-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Slate.jpg', texture_big_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Big-Slate.jpg', color_hex: '#4a4d52', in_stock: true, extra_price: 30000 },
+  { id: 'dragon-black', name: 'Dragon Black', group: 'Signature skins', slug: 'dragon-black', class_name: 'cfg-dragon-black', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Dragon-Black-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Dragon-Black.jpg', texture_big_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Big-Dragon-Black.jpg', color_hex: '#1c1c1e', in_stock: true, extra_price: 0 },
+  { id: 'carbon-fiber-black', name: 'Carbon Fiber Black', group: 'Signature skins', slug: 'carbon-fiber-black', class_name: 'cfg-carbon-fiber-black', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Carbon-Fiber-Black-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Carbon-Fiber-Black.jpg', texture_big_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Big-Carbon-Fiber-Black.jpg', color_hex: '#202022', in_stock: true, extra_price: 0 },
+  { id: 'forged-carbon', name: 'Forged Carbon', group: 'Signature skins', slug: 'forged-carbon', class_name: 'cfg-forged-carbon', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Forged-Carbon-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Forged-Carbon.jpg', texture_big_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Big-Forged-Carbon.jpg', color_hex: '#2e2e33', in_stock: true, extra_price: 30000 },
+  { id: 'woven', name: 'Woven', group: 'Signature skins', slug: 'woven', class_name: 'cfg-woven', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Woven-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Woven.jpg', texture_big_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Big-Woven.jpg', color_hex: '#2b2d30', in_stock: true, extra_price: 30000 },
+
+  // Colors
+  { id: 'matte-black', name: 'Matte Black', group: 'Colors', slug: 'matte-black', class_name: 'cfg-matte-black', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Matte-Black-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Matte-Black.jpg', color_hex: '#18181b', in_stock: true, extra_price: 0 },
+  { id: 'matte-white', name: 'Matte White', group: 'Colors', slug: 'matte-white', class_name: 'cfg-matte-white', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Matte-White-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Matte-White.jpg', color_hex: '#f4f4f6', in_stock: true, extra_price: 0, surface_gradient_enabled: true, surface_gradient_opacity: 0.22 },
+  { id: 'arctic-blue', name: 'Arctic Blue', group: 'Colors', slug: 'arctic-blue', class_name: 'cfg-arctic-blue', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Arctic-Blue-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Arctic-Blue.jpg', color_hex: '#7ba7c2', in_stock: true, extra_price: 0 },
+  { id: 'glacial-green', name: 'Glacial Green', group: 'Colors', slug: 'glacial-green', class_name: 'cfg-glacial-green', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Glacial-Green-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Glacial-Green.jpg', color_hex: '#8db4a2', in_stock: true, extra_price: 0 },
+  { id: 'mellow-yellow', name: 'Mellow Yellow', group: 'Colors', slug: 'mellow-yellow', class_name: 'cfg-mellow-yellow', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Mellow-Yellow-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Mellow-Yellow.jpg', color_hex: '#e8ca65', in_stock: true, extra_price: 0 },
+  { id: 'petal-pink', name: 'Petal Pink', group: 'Colors', slug: 'petal-pink', class_name: 'cfg-petal-pink', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Petal-Pink-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Petal-Pink.jpg', color_hex: '#e5a5b5', in_stock: true, extra_price: 0 },
+  { id: 'blush-pink', name: 'Blush Pink', group: 'Colors', slug: 'blush-pink', class_name: 'cfg-blush-pink', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Blush-Pink-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Blush-Pink.jpg', color_hex: '#d98299', in_stock: true, extra_price: 0 },
+  { id: 'emerald-green', name: 'Emerald Green', group: 'Colors', slug: 'emerald-green', class_name: 'cfg-emerald-green', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Emerald-Green-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Emerald-Green.jpg', color_hex: '#1e5631', in_stock: true, extra_price: 0 },
+  { id: 'lust-red', name: 'Lust Red', group: 'Colors', slug: 'lust-red', class_name: 'cfg-lust-red', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Lust-Red-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Lust-Red.jpg', color_hex: '#b22222', in_stock: true, extra_price: 0 },
+  { id: 'lemon-yellow', name: 'Lemon Yellow', group: 'Colors', slug: 'lemon-yellow', class_name: 'cfg-lemon-yellow', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Lemon-Yellow-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Lemon-Yellow-Texture-Thumbnail.jpg', color_hex: '#f5d033', in_stock: true, extra_price: 0 },
+
+  // Natural
+  { id: 'marble-white', name: 'Marble White', group: 'Natural', slug: 'marble-white', class_name: 'cfg-marble-white', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Marble-White-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Marble-White.jpg', color_hex: '#e2e4e8', in_stock: true, extra_price: 0 },
+  { id: 'leather-black', name: 'Leather Black', group: 'Natural', slug: 'leather-black', class_name: 'cfg-leather-black', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Leather-Black-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Leather-Black.jpg', color_hex: '#1a1a1c', in_stock: true, extra_price: 0 },
+  { id: 'titanium-black', name: 'Titanium Black', group: 'Natural', slug: 'titanium-black', class_name: 'cfg-titanium-black', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Titanium-Black-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Titanium-Black.jpg', color_hex: '#262629', in_stock: true, extra_price: 0 },
+
+  // Limited / Special Editions
+  { id: 'titanium-plus', name: 'Titanium+', group: 'Limited', slug: 'titanium-plus', class_name: 'cfg-titanium-plus', thumbnail: 'https://cms.exacoat.com/wp-content/uploads/Titanium-Plus-Texture-Thumbnail.jpg', texture_url: 'https://cms.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Titanium-Plus.jpg', texture_big_url: 'https://cms.exacoat.com/wp-content/uploads/Exacoat-Texture-Big-Titanium-Plus.jpg', color_hex: '#2c2d30', in_stock: true, badge_text: 'POPULAR', badge_color: '#f3aa18', extra_price: 30000 },
+  { id: 'burgundy', name: 'Burgundy', group: 'Limited', slug: 'burgundy', class_name: 'cfg-burgundy', thumbnail: 'https://cms.exacoat.com/wp-content/uploads/Burgundy-Texture-Thumbnail.jpg', texture_url: 'https://cms.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Burgundy-v4.jpg', texture_big_url: 'https://cms.exacoat.com/wp-content/uploads/Exacoat-Texture-Big-Burgundy-v4.jpg', color_hex: '#4a1525', in_stock: false, status: 'out_of_stock', badge_text: 'NEW', badge_color: '#f3aa18', extra_price: 30000 },
+  { id: 'everything', name: 'Everything', group: 'Limited', slug: 'everything', class_name: 'cfg-everything', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Everything-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Everything-Texture-Thumbnail.jpg', color_hex: '#333333', in_stock: true, is_custom_per_device: true, extra_price: 120000 },
+  { id: 'pumpkin-orange', name: 'Pumpkin Orange', group: 'Limited', slug: 'pumpkin-orange', class_name: 'cfg-pumpkin-orange', thumbnail: 'https://exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Pumpkin-Orange.jpg', texture_url: 'https://exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Pumpkin-Orange.jpg', color_hex: '#e65c00', in_stock: true, extra_price: 0 },
+  { id: 'concrete', name: 'Concrete', group: 'Limited', slug: 'concrete', class_name: 'cfg-concrete', thumbnail: 'https://exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Concrete.jpg', texture_url: 'https://exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Concrete.jpg', color_hex: '#8a8d91', in_stock: true, extra_price: 0 },
 ];
 
 // ==========================================
@@ -3926,7 +3938,8 @@ export async function fetchGlobalFinishesDirect(): Promise<{
   } catch {}
 
   try {
-    const nextRes = await fetch('http://localhost:3020/api/configurator/finishes');
+    const webBase = getEnv('VITE_WEB_URL', 'https://exacoat.com').replace(/\/$/, '');
+    const nextRes = await fetch(`${webBase}/api/configurator/finishes`);
     if (nextRes.ok) {
       const nextData = await nextRes.json();
       if (nextData?.success && Array.isArray(nextData?.finishes)) {
@@ -4057,7 +4070,8 @@ export async function toggleFinishStockDirect(
   };
 
   try {
-    await fetch('http://localhost:3020/api/configurator/finishes', {
+    const webBase = getEnv('VITE_WEB_URL', 'https://exacoat.com').replace(/\/$/, '');
+    await fetch(`${webBase}/api/configurator/finishes`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(postPayload),
@@ -4108,7 +4122,8 @@ export async function toggleFinishActiveDirect(id: string, isActive: boolean): P
   } catch {}
 
   try {
-    await fetch('http://localhost:3020/api/configurator/finishes', {
+    const webBase = getEnv('VITE_WEB_URL', 'https://exacoat.com').replace(/\/$/, '');
+    await fetch(`${webBase}/api/configurator/finishes`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, is_active: isActive }),

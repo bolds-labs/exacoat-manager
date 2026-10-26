@@ -1636,3 +1636,23 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - In `rest_save_product_configurator`, saving a device with `coverage_type === 'model_cut_only'` strictly forces `has_model_cut = true` and `model_360_extra_price = 0`.
   - Presets with `coverage === 'model_360'` are automatically sanitized to `model_cut`.
   - In `rest_get_product_configurator`, any device with `coverage_type === 'model_cut_only'` that contains a lingering nonzero `model_360_extra_price` is auto-healed to `0` and persisted to post meta.
+
+---
+
+## 55. Order & Warranty Configurator Parity and Visual Finishes Architecture
+
+- **Global Finishes Catalog Parity**:
+  - `DEFAULT_GLOBAL_FINISHES` in `src/lib/wordpressBridge.ts` is strictly synchronized to all 26 store finishes across the 4 official groups: `Signature skins`, `Colors`, `Natural`, and `Limited` (including `Burgundy`, `Titanium+`, `Everything`, `Pumpkin Orange`, and `Concrete`).
+  - Pruned dead `http://localhost:3020` fallbacks, routing all finish fetch and toggle requests through `VITE_WEB_URL` (`https://exacoat.com`).
+- **Intelligent Device Keyword & Configurator Profile Resolution (`EditOrderItemModal.tsx`)**:
+  - Marketplace orders (Shopee / TikTok) where `product_id` is a remote marketplace item ID or 0, and warranty replacement items with placeholder ID (`507022`), previously failed profile lookups and fell back to raw Form Mode with empty key-value text fields.
+  - `loadProductConfig` implements intelligent device keyword extraction (`extractDeviceKeywords`) that strips listing noise (`[EXACOAT]`, `Warranty Replacement -`, `Skin HP`, `Garskin`, `Sticker`) to isolate the true device name (e.g. `iPhone 16 Pro`, `ROG Ally X`, `iPad Pro 11 M4`).
+  - Automatically searches WooCommerce products via `fetchProductsDirect` and resolves the authentic configurator profile.
+  - If WooCommerce search returns no matching profile, synthesizes a high-fidelity device profile matching the device family (`synthesizeConfiguratorProfile`), ensuring operators always have interactive skin layers, visual swatch cards, coverage toggles, and logo cutout controls.
+  - Resolves single-skin item variations (e.g. `Finish: Swarm` from Shopee) directly to the primary layer (`Back Skin`), eliminating unselected default states.
+- **Manual Warranty Visual Finishes & Elimination of Hardcoded Defaults (`ManualWarrantyModal.tsx`)**:
+  - Eliminated hardcoded `'black-camo'` default assignments across initial state, coverage switches, and checkbox handlers. Claimed layers default to empty, requiring intentional finish selection or inheriting the order item's actual finish.
+  - Upgraded Mode A item and finish selection from a plain HTML `<select>` dropdown to an interactive swatch system:
+    - Layer cards show the selected finish with texture thumbnail or color swatch, finish name, and group badge.
+    - An interactive Finishes Catalog panel for the active layer provides category filter tabs (`All`, `Signature skins`, `Colors`, `Natural`, `Limited`), quick search, and visual swatch cards for all 26 finishes with instant 1-click application.
+

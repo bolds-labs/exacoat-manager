@@ -143,6 +143,7 @@ import {
   DollarSign,
   Palette,
   Sliders,
+  Sparkles,
   X,
   Plus,
   Check,
@@ -255,6 +256,41 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
   const [layerFinishes, setLayerFinishes] = useState<Record<string, string>>({});
   const [layerClaimed, setLayerClaimed] = useState<Record<string, boolean>>({});
   const [freeformConfigText, setFreeformConfigText] = useState('');
+  const [activeWarrantyLayerId, setActiveWarrantyLayerId] = useState<string | null>(null);
+  const [warrantyFinishGroup, setWarrantyFinishGroup] = useState<string>('all');
+  const [warrantyFinishSearch, setWarrantyFinishSearch] = useState<string>('');
+
+  const warrantyFinishGroups = useMemo(() => {
+    const set = new Set<string>();
+    set.add('all');
+    finishes.forEach((f) => {
+      if (f.group && f.group.trim()) {
+        set.add(f.group.trim());
+      }
+    });
+    return Array.from(set);
+  }, [finishes]);
+
+  const filteredWarrantyFinishes = useMemo(() => {
+    let list = finishes;
+    if (warrantyFinishGroup !== 'all') {
+      list = list.filter((f) => (f.group || '').toLowerCase() === warrantyFinishGroup.toLowerCase());
+    }
+    if (warrantyFinishSearch.trim()) {
+      const q = warrantyFinishSearch.toLowerCase().trim();
+      list = list.filter((f) =>
+        f.name.toLowerCase().includes(q) ||
+        f.slug.toLowerCase().includes(q) ||
+        (f.group || '').toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [finishes, warrantyFinishGroup, warrantyFinishSearch]);
+
+  const activeWarrantyLayer = useMemo(() => {
+    if (!activeWarrantyLayerId) return deviceLayers[0] || null;
+    return deviceLayers.find((l) => l.id === activeWarrantyLayerId) || deviceLayers[0] || null;
+  }, [deviceLayers, activeWarrantyLayerId]);
 
   // Device cut and coverage options (Coverage: Model Cut vs 360, Logo Cutout: With vs Without)
   const [hasCoverageOption, setHasCoverageOption] = useState(false);
@@ -603,11 +639,12 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
           const isPrimary = (idx === 0 || l.is_required) && !isFrame;
           const shouldClaim = (isPrimary || l.default_selected) && !isFrame;
           initialClaimed[l.id] = shouldClaim;
-          initialFinishes[l.id] = shouldClaim ? 'black-camo' : '';
+          initialFinishes[l.id] = '';
         });
 
         setLayerFinishes(initialFinishes);
         setLayerClaimed(initialClaimed);
+        setActiveWarrantyLayerId(resolved[0]?.id || null);
       })
       .catch(() => {
         if (isCancelled) return;
@@ -626,10 +663,11 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
           const isPrimary = (idx === 0 || l.is_required) && !isFrame;
           const shouldClaim = (isPrimary || l.default_selected) && !isFrame;
           initialClaimed[l.id] = shouldClaim;
-          initialFinishes[l.id] = shouldClaim ? 'black-camo' : '';
+          initialFinishes[l.id] = '';
         });
         setLayerFinishes(initialFinishes);
         setLayerClaimed(initialClaimed);
+        setActiveWarrantyLayerId(fallback[0]?.id || null);
       });
 
     return () => {
@@ -1555,7 +1593,8 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
                                     );
                                     if (frameLayer) {
                                       setLayerClaimed((prev) => ({ ...prev, [frameLayer.id]: true }));
-                                      setLayerFinishes((prev) => ({ ...prev, [frameLayer.id]: prev[frameLayer.id] || 'black-camo' }));
+                                      const primaryFinish = layerFinishes['back'] || Object.values(layerFinishes).find(Boolean) || '';
+                                      setLayerFinishes((prev) => ({ ...prev, [frameLayer.id]: prev[frameLayer.id] || primaryFinish }));
                                     }
                                   }}
                                   className={clsx(
@@ -1637,26 +1676,47 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
                           {deviceLayers.map((layer) => {
                             const isClaimed = Boolean(layerClaimed[layer.id]);
                             const currentFinish = layerFinishes[layer.id] || '';
-                            const isFrameLayer = layer.id.toLowerCase().includes('frame') || layer.name.toLowerCase().includes('frame');
+                            const selectedFinishObj = finishes.find(
+                              (f) =>
+                                f.slug === currentFinish ||
+                                f.id === currentFinish ||
+                                f.name.toLowerCase() === currentFinish.toLowerCase()
+                            );
+                            const isFrameLayer =
+                              layer.id.toLowerCase().includes('frame') || layer.name.toLowerCase().includes('frame');
                             const isFrameDisabled = isFrameLayer && hasCoverageOption && selectedCoverage === 'Model Cut';
+                            const isLayerActive = activeWarrantyLayer?.id === layer.id;
 
                             return (
                               <div
                                 key={layer.id}
+                                onClick={() => {
+                                  if (!isFrameDisabled) {
+                                    setActiveWarrantyLayerId(layer.id);
+                                    if (!isClaimed) {
+                                      setLayerClaimed((prev) => ({ ...prev, [layer.id]: true }));
+                                    }
+                                  }
+                                }}
                                 className={clsx(
-                                  'p-3 rounded-xl border transition-all space-y-2',
+                                  'p-3 rounded-xl border transition-all space-y-2.5 cursor-pointer',
                                   isFrameDisabled
-                                    ? 'bg-neutral-900/40 border-white/[0.04] text-neutral-500 opacity-70'
+                                    ? 'bg-neutral-900/40 border-white/[0.04] text-neutral-500 opacity-60 cursor-not-allowed'
+                                    : isLayerActive
+                                    ? 'bg-emerald-500/10 border-emerald-500 ring-1 ring-emerald-500/40 text-white shadow-xs'
                                     : isClaimed
-                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-white'
-                                    : 'bg-white/[0.02] border-white/[0.06] text-neutral-400'
+                                    ? 'bg-white/[0.04] border-white/[0.12] text-white hover:border-white/25'
+                                    : 'bg-white/[0.02] border-white/[0.06] text-neutral-400 hover:border-white/20'
                                 )}
                               >
                                 <div className="flex items-center justify-between">
-                                  <label className={clsx(
-                                    'flex items-center gap-2 select-none',
-                                    isFrameDisabled ? 'cursor-not-allowed text-neutral-500' : 'cursor-pointer text-white'
-                                  )}>
+                                  <label
+                                    className={clsx(
+                                      'flex items-center gap-2 select-none',
+                                      isFrameDisabled ? 'cursor-not-allowed text-neutral-500' : 'cursor-pointer text-white'
+                                    )}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
                                     <input
                                       type="checkbox"
                                       disabled={isFrameDisabled}
@@ -1664,8 +1724,8 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
                                       onChange={(e) => {
                                         const nextClaimed = e.target.checked;
                                         setLayerClaimed((prev) => ({ ...prev, [layer.id]: nextClaimed }));
-                                        if (nextClaimed && !layerFinishes[layer.id]) {
-                                          setLayerFinishes((prev) => ({ ...prev, [layer.id]: 'black-camo' }));
+                                        if (nextClaimed) {
+                                          setActiveWarrantyLayerId(layer.id);
                                         }
                                       }}
                                       className="rounded border-neutral-700 w-3.5 h-3.5 text-emerald-500 focus:ring-emerald-400 disabled:opacity-40"
@@ -1690,40 +1750,128 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
                                   <p className="text-[11px] text-neutral-500 italic">
                                     Not included in Model Cut (Back only). Switch to Model 360° above to include frame wrap.
                                   </p>
-                                ) : (
-                                  <div>
-                                    <select
-                                      value={isClaimed ? currentFinish : ''}
-                                      disabled={!isClaimed}
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        setLayerFinishes((prev) => ({ ...prev, [layer.id]: val }));
-                                        if (!val) {
-                                          setLayerClaimed((prev) => ({ ...prev, [layer.id]: false }));
-                                        } else {
-                                          setLayerClaimed((prev) => ({ ...prev, [layer.id]: true }));
-                                        }
-                                      }}
-                                      className={clsx(
-                                        'w-full px-2.5 py-1.5 rounded-lg border text-xs focus:outline-none focus:border-emerald-500',
-                                        isClaimed
-                                          ? 'bg-[#141414] border-white/[0.12] text-white cursor-pointer'
-                                          : 'bg-neutral-900/60 border-white/[0.04] text-neutral-600 cursor-not-allowed'
+                                ) : isClaimed ? (
+                                  selectedFinishObj ? (
+                                    <div className="flex items-center gap-2 p-2 rounded-lg bg-black/40 border border-white/10">
+                                      {selectedFinishObj.thumbnail ? (
+                                        <img
+                                          src={selectedFinishObj.thumbnail}
+                                          alt={selectedFinishObj.name}
+                                          className="w-7 h-7 rounded-md object-cover border border-white/10 shrink-0"
+                                        />
+                                      ) : (
+                                        <span
+                                          className="w-7 h-7 rounded-md border border-white/20 shrink-0"
+                                          style={{ backgroundColor: selectedFinishObj.color_hex || '#333' }}
+                                        />
                                       )}
-                                    >
-                                      <option value="">None / Not Claimed</option>
-                                      {finishes.map((f) => (
-                                        <option key={f.id} value={f.slug || f.id}>
-                                          {f.name} {f.group ? `(${f.group})` : ''}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </div>
+                                      <div className="min-w-0 flex-1">
+                                        <p className="text-xs font-semibold text-white truncate">{selectedFinishObj.name}</p>
+                                        <p className="text-[10px] text-neutral-400 truncate">{selectedFinishObj.group || 'Finish'}</p>
+                                      </div>
+                                      <span className="text-[10px] text-emerald-400 font-mono">Ubah →</span>
+                                    </div>
+                                  ) : (
+                                    <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-medium flex items-center justify-between">
+                                      <span>Pilih Finish Skin...</span>
+                                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                                    </div>
+                                  )
+                                ) : (
+                                  <p className="text-[11px] text-neutral-500 italic">Not claimed</p>
                                 )}
                               </div>
                             );
                           })}
                         </div>
+
+                        {/* Interactive Finishes Catalog for Active Layer */}
+                        {activeWarrantyLayer && (
+                          <div className="mt-4 p-4 rounded-xl border border-white/[0.08] bg-[#121316] space-y-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/[0.06] pb-2">
+                              <div className="flex items-center gap-2">
+                                <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300">
+                                  Pilih Finish untuk: <span className="text-emerald-400">{activeWarrantyLayer.name}</span>
+                                </h4>
+                              </div>
+                              <input
+                                type="text"
+                                value={warrantyFinishSearch}
+                                onChange={(e) => setWarrantyFinishSearch(e.target.value)}
+                                placeholder="Cari finish..."
+                                className="px-2.5 py-1 rounded-lg bg-black/40 border border-white/10 text-xs text-white placeholder:text-neutral-500 focus:outline-none focus:border-emerald-500"
+                              />
+                            </div>
+
+                            {/* Category Filter Tabs */}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {warrantyFinishGroups.map((grp) => (
+                                <button
+                                  key={grp}
+                                  type="button"
+                                  onClick={() => setWarrantyFinishGroup(grp)}
+                                  className={clsx(
+                                    "px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer capitalize",
+                                    warrantyFinishGroup === grp
+                                      ? "bg-emerald-600 text-white font-bold"
+                                      : "bg-white/[0.05] text-neutral-400 hover:text-white"
+                                  )}
+                                >
+                                  {grp}
+                                </button>
+                              ))}
+                            </div>
+
+                            {/* Swatches Grid */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2 max-h-56 overflow-y-auto custom-scrollbar pr-1">
+                              {filteredWarrantyFinishes.map((f) => {
+                                const isSelected =
+                                  layerFinishes[activeWarrantyLayer.id] === f.slug ||
+                                  layerFinishes[activeWarrantyLayer.id] === f.id ||
+                                  layerFinishes[activeWarrantyLayer.id] === f.name;
+
+                                return (
+                                  <div
+                                    key={f.id}
+                                    onClick={() => {
+                                      setLayerFinishes((prev) => ({ ...prev, [activeWarrantyLayer.id]: f.name }));
+                                      setLayerClaimed((prev) => ({ ...prev, [activeWarrantyLayer.id]: true }));
+                                    }}
+                                    className={clsx(
+                                      "p-2 rounded-xl border flex flex-col items-center gap-1.5 transition-all cursor-pointer relative text-center group",
+                                      isSelected
+                                        ? "bg-emerald-500/15 border-emerald-500 ring-1 ring-emerald-500/40 text-white"
+                                        : "bg-white/[0.02] border-white/[0.06] text-neutral-300 hover:border-white/20 hover:text-white"
+                                    )}
+                                  >
+                                    <div className="w-10 h-10 rounded-lg overflow-hidden border border-white/10 relative">
+                                      {f.thumbnail ? (
+                                        <img src={f.thumbnail} alt={f.name} className="w-full h-full object-cover" />
+                                      ) : (
+                                        <span className="w-full h-full block" style={{ backgroundColor: f.color_hex || '#333' }} />
+                                      )}
+                                      {isSelected && (
+                                        <span className="absolute inset-0 bg-emerald-500/50 flex items-center justify-center">
+                                          <Check className="w-4 h-4 text-white" />
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span className="text-[11px] font-medium truncate w-full">{f.name}</span>
+                                    {f.badge_text && (
+                                      <span
+                                        className="text-[9px] px-1 py-0.2 rounded font-mono font-bold"
+                                        style={{ backgroundColor: f.badge_color || '#f3aa18', color: '#000' }}
+                                      >
+                                        {f.badge_text}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </>

@@ -89,3 +89,16 @@
   - Checks all active non-rejected statuses: `pending`, `processing`, `on-hold`, `completed`, `shipped`, `ready-to-ship`, `delivered`, `preparing-order`, `in-production`, `smb-ready`, `smb-picked`, and `awaiting-pickup`.
   - Endpoint `GET /wp-json/exacoat-core/v1/warranty/check-claimed?invoice=...` is publicly available for frontend verification.
   - `handleSubmitClaim` in `exacoat-web` validates this endpoint before issuing `POST /wp-json/wc/v3/orders`, rejecting duplicate attempts with HTTP 400.
+
+---
+
+## 6. Manual Warranty & Item Configurator Swatch System
+
+* **The Problem**:
+  - In `ManualWarrantyModal.tsx`, finish selection was rendered as a plain HTML `<select>` text dropdown, and all claimed layers were hardcoded to default to `'black-camo'`.
+  - In `EditOrderItemModal.tsx`, editing marketplace items or warranty items (with `product_id: 507022` or `0`) caused profile lookups to fail, dropping operators into raw key-value Form Mode where no visual configurator, swatches, or cutouts were accessible.
+* **The Solution**:
+  - **Dynamic Finishes Swatches**: Replaced `<select>` in `ManualWarrantyModal.tsx` with visual swatch cards with thumbnail textures, color hex circles, category filter tabs (`All`, `Signature skins`, `Colors`, `Natural`, `Limited`), and real-time search across all 26 finishes.
+  - **Eliminated Black Camo Defaults**: Claimed layers start unselected, requiring deliberate selection or inheriting the order item's actual finish.
+  - **Intelligent Device Resolution**: In `EditOrderItemModal.tsx`, `extractDeviceKeywords` cleans marketplace listing titles and resolves authentic configurator profiles via WooCommerce or high-fidelity synthesized fallbacks, guaranteeing full configurator capabilities (swatches, coverage, cutouts) across all order items.
+

@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Authoritative RMA claim deduplication across _rma_original_invoice, _rma_original_order_id, _rma_original_order_number, and _marketplace_invoice\n- Include pending and all fulfillment stages in active claim checks to block immediate duplicate warranty claims\n- Public /warranty/check-claimed endpoint and unified check_invoice_claimed logic across Shopee and TikTok clients`,
+      changelog: `### Version ${version}\n- Harmonize global finishes catalog to all 26 store finishes across Signature skins, Colors, Natural, and Limited\n- Intelligent device keyword and configurator profile resolution in EditOrderItemModal for marketplace and warranty items\n- Modern visual finish swatch grid in ManualWarrantyModal with category tabs, search, and elimination of hardcoded black-camo defaults`,
     },
   };
 

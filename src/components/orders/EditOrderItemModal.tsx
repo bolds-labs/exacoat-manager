@@ -3,7 +3,7 @@ import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { ConfirmationModal } from '../ui/ConfirmationModal';
-import { Order, OrderItem, DeviceConfiguratorProfile, ConfiguratorVariant } from '../../types';
+import { Order, OrderItem, DeviceConfiguratorProfile, ConfiguratorVariant, DeviceFamily } from '../../types';
 import {
   fetchProductsDirect,
   fetchGlobalFinishesDirect,
@@ -13,7 +13,7 @@ import {
   DEFAULT_GLOBAL_FINISHES,
   Product,
 } from '../../lib/wordpressBridge';
-import { extractItemSpecs, ItemCustomizationSpec } from '../../lib/orderItems';
+import { extractItemSpecs, cleanItemTitle, ItemCustomizationSpec } from '../../lib/orderItems';
 import { formatCurrency } from '../../lib/formatters';
 import { useToast } from '../../context/ToastContext';
 import {
@@ -126,6 +126,156 @@ function isDeviceSupportingCoverage(
   return false;
 }
 
+export function extractDeviceKeywords(rawName: string): string {
+  if (!rawName) return '';
+  let text = cleanItemTitle(rawName);
+  text = text.replace(/^(?:Warranty\s*(?:Replacement)?|Redeem|Claim|Replacement)\s*[-:]\s*/gi, '');
+  const segments = text.split(/\s*[-|/:]\s*/);
+  let bestSegment = segments[0] || text;
+  if (/^(?:skin\s*hp|garskin|sticker|case|pelindung)$/i.test(bestSegment.trim()) && segments.length > 1) {
+    bestSegment = segments[1];
+  }
+  const clean = bestSegment
+    .replace(/\b(?:Skins?|Garskin|Sticker|Pelindung|Case|Cover|Vinyl|Wrap)\b/gi, ' ')
+    .replace(/\((?:Model Cut|360|Full Body|Back Only|Case Friendly)[^)]*\)/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return clean;
+}
+
+function synthesizeConfiguratorProfile(deviceName: string): {
+  profile: DeviceConfiguratorProfile;
+  layers: DynamicLayerOption[];
+  hasCoverage: boolean;
+  hasLogo: boolean;
+  hasPencil: boolean;
+} {
+  const nameLower = (deviceName || '').toLowerCase();
+
+  const isLaptop =
+    nameLower.includes('macbook') ||
+    nameLower.includes('laptop') ||
+    nameLower.includes('notebook') ||
+    nameLower.includes('thinkpad') ||
+    nameLower.includes('surface');
+
+  const isTablet =
+    nameLower.includes('ipad') ||
+    nameLower.includes('tablet') ||
+    nameLower.includes('tab ') ||
+    nameLower.includes('tab s');
+
+  const isConsole =
+    nameLower.includes('playstation') ||
+    nameLower.includes('ps5') ||
+    nameLower.includes('ps4') ||
+    nameLower.includes('xbox') ||
+    nameLower.includes('switch') ||
+    nameLower.includes('steam deck') ||
+    nameLower.includes('rog ally');
+
+  const isKeyboard = nameLower.includes('keyboard');
+  const isAudio = nameLower.includes('airpods') || nameLower.includes('buds') || nameLower.includes('audio');
+  const isCharger = nameLower.includes('charger') || nameLower.includes('power bank') || nameLower.includes('magsafe');
+
+  let rawLayers: DynamicLayerOption[] = [];
+  let category = 'Smartphone';
+  let family: DeviceFamily = 'phone';
+  let hasCoverage = false;
+  let hasLogo = false;
+  let hasPencil = false;
+
+  if (isLaptop) {
+    category = 'Laptop';
+    family = 'laptop';
+    rawLayers = [
+      { id: 'top', name: 'Top Skin', is_required: true, default_selected: true },
+      { id: 'bottom', name: 'Bottom Skin', is_required: false, default_selected: true },
+      { id: 'palmrest', name: 'Inside / Palmrest', is_required: false, default_selected: false },
+      { id: 'trackpad', name: 'Trackpad', is_required: false, default_selected: false },
+    ];
+    hasLogo = true;
+  } else if (isTablet) {
+    category = 'Tablet';
+    family = 'tablet';
+    rawLayers = [
+      { id: 'back', name: 'Back Skin', is_required: true, default_selected: true },
+      { id: 'pencil', name: 'Apple Pencil / Accent', is_required: false, default_selected: false },
+      { id: 'frame', name: 'Frame / Sides', is_required: false, default_selected: false },
+    ];
+    hasLogo = true;
+    hasPencil = true;
+  } else if (isConsole) {
+    category = 'Gaming';
+    family = 'console';
+    rawLayers = [
+      { id: 'body', name: 'Main Body / Plates', is_required: true, default_selected: true },
+      { id: 'middle', name: 'Middle Strip / Accent', is_required: false, default_selected: false },
+      { id: 'controller', name: 'Controller Skin', is_required: false, default_selected: false },
+    ];
+  } else if (isKeyboard) {
+    category = 'Keyboard';
+    family = 'keyboard';
+    rawLayers = [
+      { id: 'body', name: 'Main Keyboard Body', is_required: true, default_selected: true },
+      { id: 'surround', name: 'Key Surround Accent', is_required: false, default_selected: false },
+    ];
+  } else if (isAudio) {
+    category = 'Audio';
+    family = 'audio';
+    rawLayers = [
+      { id: 'case', name: 'Case Skin', is_required: true, default_selected: true },
+      { id: 'accent', name: 'Buds Accent', is_required: false, default_selected: false },
+    ];
+  } else if (isCharger) {
+    category = 'Charger';
+    family = 'accessory';
+    rawLayers = [
+      { id: 'body', name: 'Body Skin', is_required: true, default_selected: true },
+      { id: 'accent', name: 'Ring / Accent', is_required: false, default_selected: false },
+    ];
+  } else {
+    category = 'Smartphone';
+    family = 'phone';
+    rawLayers = [
+      { id: 'back', name: 'Back Skin', is_required: true, default_selected: true },
+      { id: 'camera', name: 'Camera Accent', is_required: false, default_selected: false },
+      { id: 'frame', name: 'Frame / Sides', is_required: false, default_selected: false },
+    ];
+    hasCoverage = true;
+    hasLogo = nameLower.includes('iphone') || nameLower.includes('apple');
+  }
+
+  const profile: DeviceConfiguratorProfile = {
+    product_id: 0,
+    base_price: 130000,
+    device_name: deviceName,
+    device_slug: deviceName.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+    category,
+    family,
+    currency: 'IDR',
+    size_multiplier: 1,
+    views: [],
+    layers: rawLayers as any,
+    variants: [],
+    presets: [],
+    coverage_and_cutouts: {
+      coverage_type: hasCoverage ? 'model_cut_and_360' : 'none',
+      has_logo_cutout: hasLogo,
+      has_pencil_cutout: hasPencil,
+    },
+    is_configurable: true,
+  };
+
+  return {
+    profile,
+    layers: rawLayers,
+    hasCoverage,
+    hasLogo,
+    hasPencil,
+  };
+}
+
 export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
   order,
   item,
@@ -232,8 +382,10 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
     setIsLoadingProfile(true);
     let loadedProfile: DeviceConfiguratorProfile | null = null;
     let resolvedLayers: DynamicLayerOption[] = [];
+    const effectiveProductName = (nameOverride || productName || item?.name || '').trim();
 
-    if (pId > 0) {
+    // 1. Try direct profile fetch if valid WooCommerce product ID
+    if (pId > 0 && pId !== 507022 && pId < 1000000000) {
       try {
         const res = await fetchProductConfiguratorProfileDirect(pId);
         if (res.success && res.profile) {
@@ -264,6 +416,67 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
       } catch {
         // ignore
       }
+    }
+
+    // 2. If no profile found (marketplace item, placeholder warranty ID, or unlinked item),
+    // search WooCommerce catalog using cleaned device keywords
+    const deviceKw = extractDeviceKeywords(effectiveProductName);
+    if ((!loadedProfile || resolvedLayers.length === 0) && deviceKw) {
+      try {
+        const pSearch = await fetchProductsDirect({ search: deviceKw, per_page: 5 });
+        if (pSearch.success && Array.isArray(pSearch.products) && pSearch.products.length > 0) {
+          const matchedProd =
+            pSearch.products.find((p) => {
+              const pNameLower = (p.name || '').toLowerCase();
+              const kwLower = deviceKw.toLowerCase();
+              return pNameLower.includes(kwLower);
+            }) || pSearch.products[0];
+
+          if (matchedProd) {
+            const profRes = await fetchProductConfiguratorProfileDirect(matchedProd.id);
+            if (
+              profRes.success &&
+              profRes.profile &&
+              Array.isArray(profRes.profile.layers) &&
+              profRes.profile.layers.length > 0
+            ) {
+              loadedProfile = profRes.profile;
+              resolvedLayers = profRes.profile.layers
+                .filter((l: any) => {
+                  const lName = (l.name || '').toLowerCase();
+                  return (
+                    lName !== 'device' &&
+                    !lName.includes('device-body') &&
+                    !lName.includes('logo') &&
+                    !lName.includes('cutout')
+                  );
+                })
+                .map((l: any, idx: number) => ({
+                  id: String(l.id || `layer_${idx}`),
+                  name: String(l.name || `Part ${idx + 1}`),
+                  is_required: Boolean(l.is_required),
+                  default_selected: Boolean(l.default_selected ?? (idx === 0 || l.is_required)),
+                }));
+
+              if (pId <= 0 || pId === 507022 || pId >= 1000000000) {
+                setProductId(matchedProd.id);
+                if (matchedProd.images?.[0]?.src && !productImage) {
+                  setProductImage(matchedProd.images[0].src);
+                }
+              }
+            }
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    // 3. Fallback: Synthesize high-fidelity configurator profile so operators always have authentic skin configurator
+    if ((!loadedProfile || resolvedLayers.length === 0) && deviceKw) {
+      const synthetic = synthesizeConfiguratorProfile(deviceKw || effectiveProductName);
+      loadedProfile = synthetic.profile;
+      resolvedLayers = synthetic.layers;
     }
 
     setProfile(loadedProfile);
@@ -332,15 +545,24 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
     setIsConfiguratorProduct(isConfigurable);
     setConfigMode(isConfigurable ? 'configurator' : 'form');
 
-    const effectiveProductName = nameOverride || productName || loadedProfile?.device_name || '';
-
     if (isConfigurable) {
       // 1. Configure layers based on true existingSpecs
       setLayers(resolvedLayers);
       const initialActive: Record<string, boolean> = {};
       const initialFinishes: Record<string, string> = {};
 
-      resolvedLayers.forEach((l) => {
+      // Check if item has a global/single finish indicator
+      const genericFinishSpec = currentSpecs.find((s) =>
+        /^(finish|skin|texture|varian|warna|option)$/i.test(s.label.trim())
+      );
+      const itemAny = item as any;
+      const genericFinishVal =
+        genericFinishSpec?.value ||
+        item?.finish_type ||
+        itemAny?.meta_data?.find((m: any) => /^(finish|skin|texture|varian|warna)$/i.test(m.key))?.value ||
+        '';
+
+      resolvedLayers.forEach((l, idx) => {
         const lClean = l.name.trim().toLowerCase().replace(/s$/, '');
         const match = currentSpecs.find((s) => {
           const sClean = s.label.trim().toLowerCase().replace(/s$/, '');
@@ -349,6 +571,9 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
         if (match) {
           initialActive[l.id] = true;
           initialFinishes[l.id] = match.value;
+        } else if (idx === 0 && genericFinishVal) {
+          initialActive[l.id] = true;
+          initialFinishes[l.id] = genericFinishVal;
         } else {
           // If editing an existing item: unpurchased layers stay inactive and empty (no fake fallbacks)
           // If adding a brand new item: default-selected layers are active with blank finish
@@ -371,12 +596,15 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
         const existingCov = currentSpecs.find((s) =>
           /^(coverage|cut|model cut|360)$/i.test(s.label.trim())
         );
+        const rawText = `${item?.name || ''} ${itemAny?.meta || ''} ${JSON.stringify(itemAny?.meta_data || [])}`.toLowerCase();
         if (existingCov) {
           setCoverage(
             existingCov.value.toLowerCase().includes('360')
               ? '360° Full Coverage'
               : 'Model Cut'
           );
+        } else if (rawText.includes('360') || rawText.includes('full coverage') || rawText.includes('full body')) {
+          setCoverage('360° Full Coverage');
         } else {
           setCoverage('Model Cut');
         }
