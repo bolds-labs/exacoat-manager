@@ -1682,23 +1682,33 @@ class Exacoat_Checkout_Engine {
 	 * it yields execution so the official Midtrans plugin handles it as normal.
 	 */
 	public static function handle_midtrans_webhook_fallback(): void {
-		if ( ( $_SERVER['REQUEST_METHOD'] ?? '' ) !== 'POST' ) {
+		$method = strtoupper( $_SERVER['REQUEST_METHOD'] ?? 'GET' );
+		if ( 'POST' !== $method ) {
 			return;
 		}
 
 		$raw_input = file_get_contents( 'php://input' );
 		if ( empty( $raw_input ) ) {
-			return;
+			status_header( 200 );
+			echo 'OK - Empty payload ignored.';
+			exit;
 		}
 
 		$data = json_decode( $raw_input, true );
-		if ( ! is_array( $data ) || empty( $data['order_id'] ) ) {
-			return;
+		if ( ! is_array( $data ) || ( empty( $data['order_id'] ) && empty( $data['transaction_id'] ) ) ) {
+			status_header( 200 );
+			echo 'OK - Non-order payload ignored.';
+			exit;
 		}
 
-		$raw_order_id = trim( (string) $data['order_id'] );
-		$base_id      = 0;
+		$raw_order_id = trim( (string) ( $data['order_id'] ?? '' ) );
+		if ( empty( $raw_order_id ) ) {
+			status_header( 200 );
+			echo 'OK - Missing order ID.';
+			exit;
+		}
 
+		$base_id = 0;
 		if ( strpos( $raw_order_id, '-wc-mdtrs-' ) !== false ) {
 			$base_id = intval( explode( '-wc-mdtrs-', $raw_order_id )[0] );
 		} elseif ( strpos( $raw_order_id, '-' ) !== false ) {
@@ -1708,12 +1718,16 @@ class Exacoat_Checkout_Engine {
 		}
 
 		if ( $base_id <= 0 || ! function_exists( 'wc_get_order' ) ) {
-			return;
+			status_header( 200 );
+			echo 'OK - Invalid order identifier.';
+			exit;
 		}
 
 		$order = wc_get_order( $base_id );
 		if ( ! $order instanceof \WC_Order ) {
-			return;
+			status_header( 200 );
+			echo 'OK - Order not found.';
+			exit;
 		}
 
 		$has_nonstandard_suffix = ( strpos( $raw_order_id, '-' ) !== false && strpos( $raw_order_id, '-wc-mdtrs-' ) === false );

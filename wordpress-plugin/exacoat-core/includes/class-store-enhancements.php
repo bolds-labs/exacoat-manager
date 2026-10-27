@@ -82,6 +82,11 @@ class Exacoat_Store_Enhancements {
 		// 23. Refine REST API product search to match post_title & SKU instead of broad post_content
 		add_filter( 'posts_search', [ __CLASS__, 'refine_rest_product_search' ], 20, 2 );
 		add_filter( 'posts_clauses', [ __CLASS__, 'refine_rest_product_search_orderby' ], 20, 2 );
+
+		// 24. PHP 8.4 Strict Type Safety for Email Preview (Prevents "Unsupported operand types: string * int" in EmailPreview.php)
+		add_filter( 'woocommerce_product_get_price', [ __CLASS__, 'sanitize_product_price_for_php8' ], 9999, 2 );
+		add_filter( 'woocommerce_product_variation_get_price', [ __CLASS__, 'sanitize_product_price_for_php8' ], 9999, 2 );
+		add_filter( 'woocommerce_email_preview_dummy_product', [ __CLASS__, 'harden_email_preview_dummy_product' ], 9999, 2 );
 	}
 
 	/**
@@ -1892,6 +1897,57 @@ class Exacoat_Store_Enhancements {
 		}
 
 		return $clauses;
+	}
+
+	/**
+	 * Sanitize product price values to guarantee numeric float/int return types under PHP 8.4+.
+	 * Prevents fatal TypeError: Unsupported operand types: string * int in WooCommerce EmailPreview.php line 400.
+	 */
+	public static function sanitize_product_price_for_php8( $price, $product = null ) {
+		if ( is_float( $price ) || is_int( $price ) ) {
+			return $price;
+		}
+
+		if ( is_string( $price ) ) {
+			$trimmed = trim( $price );
+			if ( '' === $trimmed ) {
+				// If dummy product has empty price in preview context, ensure standard numeric fallback
+				if ( is_object( $product ) && method_exists( $product, 'get_id' ) && $product->get_id() === 0 ) {
+					return 25.0;
+				}
+				return 0.0;
+			}
+			if ( is_numeric( $trimmed ) ) {
+				return (float) $trimmed;
+			}
+			// Clean localized decimal separators (e.g. "25,00" -> "25.00")
+			$cleaned = preg_replace( '/[^\d,.]/', '', $trimmed );
+			if ( strpos( $cleaned, ',' ) !== false && strpos( $cleaned, '.' ) === false ) {
+				$cleaned = str_replace( ',', '.', $cleaned );
+			}
+			if ( is_numeric( $cleaned ) ) {
+				return (float) $cleaned;
+			}
+		}
+
+		if ( is_object( $product ) && method_exists( $product, 'get_id' ) && $product->get_id() === 0 ) {
+			return 25.0;
+		}
+
+		return is_numeric( $price ) ? (float) $price : 0.0;
+	}
+
+	/**
+	 * Ensure WooCommerce Email Preview dummy product always has a numeric price assigned.
+	 */
+	public static function harden_email_preview_dummy_product( $product, $email_type = '' ) {
+		if ( is_object( $product ) && method_exists( $product, 'set_price' ) ) {
+			$product->set_price( 25.0 );
+			if ( method_exists( $product, 'set_regular_price' ) ) {
+				$product->set_regular_price( 25.0 );
+			}
+		}
+		return $product;
 	}
 }
 

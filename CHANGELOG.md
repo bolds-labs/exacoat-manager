@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.207] - 2026-10-27
+
+### Webhook Probe Hardening & PHP 8.4 Email Preview Type Safety
+- **Midtrans Webhook Probe Hardening (`class-checkout-engine.php`)**:
+  - Intercept empty POST payloads, crawler probes, and invalid/non-existent order requests hitting `/?wc-api=WC_Gateway_Midtrans` with clean HTTP 200 responses at priority 5.
+  - Prevents the official `midtrans-woocommerce` notification handler from executing `new Midtrans\Notification()` on null/empty transaction IDs, which triggered uncaught `Midtrans Error (): ApiRequestor.php:121` exceptions when querying Midtrans API.
+- **PHP 8.4 Email Preview Strict Type Safety (`class-store-enhancements.php`)**:
+  - Added `sanitize_product_price_for_php8` filter on `woocommerce_product_get_price` and `woocommerce_product_variation_get_price` to strictly cast prices to numeric floats (normalizing localized commas and non-numeric strings).
+  - Added `harden_email_preview_dummy_product` filter on `woocommerce_email_preview_dummy_product` to guarantee dummy preview products always possess a valid float price.
+  - Eliminates fatal `TypeError: Unsupported operand types: string * int` on line 400 of WooCommerce `EmailPreview.php` when administrators navigate to WooCommerce > Settings > Emails.
+- **Benign Crawler Probe Alert Suppression (`class-logger.php`)**:
+  - Filtered benign external crawler probes on public payment callback endpoints from triggering noisy Telegram alerts, ensuring only genuine application anomalies notify the operations team.
+
+---
+
 ## [0.1.206] - 2026-10-26
 
 ### Courier Auto-Selection, Tracking Pattern Detection & Select Trigger Sync

@@ -1694,3 +1694,25 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Eliminated hardcoded `'black-camo'` default assignments across initial state, coverage switches, and checkbox handlers. Claimed layers default to empty, requiring intentional finish selection or inheriting the order item's actual finish.
   - Upgraded Mode A item and finish selection from a plain HTML `<select>` dropdown to an interactive swatch system with embedded per-layer swatch selectors, real-time search, and 1-click application.
 
+---
+
+## 56. Midtrans Webhook Probe Interception & PHP 8.4 Email Preview Strict Typing Invariants
+
+- **Midtrans Public Webhook Probe Interceptor Invariant (`class-checkout-engine.php`)**:
+  - Endpoint `/?wc-api=WC_Gateway_Midtrans` is publicly accessible as WooCommerce's payment callback listener.
+  - The official `midtrans-woocommerce` plugin (`WC_Gateway_Midtrans_Notif_Handler`) executes `new Midtrans\Notification()` whenever this URL is triggered. When hit by web scanners, crawlers, empty POST requests, or invalid payloads lacking a `transaction_id`, the Midtrans SDK queries `https://api.midtrans.com/v2//status` (null ID), which throws an unhandled `Exception: Midtrans Error (): File: ApiRequestor.php:121`.
+  - In `Exacoat_Checkout_Engine::handle_midtrans_webhook_fallback()`, running at priority 5 before the official plugin:
+    - Empty payloads (`empty($raw_input)`), non-JSON requests, payloads lacking `order_id` and `transaction_id`, or requests targeting non-existent orders in WooCommerce are cleanly intercepted and responded to with HTTP 200 (`status_header(200); exit;`).
+    - This stops execution before the official plugin runs on invalid data, completely preventing the fatal unhandled `ApiRequestor.php:121` exception.
+    - Legitimate payment webhooks from Midtrans containing valid order identifiers continue through to the official payment handler or the fallback reconciler.
+  - In `Exacoat_Logger::handle_uncaught_exception()`, benign crawler probes on `/?wc-api=WC_Gateway_Midtrans` with empty error messages are suppressed from notifying Telegram, eliminating false-alarm bot alerts.
+
+- **PHP 8.4 Email Preview Strict Type Safety Invariant (`class-store-enhancements.php`)**:
+  - In WooCommerce 9.6+, navigating to **WooCommerce > Settings > Emails** fires REST preview requests (`/wp-json/wc-admin-email/settings/email/preview-subject`).
+  - For custom non-customer emails (e.g. Advanced Coupons' `ACFWP\Models\Emails\WC_Email_Store_Credit_Reminder`), WooCommerce generates a mock order via `get_dummy_order()`.
+  - On line 400 of WooCommerce `EmailPreview.php`, WooCommerce calculates line item totals using `'subtotal' => $product->get_price() * 2`.
+  - Because `WC_Product::get_price()` invokes the `woocommerce_product_get_price` filter, stores with localized currency formatting (e.g. Indonesian locale with comma decimal separators) or currency switcher plugins return prices as string types.
+  - Under PHP 8.4 (active on production: PHP 8.4.27), performing arithmetic operations between strings and integers (`string * int`) strictly throws a fatal `TypeError: Unsupported operand types: string * int`.
+  - `Exacoat_Store_Enhancements` registers `sanitize_product_price_for_php8` at priority 9999 on `woocommerce_product_get_price` and `woocommerce_product_variation_get_price`, and `harden_email_preview_dummy_product` on `woocommerce_email_preview_dummy_product`.
+  - All product prices during preview or dummy order calculations are strictly normalized and cast to numeric floats (`(float) $price`, defaulting to `25.0` for dummy products), permanently eliminating `TypeError` exceptions in WooCommerce Admin.
+

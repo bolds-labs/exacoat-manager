@@ -339,6 +339,16 @@ class Exacoat_Logger {
 			'user_id'    => get_current_user_id(),
 		] );
 
+		// Suppress Telegram notifications for benign external crawler/probe exceptions on public webhook endpoints
+		$is_benign_webhook_probe = (
+			strpos( $uri, 'wc-api=WC_Gateway_Midtrans' ) !== false &&
+			( trim( $e->getMessage() ) === 'Midtrans Error ():' || empty( trim( $e->getMessage() ) ) )
+		);
+
+		if ( $is_benign_webhook_probe ) {
+			return;
+		}
+
 		if ( class_exists( 'Exacoat_Notification_Service' ) ) {
 			Exacoat_Notification_Service::notify_error(
 				'Uncaught Exception: ' . get_class( $e ),

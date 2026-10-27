@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Auto-select courier dropdown based on customer shipping method, shipping lines, and tracking number pattern recognition (SiCepat 00..., JNE 07..., J&T, POS ID, Lion, SPX, Anteraja)\n- Fix Radix Select trigger placeholder fallback by explicitly binding selected courier label in OrderDetailDrawer\n- Enrich order shipping lines and courier detection in WordPress exacoat-core backend`,
+      changelog: `### Version ${version}\n- Prevent uncaught Midtrans Error on empty or crawler webhook probes by safely intercepting non-order payloads with HTTP 200\n- Fix fatal TypeError in WooCommerce EmailPreview line 400 under PHP 8.4 by strictly casting product prices to numeric float\n- Suppress false alarm Telegram alerts for benign crawler drops on public webhook endpoints`,
     },
   };
 
