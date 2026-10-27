@@ -79,11 +79,14 @@ class Exacoat_Store_Enhancements {
 		// 22. Shortlink Redirects (/cs, /wa, /whatsapp -> WhatsApp Customer Support)
 		add_action( 'template_redirect', [ __CLASS__, 'handle_shortlink_redirects' ], 1 );
 
-		// 23. Refine REST API product search to match post_title & SKU instead of broad post_content
+		// 23. Headless CMS Frontend to Storefront Redirect (Redirect cms.exacoat.com to exacoat.com except wp-admin & APIs)
+		add_action( 'template_redirect', [ __CLASS__, 'redirect_cms_frontend_to_storefront' ], 6 );
+
+		// 24. Refine REST API product search to match post_title & SKU instead of broad post_content
 		add_filter( 'posts_search', [ __CLASS__, 'refine_rest_product_search' ], 20, 2 );
 		add_filter( 'posts_clauses', [ __CLASS__, 'refine_rest_product_search_orderby' ], 20, 2 );
 
-		// 24. PHP 8.4 Strict Type Safety for Email Preview (Prevents "Unsupported operand types: string * int" in EmailPreview.php)
+		// 25. PHP 8.4 Strict Type Safety for Email Preview (Prevents "Unsupported operand types: string * int" in EmailPreview.php)
 		add_filter( 'woocommerce_product_get_price', [ __CLASS__, 'sanitize_product_price_for_php8' ], 9999, 2 );
 		add_filter( 'woocommerce_product_variation_get_price', [ __CLASS__, 'sanitize_product_price_for_php8' ], 9999, 2 );
 		add_filter( 'woocommerce_email_preview_dummy_product', [ __CLASS__, 'harden_email_preview_dummy_product' ], 9999, 2 );
@@ -108,7 +111,11 @@ class Exacoat_Store_Enhancements {
 			$source = untrailingslashit( strtolower( $rule['source'] ?? '' ) );
 			if ( $source === $request_uri && ! empty( $rule['target'] ) ) {
 				$status = in_array( (int) ( $rule['status_code'] ?? 307 ), [ 301, 302, 307, 308 ], true ) ? (int) $rule['status_code'] : 307;
-				wp_redirect( $rule['target'], $status );
+				$target = (string) $rule['target'];
+				if ( str_starts_with( $target, '/' ) ) {
+					$target = function_exists( 'exacoat_storefront_url' ) ? exacoat_storefront_url( $target ) : ( 'https://exacoat.com' . $target );
+				}
+				wp_redirect( $target, $status );
 				exit;
 			}
 		}
@@ -118,6 +125,85 @@ class Exacoat_Store_Enhancements {
 			wp_redirect( $wa_url, 307 );
 			exit;
 		}
+	}
+
+	/**
+	 * Headless CMS Frontend Redirection
+	 *
+	 * Automatically redirects all frontend page visits on cms.exacoat.com to the authoritative
+	 * storefront on exacoat.com, preserving paths and query strings, while strictly safeguarding:
+	 * - /wp-admin & /wp-login.php (Admin dashboard and authentication)
+	 * - /wp-json/* (WooCommerce REST API, Store API, Exacoat Core REST routes)
+	 * - /wc-api/* & ?wc-ajax=* (Payment callbacks, IPNs, webhooks)
+	 * - /wp-content/* & /wp-includes/* (Static uploads, scripts, stylesheets)
+	 * - /wp-cron.php & /xmlrpc.php
+	 * - Active Bricks builder sessions (?bricks=run / ?brickspreview) for logged-in editors
+	 */
+	public static function redirect_cms_frontend_to_storefront(): void {
+		// 1. Skip admin screens, AJAX, Cron, or REST API requests
+		if ( is_admin() || wp_doing_ajax() || wp_doing_cron() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+			return;
+		}
+
+		// 2. Allow disabling via setting or constant if ever needed
+		if ( defined( 'EXACOAT_DISABLE_CMS_REDIRECT' ) && EXACOAT_DISABLE_CMS_REDIRECT ) {
+			return;
+		}
+		if ( class_exists( 'Exacoat_Core' ) && ! Exacoat_Core::get_setting( 'redirect_cms_frontend', 1 ) ) {
+			return;
+		}
+
+		$raw_uri = $_SERVER['REQUEST_URI'] ?? '/';
+		$path    = parse_url( $raw_uri, PHP_URL_PATH ) ?: '/';
+
+		// 3. Strictly safeguard core backend endpoints from redirection
+		if ( preg_match( '#^/(wp-admin|wp-login\.php|wp-json|wc-api|wc-ajax|wp-content|wp-includes|xmlrpc\.php|wp-cron\.php)#i', $path ) ) {
+			return;
+		}
+
+		if ( isset( $_GET['wc-ajax'] ) || isset( $_GET['wc-api'] ) ) {
+			return;
+		}
+
+		// 4. Allow logged-in staff to use Bricks visual editor or preview unpublished posts
+		if ( function_exists( 'is_user_logged_in' ) && is_user_logged_in() && current_user_can( 'edit_posts' ) ) {
+			if ( isset( $_GET['bricks'] ) || isset( $_GET['brickspreview'] ) || ( function_exists( 'is_preview' ) && is_preview() ) ) {
+				return;
+			}
+		}
+
+		// 5. Canonical resolution for plain post queries (e.g. ?p=123 or ?page_id=456)
+		$target_path = $raw_uri;
+		if ( ( isset( $_GET['p'] ) || isset( $_GET['page_id'] ) ) && function_exists( 'is_singular' ) && is_singular() ) {
+			$canonical = get_permalink();
+			if ( $canonical ) {
+				$parsed_path = parse_url( $canonical, PHP_URL_PATH );
+				if ( $parsed_path ) {
+					$query = $_GET;
+					unset( $query['p'], $query['page_id'], $query['post_type'] );
+					$target_path = $parsed_path . ( ! empty( $query ) ? ( '?' . http_build_query( $query ) ) : '' );
+				}
+			}
+		}
+
+		// 6. Resolve destination URL on exacoat.com
+		$storefront_base = function_exists( 'exacoat_storefront_url' )
+			? exacoat_storefront_url( '/' )
+			: ( defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : 'https://exacoat.com' );
+		$storefront_base = untrailingslashit( $storefront_base );
+
+		$destination = $storefront_base . ( str_starts_with( $target_path, '/' ) ? $target_path : ( '/' . $target_path ) );
+
+		// 7. Prevent infinite redirect loop if host matches destination
+		$target_host  = parse_url( $destination, PHP_URL_HOST );
+		$current_host = parse_url( home_url(), PHP_URL_HOST ) ?: ( $_SERVER['HTTP_HOST'] ?? '' );
+		if ( strcasecmp( (string) $target_host, (string) $current_host ) === 0 ) {
+			return;
+		}
+
+		// 8. Execute 301 Permanent Redirect
+		wp_redirect( $destination, 301, 'Exacoat-Headless-CMS' );
+		exit;
 	}
 
 	public static function redirect_cart_to_checkout() {

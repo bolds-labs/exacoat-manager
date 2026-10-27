@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.208] - 2026-10-27
+
+### Headless CMS Frontend to Storefront Redirection Architecture
+- **Headless CMS Frontend Redirection (`class-store-enhancements.php`)**:
+  - Implemented `redirect_cms_frontend_to_storefront` hooked into `template_redirect` at priority 6.
+  - Automatically redirects all frontend page requests on `cms.exacoat.com` to the authoritative headless storefront on `https://exacoat.com` via HTTP 301, preserving exact URI paths and query strings.
+  - Resolves canonical post/product permalinks for raw query requests (e.g. `?p=123` or `?page_id=456`) directly to their storefront URLs (e.g. `/product/iphone-camera-back-glass-skins/`).
+  - Strictly safeguards WordPress backend and operational infrastructure from redirection:
+    - Admin dashboard (`/wp-admin`, `/wp-admin/*`, `is_admin()`)
+    - Authentication (`/wp-login.php`)
+    - REST API (`/wp-json/*`, `REST_REQUEST`)
+    - Payment callbacks & IPNs (`/wc-api/*`, `?wc-ajax=*`, `?wc-api=*`)
+    - Static media & assets (`/wp-content/*`, `/wp-includes/*`)
+    - Maintenance tasks & cron (`/wp-cron.php`, `wp_doing_cron()`, `/xmlrpc.php`, `wp_doing_ajax()`)
+    - Active Bricks visual builder sessions (`?bricks=run`, `?brickspreview`) for authenticated editors with `edit_posts` capabilities.
+  - Configurable via `Exacoat_Core::get_setting('redirect_cms_frontend', 1)` and constant `EXACOAT_DISABLE_CMS_REDIRECT`.
+- **Shortlink Relative Path Direct Resolution (`class-store-enhancements.php`)**:
+  - Updated `handle_shortlink_redirects` to detect relative path targets (`/product/...`) and automatically resolve them to `https://exacoat.com/...` via `exacoat_storefront_url()`, eliminating redundant intermediate redirect hops.
+
+---
+
 ## [0.1.207] - 2026-10-27
 
 ### Webhook Probe Hardening & PHP 8.4 Email Preview Type Safety

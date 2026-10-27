@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Prevent uncaught Midtrans Error on empty or crawler webhook probes by safely intercepting non-order payloads with HTTP 200\n- Fix fatal TypeError in WooCommerce EmailPreview line 400 under PHP 8.4 by strictly casting product prices to numeric float\n- Suppress false alarm Telegram alerts for benign crawler drops on public webhook endpoints`,
+      changelog: `### Version ${version}\n- Add headless CMS frontend redirection: seamlessly redirect cms.exacoat.com to exacoat.com with path and query preservation, strictly safeguarding wp-admin, wp-login, REST API, webhooks, and static assets\n- Enhance shortlink redirects with relative path auto-resolution to exacoat.com`,
     },
   };
 

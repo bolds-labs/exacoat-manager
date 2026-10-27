@@ -37,7 +37,32 @@ This document is the authoritative operational guideline, system boundaries, and
 
 ---
 
-## 3. Mandatory System & Brand Boundaries
+## 3. Headless CMS Frontend Redirection Invariant (`cms.exacoat.com` -> `exacoat.com`)
+
+Exacoat operates a modern headless decoupled architecture where WordPress (`cms.exacoat.com`) serves strictly as a headless CMS, database, and WooCommerce REST API engine, while Next.js (`exacoat.com`) provides the authoritative frontend storefront.
+
+### The Invariant
+**All public frontend traffic arriving at `cms.exacoat.com` is automatically redirected to `https://exacoat.com` via HTTP 301, strictly safeguarding all administration, authentication, API, and static asset endpoints.**
+
+1. **Trigger & Hook (`class-store-enhancements.php`)**:
+   - `redirect_cms_frontend_to_storefront` runs on `template_redirect` at priority 6.
+   - Preserves complete URI paths and query strings (e.g. `cms.exacoat.com/product/xyz?texture=matte` -> `https://exacoat.com/product/xyz?texture=matte`).
+   - Dynamically resolves canonical permalinks for raw post queries (e.g. `?p=123` or `?page_id=456`) to the storefront URL path.
+2. **Strict Exclusions (Never Redirected)**:
+   - WordPress Admin dashboard: `/wp-admin`, `/wp-admin/*`, `is_admin()`
+   - Authentication & Login: `/wp-login.php`
+   - REST API endpoints: `/wp-json/*`, `defined('REST_REQUEST') && REST_REQUEST`
+   - Payment Callbacks & IPNs: `/wc-api/*`, `?wc-ajax=*`, `?wc-api=*`
+   - Static Media & Uploads: `/wp-content/*`, `/wp-includes/*`
+   - System Crons & Maintenance: `/wp-cron.php`, `wp_doing_cron()`, `/xmlrpc.php`, `wp_doing_ajax()`
+   - Active Bricks Builder Sessions: `?bricks=run`, `?brickspreview`, or `is_preview()` for logged-in users with `edit_posts` permissions.
+3. **Safety & Loop Prevention**:
+   - Evaluates destination host vs. current host: never redirects if destination host matches current host.
+   - Configurable via option `redirect_cms_frontend` (defaults to enabled, `1`) and filterable via constant `EXACOAT_DISABLE_CMS_REDIRECT`.
+
+---
+
+## 4. Mandatory System & Brand Boundaries
 
 - **Exacoat Manager strictly manages Exacoat e-commerce operations.**
 - **NEVER use or reference `artmatter-core` in active runtime code.**
