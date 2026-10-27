@@ -11,7 +11,7 @@
   - Queries `_rma_original_invoice`, `_rma_original_order_id`, and `_rma_original_order_number`.
   - **Critical**: In classic WooCommerce CPT mode (`shop_order`), post statuses must be queried with `wc-` prefix (`wc-pending`, `wc-on-hold`, `wc-processing`, `wc-completed`).
 * **`POST /wp-json/exacoat/v1/warranty/upload-proof`**:
-  - Handles customer video uploads (max 100MB).
+  - Handles customer video uploads (max 50MB; pre-upload checked on client side to prevent Nginx 413 gateway errors).
   - Accepts alphanumeric marketplace invoice IDs (e.g. `260918CXA4DDTX`).
   - Stores files in `wp-content/uploads/warranty/`.
 * **`GET /wp-json/exacoat/v1/warranty/claim-details?order_id={id}`**:

@@ -14,7 +14,7 @@ if ( ! class_exists( 'Exacoat_Warranty_Manager' ) ) {
 class Exacoat_Warranty_Manager {
 
 	const UPLOAD_SUBDIR         = 'warranty-proofs';
-	const MAX_VIDEO_BYTES       = 104857600; // 100 MB
+	const MAX_VIDEO_BYTES       = 52428800; // 50 MB
 	const WARRANTY_WINDOW_HOURS = 48;
 	const WARRANTY_WINDOW_SECS  = 172800;    // 48 * 3600
 	const OPTION_WARRANTY_CODES = 'exacoat_warranty_codes';
@@ -104,7 +104,7 @@ class Exacoat_Warranty_Manager {
 			],
 		] );
 
-		// Public: Upload 5-piece cut video proof (max 100MB)
+		// Public: Upload 5-piece cut video proof (max 50MB)
 		register_rest_route( 'exacoat-core/v1', '/warranty/upload-proof', [
 			[
 				'methods'             => \WP_REST_Server::CREATABLE,
@@ -1114,7 +1114,7 @@ class Exacoat_Warranty_Manager {
 	}
 
 	/**
-	 * Upload 5-piece cut video proof (max 100MB)
+	 * Upload 5-piece cut video proof (max 50MB)
 	 */
 	public static function rest_upload_proof( \WP_REST_Request $request ): \WP_REST_Response {
 		$raw_order_id = sanitize_text_field( trim( (string) $request->get_param( 'order_id' ) ) );
@@ -1144,8 +1144,8 @@ class Exacoat_Warranty_Manager {
 		if ( $file['size'] > self::MAX_VIDEO_BYTES ) {
 			return new \WP_REST_Response( [
 				'success' => false,
-				'message' => 'Video file exceeds the maximum allowed size of 100 MB.',
-			], 400 );
+				'message' => 'Video file exceeds the maximum allowed size of 50 MB.',
+			], 413 );
 		}
 
 		$allowed_mimes = [
@@ -3744,7 +3744,7 @@ class Exacoat_Warranty_Manager {
 		switch ( $code ) {
 			case UPLOAD_ERR_INI_SIZE:
 			case UPLOAD_ERR_FORM_SIZE:
-				return 'Video exceeds server file size limit (max 100MB).';
+				return 'Video exceeds server file size limit (max 50MB).';
 			case UPLOAD_ERR_PARTIAL:
 				return 'The file was only partially uploaded.';
 			case UPLOAD_ERR_NO_FILE:

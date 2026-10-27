@@ -190,6 +190,10 @@ export function cleanItemTitle(name?: string): string {
 ## 7. Warranty Claim Review & Storage Purge
 
 - **Video Proof URL Normalization**: URLs starting with `/` must be resolved to `https://exacoat.com/...`; Exacoat Manager runs on `manager.exacoat.com` and relative URLs will 404.
+- **Video Proof 50MB Limit & Pre-Upload Validation Invariant**:
+  - Customer video proof uploads must never exceed 50 MB (`52,428,800` bytes). Nginx and reverse-proxy gateways drop or HTML-error on payloads larger than 50MB-64MB with HTTP 413, causing browser JSON parsing crashes if not handled gracefully.
+  - Front-end wizard (`warranty-claim-wizard.tsx`) strictly validates file size before initiating any network request; files > 50MB are rejected immediately on selection with clear instructions to choose a shorter clip (5-10 seconds) or lower resolution.
+  - Server endpoints (`/warranty/upload-proof` in both `exacoat-web` and `exacoat-core`) strictly enforce `MAX_VIDEO_BYTES = 52428800` and return explicit HTTP 413 JSON responses.
 - **Disk Purge Invariant**: When a warranty claim is reviewed (approved or rejected via `reviewWarrantyClaimDirect`), the uploaded video proof file is immediately purged from disk via WordPress REST API to comply with disk limits and privacy.
 - **CPT Table Status Prefix**: When querying WooCommerce classic CPT tables (`shop_order`) in WordPress via `WP_Query`, post statuses are prefixed with `wc-` (`wc-pending`, `wc-processing`, etc.). Omitting `wc-` causes queries to return empty results.
 - **Authoritative RMA Claim Deduplication Invariant**:

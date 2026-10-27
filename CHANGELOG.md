@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.209] - 2026-10-28
+
+### Warranty Video Upload 50MB Limit & Error Status Clarity
+- **Warranty Video Proof Size Limit (`class-warranty-manager.php`)**:
+  - Synchronized `MAX_VIDEO_BYTES` to 52,428,800 bytes (50 MB) across WordPress REST routes (`/warranty/upload-proof`) to match server and reverse-proxy payload thresholds (Cloudflare/Nginx 50MB-64MB client body limits).
+  - Configured REST response to return explicit HTTP 413 (Payload Too Large) with human-friendly guidance when uploads exceed 50 MB.
+  - Updated upload error message translations for server ini/form size limits to explicitly indicate 50MB limit.
+- **Documentation & System Reference Updates**:
+  - Updated `docs/WARRANTY_SYSTEM.md` with 50MB proof limit and client-side pre-upload validation notes.
+
+---
+
 ## [0.1.208] - 2026-10-27
 
 ### Headless CMS Frontend to Storefront Redirection Architecture

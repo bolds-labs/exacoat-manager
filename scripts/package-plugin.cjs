@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Add headless CMS frontend redirection: seamlessly redirect cms.exacoat.com to exacoat.com with path and query preservation, strictly safeguarding wp-admin, wp-login, REST API, webhooks, and static assets\n- Enhance shortlink redirects with relative path auto-resolution to exacoat.com`,
+      changelog: `### Version ${version}\n- Synchronize warranty cut proof video upload size limit to 50MB matching server gateway thresholds, return explicit HTTP 413 responses, and clarify error messages\n- Headless CMS frontend redirection safeguarding wp-admin, wp-login, REST API, webhooks, and static assets`,
     },
   };
 

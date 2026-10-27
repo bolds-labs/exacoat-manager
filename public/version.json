@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.208",
+  "version": "0.1.209",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.208.zip?v=0.1.208",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.209.zip?v=0.1.209",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-10-27T07:44:45.287Z",
+  "last_updated": "2026-10-27T17:54:28.237Z",
   "sections": {
-    "changelog": "### Version 0.1.208\n- Add headless CMS frontend redirection: seamlessly redirect cms.exacoat.com to exacoat.com with path and query preservation, strictly safeguarding wp-admin, wp-login, REST API, webhooks, and static assets\n- Enhance shortlink redirects with relative path auto-resolution to exacoat.com"
+    "changelog": "### Version 0.1.209\n- Synchronize warranty cut proof video upload size limit to 50MB matching server gateway thresholds, return explicit HTTP 413 responses, and clarify error messages\n- Headless CMS frontend redirection safeguarding wp-admin, wp-login, REST API, webhooks, and static assets"
   }
 }
