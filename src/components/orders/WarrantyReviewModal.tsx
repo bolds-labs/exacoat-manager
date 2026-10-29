@@ -115,6 +115,7 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
   const [rejectionReason, setRejectionReason] = useState('');
   const [allowResubmit, setAllowResubmit] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [videoError, setVideoError] = useState(false);
 
   // Manual Customer Follow-up State (WhatsApp or Email)
   const [commChannel, setCommChannel] = useState<'whatsapp' | 'email' | null>(null);
@@ -264,6 +265,7 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
     if (!orderId) return;
     setIsLoading(true);
     setError(null);
+    setVideoError(false);
 
     const res = await fetchWarrantyClaimDetails(orderId);
     if (res.success && res.data) {
@@ -1033,13 +1035,65 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
                 )}
               </div>
             ) : claim.video_proof_url ? (
-              <div className="overflow-hidden rounded-xl border border-neutral-800 bg-black">
-                <video
-                  src={normalizeVideoUrl(claim.video_proof_url)}
-                  controls
-                  playsInline
-                  className="max-h-[380px] w-full bg-black object-contain"
-                />
+              <div className="space-y-2">
+                <div className="overflow-hidden rounded-xl border border-neutral-800 bg-black">
+                  <video
+                    key={claim.video_proof_url}
+                    src={normalizeVideoUrl(claim.video_proof_url)}
+                    controls
+                    playsInline
+                    onError={() => setVideoError(true)}
+                    className="max-h-[380px] w-full bg-black object-contain"
+                  />
+                </div>
+                {videoError && (
+                  <div className="flex flex-col gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+                    <div className="flex items-center gap-2 font-medium">
+                      <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
+                      <span>Video proof could not be loaded or played directly.</span>
+                    </div>
+                    <p className="text-[11px] text-amber-300/80 leading-relaxed">
+                      The video file could not be decoded or was not reachable on the server. You can attempt to open it in a new tab, or request the customer to provide a video via WhatsApp or email.
+                    </p>
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCommChannel('whatsapp');
+                          setTemplateKey('unclear_video');
+                          setCommMessage(generateCommMessage('unclear_video', commLanguage, claim));
+                          setEmailSubject(generateEmailSubject('unclear_video', commLanguage, claim));
+                        }}
+                        className="flex items-center gap-1.5 rounded-lg bg-amber-500/20 px-2.5 py-1 text-[11px] font-medium text-amber-300 hover:bg-amber-500/30 border border-amber-500/30 transition-colors cursor-pointer"
+                      >
+                        <MessageSquare className="h-3 w-3" />
+                        <span>Request Re-submission via WhatsApp</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCommChannel('email');
+                          setTemplateKey('unclear_video');
+                          setCommMessage(generateCommMessage('unclear_video', commLanguage, claim));
+                          setEmailSubject(generateEmailSubject('unclear_video', commLanguage, claim));
+                        }}
+                        className="flex items-center gap-1.5 rounded-lg bg-neutral-800 px-2.5 py-1 text-[11px] font-medium text-neutral-300 hover:bg-neutral-700 border border-neutral-700 transition-colors cursor-pointer"
+                      >
+                        <Mail className="h-3 w-3" />
+                        <span>Clarify via Email</span>
+                      </button>
+                      <a
+                        href={normalizeVideoUrl(claim.video_proof_url)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 rounded-lg bg-neutral-800 px-2.5 py-1 text-[11px] font-medium text-neutral-300 hover:bg-neutral-700 border border-neutral-700 transition-colors"
+                      >
+                        <span>Open Direct Link</span>
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900/30 p-8 text-center text-neutral-500">

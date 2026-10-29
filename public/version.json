@@ -9,7 +9,7 @@
   "requires_php": "7.4",
   "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.210.zip?v=0.1.210",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-10-29T09:29:28.835Z",
+  "last_updated": "2026-10-29T09:46:30.296Z",
   "sections": {
     "changelog": "### Version 0.1.210\n- Fix courier detection false positive where marketplace channel names (e.g. Channel: Shopee in customer notes) were misclassified as SPX instead of chosen shipping courier (e.g. JNE)\n- Prioritize authoritative shipping lines over customer notes during courier detection\n- Persist explicit courier metadata (_carrier_id, _exacoat_courier) upon manual warranty and redeem claim order creation\n- Add conflict guard in getOrderCourierDisplay ensuring frontend never renders misattributed courier when explicit shipping method is present"
   }

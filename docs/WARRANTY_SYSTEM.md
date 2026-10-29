@@ -26,11 +26,13 @@
 
 ## 2. Exacoat Manager UI (`src/components/orders/WarrantyReviewModal.tsx`)
 
-* **Video Playback**:
+* **Video Playback & Error Recovery**:
   - Relative URLs like `/uploads/warranty/...` are normalized to `https://exacoat.com/uploads/...`.
-  - Embedded HTML5 `<video controls playsInline />` player.
-  - "Open Video in New Tab" link for fullscreen verification of the 5-piece cut skin.
+  - Embedded HTML5 `<video controls playsInline />` player with `onError` event monitoring.
+  - "Open Video in New Tab" link for fullscreen verification of the cut skin.
   - If video has been purged post-review, displays a badge: *"Video proof deleted from server disk"*.
+  - If video fails to load (e.g. 404 or unplayable format), displays an error notification banner with 1-click action to request re-submission from the customer via WhatsApp or Email using the `unclear_video` template.
+  - Storefront dynamic route (`app/uploads/[...path]/route.ts`) provides HTTP Range seeking and streams from persistent CMS storage.
 * **Title Sanitization**:
   - Item names in the replacement items list are sanitized using `cleanItemTitle(name)` to strip `[EXACOAT]`.
 * **Approval / Rejection Workflow**:

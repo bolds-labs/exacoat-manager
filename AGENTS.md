@@ -232,6 +232,12 @@ export function cleanItemTitle(name?: string): string {
   - Both client-side Step 5 and the server-side submission endpoint (`handleSubmitClaim` in `app/api/warranty/[action]/route.ts`) strictly enforce real recipient name (no `@` or `*`), active phone number (no `*`, min 9 digits), active personal email (rejecting `@marketplace.internal` and `@scs2.tiktok.com`), and complete destination address (min 10 characters without `*`).
   - Order creation assigns verified user inputs directly to WooCommerce `billing` and `shipping` objects and metadata (`_customer_name`, `_customer_phone`, `_customer_email`, `_warranty_phone`, `_warranty_email`, `_warranty_destination_address`).
   - Exacoat Manager order and RMA endpoints (`format_order_for_manager`, `rest_get_claim_details`, `rest_get_claims_log`) prioritize clean metadata keys over stale or masked order defaults, ensuring operators always see the true customer contact and shipping details.
+  - **Dynamic Video Proof Streaming & Fallback Invariant**:
+    - In Next.js App Router, files created dynamically at runtime in `/public/uploads/` are not automatically indexed by the static file server and will 404 with the Next.js `not-found.tsx` page (rendering HTML titled "Exacoat®: It's Skins Reimagined") unless handled by a route.
+    - A dedicated Route Handler (`app/uploads/[...path]/route.ts`) handles dynamic uploads with path traversal protection, correct video MIME types (`video/quicktime`, `video/mp4`, `video/webm`), and HTTP 206 `Range` header support for browser video scrubbing and seeking.
+    - `configuredOrigin` in `lib/server/exacoat-config.ts` rejects any assignment where `CMS_ORIGIN` equals `https://exacoat.com` or `http://exacoat.com`, ensuring WordPress API calls always target `https://cms.exacoat.com`.
+    - If a local video proof file is missing from container disk (e.g. after container redeploy), `app/uploads/[...path]/route.ts` automatically attempts a fallback redirect to `https://cms.exacoat.com/wp-content/uploads/warranty-proofs/{filename}`.
+    - In `WarrantyReviewModal.tsx`, video elements include an `onError` listener. If a proof video fails to decode or reach the server, a clear banner is displayed with 1-click actions to request a resubmission via WhatsApp or Email using the pre-composed `unclear_video` template.
 
 ---
 
