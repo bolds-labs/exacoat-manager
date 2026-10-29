@@ -235,7 +235,7 @@ export function normalizeCourierSlug(raw?: string): string {
   if (s.includes('fedex')) return 'fedex';
   if (s.includes('rayspeed')) return 'rayspeed';
   if (s.includes('biteship')) return 'biteship';
-  if (s.includes('spx') || s.includes('shopee')) return 'spx';
+  if (s.includes('spx') || s.includes('shopee express') || s.includes('shopee_express')) return 'spx';
   if (s.includes('anteraja')) return 'anteraja';
   if (s.includes('ninja')) return 'ninja';
   return s === 'custom' ? 'custom' : 'custom';
@@ -394,24 +394,7 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
   // 4. Gather candidate text sources in prioritized order
   const candidateTexts: string[] = [];
 
-  // Customer note: only prioritize if explicit courier prefix is present
-  const customerNote = String(order.customer_note || '').trim();
-  if (customerNote) {
-    const noteMatch = customerNote.match(/shipping courier\s*:\s*([^\r\n]+)/i) ||
-                      customerNote.match(/courier\s*:\s*([^\r\n]+)/i) ||
-                      customerNote.match(/jasa kirim\s*:\s*([^\r\n]+)/i);
-    if (noteMatch && noteMatch[1]) {
-      candidateTexts.push(noteMatch[1].trim());
-    } else if (!customerNote.toLowerCase().startsWith('consolidated goorita') && customerNote.length < 80) {
-      candidateTexts.push(customerNote);
-    }
-  }
-
-  // Shipping method name and title
-  if (order.shipping_method_name) candidateTexts.push(String(order.shipping_method_name));
-  if (order.shipping_method) candidateTexts.push(String(order.shipping_method));
-
-  // Shipping lines items (method_title, method_id, instance_id, and meta_data)
+  // Shipping lines items FIRST (method_title, method_id, instance_id, and meta_data)
   if (Array.isArray(order.shipping_lines)) {
     for (const sl of order.shipping_lines) {
       if (sl?.method_title) candidateTexts.push(String(sl.method_title));
@@ -427,6 +410,10 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
     }
   }
 
+  // Shipping method name and title
+  if (order.shipping_method_name) candidateTexts.push(String(order.shipping_method_name));
+  if (order.shipping_method) candidateTexts.push(String(order.shipping_method));
+
   // Order meta data
   if (Array.isArray(order.meta_data)) {
     for (const m of order.meta_data) {
@@ -434,6 +421,17 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
       if (/carrier|courier|biteship|tracking_provider/i.test(k)) {
         if (m?.value && typeof m.value === 'string') candidateTexts.push(m.value);
       }
+    }
+  }
+
+  // Customer note: only prioritize if explicit courier prefix is present
+  const customerNote = String(order.customer_note || '').trim();
+  if (customerNote) {
+    const noteMatch = customerNote.match(/shipping courier\s*:\s*([^\r\n|]+)/i) ||
+                      customerNote.match(/courier\s*:\s*([^\r\n|]+)/i) ||
+                      customerNote.match(/jasa kirim\s*:\s*([^\r\n|]+)/i);
+    if (noteMatch && noteMatch[1]) {
+      candidateTexts.push(noteMatch[1].trim());
     }
   }
 
@@ -449,8 +447,8 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
     const t = text.toLowerCase();
 
     // Extract service code if present (e.g. from "SICEPAT - BEST" -> "BEST", "JNE - REG" -> "REG", "JNE (REG)" -> "REG")
-    const serviceMatch = text.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*[-:]\s*([A-Za-z0-9_\s]+)/i) ||
-                         text.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*\(([A-Za-z0-9_\s]+)\)/i);
+    const serviceMatch = text.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee\s*express)\s*[-:]\s*([A-Za-z0-9_\s]+)/i) ||
+                         text.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee\s*express)\s*\(([A-Za-z0-9_\s]+)\)/i);
     const serviceName = serviceMatch ? serviceMatch[1].trim().toUpperCase() : undefined;
 
     if (t.includes('sicepat')) {
@@ -543,7 +541,7 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
         isCustom: false,
       };
     }
-    if (t.includes('spx') || t.includes('shopee express') || t.includes('shopee')) {
+    if (t.includes('spx') || t.includes('shopee express') || t.includes('shopee_express')) {
       return {
         courierId: 'spx',
         courierName: 'SPX Express',
@@ -639,6 +637,21 @@ export function getOrderCourierDisplay(order: any): string {
   if (isConsolidation && backendCourier.toLowerCase().includes('goorita')) {
     backendCourier = '';
   }
+  // Conflict guard: If backend courier says e.g. "Spx - REG" but explicit shipping line says "JNE - REG",
+  // discard backendCourier and resolve from the true shipping line
+  const explicitMethod = String(order.shipping_lines?.[0]?.method_title || order.shipping_method_name || '').toLowerCase();
+  if (backendCourier && explicitMethod) {
+    const backendCarrierPrefix = backendCourier.split('-')[0].trim().toLowerCase();
+    if (
+      (explicitMethod.includes('jne') && !backendCarrierPrefix.includes('jne')) ||
+      (explicitMethod.includes('sicepat') && !backendCarrierPrefix.includes('sicepat')) ||
+      (explicitMethod.includes('pos') && !backendCarrierPrefix.includes('pos')) ||
+      (explicitMethod.includes('lion') && !backendCarrierPrefix.includes('lion')) ||
+      (explicitMethod.includes('j&t') && !backendCarrierPrefix.includes('j&t') && !backendCarrierPrefix.includes('jnt'))
+    ) {
+      backendCourier = '';
+    }
+  }
   if (backendCourier && backendCourier.includes('-') && !backendCourier.toLowerCase().includes('unknown')) {
     return backendCourier;
   }
@@ -682,7 +695,7 @@ export function getOrderCourierDisplay(order: any): string {
         else if (p0Lower.includes('rayspeed')) p0 = 'Rayspeed';
         else if (p0Lower.includes('j&t') || p0Lower.includes('jnt')) p0 = 'J&T';
         else if (p0Lower.includes('lion')) p0 = 'Lion';
-        else if (p0Lower.includes('spx') || p0Lower.includes('shopee')) p0 = 'SPX';
+        else if (p0Lower.includes('spx') || p0Lower.includes('shopee express') || p0Lower.includes('shopee_express')) p0 = 'SPX';
         else if (p0Lower.includes('anteraja')) p0 = 'Anteraja';
         else if (p0Lower.includes('ninja')) p0 = 'Ninja';
         return `${p0} - ${parts.slice(1).join('-').trim().toUpperCase()}`;

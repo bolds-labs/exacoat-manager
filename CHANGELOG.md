@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.210] - 2026-10-29
+
+### Courier Detection Precision & Warranty Redeem Courier Persistence
+- **Courier Detection False Positive Prevention (`class-order-manager.php`, `orderUtils.ts`)**:
+  - Eliminated erroneous mapping of bare `shopee` substrings to SPX courier (`spx`). Marketplace channel notations (such as `Channel: Shopee` in RMA/redeem customer notes) were incorrectly triggering SPX detection instead of the chosen shipping carrier (e.g. JNE or SiCepat).
+  - Restricted SPX carrier matching strictly to `spx`, `shopee express`, or `shopee_express`.
+  - Reordered candidate text evaluation: authoritative WooCommerce shipping lines (`order.shipping_lines`) and designated courier metadata (`_warranty_courier`) now take strict precedence over freeform customer notes.
+  - Hardened customer note scanning to only extract courier information when preceded by explicit directives (such as `shipping courier:`, `courier:`, or `jasa kirim:`).
+- **Manual Warranty & Redeem Courier Metadata Persistence (`class-warranty-manager.php`)**:
+  - Implemented `resolve_courier_info` to normalize chosen courier IDs and labels into canonical carrier slugs (`jne`, `sicepat`, etc.) and full labels.
+  - Order creation in `rest_create_manual_claim` now explicitly persists `_carrier_id`, `carrier_id`, `_shipping_carrier`, `_exacoat_courier`, `_tracking_provider`, and `_warranty_courier`.
+  - Configured instant auto-assignment of tracking numbers from `Exacoat_Tracking_Pool` upon manual warranty/redeem order creation for JNE and SiCepat when in confirmed or processing statuses.
+- **Frontend Conflicting Courier Guard (`orderUtils.ts`)**:
+  - Added a defensive conflict guard in `getOrderCourierDisplay`: if a stale or erroneous backend courier string conflicts with the order's actual shipping line item (e.g. `Spx - REG` vs `JNE - REG`), the invalid backend string is discarded in favor of resolving from the true shipping line.
+
+---
+
 ## [0.1.209] - 2026-10-28
 
 ### Warranty Video Upload 50MB Limit & Error Status Clarity

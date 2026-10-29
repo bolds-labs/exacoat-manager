@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Synchronize warranty cut proof video upload size limit to 50MB matching server gateway thresholds, return explicit HTTP 413 responses, and clarify error messages\n- Headless CMS frontend redirection safeguarding wp-admin, wp-login, REST API, webhooks, and static assets`,
+      changelog: `### Version ${version}\n- Fix courier detection false positive where marketplace channel names (e.g. Channel: Shopee in customer notes) were misclassified as SPX instead of chosen shipping courier (e.g. JNE)\n- Prioritize authoritative shipping lines over customer notes during courier detection\n- Persist explicit courier metadata (_carrier_id, _exacoat_courier) upon manual warranty and redeem claim order creation\n- Add conflict guard in getOrderCourierDisplay ensuring frontend never renders misattributed courier when explicit shipping method is present`,
     },
   };
 

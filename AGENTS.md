@@ -263,8 +263,11 @@ export function cleanItemTitle(name?: string): string {
     - `^(?:RS|RAY)\w+` -> Rayspeed Asia (`rayspeed`)
     - `^(?:GOO|GRT)\w+` or `^9[2345]\d{20,24}$` -> Goorita / USPS (`goorita`)
 - **Multi-Source Courier Resolution Invariant (`resolveOrderCourier`)**:
-  - Prioritizes store pickup -> domestic Goorita consolidation -> explicit valid preset carrier IDs -> tracking number pattern recognition -> shipping lines (`method_title`, `method_id`, `instance_id`, `meta_data`) -> order meta (`_warranty_courier`, `_biteship_courier_code`, `_shipping_courier`, `carrier_id`) -> customer notes -> backend detected carriers -> default `jne`.
+  - Prioritizes store pickup -> domestic Goorita consolidation -> explicit valid preset carrier IDs -> tracking number pattern recognition -> shipping lines (`method_title`, `method_id`, `instance_id`, `meta_data`) -> order meta (`_warranty_courier`, `_biteship_courier_code`, `_shipping_courier`, `carrier_id`) -> customer notes (with explicit prefix only) -> backend detected carriers -> default `jne`.
   - Never prematurely bail to `custom` when `carrier_id` in meta is empty, generic, or `'custom'`; always inspect shipping lines and tracking patterns first.
+  - **Marketplace Channel Name Isolation**: Never match bare platform or channel names (e.g. `shopee`, `tiktok`, `tokopedia`) as couriers. SPX carrier matching is strictly bounded to `spx`, `shopee express`, or `shopee_express`. Freeform customer notes containing strings like `Channel: Shopee` must never trigger SPX courier detection.
+  - **Manual Warranty & Redeem Courier Metadata Persistence**: Orders created via `rest_create_manual_claim` must explicitly persist `_carrier_id`, `carrier_id`, `_shipping_carrier`, `_exacoat_courier`, `_tracking_provider`, and `_warranty_courier` to guarantee unambiguous courier assignment from creation.
+  - **Conflicting Backend Courier Guard**: `getOrderCourierDisplay` discards stale or mismatched `backendCourier` values when they conflict with the order's actual shipping line item (e.g. discarding `Spx - REG` when shipping line specifies `JNE - REG`).
 - **Backend Order Manager Sync (`class-order-manager.php`)**:
   - `format_order_for_manager()` includes tracking number pattern detection, `$s_item->get_instance_id()`, `_warranty_courier`, and returns the full `shipping_lines` array.
 

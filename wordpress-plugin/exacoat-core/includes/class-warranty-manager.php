@@ -2177,6 +2177,60 @@ class Exacoat_Warranty_Manager {
 	}
 
 	/**
+	 * Resolves carrier slug and full name from courier id and label
+	 */
+	public static function resolve_courier_info( string $courier_id, string $courier_label ): array {
+		$raw = strtolower( trim( $courier_id . ' ' . $courier_label ) );
+		$carrier_slug = 'jne';
+
+		if ( str_contains( $raw, 'sicepat' ) ) {
+			$carrier_slug = 'sicepat';
+		} elseif ( str_contains( $raw, 'jne' ) ) {
+			$carrier_slug = 'jne';
+		} elseif ( str_contains( $raw, 'j&t' ) || str_contains( $raw, 'jnt' ) ) {
+			$carrier_slug = 'jnt';
+		} elseif ( str_contains( $raw, 'pos' ) ) {
+			$carrier_slug = 'pos';
+		} elseif ( str_contains( $raw, 'lion' ) ) {
+			$carrier_slug = 'lion';
+		} elseif ( str_contains( $raw, 'spx' ) || str_contains( $raw, 'shopee express' ) || str_contains( $raw, 'shopee_express' ) ) {
+			$carrier_slug = 'spx';
+		} elseif ( str_contains( $raw, 'anteraja' ) ) {
+			$carrier_slug = 'anteraja';
+		} elseif ( str_contains( $raw, 'ninja' ) ) {
+			$carrier_slug = 'ninja';
+		} elseif ( str_contains( $raw, 'goorita' ) ) {
+			$carrier_slug = 'goorita';
+		} elseif ( str_contains( $raw, 'dhl' ) ) {
+			$carrier_slug = 'dhl';
+		} elseif ( str_contains( $raw, 'fedex' ) ) {
+			$carrier_slug = 'fedex';
+		} elseif ( str_contains( $raw, 'rayspeed' ) ) {
+			$carrier_slug = 'rayspeed';
+		}
+
+		$names = [
+			'jne'      => 'JNE Express',
+			'sicepat'  => 'SiCepat',
+			'pos'      => 'POS Indonesia',
+			'lion'     => 'Lion Parcel',
+			'jnt'      => 'J&T Express',
+			'spx'      => 'SPX Express',
+			'anteraja' => 'Anteraja',
+			'ninja'    => 'Ninja Xpress',
+			'goorita'  => 'Goorita Send USA',
+			'dhl'      => 'DHL Express',
+			'fedex'    => 'FedEx International',
+			'rayspeed' => 'Rayspeed Asia',
+		];
+
+		return [
+			'slug'      => $carrier_slug,
+			'full_name' => $names[ $carrier_slug ] ?? $courier_label,
+		];
+	}
+
+	/**
 	 * Admin / Manager: Create manual warranty or redeem claim (Web order or Marketplace Shopee / Tokopedia)
 	 */
 	public static function rest_create_manual_claim( \WP_REST_Request $request ): \WP_REST_Response {
@@ -2381,6 +2435,15 @@ class Exacoat_Warranty_Manager {
 				$replacement_order->update_meta_data( '_shipping_waived', $is_free ? 'yes' : 'no' );
 				$replacement_order->update_meta_data( '_rma_reviewed_by', $admin_name );
 				$replacement_order->update_meta_data( '_rma_reviewed_at', current_time( 'mysql' ) );
+
+				$c_info = self::resolve_courier_info( $courier_id, $courier_label );
+				$replacement_order->update_meta_data( '_carrier_id', $c_info['slug'] );
+				$replacement_order->update_meta_data( 'carrier_id', $c_info['slug'] );
+				$replacement_order->update_meta_data( '_shipping_carrier', $c_info['slug'] );
+				$replacement_order->update_meta_data( '_exacoat_courier', $c_info['full_name'] );
+				$replacement_order->update_meta_data( '_tracking_provider', $c_info['full_name'] );
+				$replacement_order->update_meta_data( '_warranty_courier', $courier_label );
+
 				if ( ! empty( $selected_parts ) ) {
 					$replacement_order->update_meta_data( '_rma_selected_parts', $selected_parts );
 				}
@@ -2468,6 +2531,10 @@ class Exacoat_Warranty_Manager {
 				}
 
 				$replacement_order->save();
+
+				if ( class_exists( 'Exacoat_Tracking_Pool' ) && in_array( $initial_status, [ 'processing', 'preparing-order', 'confirmed' ], true ) && in_array( $c_info['slug'], [ 'jne', 'sicepat' ], true ) ) {
+					\Exacoat_Tracking_Pool::auto_assign_order_tracking( $rep_id );
+				}
 
 				$res_data = [
 					'success'                  => true,
@@ -2697,6 +2764,15 @@ class Exacoat_Warranty_Manager {
 				$replacement_order->update_meta_data( '_shipping_waived', $is_free ? 'yes' : 'no' );
 				$replacement_order->update_meta_data( '_rma_reviewed_by', $admin_name );
 				$replacement_order->update_meta_data( '_rma_reviewed_at', current_time( 'mysql' ) );
+
+				$c_info = self::resolve_courier_info( $courier_id, $courier_label );
+				$replacement_order->update_meta_data( '_carrier_id', $c_info['slug'] );
+				$replacement_order->update_meta_data( 'carrier_id', $c_info['slug'] );
+				$replacement_order->update_meta_data( '_shipping_carrier', $c_info['slug'] );
+				$replacement_order->update_meta_data( '_exacoat_courier', $c_info['full_name'] );
+				$replacement_order->update_meta_data( '_tracking_provider', $c_info['full_name'] );
+				$replacement_order->update_meta_data( '_warranty_courier', $courier_label );
+
 				if ( ! empty( $request->get_param( 'buyer_note' ) ) ) {
 					$replacement_order->update_meta_data( '_shopee_buyer_note', sanitize_textarea_field( $request->get_param( 'buyer_note' ) ) );
 				}
@@ -2777,6 +2853,10 @@ class Exacoat_Warranty_Manager {
 				}
 
 				$replacement_order->save();
+
+				if ( class_exists( 'Exacoat_Tracking_Pool' ) && in_array( $initial_status, [ 'processing', 'preparing-order', 'confirmed' ], true ) && in_array( $c_info['slug'], [ 'jne', 'sicepat' ], true ) ) {
+					\Exacoat_Tracking_Pool::auto_assign_order_tracking( $rep_id );
+				}
 
 				$res_data = [
 					'success'                  => true,

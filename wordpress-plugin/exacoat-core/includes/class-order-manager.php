@@ -1336,15 +1336,19 @@ class Exacoat_Order_Manager {
 		}
 
 		$carrier_labels = [
-			'jne'     => 'JNE Express',
-			'sicepat' => 'SiCepat',
-			'pos'     => 'POS Indonesia',
-			'goorita' => 'Goorita Send USA',
-			'dhl'     => 'DHL Express',
-			'fedex'   => 'FedEx International',
-			'biteship'=> 'Biteship',
-			'lion'    => 'Lion Parcel',
-			'jnt'     => 'J&T Express',
+			'jne'      => 'JNE Express',
+			'sicepat'  => 'SiCepat',
+			'pos'      => 'POS Indonesia',
+			'goorita'  => 'Goorita Send USA',
+			'dhl'      => 'DHL Express',
+			'fedex'    => 'FedEx International',
+			'biteship' => 'Biteship',
+			'lion'     => 'Lion Parcel',
+			'jnt'      => 'J&T Express',
+			'spx'      => 'SPX Express',
+			'anteraja' => 'Anteraja',
+			'ninja'    => 'Ninja Xpress',
+			'rayspeed' => 'Rayspeed Asia',
 		];
 		$carrier_display = $carrier_labels[ $carrier_id ] ?? ( ! empty( $courier ) ? $courier : 'Express Courier' );
 
@@ -1916,24 +1920,32 @@ class Exacoat_Order_Manager {
 		$detected_carrier = '';
 		$detected_service = '';
 		$search_texts = [];
-		$cust_note = (string) $order->get_customer_note();
-		if ( ! empty( $cust_note ) && ! str_starts_with( strtolower( trim( $cust_note ) ), 'consolidated goorita' ) ) {
-			$search_texts[] = $cust_note;
-		}
-		$ship_method = (string) $order->get_shipping_method();
-		if ( ! empty( $ship_method ) ) {
-			$search_texts[] = $ship_method;
-		}
+
+		// Priority 1: Actual shipping line items (authoritative method title and id)
 		foreach ( $order->get_items( 'shipping' ) as $s_item ) {
 			$search_texts[] = (string) $s_item->get_method_title() . ' ' . (string) $s_item->get_method_id() . ' ' . (string) $s_item->get_instance_id();
 		}
+		// Priority 2: Warranty / RMA designated courier
 		$w_courier = (string) $order->get_meta( '_warranty_courier' );
 		if ( ! empty( $w_courier ) ) {
 			$search_texts[] = $w_courier;
 		}
+		// Priority 3: Shipping method title / code
+		$ship_method = (string) $order->get_shipping_method();
+		if ( ! empty( $ship_method ) ) {
+			$search_texts[] = $ship_method;
+		}
+		// Priority 4: Biteship courier code
 		$bite_code = (string) $order->get_meta( '_biteship_courier_code' );
 		if ( ! empty( $bite_code ) ) {
 			$search_texts[] = $bite_code;
+		}
+		// Priority 5: Customer note only if an explicit courier directive prefix is found
+		$cust_note = (string) $order->get_customer_note();
+		if ( ! empty( $cust_note ) && ! str_starts_with( strtolower( trim( $cust_note ) ), 'consolidated goorita' ) ) {
+			if ( preg_match( '/(?:shipping courier|jasa kirim|courier)\s*:\s*([^\r\n|]+)/i', $cust_note, $nm ) ) {
+				$search_texts[] = trim( $nm[1] );
+			}
 		}
 
 		foreach ( $search_texts as $st ) {
@@ -1951,6 +1963,8 @@ class Exacoat_Order_Manager {
 			if ( empty( $detected_carrier ) ) {
 				if ( str_contains( $st_lower, 'sicepat' ) ) {
 					$detected_carrier = 'sicepat';
+				} elseif ( str_contains( $st_lower, 'jne' ) ) {
+					$detected_carrier = 'jne';
 				} elseif ( str_contains( $st_lower, 'j&t' ) || str_contains( $st_lower, 'jnt' ) ) {
 					$detected_carrier = 'jnt';
 				} elseif ( str_contains( $st_lower, 'pos indonesia' ) || preg_match( '/\bpos\b/', $st_lower ) ) {
@@ -1965,14 +1979,12 @@ class Exacoat_Order_Manager {
 					$detected_carrier = 'fedex';
 				} elseif ( str_contains( $st_lower, 'rayspeed' ) ) {
 					$detected_carrier = 'rayspeed';
-				} elseif ( str_contains( $st_lower, 'spx' ) || str_contains( $st_lower, 'shopee' ) ) {
+				} elseif ( str_contains( $st_lower, 'spx' ) || str_contains( $st_lower, 'shopee express' ) || str_contains( $st_lower, 'shopee_express' ) ) {
 					$detected_carrier = 'spx';
 				} elseif ( str_contains( $st_lower, 'anteraja' ) ) {
 					$detected_carrier = 'anteraja';
 				} elseif ( str_contains( $st_lower, 'ninja' ) ) {
 					$detected_carrier = 'ninja';
-				} elseif ( str_contains( $st_lower, 'jne' ) ) {
-					$detected_carrier = 'jne';
 				}
 			}
 		}
@@ -2047,6 +2059,10 @@ class Exacoat_Order_Manager {
 			'biteship'            => 'Biteship',
 			'lion'                => 'Lion Parcel',
 			'jnt'                 => 'J&T Express',
+			'spx'                 => 'SPX',
+			'anteraja'            => 'Anteraja',
+			'ninja'               => 'Ninja Xpress',
+			'rayspeed'            => 'Rayspeed',
 			'pickup'              => 'Store Pickup (SMB)',
 		];
 		$carrier_key = strtolower( trim( (string) $carrier_val ) );
@@ -2055,7 +2071,7 @@ class Exacoat_Order_Manager {
 		if ( $is_store_pickup ) {
 			$carrier_display = 'Store Pickup (SMB)';
 		} elseif ( ! empty( $detected_service ) ) {
-			$prefix = ( 'jne' === $carrier_key ) ? 'JNE' : ( ( 'sicepat' === $carrier_key ) ? 'SiCepat' : ( ( 'pos' === $carrier_key ) ? 'POS' : $base_carrier ) );
+			$prefix = ( 'jne' === $carrier_key ) ? 'JNE' : ( ( 'sicepat' === $carrier_key ) ? 'SiCepat' : ( ( 'pos' === $carrier_key ) ? 'POS' : ( ( 'spx' === $carrier_key ) ? 'SPX' : ( ( 'jnt' === $carrier_key ) ? 'J&T' : $base_carrier ) ) ) );
 			$carrier_display = "{$prefix} - {$detected_service}";
 		} else {
 			$carrier_display = $base_carrier;
@@ -3145,6 +3161,10 @@ class Exacoat_Order_Manager {
 				'biteship'            => 'Biteship',
 				'lion'                => 'Lion Parcel',
 				'jnt'                 => 'J&T Express',
+				'spx'                 => 'SPX Express',
+				'anteraja'            => 'Anteraja',
+				'ninja'               => 'Ninja Xpress',
+				'rayspeed'            => 'Rayspeed Asia',
 			];
 			$courier_name = $carrier_labels[ $carrier_key ] ?? ( ! empty( $carrier_val ) ? ucfirst( (string) $carrier_val ) : 'Express Courier' );
 
