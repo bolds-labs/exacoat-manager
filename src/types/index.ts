@@ -253,6 +253,7 @@ export interface Order {
   discount_tax?: number | string;
   fee_total?: number;
   fees?: OrderFee[];
+  fee_lines?: any[];
   coupons?: OrderCoupon[];
   coupon_codes?: string[];
   total: number | string;

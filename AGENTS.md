@@ -317,6 +317,25 @@ ow, up to 365 days).
 
 ---
 
+## 11b. 30-Day Guarantee Returns & Subsidized Shipping Policy
+
+- **The Policy & Invariant**: When a customer returns items under the 30-Day Money Back Guarantee for 100% Store Credit, any subsidized shipping discount provided by Exacoat on the original order (e.g. Free Shipping promo) is deducted from the refundable amount.
+- **Subsidized Shipping Extraction Sources**:
+  In WooCommerce, free shipping promotions are stored in order metadata and shipping line items, not as negative fee lines:
+  1. Order metadata: `_shipping_discount_amount`, `_shipping_biteship_discount`.
+  2. Shipping difference: `_shipping_raw_price` vs `order.shipping_total`.
+  3. Shipping lines metadata: `original_cost` or `_biteship_raw_idr_cost` where `is_free_shipping = 1`.
+  4. Fee lines: Any fee containing "shipping" or "ongkir".
+- **Store Credit Ledger Deposit**:
+  - Merely changing WooCommerce order status to `refunded` does NOT deposit store credit into the customer's wallet.
+  - In `Exacoat_Guarantee_Manager::rest_process_action('approve_refund')`, when `refund_method === 'store_credit'`, `Exacoat_Guarantee_Manager::issue_customer_store_credit()` is invoked.
+  - This dispatches `POST /wc-store-credits/v1/entries` to Advanced Coupons with fallback to `\ACFW_Store_Credits::add_credit()` and user meta `acfw_store_credit_balance` synchronization.
+- **Order Detail Drawer Refund Modal**:
+  - Displays the shipping subsidy deduction and suggested net refund when `refundMethod === 'store_credit'`.
+  - Provides a 1-click button to apply the subsidized net amount directly.
+
+---
+
 ## 12. Build, Packaging, and Release Workflow
 
 Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-core` plugin:

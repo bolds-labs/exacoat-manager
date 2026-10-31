@@ -87,3 +87,29 @@ Exacoat Core introduces [`Exacoat_Store_Credit_Manager`](file:///c:/AI/exacoat-m
 2. **Visual HTML Preview**:
    - `GET /wp-admin/admin-ajax.php?action=exacoat_preview_email_html&event=customer_cashback_earned`
    - `GET /wp-admin/admin-ajax.php?action=exacoat_preview_email_html&event=customer_store_credit_reminder`
+
+---
+
+## 6. Store Credit Refunds & Subsidized Shipping Policy (30-Day Guarantee)
+
+### The Policy & Invariant
+- **Policy**: In accordance with Exacoat policy, when a customer returns items under the 30-Day Money Back Guarantee for 100% Store Credit, any subsidized shipping discount provided by Exacoat on the original order (e.g. Free Shipping promo) is deducted from the refundable amount.
+- **Example Calculation**:
+  - Item Subtotal: Rp 310.000
+  - Courier Shipping (e.g. JNE REG): Rp 19.000
+  - Shipping Discount (Free Shipping promo): -Rp 19.000
+  - Paid Total: Rp 310.000
+  - Net Store Credit Refund: `Rp 310.000 - Rp 19.000 = Rp 291.000`
+- **Subsidized Shipping Extraction Sources**:
+  In WooCommerce, free shipping promotions are stored in order metadata and shipping line items, not as negative fee lines:
+  1. Order metadata: `_shipping_discount_amount`, `_shipping_biteship_discount`.
+  2. Shipping difference: `_shipping_raw_price` vs `order.shipping_total`.
+  3. Shipping lines metadata: `original_cost` or `_biteship_raw_idr_cost` where `is_free_shipping = 1`.
+  4. Fee lines: Any fee containing "shipping" or "ongkir".
+- **Store Credit Ledger Deposit**:
+  - Merely changing WooCommerce order status to `refunded` does NOT deposit store credit into the customer's wallet.
+  - In `Exacoat_Guarantee_Manager::rest_process_action('approve_refund')`, when `refund_method === 'store_credit'`, `Exacoat_Guarantee_Manager::issue_customer_store_credit()` is invoked.
+  - This dispatches `POST /wc-store-credits/v1/entries` to Advanced Coupons with fallback to `\ACFW_Store_Credits::add_credit()` and user meta `acfw_store_credit_balance` synchronization.
+- **Order Detail Drawer Refund Modal**:
+  - Displays the shipping subsidy deduction and suggested net refund when `refundMethod === 'store_credit'`.
+  - Provides a 1-click button to apply the subsidized net amount directly.

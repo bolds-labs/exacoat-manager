@@ -180,6 +180,114 @@ class Exacoat_Guarantee_Manager {
 	}
 
 	/**
+	 * Extract subsidized shipping discount from order metadata, shipping lines, or fees.
+	 */
+	public static function get_subsidized_shipping_discount( \WC_Order $order ): float {
+		$discount = 0.0;
+
+		// 1. Order meta
+		$meta_disc = $order->get_meta( '_shipping_discount_amount' ) ?: $order->get_meta( '_shipping_biteship_discount' );
+		if ( is_numeric( $meta_disc ) ) {
+			$discount = max( $discount, abs( (float) $meta_disc ) );
+		}
+
+		// 2. Raw price vs shipping total difference
+		$raw_price = $order->get_meta( '_shipping_raw_price' )
+			?: ( $order->get_meta( '_shipping_biteship_original_rate' ) ?: $order->get_meta( '_shipping_biteship_courier_rate' ) );
+		if ( is_numeric( $raw_price ) ) {
+			$diff = max( 0.0, (float) $raw_price - (float) $order->get_shipping_total() );
+			$discount = max( $discount, $diff );
+		}
+
+		// 3. Shipping lines metadata
+		foreach ( $order->get_shipping_methods() as $shipping_item ) {
+			/** @var \WC_Order_Item_Shipping $shipping_item */
+			$is_free   = $shipping_item->get_meta( 'is_free_shipping' );
+			$orig_cost = $shipping_item->get_meta( 'original_cost' ) ?: $shipping_item->get_meta( '_biteship_raw_idr_cost' );
+			if ( ( '1' === (string) $is_free || true === $is_free ) && is_numeric( $orig_cost ) ) {
+				$discount = max( $discount, abs( (float) $orig_cost ) );
+			}
+		}
+
+		// 4. Fee lines
+		foreach ( $order->get_fees() as $fee ) {
+			/** @var \WC_Order_Item_Fee $fee */
+			$n = strtolower( $fee->get_name() );
+			if ( str_contains( $n, 'shipping' ) || str_contains( $n, 'ongkir' ) ) {
+				$discount = max( $discount, abs( (float) $fee->get_total() ) );
+			}
+		}
+
+		return $discount;
+	}
+
+	/**
+	 * Allocate store credit to a customer's Advanced Coupons wallet with ledger entry and user meta sync.
+	 */
+	public static function issue_customer_store_credit( int $customer_id, float $amount, int $order_id, string $note = '' ): bool {
+		if ( $customer_id <= 0 || $amount <= 0 ) {
+			return false;
+		}
+
+		$credit_issued = false;
+
+		// 1. Dispatch internal REST entry to Advanced Coupons store credit engine
+		$old_user_id = get_current_user_id();
+		if ( ! current_user_can( 'manage_woocommerce' ) ) {
+			$admins = get_users( [ 'role' => 'administrator', 'number' => 1, 'fields' => 'ID' ] );
+			if ( ! empty( $admins ) ) {
+				wp_set_current_user( (int) $admins[0] );
+			}
+		}
+
+		try {
+			$entry_req = new \WP_REST_Request( 'POST', '/wc-store-credits/v1/entries' );
+			$entry_req->set_header( 'content-type', 'application/json' );
+			$entry_req->set_body( wp_json_encode( [
+				'amount'    => $amount,
+				'user_id'   => $customer_id,
+				'type'      => 'increase',
+				'action'    => 'refund',
+				'object_id' => $order_id,
+				'note'      => $note ?: "Refund for Order #{$order_id}",
+			] ) );
+
+			$entry_res = rest_do_request( $entry_req );
+			if ( ! is_wp_error( $entry_res ) && $entry_res->get_status() >= 200 && $entry_res->get_status() < 300 ) {
+				$credit_issued = true;
+			}
+		} catch ( \Throwable $e ) {
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::error( 'refunds', "Exception calling /wc-store-credits/v1/entries for Order #{$order_id}: " . $e->getMessage() );
+			}
+		} finally {
+			if ( $old_user_id !== get_current_user_id() ) {
+				wp_set_current_user( $old_user_id );
+			}
+		}
+
+		// 2. Direct ACFW helper class fallback if loaded
+		if ( ! $credit_issued && class_exists( 'ACFW_Store_Credits' ) && method_exists( 'ACFW_Store_Credits', 'add_credit' ) ) {
+			try {
+				\ACFW_Store_Credits::add_credit( $customer_id, $amount, $note ?: "Refund for Order #{$order_id}" );
+				$credit_issued = true;
+			} catch ( \Throwable $e ) {
+				// Fallback
+			}
+		}
+
+		// 3. User meta sync and fallback
+		$current_bal = floatval( get_user_meta( $customer_id, 'acfw_store_credit_balance', true ) );
+		if ( ! $credit_issued ) {
+			$new_bal = round( $current_bal + $amount, 2 );
+			update_user_meta( $customer_id, 'acfw_store_credit_balance', $new_bal );
+			$credit_issued = true;
+		}
+
+		return $credit_issued;
+	}
+
+	/**
 	 * REST Endpoint: Check 30-Day Guarantee Eligibility
 	 */
 	public static function rest_check_eligibility( \WP_REST_Request $request ): \WP_REST_Response {
@@ -333,29 +441,37 @@ class Exacoat_Guarantee_Manager {
 		}
 
 		// Currency & Payout calculations
-		$currency = $order->get_currency();
+		$currency        = $order->get_currency();
 		$currency_symbol = get_woocommerce_currency_symbol( $currency );
 
+		// Subsidized shipping deduction: Exacoat policy states original shipping and promotional subsidies are deducted from returns
+		$shipping_discount  = self::get_subsidized_shipping_discount( $order );
+		$deduction          = min( $shipping_discount, $eligible_total );
+		$net_eligible_total = max( 0.0, $eligible_total - $deduction );
+
 		// Payout options:
-		// Option 1: 100% Store Credit
-		$store_credit_amount = $eligible_total;
-		// Option 2 & 3: 70% Bank Transfer / PayPal (30% restocking & administration fee)
-		$cash_refund_amount  = round( $eligible_total * 0.70, 2 );
+		// Option 1: 100% Store Credit (subsidized shipping deducted)
+		$store_credit_amount = $net_eligible_total;
+		// Option 2 & 3: 70% Bank Transfer / PayPal (subsidized shipping deducted, then 30% admin/restocking fee)
+		$cash_refund_amount  = round( $net_eligible_total * 0.70, 2 );
 
 		return new \WP_REST_Response( [
-			'success'            => true,
-			'eligible'           => true,
-			'order_id'           => $order->get_id(),
-			'order_number'       => $order->get_order_number(),
-			'shipped_at'         => $shipped_date_str,
-			'shipped_timestamp'  => $shipped_timestamp,
-			'days_since_shipped' => $days_since_shipped,
-			'days_remaining'     => $days_remaining,
-			'currency'           => $currency,
-			'currency_symbol'    => $currency_symbol,
-			'eligible_subtotal'  => $eligible_total,
-			'eligible_items'     => $eligible_items,
-			'ineligible_items'   => $ineligible_items,
+			'success'              => true,
+			'eligible'             => true,
+			'order_id'             => $order->get_id(),
+			'order_number'         => $order->get_order_number(),
+			'shipped_at'           => $shipped_date_str,
+			'shipped_timestamp'    => $shipped_timestamp,
+			'days_since_shipped'   => $days_since_shipped,
+			'days_remaining'       => $days_remaining,
+			'currency'             => $currency,
+			'currency_symbol'      => $currency_symbol,
+			'eligible_subtotal'    => $eligible_total,
+			'shipping_discount'    => $shipping_discount,
+			'subsidized_deduction' => $deduction,
+			'net_refundable'       => $net_eligible_total,
+			'eligible_items'       => $eligible_items,
+			'ineligible_items'     => $ineligible_items,
 			'refund_options'     => [
 				[
 					'key'         => 'store_credit',
@@ -444,9 +560,14 @@ class Exacoat_Guarantee_Manager {
 			}
 		}
 
+		// Subsidized shipping deduction: Exacoat policy states original shipping and promotional subsidies are deducted from returns
+		$shipping_discount  = self::get_subsidized_shipping_discount( $order );
+		$deduction          = min( $shipping_discount, $eligible_total );
+		$net_eligible_total = max( 0.0, $eligible_total - $deduction );
+
 		$is_store_credit = 'store_credit' === $refund_method;
 		$percentage      = $is_store_credit ? 100 : 70;
-		$refund_amount   = $is_store_credit ? $eligible_total : round( $eligible_total * 0.70, 2 );
+		$refund_amount   = $is_store_credit ? $net_eligible_total : round( $net_eligible_total * 0.70, 2 );
 
 		// Destination descriptor
 		$destination_desc = '';
@@ -463,6 +584,10 @@ class Exacoat_Guarantee_Manager {
 			'refund_method'         => $refund_method,
 			'refund_percentage'     => $percentage,
 			'refund_amount'         => $refund_amount,
+			'eligible_subtotal'     => $eligible_total,
+			'shipping_discount'     => $shipping_discount,
+			'subsidized_deduction'  => $deduction,
+			'net_eligible_total'    => $net_eligible_total,
 			'currency'              => $order->get_currency(),
 			'bank_name'             => $bank_name,
 			'bank_account_name'     => $bank_acc_name,
@@ -480,6 +605,11 @@ class Exacoat_Guarantee_Manager {
 		$order->update_meta_data( '_guarantee_status', 'pending_return' );
 		$order->update_meta_data( '_guarantee_refund_method', $refund_method );
 		$order->update_meta_data( '_guarantee_refund_amount', (string) $refund_amount );
+		$order->update_meta_data( '_guarantee_shipping_discount', (string) $shipping_discount );
+		$order->update_meta_data( '_guarantee_items_subtotal', (string) $eligible_total );
+		$order->update_meta_data( '_guarantee_total_refund', (string) $refund_amount );
+		$order->update_meta_data( '_guarantee_est_refund_store_credit', (string) $net_eligible_total );
+		$order->update_meta_data( '_guarantee_est_refund_bank', (string) round( $net_eligible_total * 0.70, 2 ) );
 		$order->update_meta_data( '_guarantee_destination', $destination_desc );
 		$order->update_meta_data( '_guarantee_return_courier', $return_courier );
 		$order->update_meta_data( '_guarantee_return_tracking', $return_resi );
@@ -492,6 +622,11 @@ class Exacoat_Guarantee_Manager {
 		update_post_meta( $order_id, '_guarantee_status', 'pending_return' );
 		update_post_meta( $order_id, '_guarantee_refund_method', $refund_method );
 		update_post_meta( $order_id, '_guarantee_refund_amount', (string) $refund_amount );
+		update_post_meta( $order_id, '_guarantee_shipping_discount', (string) $shipping_discount );
+		update_post_meta( $order_id, '_guarantee_items_subtotal', (string) $eligible_total );
+		update_post_meta( $order_id, '_guarantee_total_refund', (string) $refund_amount );
+		update_post_meta( $order_id, '_guarantee_est_refund_store_credit', (string) $net_eligible_total );
+		update_post_meta( $order_id, '_guarantee_est_refund_bank', (string) round( $net_eligible_total * 0.70, 2 ) );
 		update_post_meta( $order_id, '_guarantee_destination', $destination_desc );
 		update_post_meta( $order_id, '_guarantee_claim_data', $claim_data );
 
@@ -936,6 +1071,20 @@ class Exacoat_Guarantee_Manager {
 				$destination
 			) );
 
+			// Allocate store credit to customer wallet if refund method is store credit
+			$store_credit_funded = false;
+			if ( 'store_credit' === $method && $refund_amount > 0 ) {
+				$customer_id = (int) $order->get_customer_id();
+				if ( $customer_id > 0 ) {
+					$store_credit_funded = self::issue_customer_store_credit(
+						$customer_id,
+						$refund_amount,
+						$order_id,
+						sprintf( '30-Day Guarantee Refund for Order #%s', $order->get_order_number() )
+					);
+				}
+			}
+
 			$amount_fmt = $currency_sym . ' ' . number_format( $refund_amount, 0, ',', '.' );
 
 			// Dispatch light-theme refund email via Exacoat Email Engine
@@ -972,10 +1121,11 @@ class Exacoat_Guarantee_Manager {
 			}
 
 			$order->add_order_note( sprintf(
-				"✅ [30-DAY GUARANTEE REFUND COMPLETED] Approved and issued: %s via %s (%s).%s%s",
+				"✅ [30-DAY GUARANTEE REFUND COMPLETED] Approved and issued: %s via %s (%s).%s%s%s",
 				$amount_fmt,
 				ucwords( str_replace( '_', ' ', $method ) ),
 				$destination,
+				$store_credit_funded ? "\nDeposited store credit into customer wallet balance." : '',
 				$email_dispatched ? "\nDispatched light-themed refund confirmation email to customer." : '',
 				! empty( $notes ) ? "\nAdmin Notes: {$notes}" : ''
 			) );

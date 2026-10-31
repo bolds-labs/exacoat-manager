@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.211] - 2026-10-31
+
+### 30-Day Guarantee Subsidized Shipping Deduction & Store Credit Auto-Funding
+- **Subsidized Shipping Deduction on Guarantee Returns (`class-guarantee-manager.php`)**:
+  - Enforced policy deduction of promotional shipping subsidies (e.g. Free Shipping promo) from 100% store credit and 70% bank transfer guarantee returns.
+  - Implemented `get_subsidized_shipping_discount` inspecting `_shipping_discount_amount`, `_shipping_biteship_discount`, raw shipping rate differences, and shipping line items where `is_free_shipping = 1`.
+  - Stored `_guarantee_shipping_discount`, `_guarantee_items_subtotal`, and `_guarantee_total_refund` in order metadata.
+- **Automated Store Credit Wallet Funding (`class-guarantee-manager.php`)**:
+  - Implemented `issue_customer_store_credit` dispatching internal REST entries to `/wc-store-credits/v1/entries` to credit customer balances upon guarantee refund approval.
+  - Added fallback to `\ACFW_Store_Credits::add_credit()` and direct `acfw_store_credit_balance` user meta synchronization.
+- **Refund Modal Subsidy Notice & 1-Click Net Amount Helper (`OrderDetailDrawer.tsx`)**:
+  - Added real-time subsidized shipping deduction notification when selecting Store Credit in the Order Detail Drawer refund modal.
+  - Added a 1-click button to automatically apply the subsidized net refund amount.
+
+---
+
 ## [0.1.210] - 2026-10-29
 
 ### Courier Detection Precision & Warranty Redeem Courier Persistence

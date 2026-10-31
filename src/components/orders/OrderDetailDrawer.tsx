@@ -904,7 +904,28 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
 
     const rawShippingPriceStr = findOrderMeta('_shipping_raw_price') || findOrderMeta('_shipping_biteship_original_rate') || findOrderMeta('_shipping_biteship_courier_rate');
     const shippingDiscountStr = findOrderMeta('_shipping_discount_amount') || findOrderMeta('_shipping_biteship_discount');
-    const shippingDiscount = shippingDiscountStr ? Math.abs(parseFloat(String(shippingDiscountStr))) : 0;
+    let shippingDiscount = shippingDiscountStr ? Math.abs(parseFloat(String(shippingDiscountStr))) : 0;
+
+    if (!shippingDiscount && Array.isArray(order.shipping_lines)) {
+      for (const line of order.shipping_lines) {
+        const isFree = line.meta_data?.find((m: any) => m.key === 'is_free_shipping')?.value;
+        const origCost = line.meta_data?.find((m: any) => m.key === 'original_cost' || m.key === '_biteship_raw_idr_cost')?.value;
+        if ((isFree === '1' || isFree === true) && origCost && !isNaN(Number(origCost))) {
+          shippingDiscount = Math.max(shippingDiscount, Math.abs(Number(origCost)));
+        }
+      }
+    }
+
+    const feeLines = order.fee_lines || order.fees || [];
+    if (!shippingDiscount && Array.isArray(feeLines)) {
+      for (const fee of feeLines) {
+        const n = ((fee as any).name || (fee as any).title || '').toLowerCase();
+        if (n.includes('shipping') || n.includes('ongkir')) {
+          shippingDiscount = Math.max(shippingDiscount, Math.abs(parseFloat(String((fee as any).total || 0))));
+        }
+      }
+    }
+
     const shippingPromoCode = String(findOrderMeta('_shipping_promo_code') || findOrderMeta('_shipping_biteship_applied_coupon') || '').trim();
 
     const originalShippingRate = rawShippingPriceStr
@@ -3042,7 +3063,12 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => setRefundMethod('original')}
+                    onClick={() => {
+                      setRefundMethod('original');
+                      if (shippingDiscount > 0 && Number(refundAmount) === Math.max(0, remainingAvailableRefund - shippingDiscount)) {
+                        setRefundAmount(String(remainingAvailableRefund));
+                      }
+                    }}
                     className={clsx(
                       'p-3 rounded-xl border text-left transition-all',
                       refundMethod === 'original'
@@ -3060,7 +3086,12 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                   <button
                     type="button"
                     disabled={!order.customer_id}
-                    onClick={() => setRefundMethod('store_credit')}
+                    onClick={() => {
+                      setRefundMethod('store_credit');
+                      if (shippingDiscount > 0 && Number(refundAmount) === remainingAvailableRefund) {
+                        setRefundAmount(String(Math.max(0, remainingAvailableRefund - shippingDiscount)));
+                      }
+                    }}
                     className={clsx(
                       'p-3 rounded-xl border text-left transition-all',
                       refundMethod === 'store_credit'
@@ -3079,12 +3110,38 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                 </div>
 
                 {refundMethod === 'store_credit' && (
-                  <div className="mt-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] font-sans flex items-center justify-between">
-                    <span>Customer account store credit</span>
-                    {order.customer_store_credit_balance !== undefined && (
-                      <span className="font-mono font-bold">
-                        Balance: {formatCurrency(order.customer_store_credit_balance, order.currency)}
-                      </span>
+                  <div className="mt-2 space-y-2">
+                    <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] font-sans flex items-center justify-between">
+                      <span>Customer account store credit</span>
+                      {order.customer_store_credit_balance !== undefined && (
+                        <span className="font-mono font-bold">
+                          Balance: {formatCurrency(order.customer_store_credit_balance, order.currency)}
+                        </span>
+                      )}
+                    </div>
+
+                    {shippingDiscount > 0 && (
+                      <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] font-sans space-y-1.5">
+                        <div className="flex items-center justify-between text-amber-300">
+                          <span>Shipping subsidy deduction:</span>
+                          <span className="font-mono font-bold">
+                            -{formatCurrency(shippingDiscount, order.currency)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-neutral-300">
+                          <span>Suggested net refund:</span>
+                          <span className="font-mono font-bold text-amber-200">
+                            {formatCurrency(Math.max(0, remainingAvailableRefund - shippingDiscount), order.currency)}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setRefundAmount(String(Math.max(0, remainingAvailableRefund - shippingDiscount)))}
+                          className="w-full mt-1 py-1 px-2 text-[10px] font-medium bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 rounded-md transition-colors text-center"
+                        >
+                          Apply Subsidized Net ({formatCurrency(Math.max(0, remainingAvailableRefund - shippingDiscount), order.currency)})
+                        </button>
+                      </div>
                     )}
                   </div>
                 )}

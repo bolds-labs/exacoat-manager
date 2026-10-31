@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Fix courier detection false positive where marketplace channel names (e.g. Channel: Shopee in customer notes) were misclassified as SPX instead of chosen shipping courier (e.g. JNE)\n- Prioritize authoritative shipping lines over customer notes during courier detection\n- Persist explicit courier metadata (_carrier_id, _exacoat_courier) upon manual warranty and redeem claim order creation\n- Add conflict guard in getOrderCourierDisplay ensuring frontend never renders misattributed courier when explicit shipping method is present`,
+      changelog: `### Version ${version}\n- Deduct subsidized shipping discounts from 30-Day Guarantee returns and store credit refunds in accordance with Exacoat policy\n- Extract subsidized shipping from _shipping_discount_amount, _shipping_raw_price, and shipping lines metadata\n- Fund Advanced Coupons store credit wallet automatically upon guarantee refund approval\n- Add subsidized shipping deduction breakdown and 1-click net amount helper in Order Detail Drawer refund modal`,
     },
   };
 
