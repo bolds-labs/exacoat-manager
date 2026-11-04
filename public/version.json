@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.212",
+  "version": "0.1.213",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.212.zip?v=0.1.212",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.213.zip?v=0.1.213",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-11-04T03:25:48.744Z",
+  "last_updated": "2026-11-04T04:04:04.375Z",
   "sections": {
-    "changelog": "### Version 0.1.212\n- Fix Switch to Courier toggle allowing orders to transition seamlessly from Store Pickup to Courier Delivery\n- Support _delivery_override and _is_store_pickup explicit metadata overrides in tracking pool and order manager\n- Persist fulfillment mode switch to WordPress backend via authenticated REST API\n- Auto-prompt delivery address edit when switching from store pickup address to courier delivery"
+    "changelog": "### Version 0.1.213\n- Fix false-positive Exacoat Store address warning when an order has a valid customer delivery address\n- Fix Store Pickup method title leakage in Courier section by sanitizing store pickup titles during courier delivery\n- Fix courier and tracking persistence: enforce delivery override on tracking save and prevent store pickup auto-reversion\n- Default domestic courier deliveries to REG tier (e.g. SiCepat - REG) when service tier is not explicitly set"
   }
 }

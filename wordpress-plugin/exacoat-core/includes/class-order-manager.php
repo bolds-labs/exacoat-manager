@@ -1050,16 +1050,42 @@ class Exacoat_Order_Manager {
 				if ( in_array( $order->get_status(), [ 'smb-ready', 'smb-picked' ], true ) ) {
 					$order->set_status( 'ready-to-ship', 'Fulfillment mode switched from Store Pickup to Courier Delivery via Exacoat Manager' );
 				}
-				$curr_carrier = strtolower( (string) ( $order->get_meta( '_carrier_id' ) ?: $order->get_meta( 'carrier_id' ) ) );
-				if ( empty( $curr_carrier ) || 'pickup' === $curr_carrier || 'custom' === $curr_carrier ) {
-					$order->update_meta_data( '_carrier_id', 'jne' );
-					$order->update_meta_data( 'carrier_id', 'jne' );
-					$order->update_meta_data( '_exacoat_courier', 'JNE Express' );
-					$order->update_meta_data( '_shipping_carrier', 'jne' );
-					update_post_meta( $order_id, '_carrier_id', 'jne' );
-					update_post_meta( $order_id, 'carrier_id', 'jne' );
+				$s_comp = (string) $order->get_shipping_company();
+				if ( false !== stripos( $s_comp, 'exacoat store' ) || false !== stripos( $s_comp, 'store bekasi' ) ) {
+					$order->set_shipping_company( '' );
+					update_post_meta( $order_id, '_shipping_company', '' );
 				}
+				$req_carrier = strtolower( trim( (string) ( $params['carrier_id'] ?? ( $params['courier'] ?? '' ) ) ) );
+				$curr_carrier = $req_carrier ?: strtolower( (string) ( $order->get_meta( '_carrier_id' ) ?: $order->get_meta( 'carrier_id' ) ) );
+				if ( empty( $curr_carrier ) || 'pickup' === $curr_carrier || 'custom' === $curr_carrier ) {
+					$curr_carrier = 'jne';
+				}
+				$c_label = ( 'sicepat' === $curr_carrier ? 'SiCepat - REG' : ( 'jne' === $curr_carrier ? 'JNE - REG' : ucfirst( $curr_carrier ) ) );
+				$order->update_meta_data( '_carrier_id', $curr_carrier );
+				$order->update_meta_data( 'carrier_id', $curr_carrier );
+				$order->update_meta_data( '_exacoat_courier', $c_label );
+				$order->update_meta_data( '_shipping_carrier', $curr_carrier );
+				update_post_meta( $order_id, '_carrier_id', $curr_carrier );
+				update_post_meta( $order_id, 'carrier_id', $curr_carrier );
 				$audit_notes[] = 'Switched fulfillment to Courier Delivery';
+			}
+		}
+
+		// 1c. Update Courier / Carrier if provided directly
+		if ( isset( $params['carrier_id'] ) || isset( $params['courier'] ) ) {
+			$raw_c = sanitize_text_field( $params['carrier_id'] ?? $params['courier'] );
+			$c_id  = strtolower( trim( $raw_c ) );
+			if ( in_array( $c_id, [ 'sicepat', 'jne', 'pos', 'spx', 'jnt', 'lion', 'dhl', 'fedex', 'anteraja', 'ninja', 'rayspeed', 'goorita' ], true ) ) {
+				$c_label = ( 'sicepat' === $c_id ? 'SiCepat - REG' : ( 'jne' === $c_id ? 'JNE - REG' : ucfirst( $c_id ) ) );
+				$order->update_meta_data( 'carrier_id', $c_id );
+				$order->update_meta_data( '_carrier_id', $c_id );
+				$order->update_meta_data( '_shipping_carrier', $c_id );
+				$order->update_meta_data( '_exacoat_courier', $c_label );
+				update_post_meta( $order_id, 'carrier_id', $c_id );
+				update_post_meta( $order_id, '_carrier_id', $c_id );
+				update_post_meta( $order_id, '_shipping_carrier', $c_id );
+				update_post_meta( $order_id, '_exacoat_courier', $c_label );
+				$audit_notes[] = "Courier updated to {$c_label}";
 			}
 		}
 
@@ -1068,7 +1094,13 @@ class Exacoat_Order_Manager {
 			$s = $params['shipping'];
 			if ( isset( $s['first_name'] ) ) $order->set_shipping_first_name( sanitize_text_field( $s['first_name'] ) );
 			if ( isset( $s['last_name'] ) )  $order->set_shipping_last_name( sanitize_text_field( $s['last_name'] ) );
-			if ( isset( $s['company'] ) )    $order->set_shipping_company( sanitize_text_field( $s['company'] ) );
+			if ( isset( $s['company'] ) ) {
+				$clean_comp = sanitize_text_field( $s['company'] );
+				if ( false !== stripos( $clean_comp, 'exacoat store' ) || false !== stripos( $clean_comp, 'store bekasi' ) ) {
+					$clean_comp = '';
+				}
+				$order->set_shipping_company( $clean_comp );
+			}
 			if ( isset( $s['address_1'] ) )  $order->set_shipping_address_1( sanitize_text_field( $s['address_1'] ) );
 			if ( isset( $s['address_2'] ) )  $order->set_shipping_address_2( sanitize_text_field( $s['address_2'] ) );
 			if ( isset( $s['city'] ) )       $order->set_shipping_city( sanitize_text_field( $s['city'] ) );
@@ -1080,6 +1112,17 @@ class Exacoat_Order_Manager {
 					$order->set_shipping_phone( sanitize_text_field( $s['phone'] ) );
 				}
 				$order->update_meta_data( '_shipping_phone_formatted', sanitize_text_field( $s['phone'] ) );
+			}
+			$addr1_val = strtolower( trim( (string) ( $s['address_1'] ?? '' ) ) );
+			$is_store_street = ( str_contains( $addr1_val, 'ruby commercial' ) || str_contains( $addr1_val, 'summarecon bekasi' ) );
+			if ( ! empty( $addr1_val ) && ! $is_store_street ) {
+				$order->update_meta_data( '_delivery_override', 'yes' );
+				$order->update_meta_data( '_is_store_pickup', 'no' );
+				update_post_meta( $order_id, '_delivery_override', 'yes' );
+				update_post_meta( $order_id, '_is_store_pickup', 'no' );
+				if ( in_array( $order->get_status(), [ 'smb-ready', 'smb-picked' ], true ) ) {
+					$order->set_status( 'ready-to-ship', 'Switched from Store Pickup to Courier Delivery due to destination address entry' );
+				}
 			}
 			$audit_notes[] = 'Shipping address updated';
 		}
@@ -1383,7 +1426,35 @@ class Exacoat_Order_Manager {
 			'ninja'    => 'Ninja Xpress',
 			'rayspeed' => 'Rayspeed Asia',
 		];
-		$carrier_display = $carrier_labels[ $carrier_id ] ?? ( ! empty( $courier ) ? $courier : 'Express Courier' );
+		// Resolve carrier display with REG service tier default for domestic couriers
+		$service_tier = 'REG';
+		if ( preg_match( '/(?:jne|sicepat|pos|goorita|dhl|fedex|lion|j&t|jnt|spx|anteraja|ninja|rayspeed)\s*[-:]\s*([A-Za-z0-9_\s]+)/i', $courier, $sm ) ) {
+			$service_tier = strtoupper( trim( $sm[1] ) );
+		}
+		if ( in_array( $carrier_id, [ 'sicepat', 'jne', 'pos', 'spx', 'jnt' ], true ) ) {
+			$prefix = ( 'sicepat' === $carrier_id ? 'SiCepat' : ( 'jne' === $carrier_id ? 'JNE' : ( 'spx' === $carrier_id ? 'SPX' : ( 'pos' === $carrier_id ? 'POS' : 'J&T' ) ) ) );
+			$carrier_display = "{$prefix} - {$service_tier}";
+		} else {
+			$carrier_display = $carrier_labels[ $carrier_id ] ?? ( ! empty( $courier ) ? $courier : 'Express Courier' );
+		}
+
+		// Ensure fulfillment mode is definitively Courier Delivery
+		$order->update_meta_data( '_delivery_override', 'yes' );
+		$order->update_meta_data( '_is_store_pickup', 'no' );
+		update_post_meta( $order_id, '_delivery_override', 'yes' );
+		update_post_meta( $order_id, '_is_store_pickup', 'no' );
+
+		// Clear store company if lingering from initial store pickup selection
+		$s_comp = (string) $order->get_shipping_company();
+		if ( false !== stripos( $s_comp, 'exacoat store' ) || false !== stripos( $s_comp, 'store bekasi' ) ) {
+			$order->set_shipping_company( '' );
+			update_post_meta( $order_id, '_shipping_company', '' );
+		}
+
+		// If status was store pickup status, switch to ready-to-ship
+		if ( in_array( $order->get_status(), [ 'smb-ready', 'smb-picked' ], true ) && ( empty( $new_status ) || 'none' === $new_status ) ) {
+			$order->set_status( 'ready-to-ship', 'Fulfillment mode switched to Courier Delivery upon saving tracking' );
+		}
 
 		// Save tracking metadata
 		$tracking_info = [
@@ -2103,11 +2174,16 @@ class Exacoat_Order_Manager {
 
 		if ( $is_store_pickup ) {
 			$carrier_display = 'Store Pickup (SMB)';
-		} elseif ( ! empty( $detected_service ) ) {
-			$prefix = ( 'jne' === $carrier_key ) ? 'JNE' : ( ( 'sicepat' === $carrier_key ) ? 'SiCepat' : ( ( 'pos' === $carrier_key ) ? 'POS' : ( ( 'spx' === $carrier_key ) ? 'SPX' : ( ( 'jnt' === $carrier_key ) ? 'J&T' : $base_carrier ) ) ) );
-			$carrier_display = "{$prefix} - {$detected_service}";
 		} else {
-			$carrier_display = $base_carrier;
+			if ( empty( $detected_service ) && in_array( $carrier_key, [ 'sicepat', 'jne', 'pos', 'spx', 'jnt' ], true ) && $is_domestic ) {
+				$detected_service = 'REG';
+			}
+			if ( ! empty( $detected_service ) ) {
+				$prefix = ( 'jne' === $carrier_key ) ? 'JNE' : ( ( 'sicepat' === $carrier_key ) ? 'SiCepat' : ( ( 'pos' === $carrier_key ) ? 'POS' : ( ( 'spx' === $carrier_key ) ? 'SPX' : ( ( 'jnt' === $carrier_key ) ? 'J&T' : $base_carrier ) ) ) );
+				$carrier_display = "{$prefix} - {$detected_service}";
+			} else {
+				$carrier_display = $base_carrier;
+			}
 		}
 
 		$tracking = null;
@@ -2577,7 +2653,7 @@ class Exacoat_Order_Manager {
 			'coupon_codes'                  => $coupon_codes,
 			'shipping_total'                => floatval( $order->get_shipping_total() ),
 			'shipping_tax'                  => floatval( $order->get_shipping_tax() ),
-			'shipping_method_name'          => $is_store_pickup ? 'Store Pickup (Summarecon Bekasi)' : ( $order->get_shipping_method() ?: 'Standard Tracked Delivery' ),
+			'shipping_method_name'          => $is_store_pickup ? 'Store Pickup (Summarecon Bekasi)' : ( ( ! empty( $carrier_display ) && 'Store Pickup (SMB)' !== $carrier_display ) ? $carrier_display : ( preg_match( '/pickup/i', (string) $order->get_shipping_method() ) ? 'Standard Tracked Delivery' : ( $order->get_shipping_method() ?: 'Standard Tracked Delivery' ) ) ),
 			'is_store_pickup'               => $is_store_pickup,
 			'total_tax'                     => floatval( $order->get_total_tax() ),
 			'total'                         => floatval( $order->get_total() ),

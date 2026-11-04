@@ -649,6 +649,13 @@ class Exacoat_Tracking_Pool {
 			return true;
 		}
 
+		// 3. If a courier and tracking number are already attached, it is definitively a courier delivery
+		$t_code = trim( (string) ( $order->get_meta( 'tracking_number' ) ?: $order->get_meta( '_tracking_number' ) ) );
+		$c_id   = strtolower( trim( (string) ( $order->get_meta( 'carrier_id' ) ?: $order->get_meta( '_carrier_id' ) ) ) );
+		if ( ! empty( $t_code ) && ! str_starts_with( $t_code, 'field_' ) && ! empty( $c_id ) && 'pickup' !== $c_id && 'custom' !== $c_id ) {
+			return false;
+		}
+
 		$status = str_replace( 'wc-', '', $order->get_status() );
 		if ( in_array( $status, [ 'smb-ready', 'smb-picked' ], true ) ) {
 			return true;
@@ -658,15 +665,16 @@ class Exacoat_Tracking_Pool {
 		$shipping_addr1    = strtolower( trim( (string) $order->get_shipping_address_1() ?: (string) $order->get_billing_address_1() ) );
 		$shipping_addr2    = strtolower( trim( (string) $order->get_shipping_address_2() ?: (string) $order->get_billing_address_2() ) );
 		$shipping_postcode = trim( (string) $order->get_shipping_postcode() ?: (string) $order->get_billing_postcode() );
-
-		if ( str_contains( $shipping_company, 'exacoat store' ) || str_contains( $shipping_company, 'store bekasi' ) ) {
-			return true;
-		}
+		$shipping_city     = strtolower( trim( (string) $order->get_shipping_city() ?: (string) $order->get_billing_city() ) );
 
 		if (
 			( str_contains( $shipping_addr1, 'ruby commercial' ) || str_contains( $shipping_addr1, 'summarecon bekasi' ) || str_contains( $shipping_addr2, 'summarecon bekasi' ) ) &&
-			( '17142' === $shipping_postcode || str_contains( $shipping_addr1, 'bekasi' ) || str_contains( $shipping_addr2, 'bekasi' ) )
+			( '17142' === $shipping_postcode || str_contains( $shipping_addr1, 'bekasi' ) || str_contains( $shipping_addr2, 'bekasi' ) || str_contains( $shipping_city, 'bekasi' ) )
 		) {
+			return true;
+		}
+
+		if ( ( str_contains( $shipping_company, 'exacoat store' ) || str_contains( $shipping_company, 'store bekasi' ) ) && ( empty( $shipping_addr1 ) || str_contains( $shipping_addr1, 'ruby' ) || str_contains( $shipping_addr1, 'bekasi' ) || str_contains( $shipping_city, 'bekasi' ) ) ) {
 			return true;
 		}
 

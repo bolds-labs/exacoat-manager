@@ -195,6 +195,8 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
 
   const handleOrderMutated = (updatedOrder: Order) => {
     setInternalOrder(updatedOrder);
+    setStorePickupOverride(isStorePickupOrder(updatedOrder));
+    setPickupOverrideVersion((v) => v + 1);
     if (onOrderUpdated) onOrderUpdated();
   };
   
@@ -361,6 +363,11 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
   const handleCourierChange = (newCourier: string) => {
     isFormDirtyRef.current = true;
     setCourier(newCourier);
+    if (newCourier !== 'custom' && order && isStorePickupOrder(order)) {
+      setStorePickupOverride(false);
+      toggleLocalStorePickupOrder(order.id, false);
+      setPickupOverrideVersion((v) => v + 1);
+    }
     if (newCourier === 'custom') {
       const isPresetName = COURIER_PRESETS.some(
         p => p.label.toLowerCase() === customCourierName.trim().toLowerCase() || p.value === customCourierName.trim().toLowerCase()
@@ -684,10 +691,12 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
       setIsFulfilling(true);
       const res = await fulfillOrderDirect(order.id, {
         courier: finalCarrier,
+        carrier_id: finalCarrier,
         tracking_number: trackingNumber.trim(),
         tracking_url: finalUrl,
         status: targetStatus,
         notify_customer: targetStatus === 'shipped',
+        is_store_pickup: false,
       } as any);
 
       if (res.success) {
@@ -696,6 +705,13 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
         const currentStatusInfo = getOrderStatusInfo(order.status);
         isFormDirtyRef.current = false;
         lastLoadedOrderIdRef.current = order.id;
+
+        setCourier(finalCarrier);
+        setTrackingNumber(trackingNumber.trim());
+        setStorePickupOverride(false);
+        toggleLocalStorePickupOrder(order.id, false);
+        setPickupOverrideVersion((v) => v + 1);
+
         if (targetStatus === 'shipped') {
           showToast('success', 'Order Shipped', `Order #${orderNum} marked as Shipped with tracking code.`);
           order.status = 'shipped' as OrderStatus;
@@ -707,9 +723,12 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
             res.order.tracking.carrier_id = 'jne';
             res.order.tracking.courier = 'JNE Express';
           }
+          setInternalOrder(res.order);
           Object.assign(order, res.order);
         } else if ((res as any).tracking_info) {
-          order.tracking = (res as any).tracking_info;
+          const updatedTracking = (res as any).tracking_info;
+          order.tracking = updatedTracking;
+          setInternalOrder({ ...order, tracking: updatedTracking });
         }
         if (isConsolidationOrder && order.tracking && order.tracking.carrier_id === 'goorita') {
           order.tracking.carrier_id = 'jne';
@@ -889,10 +908,13 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
   const currentStatusClean = String(order.status || '').replace('wc-', '');
   const cleanOrderNum = String(order.order_number || order.id || '').replace(/^#+/, '');
   const isStorePickup = storePickupOverride !== null ? storePickupOverride : isStorePickupOrder(order);
+  const sAddr1 = (order.shipping?.address_1 || order.billing?.address_1 || '').toLowerCase();
+  const sAddr2 = (order.shipping?.address_2 || order.billing?.address_2 || '').toLowerCase();
+  const sPostcode = String(order.shipping?.postcode || order.billing?.postcode || '').trim();
+  const sCity = (order.shipping?.city || order.billing?.city || '').toLowerCase();
   const isStoreAddress = Boolean(
-    (order.shipping?.address_1 || '').toLowerCase().includes('ruby commercial') ||
-    (order.shipping?.address_1 || '').toLowerCase().includes('summarecon bekasi') ||
-    (order.shipping?.company || '').toLowerCase().includes('exacoat store')
+    (sAddr1.includes('ruby commercial') || sAddr1.includes('summarecon bekasi') || sAddr2.includes('summarecon bekasi')) &&
+    (sPostcode === '17142' || sCity.includes('bekasi') || sAddr1.includes('bekasi'))
   );
 
   const handleToggleStorePickup = async () => {
@@ -913,8 +935,13 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
     // 3. Persist to WordPress database
     setIsSwitchingFulfillment(true);
     try {
+      const cleanShippingComp = /exacoat\s*store|store\s*bekasi/i.test(order.shipping?.company || '') ? '' : order.shipping?.company;
       const res = await updateOrderDirect(order.id, {
         is_store_pickup: targetIsPickup,
+        shipping: order.shipping ? {
+          ...order.shipping,
+          company: cleanShippingComp,
+        } : undefined,
       });
 
       if (res.success && res.order) {
@@ -1967,10 +1994,17 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                   </label>
                   {(() => {
                     const resolved = resolveOrderCourier(order);
-                    if (resolved.serviceName || (resolved.rawMatch && resolved.courierId !== 'jne')) {
+                    if (resolved.serviceName) {
                       return (
                         <span className="text-[10px] font-mono text-amber-300 font-semibold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                          {resolved.serviceName ? `Service: ${resolved.serviceName}` : resolved.rawMatch}
+                          {`Service: ${resolved.serviceName}`}
+                        </span>
+                      );
+                    }
+                    if (resolved.rawMatch && resolved.courierId !== 'jne' && !/pickup|ambil|summarecon/i.test(resolved.rawMatch)) {
+                      return (
+                        <span className="text-[10px] font-mono text-amber-300 font-semibold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                          {resolved.rawMatch}
                         </span>
                       );
                     }

@@ -140,14 +140,22 @@ export function isStorePickupOrder(order: Partial<Order> | any): boolean {
   const shippingAddr1 = String(order.shipping?.address_1 || order.billing?.address_1 || '').toLowerCase();
   const shippingAddr2 = String(order.shipping?.address_2 || order.billing?.address_2 || '').toLowerCase();
   const shippingPostcode = String(order.shipping?.postcode || order.billing?.postcode || '').trim();
+  const shippingCity = String(order.shipping?.city || order.billing?.city || '').toLowerCase();
 
-  if (shippingCompany.includes('exacoat store') || shippingCompany.includes('store bekasi')) {
-    return true;
+  // Explicit tracking number and courier assigned takes precedence over store flags
+  const hasValidTracking = Boolean(order.tracking?.tracking_number && order.tracking.tracking_number !== '⚠️' && !order.tracking.tracking_number.startsWith('field_'));
+  const hasValidCarrier = Boolean(order.tracking?.carrier_id && order.tracking.carrier_id !== 'pickup' && order.tracking.carrier_id !== 'custom');
+  if (hasValidTracking && hasValidCarrier) {
+    return false;
   }
+
   if (
     (shippingAddr1.includes('ruby commercial') || shippingAddr1.includes('summarecon bekasi') || shippingAddr2.includes('summarecon bekasi')) &&
-    (shippingPostcode === '17142' || shippingAddr1.includes('bekasi') || shippingAddr2.includes('bekasi'))
+    (shippingPostcode === '17142' || shippingAddr1.includes('bekasi') || shippingAddr2.includes('bekasi') || shippingCity.includes('bekasi'))
   ) {
+    return true;
+  }
+  if ((shippingCompany.includes('exacoat store') || shippingCompany.includes('store bekasi')) && (!shippingAddr1 || shippingAddr1.includes('ruby') || shippingAddr1.includes('bekasi') || shippingCity.includes('bekasi'))) {
     return true;
   }
 
@@ -412,34 +420,43 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
   }
 
   // 3. Check tracking object if already saved on the order with a valid tracking number
+  const country = String(order.shipping?.country || order.billing?.country || '').toUpperCase();
+  const isDomestic = !country || country === 'ID' || country === 'INDONESIA';
+
   const trackingNumber = String(order.tracking?.tracking_number || order.tracking_number || '').trim();
   const savedCarrierId = String(order.tracking?.carrier_id || order.carrier_id || '').toLowerCase().trim();
   const detectedFromTrackingNum = detectCourierFromTrackingNumber(trackingNumber);
 
   if (trackingNumber && trackingNumber !== '⚠️' && !trackingNumber.startsWith('field_')) {
-    const normCarrierId = normalizeCourierSlug(savedCarrierId);
-    if (savedCarrierId && savedCarrierId !== 'custom' && savedCarrierId !== 'unknown' && normCarrierId !== 'custom' && PRESET_MAP[normCarrierId]) {
+    const effectiveCarrier = normalizeCourierSlug(savedCarrierId || detectedFromTrackingNum?.courierId || '');
+    if (effectiveCarrier && effectiveCarrier !== 'custom' && effectiveCarrier !== 'unknown' && PRESET_MAP[effectiveCarrier]) {
       const slTitle = String(order.shipping_lines?.[0]?.method_title || order.shipping_method_name || (order as any).shipping_courier_name || '');
-      const serviceMatch = slTitle.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*[-:]\s*([A-Za-z0-9_\s]+)/i) ||
-                           slTitle.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*\(([A-Za-z0-9_\s]+)\)/i);
+      const isStoreMethod = /pickup|ambil|summarecon/i.test(slTitle);
+      const cleanTitle = isStoreMethod ? '' : slTitle;
+      const serviceMatch = cleanTitle.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*[-:]\s*([A-Za-z0-9_\s]+)/i) ||
+                           cleanTitle.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*\(([A-Za-z0-9_\s]+)\)/i);
+      const defaultService = (isDomestic && ['sicepat', 'jne', 'pos', 'spx', 'jnt'].includes(effectiveCarrier)) ? 'REG' : undefined;
       return {
-        courierId: normCarrierId,
-        courierName: PRESET_MAP[normCarrierId],
-        serviceName: serviceMatch ? serviceMatch[1].trim().toUpperCase() : undefined,
-        rawMatch: slTitle || PRESET_MAP[normCarrierId],
+        courierId: effectiveCarrier,
+        courierName: PRESET_MAP[effectiveCarrier],
+        serviceName: serviceMatch ? serviceMatch[1].trim().toUpperCase() : defaultService,
+        rawMatch: cleanTitle || PRESET_MAP[effectiveCarrier],
         isCustom: false,
       };
     }
     const savedCourier = String(order.tracking?.courier || (order as any).shipping_courier_name || '').trim();
     const normSavedCourier = normalizeCourierSlug(savedCourier);
     if (savedCourier && savedCourier !== 'custom' && savedCourier !== 'Custom Courier' && normSavedCourier !== 'custom' && PRESET_MAP[normSavedCourier]) {
-      const serviceMatch = savedCourier.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*[-:]\s*([A-Za-z0-9_\s]+)/i) ||
-                           savedCourier.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*\(([A-Za-z0-9_\s]+)\)/i);
+      const isStoreSaved = /pickup|ambil|summarecon/i.test(savedCourier);
+      const cleanSaved = isStoreSaved ? '' : savedCourier;
+      const serviceMatch = cleanSaved.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*[-:]\s*([A-Za-z0-9_\s]+)/i) ||
+                           cleanSaved.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*\(([A-Za-z0-9_\s]+)\)/i);
+      const defaultService = (isDomestic && ['sicepat', 'jne', 'pos', 'spx', 'jnt'].includes(normSavedCourier)) ? 'REG' : undefined;
       return {
         courierId: normSavedCourier,
         courierName: PRESET_MAP[normSavedCourier],
-        serviceName: serviceMatch ? serviceMatch[1].trim().toUpperCase() : undefined,
-        rawMatch: savedCourier,
+        serviceName: serviceMatch ? serviceMatch[1].trim().toUpperCase() : defaultService,
+        rawMatch: cleanSaved || PRESET_MAP[normSavedCourier],
         isCustom: false,
       };
     }
@@ -493,9 +510,6 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
   if (order.detected_courier) candidateTexts.push(String(order.detected_courier));
   if (order.shipping_courier_name) candidateTexts.push(String(order.shipping_courier_name));
 
-  const country = String(order.shipping?.country || order.billing?.country || '').toUpperCase();
-  const isDomestic = country === 'ID' || country === 'INDONESIA';
-
   // Scan texts for recognized Indonesian & International couriers
   for (const text of candidateTexts) {
     const t = text.toLowerCase();
@@ -509,7 +523,7 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
       return {
         courierId: 'sicepat',
         courierName: 'SiCepat',
-        serviceName,
+        serviceName: serviceName || (isDomestic ? 'REG' : undefined),
         rawMatch: text,
         isCustom: false,
       };
@@ -732,12 +746,12 @@ export function getOrderCourierDisplay(order: any): string {
     return `${prefix} - ${resolved.serviceName}`;
   }
 
-  // If raw match already has courier and service code separated by hyphen
-  if (resolved.rawMatch && resolved.rawMatch.includes('-')) {
+  // If raw match already has courier and service code separated by hyphen (never for store pickup)
+  if (resolved.rawMatch && resolved.rawMatch.includes('-') && !/pickup|ambil|summarecon/i.test(resolved.rawMatch)) {
     const cleanMatch = resolved.rawMatch
       .replace(/^(?:shipping courier|jasa kirim|courier)\s*:\s*/i, '')
       .trim();
-    if (cleanMatch.includes('-')) {
+    if (cleanMatch.includes('-') && !/pickup|ambil|summarecon/i.test(cleanMatch)) {
       const parts = cleanMatch.split('-').map(s => s.trim());
       if (parts.length >= 2 && parts[0] && parts[1]) {
         let p0 = parts[0];

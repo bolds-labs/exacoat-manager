@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.213] - 2026-11-04
+
+### Delivery Address False Alert Elimination & Courier Persistence Invariants
+- **False-Positive Exacoat Store Address Warning Fix (`OrderDetailDrawer.tsx`, `EditOrderAddressModal.tsx`)**:
+  - Eliminated false-positive warning "Address is set to Exacoat Store. Click Edit to enter delivery address" when an order has a valid customer delivery address.
+  - Refined `isStoreAddress` check to evaluate strictly whether `address_1` or `address_2` actually points to Ruby Commercial / Summarecon Bekasi in Kota Bekasi 17142, removing company-only triggers.
+  - Automatically sanitized legacy store company strings (e.g. `Exacoat Store Summarecon Bekasi`) in `EditOrderAddressModal`, clearing `company` on form initialization and submission when an actual delivery address is entered.
+- **Store Pickup Method Leakage Elimination (`orderUtils.ts`, `OrderDetailDrawer.tsx`)**:
+  - Eliminated erroneous "Store pickup - Summarecon Bekasi" pill badge in Shipping & Tracking section when fulfilling via courier delivery.
+  - Sanitized `resolveOrderCourier` and `getOrderCourierDisplay` to ignore legacy checkout shipping line pickup titles when an order has a courier assigned or delivery override active.
+  - Guarded courier pill rendering so store pickup strings are never displayed as a courier service tier badge.
+- **Courier & Tracking Persistence Invariant (`class-order-manager.php`, `class-tracking-pool.php`, `OrderDetailDrawer.tsx`)**:
+  - Fixed root cause where courier (e.g. SiCepat) and tracking number reverted or failed to stick after clicking Save Tracking.
+  - Enforced `_delivery_override = 'yes'` and `_is_store_pickup = 'no'` directly in `fulfill_order` and `update_order`, preventing `is_store_pickup_order` from overwriting valid courier/tracking metadata with null on response formatting.
+  - Defaulted standard domestic Indonesian courier shipments (SiCepat, JNE, POS, SPX, J&T) to `REG` (Reguler) service tier when a specific tier is not specified, cleanly displaying `SiCepat - REG`.
+  - Updated React state `internalOrder` and local override sets immediately upon saving tracking to guarantee UI consistency and prevent stale component re-renders.
+
+---
+
 ## [0.1.212] - 2026-11-04
 
 ### Store Pickup to Courier Delivery Switching & Override Architecture

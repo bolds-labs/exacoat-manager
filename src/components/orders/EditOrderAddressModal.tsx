@@ -4,6 +4,7 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Order, OrderShipping } from '../../types';
 import { updateOrderDirect, UpdateOrderPayload } from '../../lib/wordpressBridge';
+import { toggleLocalStorePickupOrder } from '../../lib/orderUtils';
 import { useToast } from '../../context/ToastContext';
 import { COUNTRY_OPTIONS } from '../../lib/countries';
 import { MapPin, User, Mail, Phone, Building, Globe, FileText, Check, AlertCircle } from 'lucide-react';
@@ -57,7 +58,8 @@ export const EditOrderAddressModal: React.FC<EditOrderAddressModalProps> = ({
       setLastName(initialLast);
       setEmail(order.customer_email || b.email || '');
       setPhone(order.customer_phone || s.phone || b.phone || '');
-      setCompany(s.company || b.company || '');
+      const rawCompany = (s.company || b.company || '').trim();
+      setCompany(/exacoat\s*store|store\s*bekasi/i.test(rawCompany) ? '' : rawCompany);
       setAddress1(s.address_1 || b.address_1 || '');
       setAddress2(s.address_2 || b.address_2 || '');
       setCity(s.city || b.city || '');
@@ -89,7 +91,10 @@ export const EditOrderAddressModal: React.FC<EditOrderAddressModalProps> = ({
     const cleanLast = lastName.trim();
     const cleanEmail = email.trim();
     const cleanPhone = phone.trim();
-    const cleanCompany = company.trim();
+    let cleanCompany = company.trim();
+    if (/exacoat\s*store|store\s*bekasi/i.test(cleanCompany)) {
+      cleanCompany = '';
+    }
     const cleanAddr1 = address1.trim();
     const cleanAddr2 = address2.trim();
     const cleanCity = city.trim();
@@ -99,6 +104,9 @@ export const EditOrderAddressModal: React.FC<EditOrderAddressModalProps> = ({
     const cleanNote = customerNote.trim();
 
     const fullName = [cleanFirst, cleanLast].filter(Boolean).join(' ');
+
+    const isStoreAddr = (cleanAddr1.toLowerCase().includes('ruby commercial') || cleanAddr1.toLowerCase().includes('summarecon bekasi')) &&
+      (cleanPostcode === '17142' || cleanCity.toLowerCase().includes('bekasi'));
 
     const shippingData: Partial<OrderShipping> = {
       first_name: cleanFirst,
@@ -127,6 +135,7 @@ export const EditOrderAddressModal: React.FC<EditOrderAddressModalProps> = ({
       customer_email: cleanEmail || order.customer_email,
       customer_phone: cleanPhone || order.customer_phone,
       customer_note: cleanNote,
+      is_store_pickup: isStoreAddr ? true : false,
       shipping: shippingData,
       billing: billingData,
     };
@@ -134,6 +143,9 @@ export const EditOrderAddressModal: React.FC<EditOrderAddressModalProps> = ({
     try {
       const res = await updateOrderDirect(order.id, payload);
       if (res.success && res.order) {
+        if (!isStoreAddr) {
+          toggleLocalStorePickupOrder(order.id, false);
+        }
         showToast('success', 'Address Updated', `Delivery details for Order ${order.order_number || `#${order.id}`} successfully saved.`);
         onSaved(res.order);
         onClose();

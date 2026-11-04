@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Fix Switch to Courier toggle allowing orders to transition seamlessly from Store Pickup to Courier Delivery\n- Support _delivery_override and _is_store_pickup explicit metadata overrides in tracking pool and order manager\n- Persist fulfillment mode switch to WordPress backend via authenticated REST API\n- Auto-prompt delivery address edit when switching from store pickup address to courier delivery`,
+      changelog: `### Version ${version}\n- Fix false-positive Exacoat Store address warning when an order has a valid customer delivery address\n- Fix Store Pickup method title leakage in Courier section by sanitizing store pickup titles during courier delivery\n- Fix courier and tracking persistence: enforce delivery override on tracking save and prevent store pickup auto-reversion\n- Default domestic courier deliveries to REG tier (e.g. SiCepat - REG) when service tier is not explicitly set`,
     },
   };
 
