@@ -299,6 +299,8 @@ export interface Order {
   goorita_awb_url?: string;
   goorita_awb_image?: string;
   goorita_service?: string;
+  is_store_pickup?: boolean;
+  delivery_override?: boolean;
 }
 
 export interface OrderRmaDetails {

@@ -3282,6 +3282,7 @@ export interface UpdateOrderPayload {
   customer_email?: string;
   customer_phone?: string;
   customer_note?: string;
+  is_store_pickup?: boolean;
   shipping?: Partial<OrderShipping>;
   billing?: Partial<OrderShipping>;
   items?: Array<{

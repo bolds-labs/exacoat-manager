@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.212] - 2026-11-04
+
+### Store Pickup to Courier Delivery Switching & Override Architecture
+- **Store Pickup to Courier Switching Fix (`orderUtils.ts`, `OrderDetailDrawer.tsx`)**:
+  - Fixed issue where clicking "Switch to Courier" failed to toggle orders away from Store Pickup.
+  - Implemented dual local storage override sets (`_exacoat_store_pickup_orders` and `_exacoat_delivery_override_orders`) ensuring explicit user intent overrides static address heuristics.
+  - Added instant optimistic fulfillment toggle in `OrderDetailDrawer` backed by server persistence.
+  - Automatically prompts the Edit Address modal if switching an order to courier while its shipping address is still pointed to the Summarecon Bekasi store.
+- **Backend Fulfillment Switching & Metadata Invariant (`class-tracking-pool.php`, `class-order-manager.php`)**:
+  - Updated `is_store_pickup_order` in `Exacoat_Tracking_Pool` to respect explicit `_delivery_override = 'yes'` and `_is_store_pickup = 'no'` overrides before checking address or shipping method strings.
+  - Added `is_store_pickup` parameter handling in `Exacoat_Order_Manager::update_order`, persisting metadata to the database and transitioning orders from `smb-ready` to `ready-to-ship` when switching to courier delivery.
+
+---
+
 ## [0.1.211] - 2026-10-31
 
 ### 30-Day Guarantee Subsidized Shipping Deduction & Store Credit Auto-Funding

@@ -1030,6 +1030,39 @@ class Exacoat_Order_Manager {
 			$order->set_customer_note( sanitize_textarea_field( $params['customer_note'] ) );
 		}
 
+		// 1b. Update Store Pickup vs Courier Delivery fulfillment mode if provided
+		if ( isset( $params['is_store_pickup'] ) ) {
+			$to_pickup = filter_var( $params['is_store_pickup'], FILTER_VALIDATE_BOOLEAN );
+			if ( $to_pickup ) {
+				$order->update_meta_data( '_is_store_pickup', 'yes' );
+				$order->delete_meta_data( '_delivery_override' );
+				update_post_meta( $order_id, '_is_store_pickup', 'yes' );
+				delete_post_meta( $order_id, '_delivery_override' );
+				if ( in_array( $order->get_status(), [ 'ready-to-ship', 'awaiting-pickup' ], true ) ) {
+					$order->set_status( 'smb-ready', 'Fulfillment mode switched to Store Pickup via Exacoat Manager' );
+				}
+				$audit_notes[] = 'Switched fulfillment to Store Pickup';
+			} else {
+				$order->update_meta_data( '_is_store_pickup', 'no' );
+				$order->update_meta_data( '_delivery_override', 'yes' );
+				update_post_meta( $order_id, '_is_store_pickup', 'no' );
+				update_post_meta( $order_id, '_delivery_override', 'yes' );
+				if ( in_array( $order->get_status(), [ 'smb-ready', 'smb-picked' ], true ) ) {
+					$order->set_status( 'ready-to-ship', 'Fulfillment mode switched from Store Pickup to Courier Delivery via Exacoat Manager' );
+				}
+				$curr_carrier = strtolower( (string) ( $order->get_meta( '_carrier_id' ) ?: $order->get_meta( 'carrier_id' ) ) );
+				if ( empty( $curr_carrier ) || 'pickup' === $curr_carrier || 'custom' === $curr_carrier ) {
+					$order->update_meta_data( '_carrier_id', 'jne' );
+					$order->update_meta_data( 'carrier_id', 'jne' );
+					$order->update_meta_data( '_exacoat_courier', 'JNE Express' );
+					$order->update_meta_data( '_shipping_carrier', 'jne' );
+					update_post_meta( $order_id, '_carrier_id', 'jne' );
+					update_post_meta( $order_id, 'carrier_id', 'jne' );
+				}
+				$audit_notes[] = 'Switched fulfillment to Courier Delivery';
+			}
+		}
+
 		// 2. Update Shipping Address
 		if ( isset( $params['shipping'] ) && is_array( $params['shipping'] ) ) {
 			$s = $params['shipping'];

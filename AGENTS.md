@@ -274,6 +274,11 @@ export function cleanItemTitle(name?: string): string {
   - **Marketplace Channel Name Isolation**: Never match bare platform or channel names (e.g. `shopee`, `tiktok`, `tokopedia`) as couriers. SPX carrier matching is strictly bounded to `spx`, `shopee express`, or `shopee_express`. Freeform customer notes containing strings like `Channel: Shopee` must never trigger SPX courier detection.
   - **Manual Warranty & Redeem Courier Metadata Persistence**: Orders created via `rest_create_manual_claim` must explicitly persist `_carrier_id`, `carrier_id`, `_shipping_carrier`, `_exacoat_courier`, `_tracking_provider`, and `_warranty_courier` to guarantee unambiguous courier assignment from creation.
   - **Conflicting Backend Courier Guard**: `getOrderCourierDisplay` discards stale or mismatched `backendCourier` values when they conflict with the order's actual shipping line item (e.g. discarding `Spx - REG` when shipping line specifies `JNE - REG`).
+- **Store Pickup vs Courier Delivery Fulfillment Invariant (`isStorePickupOrder`)**:
+  - Store pickup detection must evaluate explicit metadata overrides (`_delivery_override = 'yes'` or `_is_store_pickup = 'no'`) before falling back to address checks (e.g. Ruby Commercial / Summarecon Bekasi) or original checkout shipping method titles (`local_pickup`).
+  - When an order's fulfillment mode is switched from Store Pickup to Courier Delivery in `OrderDetailDrawer`, the system sets `_is_store_pickup = 'no'`, `_delivery_override = 'yes'`, transitions `smb-ready` orders to `ready-to-ship`, and assigns a default courier (`jne`).
+  - Client state manages dual override sets (`_exacoat_store_pickup_orders` and `_exacoat_delivery_override_orders`) to guarantee instant optimistic UI updates before and across server roundtrips.
+  - If switched to courier while shipping address remains pointed to the Summarecon Bekasi store, the UI displays a warning banner and prompts the operator with the Edit Address modal.
 - **Backend Order Manager Sync (`class-order-manager.php`)**:
   - `format_order_for_manager()` includes tracking number pattern detection, `$s_item->get_instance_id()`, `_warranty_courier`, and returns the full `shipping_lines` array.
 

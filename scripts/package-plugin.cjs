@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Deduct subsidized shipping discounts from 30-Day Guarantee returns and store credit refunds in accordance with Exacoat policy\n- Extract subsidized shipping from _shipping_discount_amount, _shipping_raw_price, and shipping lines metadata\n- Fund Advanced Coupons store credit wallet automatically upon guarantee refund approval\n- Add subsidized shipping deduction breakdown and 1-click net amount helper in Order Detail Drawer refund modal`,
+      changelog: `### Version ${version}\n- Fix Switch to Courier toggle allowing orders to transition seamlessly from Store Pickup to Courier Delivery\n- Support _delivery_override and _is_store_pickup explicit metadata overrides in tracking pool and order manager\n- Persist fulfillment mode switch to WordPress backend via authenticated REST API\n- Auto-prompt delivery address edit when switching from store pickup address to courier delivery`,
     },
   };
 

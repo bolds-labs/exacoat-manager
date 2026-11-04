@@ -56,7 +56,8 @@ import {
   ClipboardCheck,
   Edit2,
   Trash2,
-  XCircle
+  XCircle,
+  Loader2
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
@@ -67,6 +68,7 @@ import { getWpBaseUrl } from '../../lib/wordpressBridge';
 import { GooritaBookingModal } from './GooritaBookingModal';
 import { downloadGooritaAwbPdf } from '../../lib/gooritaService';
 import { 
+  updateOrderDirect,
   updateOrderStatusDirect, 
   cancelOrderDirect,
   trashOrderDirect,
@@ -176,8 +178,12 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
   const [isTrashingOrder, setIsTrashingOrder] = useState(false);
 
   const [internalOrder, setInternalOrder] = useState<Order | null>(propOrder);
+  const [storePickupOverride, setStorePickupOverride] = useState<boolean | null>(null);
+  const [isSwitchingFulfillment, setIsSwitchingFulfillment] = useState(false);
+
   useEffect(() => {
     setInternalOrder(propOrder);
+    setStorePickupOverride(null);
   }, [propOrder]);
 
   const order = internalOrder || propOrder;
@@ -880,9 +886,58 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
     }
   };
 
-    const currentStatusClean = String(order.status || '').replace('wc-', '');
-    const cleanOrderNum = String(order.order_number || order.id || '').replace(/^#+/, '');
-    const isStorePickup = isStorePickupOrder(order);
+  const currentStatusClean = String(order.status || '').replace('wc-', '');
+  const cleanOrderNum = String(order.order_number || order.id || '').replace(/^#+/, '');
+  const isStorePickup = storePickupOverride !== null ? storePickupOverride : isStorePickupOrder(order);
+  const isStoreAddress = Boolean(
+    (order.shipping?.address_1 || '').toLowerCase().includes('ruby commercial') ||
+    (order.shipping?.address_1 || '').toLowerCase().includes('summarecon bekasi') ||
+    (order.shipping?.company || '').toLowerCase().includes('exacoat store')
+  );
+
+  const handleToggleStorePickup = async () => {
+    if (!order || isSwitchingFulfillment) return;
+    const currentIsPickup = storePickupOverride !== null ? storePickupOverride : isStorePickupOrder(order);
+    const targetIsPickup = !currentIsPickup;
+
+    // 1. Optimistic instant local update
+    setStorePickupOverride(targetIsPickup);
+    toggleLocalStorePickupOrder(order.id, targetIsPickup, currentIsPickup);
+    setPickupOverrideVersion((v) => v + 1);
+
+    // 2. If switching to courier and destination address points to Exacoat Store, open Edit Address modal
+    if (!targetIsPickup && isStoreAddress) {
+      setIsEditAddressModalOpen(true);
+    }
+
+    // 3. Persist to WordPress database
+    setIsSwitchingFulfillment(true);
+    try {
+      const res = await updateOrderDirect(order.id, {
+        is_store_pickup: targetIsPickup,
+      });
+
+      if (res.success && res.order) {
+        setInternalOrder(res.order);
+        showToast(
+          'success',
+          targetIsPickup ? 'Switched to Store Pickup' : 'Switched to Courier Delivery',
+          `Order #${cleanOrderNum} fulfillment mode updated.`
+        );
+        if (onOrderUpdated) onOrderUpdated();
+      } else {
+        showToast(
+          'info',
+          targetIsPickup ? 'Store Pickup Mode' : 'Courier Delivery Mode',
+          'Updated fulfillment mode locally.'
+        );
+      }
+    } catch (err: any) {
+      showToast('error', 'Update Failed', err.message || 'Failed to update fulfillment mode on server');
+    } finally {
+      setIsSwitchingFulfillment(false);
+    }
+  };
 
     const rmaDetails = getOrderRma(order);
     const guaranteeDetails = getOrderGuarantee(order);
@@ -1568,33 +1623,33 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                   {isStorePickup ? 'Store Pickup Location' : 'Destination Address'}
                 </span>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  {!isStorePickup && (
-                    <button
-                      type="button"
-                      onClick={() => setIsEditAddressModalOpen(true)}
-                      className="px-2 py-1 rounded-md text-[11px] font-sans font-medium text-neutral-300 hover:text-white bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 transition-colors flex items-center gap-1 cursor-pointer whitespace-nowrap"
-                      title="Edit customer shipping address"
-                    >
-                      <Edit2 className="w-3 h-3 text-[#f3aa18]" />
-                      <span>Edit</span>
-                    </button>
-                  )}
                   <button
                     type="button"
-                    onClick={() => {
-                      toggleLocalStorePickupOrder(order.id);
-                      setPickupOverrideVersion((v) => v + 1);
-                      if (onOrderUpdated) onOrderUpdated();
-                    }}
+                    onClick={() => setIsEditAddressModalOpen(true)}
+                    className="px-2 py-1 rounded-md text-[11px] font-sans font-medium text-neutral-300 hover:text-white bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 transition-colors flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                    title="Edit customer shipping address"
+                  >
+                    <Edit2 className="w-3 h-3 text-[#f3aa18]" />
+                    <span>Edit</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSwitchingFulfillment}
+                    onClick={handleToggleStorePickup}
                     className={clsx(
-                      "px-2 py-1 rounded-md text-[11px] font-sans font-medium transition-colors flex items-center gap-1 cursor-pointer whitespace-nowrap",
+                      "px-2 py-1 rounded-md text-[11px] font-sans font-medium transition-colors flex items-center gap-1 cursor-pointer whitespace-nowrap disabled:opacity-50",
                       isStorePickup 
                         ? "text-neutral-300 hover:text-white bg-white/[0.05] hover:bg-white/[0.1] border border-white/10" 
                         : "text-neutral-400 hover:text-[#f3aa18] bg-white/[0.03] hover:bg-[#f3aa18]/10 border border-white/5 hover:border-[#f3aa18]/30"
                     )}
                     title="Toggle between store pickup and courier delivery view for this order"
                   >
-                    {isStorePickup ? (
+                    {isSwitchingFulfillment ? (
+                      <>
+                        <Loader2 className="w-3 h-3 animate-spin text-[#f3aa18]" />
+                        <span>Updating...</span>
+                      </>
+                    ) : isStorePickup ? (
                       <>
                         <Truck className="w-3 h-3 text-[#f3aa18]" />
                         <span>Switch to Courier</span>
@@ -1616,12 +1671,26 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                   <span className="text-[11px] text-[#f3aa18]/90 font-medium block mt-0.5">Store Collection • Direct Handover</span>
                 </p>
               ) : (
-                <p className="text-xs text-neutral-300 font-sans leading-relaxed">
-                  {formatCleanText(order.shipping?.address_1 || order.billing?.address_1 || 'No address provided')}
-                  {order.shipping?.address_2 ? `, ${formatCleanText(order.shipping.address_2)}` : (order.billing?.address_2 ? `, ${formatCleanText(order.billing.address_2)}` : '')}<br />
-                  {formatCleanText(order.shipping?.city || order.billing?.city || '')}, {formatCleanText(order.shipping?.state || order.billing?.state || '')} {order.shipping?.postcode || order.billing?.postcode || ''}<br />
-                  <strong className="text-white">{resolveCountryName(order.shipping?.country || order.billing?.country)}</strong>
-                </p>
+                <div className="space-y-2">
+                  <p className="text-xs text-neutral-300 font-sans leading-relaxed">
+                    {formatCleanText(order.shipping?.address_1 || order.billing?.address_1 || 'No address provided')}
+                    {order.shipping?.address_2 ? `, ${formatCleanText(order.shipping.address_2)}` : (order.billing?.address_2 ? `, ${formatCleanText(order.billing.address_2)}` : '')}<br />
+                    {formatCleanText(order.shipping?.city || order.billing?.city || '')}, {formatCleanText(order.shipping?.state || order.billing?.state || '')} {order.shipping?.postcode || order.billing?.postcode || ''}<br />
+                    <strong className="text-white">{resolveCountryName(order.shipping?.country || order.billing?.country)}</strong>
+                  </p>
+                  {isStoreAddress && (
+                    <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] font-sans flex items-center justify-between gap-2">
+                      <span>Address is set to Exacoat Store. Click Edit to enter delivery address.</span>
+                      <button
+                        type="button"
+                        onClick={() => setIsEditAddressModalOpen(true)}
+                        className="underline hover:text-white font-semibold shrink-0 cursor-pointer"
+                      >
+                        Edit Address
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>

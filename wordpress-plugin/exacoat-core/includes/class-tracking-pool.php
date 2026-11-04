@@ -633,13 +633,24 @@ class Exacoat_Tracking_Pool {
 			}
 		}
 
-		$status = str_replace( 'wc-', '', $order->get_status() );
-		if ( in_array( $status, [ 'smb-ready', 'smb-picked' ], true ) ) {
+		// 1. Explicit delivery override check (admin forced to courier delivery)
+		$delivery_override = strtolower( trim( (string) $order->get_meta( '_delivery_override' ) ) );
+		if ( in_array( $delivery_override, [ 'yes', '1', 'true' ], true ) ) {
+			return false;
+		}
+
+		// 2. Explicit store pickup meta check
+		$meta_pickup = (string) ( $order->get_meta( '_is_store_pickup' ) ?: ( $order->get_meta( 'is_store_pickup' ) ?: ( $order->get_meta( 'store_pickup' ) ?: '' ) ) );
+		$clean_meta  = strtolower( trim( $meta_pickup ) );
+		if ( in_array( $clean_meta, [ 'no', '0', 'false' ], true ) ) {
+			return false;
+		}
+		if ( in_array( $clean_meta, [ 'yes', '1', 'true' ], true ) ) {
 			return true;
 		}
 
-		$meta_pickup = (string) ( $order->get_meta( '_is_store_pickup' ) ?: ( $order->get_meta( 'is_store_pickup' ) ?: ( $order->get_meta( 'store_pickup' ) ?: '' ) ) );
-		if ( in_array( strtolower( trim( $meta_pickup ) ), [ 'yes', '1', 'true' ], true ) ) {
+		$status = str_replace( 'wc-', '', $order->get_status() );
+		if ( in_array( $status, [ 'smb-ready', 'smb-picked' ], true ) ) {
 			return true;
 		}
 

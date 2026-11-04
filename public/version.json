@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.211",
+  "version": "0.1.212",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.211.zip?v=0.1.211",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.212.zip?v=0.1.212",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-10-31T08:09:55.538Z",
+  "last_updated": "2026-11-04T03:25:48.744Z",
   "sections": {
-    "changelog": "### Version 0.1.211\n- Deduct subsidized shipping discounts from 30-Day Guarantee returns and store credit refunds in accordance with Exacoat policy\n- Extract subsidized shipping from _shipping_discount_amount, _shipping_raw_price, and shipping lines metadata\n- Fund Advanced Coupons store credit wallet automatically upon guarantee refund approval\n- Add subsidized shipping deduction breakdown and 1-click net amount helper in Order Detail Drawer refund modal"
+    "changelog": "### Version 0.1.212\n- Fix Switch to Courier toggle allowing orders to transition seamlessly from Store Pickup to Courier Delivery\n- Support _delivery_override and _is_store_pickup explicit metadata overrides in tracking pool and order manager\n- Persist fulfillment mode switch to WordPress backend via authenticated REST API\n- Auto-prompt delivery address edit when switching from store pickup address to courier delivery"
   }
 }

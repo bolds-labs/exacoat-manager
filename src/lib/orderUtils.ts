@@ -2,6 +2,7 @@ import { Order } from '../types';
 import { matchesPhoneQuery } from './phoneUtils';
 
 const STORE_PICKUP_STORAGE_KEY = '_exacoat_store_pickup_orders';
+const DELIVERY_OVERRIDE_STORAGE_KEY = '_exacoat_delivery_override_orders';
 
 /**
  * Retrieves the set of order IDs manually marked as store pickup in localStorage
@@ -22,19 +23,55 @@ export function getLocalStorePickupOrderIds(): Set<number> {
 }
 
 /**
- * Persists manual store pickup toggle
+ * Retrieves the set of order IDs manually marked as courier delivery in localStorage
  */
-export function toggleLocalStorePickupOrder(orderId: number, forceState?: boolean): boolean {
+export function getLocalDeliveryOverrideOrderIds(): Set<number> {
   try {
-    const set = getLocalStorePickupOrderIds();
-    const shouldAdd = forceState !== undefined ? forceState : !set.has(orderId);
-    if (shouldAdd) {
-      set.add(orderId);
-    } else {
-      set.delete(orderId);
+    const raw = localStorage.getItem(DELIVERY_OVERRIDE_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return new Set(parsed.map(Number).filter((n) => !isNaN(n)));
+      }
     }
-    localStorage.setItem(STORE_PICKUP_STORAGE_KEY, JSON.stringify(Array.from(set)));
-    return shouldAdd;
+  } catch {
+    // ignore
+  }
+  return new Set();
+}
+
+/**
+ * Persists manual store pickup vs courier delivery toggle in local storage
+ * @param orderId Target order ID
+ * @param forceState When provided, true forces Store Pickup, false forces Courier Delivery
+ * @param currentIsPickup Current resolution of order store pickup state
+ * @returns The new store pickup state (true for store pickup, false for courier delivery)
+ */
+export function toggleLocalStorePickupOrder(orderId: number, forceState?: boolean, currentIsPickup?: boolean): boolean {
+  try {
+    const pickupSet = getLocalStorePickupOrderIds();
+    const deliverySet = getLocalDeliveryOverrideOrderIds();
+
+    let targetIsPickup: boolean;
+    if (forceState !== undefined) {
+      targetIsPickup = forceState;
+    } else if (currentIsPickup !== undefined) {
+      targetIsPickup = !currentIsPickup;
+    } else {
+      targetIsPickup = !pickupSet.has(orderId);
+    }
+
+    if (targetIsPickup) {
+      pickupSet.add(orderId);
+      deliverySet.delete(orderId);
+    } else {
+      pickupSet.delete(orderId);
+      deliverySet.add(orderId);
+    }
+
+    localStorage.setItem(STORE_PICKUP_STORAGE_KEY, JSON.stringify(Array.from(pickupSet)));
+    localStorage.setItem(DELIVERY_OVERRIDE_STORAGE_KEY, JSON.stringify(Array.from(deliverySet)));
+    return targetIsPickup;
   } catch {
     return false;
   }
@@ -49,26 +86,38 @@ export function isStorePickupOrder(order: Partial<Order> | any): boolean {
   if (!order) return false;
 
   const orderId = Number(order.id);
-  if (orderId && getLocalStorePickupOrderIds().has(orderId)) {
+  if (orderId) {
+    if (getLocalDeliveryOverrideOrderIds().has(orderId)) {
+      return false;
+    }
+    if (getLocalStorePickupOrderIds().has(orderId)) {
+      return true;
+    }
+  }
+
+  // 1. Direct explicit boolean properties
+  if (order.delivery_override === true || order.is_store_pickup === false) {
+    return false;
+  }
+  if (order.is_store_pickup === true) {
     return true;
   }
 
-  const cleanStatus = String(order.status || '').replace('wc-', '').toLowerCase().trim();
-  if (cleanStatus === 'smb-ready' || cleanStatus === 'smb-picked') {
-    return true;
-  }
-
-
-  // 1. Check Order Meta Data for store pickup tags
+  // 2. Check Order Meta Data for explicit delivery overrides or store pickup tags
   const metaList = Array.isArray(order.meta_data) ? order.meta_data : [];
   for (const m of metaList) {
     const k = String(m?.key || '').toLowerCase();
     const v = String(m?.value || '').toLowerCase();
-    if (
-      (k === 'is_store_pickup' || k === '_is_store_pickup' || k === '_store_pickup') &&
-      (v === '1' || v === 'yes' || v === 'true')
-    ) {
-      return true;
+    if (k === '_delivery_override' && (v === 'yes' || v === '1' || v === 'true')) {
+      return false;
+    }
+    if (k === 'is_store_pickup' || k === '_is_store_pickup' || k === '_store_pickup') {
+      if (v === 'no' || v === '0' || v === 'false') {
+        return false;
+      }
+      if (v === '1' || v === 'yes' || v === 'true') {
+        return true;
+      }
     }
     if (
       (k === '_shipping_method' || k === '_chosen_shipping_methods' || k === '_order_shipping_type') &&
@@ -79,6 +128,11 @@ export function isStorePickupOrder(order: Partial<Order> | any): boolean {
     if (k === '_biteship_courier_code' && v === 'pickup') {
       return true;
     }
+  }
+
+  const cleanStatus = String(order.status || '').replace('wc-', '').toLowerCase().trim();
+  if (cleanStatus === 'smb-ready' || cleanStatus === 'smb-picked') {
+    return true;
   }
 
   // 2. Check destination address (if pointing to Exacoat Store / Summarecon Bekasi / Ruby Commercial)
