@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.215",
+  "version": "0.1.216",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.215.zip?v=0.1.215",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.216.zip?v=0.1.216",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-11-07T08:32:55.169Z",
+  "last_updated": "2026-11-07T08:45:28.711Z",
   "sections": {
-    "changelog": "### Version 0.1.215\n- Fix live canvas preview synchronization for Order Notes Reminder in Marketplace Image Generator\n- Add missing dependencies (showVariantOrderNote, variantOrderNoteText, variantOrderNotePosition) to preview canvas useEffect\n- Default Order Notes Reminder to enabled for variant images when unconfigured\n- Reset canvas letter spacing to prevent font metrics spillover from skin name badge"
+    "changelog": "### Version 0.1.216\n- Redesign Order Notes Reminder capsule with dynamic content-fit width\n- Replace badge with crisp black outline info icon (no orange)\n- Increase typography size to 27px bold Plus Jakarta Sans with refined monochrome frosted glass border"
   }
 }

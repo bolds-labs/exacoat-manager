@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.216] - 2026-11-07
+
+### Marketplace Variant Order Notes Reminder Styling & Content-Fit Redesign
+- **Monochrome Info Icon & Dynamic Width (`marketplaceCanvasRenderer.ts`)**:
+  - Replaced circular orange/amber badge with a clean, minimal black outline info icon (`(i)`).
+  - Dynamic content-fit capsule width: width now directly hugs the text content and icon plus comfortable side padding, rather than stretching across the entire column.
+  - Increased typography size to 27px bold Plus Jakarta Sans (up from 23px) with 54px capsule height.
+  - Symmetrically centers the dynamic capsule under the Top-Right Skin Name Pill (centered at x=995).
+  - Replaced amber accent border with subtle monochrome frosted glass border (`rgba(0, 0, 0, 0.12)`).
+
+---
+
 ## [0.1.215] - 2026-11-07
 
 ### Fix: Live Canvas Preview Synchronization for Marketplace Variant Order Notes Reminder

@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Fix live canvas preview synchronization for Order Notes Reminder in Marketplace Image Generator\n- Add missing dependencies (showVariantOrderNote, variantOrderNoteText, variantOrderNotePosition) to preview canvas useEffect\n- Default Order Notes Reminder to enabled for variant images when unconfigured\n- Reset canvas letter spacing to prevent font metrics spillover from skin name badge`,
+      changelog: `### Version ${version}\n- Redesign Order Notes Reminder capsule with dynamic content-fit width\n- Replace badge with crisp black outline info icon (no orange)\n- Increase typography size to 27px bold Plus Jakarta Sans with refined monochrome frosted glass border`,
     },
   };
 

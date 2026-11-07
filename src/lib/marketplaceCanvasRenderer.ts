@@ -512,94 +512,97 @@ function drawVariantOrderNote(
     (ctx as any).letterSpacing = '0px';
   } catch {}
 
-  let x = 540;
-  let y = 206;
-  let pillW = 910;
-  let pillH = 48;
-  let pillR = 24;
-
-  if (position === 'bottom') {
-    pillW = 860;
-    pillH = 54;
-    pillR = 27;
-    x = 540 + (910 - pillW) / 2;
-    y = 1385;
-  } else if (position === 'left') {
-    x = 50;
-    y = 336;
-    pillW = 460;
-    pillH = 56;
-    pillR = 20;
-  }
-
-  // 1. Soft ambient drop shadow
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.05)';
-  ctx.shadowBlur = 12;
-  ctx.shadowOffsetY = 4;
-
-  // 2. Background capsule with frosted glass gradient
-  pathRoundedRect(ctx, x, y, pillW, pillH, pillR);
-  const bgGrad = ctx.createLinearGradient(x, y, x, y + pillH);
-  bgGrad.addColorStop(0, 'rgba(255, 255, 255, 0.96)');
-  bgGrad.addColorStop(1, 'rgba(255, 255, 255, 0.88)');
-  ctx.fillStyle = bgGrad;
-  ctx.fill();
-
-  // 3. Subtle amber accent border (noticeable yet clean and refined)
-  ctx.shadowColor = 'transparent';
-  ctx.strokeStyle = 'rgba(243, 170, 24, 0.40)';
-  ctx.lineWidth = 1.6;
-  ctx.stroke();
-
-  // 4. Measure text and compute content centering
-  let fontSize = position === 'left' ? 20 : 23;
+  // 1. Typography configuration: larger, crisp, modern bold
+  let fontSize = position === 'left' ? 22 : 27;
   ctx.font = `700 ${fontSize}px "Plus Jakarta Sans", sans-serif`;
-  const iconW = 22;
-  const iconGap = 12;
-  const maxTextW = pillW - iconW - iconGap - 40;
 
-  while (ctx.measureText(cleanText).width > maxTextW && fontSize > 14) {
+  const iconW = 22; // info icon diameter
+  const iconGap = 10;
+  const hPad = 22; // padding on each side of the capsule
+
+  const maxAllowedW = position === 'left' ? 460 : 910;
+  const maxTextW = maxAllowedW - iconW - iconGap - hPad * 2;
+
+  // Auto-fit font downscaling if custom text is exceptionally long
+  while (ctx.measureText(cleanText).width > maxTextW && fontSize > 15) {
     fontSize -= 1;
     ctx.font = `700 ${fontSize}px "Plus Jakarta Sans", sans-serif`;
   }
 
   const textMetrics = ctx.measureText(cleanText);
-  const totalContentW = iconW + iconGap + textMetrics.width;
-  const startContentX = x + Math.max(16, (pillW - totalContentW) / 2);
+  const textW = textMetrics.width;
+  const contentW = iconW + iconGap + textW;
 
-  // 5. Circular amber badge with vector notepad/pencil glyph
-  const iconCx = startContentX + iconW / 2;
-  const iconCy = y + pillH / 2;
+  // Width dynamically hugs the text and icon cleanly
+  const pillW = Math.min(maxAllowedW, Math.round(contentW + hPad * 2));
+  const pillH = position === 'left' ? 52 : 54;
+  const pillR = Math.round(pillH / 2);
 
-  ctx.fillStyle = '#f3aa18';
-  ctx.beginPath();
-  ctx.arc(iconCx, iconCy, 12, 0, Math.PI * 2);
+  let x = 540;
+  let y = 206;
+
+  if (position === 'top') {
+    // Center dynamically under the Top-Right Skin Name Pill (centered at x = 995)
+    x = Math.round(995 - pillW / 2);
+    y = 206;
+  } else if (position === 'bottom') {
+    x = Math.round(995 - pillW / 2);
+    y = 1385;
+  } else if (position === 'left') {
+    x = Math.round(50 + (460 - pillW) / 2);
+    y = 336;
+  }
+
+  // 2. Soft ambient drop shadow
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.06)';
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetY = 3;
+
+  // 3. Background capsule with frosted glass gradient
+  pathRoundedRect(ctx, x, y, pillW, pillH, pillR);
+  const bgGrad = ctx.createLinearGradient(x, y, x, y + pillH);
+  bgGrad.addColorStop(0, 'rgba(255, 255, 255, 0.97)');
+  bgGrad.addColorStop(1, 'rgba(255, 255, 255, 0.90)');
+  ctx.fillStyle = bgGrad;
   ctx.fill();
 
-  // Vector notepad & pencil icon
+  // 4. Subtle, clean monochrome border (strictly no orange, pure modern glass)
+  ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.12)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // 5. Clean black outline Info Icon (i)
+  const startContentX = x + Math.round((pillW - contentW) / 2);
+  const iconR = 10.5;
+  const iconCx = startContentX + iconR;
+  const iconCy = y + Math.round(pillH / 2);
+
   ctx.save();
   ctx.strokeStyle = '#18181b';
   ctx.fillStyle = '#18181b';
-  ctx.lineWidth = 1.5;
+  ctx.lineWidth = 1.8;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
-  const padX = iconCx - 4.5;
-  const padY = iconCy - 5.5;
-  const padW = 9;
-  const padH = 11;
-  pathRoundedRect(ctx, padX, padY, padW, padH, 1.8);
+  // Outer circular outline
+  ctx.beginPath();
+  ctx.arc(iconCx, iconCy, iconR, 0, Math.PI * 2);
   ctx.stroke();
 
+  // Info dot (top)
   ctx.beginPath();
-  ctx.moveTo(iconCx - 2.5, iconCy - 1.8);
-  ctx.lineTo(iconCx + 2.5, iconCy - 1.8);
-  ctx.moveTo(iconCx - 2.5, iconCy + 1.8);
-  ctx.lineTo(iconCx + 1.2, iconCy + 1.8);
+  ctx.arc(iconCx, iconCy - 4.2, 1.4, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Info stem (vertical line)
+  ctx.beginPath();
+  ctx.moveTo(iconCx, iconCy - 1.0);
+  ctx.lineTo(iconCx, iconCy + 4.8);
   ctx.stroke();
   ctx.restore();
 
-  // 6. Typography: Dark charcoal, high-contrast, modern
+  // 6. Typography: Dark charcoal, bold, high-contrast, modern
   const textX = startContentX + iconW + iconGap;
   const textY = y + pillH / 2 + 1;
   ctx.textBaseline = 'middle';
