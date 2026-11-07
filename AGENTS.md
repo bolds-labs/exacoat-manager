@@ -284,6 +284,10 @@ export function cleanItemTitle(name?: string): string {
   - **Courier & Tracking Persistence on Fulfill (`fulfill_order` & `update_order`)**: Whenever an operator fulfills an order with a tracking number and courier, `fulfill_order` guarantees `_delivery_override = 'yes'`, `_is_store_pickup = 'no'`, clears lingering store company strings, and defaults domestic couriers (SiCepat, JNE, POS, SPX, J&T) to `REG` tier when service tier is not specified (e.g. `SiCepat - REG`), preventing `is_store_pickup_order` from wiping tracking on return. `internalOrder` in `OrderDetailDrawer` is refreshed with the response object to keep React state and UI strictly in sync.
 - **Backend Order Manager Sync (`class-order-manager.php`)**:
   - `format_order_for_manager()` includes tracking number pattern detection, `$s_item->get_instance_id()`, `_warranty_courier`, and returns the full `shipping_lines` array.
+- **Clean Courier Display & Internal Token Stripping Invariant (`cleanCourierDisplay` / `clean_courier_display`)**:
+  - Raw shipping strings originating from Biteship or WooCommerce shipping lines often contain concatenated internal instance IDs or gateway tokens (e.g. `JNE - REG JNE_REG`, `JNE - REG BITESHIP JNE_REG`, `SiCepat - REG BITESHIP SICEPAT_REG`).
+  - Both backend (`Exacoat_Order_Manager::clean_courier_display()`) and frontend (`cleanCourierDisplay()` and `getOrderCourierDisplay()` in `src/lib/orderUtils.ts`) strictly sanitize all courier strings into clean, canonical display formats (e.g. `JNE - REG`, `SiCepat - REG`, `SiCepat - BEST`, `POS - Tracked Shipment`).
+  - Internal gateway tokens (`biteship`, `biteship_shipping`), raw instance identifiers (`jne_reg`, `sicepat_reg`), and redundant carrier suffixes are stripped, guaranteeing that operator views and waybill badges never leak internal API slugs.
 
 ---
 

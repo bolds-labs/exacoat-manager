@@ -1427,16 +1427,7 @@ class Exacoat_Order_Manager {
 			'rayspeed' => 'Rayspeed Asia',
 		];
 		// Resolve carrier display with REG service tier default for domestic couriers
-		$service_tier = 'REG';
-		if ( preg_match( '/(?:jne|sicepat|pos|goorita|dhl|fedex|lion|j&t|jnt|spx|anteraja|ninja|rayspeed)\s*[-:]\s*([A-Za-z0-9_\s]+)/i', $courier, $sm ) ) {
-			$service_tier = strtoupper( trim( $sm[1] ) );
-		}
-		if ( in_array( $carrier_id, [ 'sicepat', 'jne', 'pos', 'spx', 'jnt' ], true ) ) {
-			$prefix = ( 'sicepat' === $carrier_id ? 'SiCepat' : ( 'jne' === $carrier_id ? 'JNE' : ( 'spx' === $carrier_id ? 'SPX' : ( 'pos' === $carrier_id ? 'POS' : 'J&T' ) ) ) );
-			$carrier_display = "{$prefix} - {$service_tier}";
-		} else {
-			$carrier_display = $carrier_labels[ $carrier_id ] ?? ( ! empty( $courier ) ? $courier : 'Express Courier' );
-		}
+		$carrier_display = self::clean_courier_display( ! empty( $courier ) ? $courier : $carrier_id, $carrier_id );
 
 		// Ensure fulfillment mode is definitively Courier Delivery
 		$order->update_meta_data( '_delivery_override', 'yes' );
@@ -2027,7 +2018,18 @@ class Exacoat_Order_Manager {
 
 		// Priority 1: Actual shipping line items (authoritative method title and id)
 		foreach ( $order->get_items( 'shipping' ) as $s_item ) {
-			$search_texts[] = (string) $s_item->get_method_title() . ' ' . (string) $s_item->get_method_id() . ' ' . (string) $s_item->get_instance_id();
+			$s_title = trim( (string) $s_item->get_method_title() );
+			if ( ! empty( $s_title ) ) {
+				$search_texts[] = $s_title;
+			}
+			$s_id = trim( (string) $s_item->get_method_id() );
+			if ( ! empty( $s_id ) && 'biteship' !== $s_id && 'biteship_shipping' !== $s_id && 'flat_rate' !== $s_id ) {
+				$search_texts[] = $s_id;
+			}
+			$s_inst = trim( (string) $s_item->get_instance_id() );
+			if ( ! empty( $s_inst ) && ! is_numeric( $s_inst ) ) {
+				$search_texts[] = $s_inst;
+			}
 		}
 		// Priority 2: Warranty / RMA designated courier
 		$w_courier = (string) $order->get_meta( '_warranty_courier' );
@@ -2058,9 +2060,45 @@ class Exacoat_Order_Manager {
 
 			if ( empty( $detected_service ) ) {
 				if ( preg_match( '/(?:jne|sicepat|pos|goorita|dhl|fedex|lion|j&t|jnt|spx|anteraja|ninja|rayspeed)\s*[-:]\s*([A-Za-z0-9_\s]+)/i', $st_clean, $sm ) ) {
-					$detected_service = strtoupper( trim( $sm[1] ) );
+					$raw_sm = trim( $sm[1] );
+					if ( preg_match( '/\b(?:reg|regular|reguler)\b/i', $raw_sm ) ) {
+						$detected_service = 'REG';
+					} elseif ( preg_match( '/\b(?:best)\b/i', $raw_sm ) ) {
+						$detected_service = 'BEST';
+					} elseif ( preg_match( '/\b(?:yes)\b/i', $raw_sm ) ) {
+						$detected_service = 'YES';
+					} elseif ( preg_match( '/\b(?:oke)\b/i', $raw_sm ) ) {
+						$detected_service = 'OKE';
+					} elseif ( preg_match( '/\b(?:gokil)\b/i', $raw_sm ) ) {
+						$detected_service = 'GOKIL';
+					} elseif ( preg_match( '/\b(?:siuntung)\b/i', $raw_sm ) ) {
+						$detected_service = 'SIUNTUNG';
+					} elseif ( preg_match( '/\b(?:jtr)\b/i', $raw_sm ) ) {
+						$detected_service = 'JTR';
+					} elseif ( preg_match( '/\b(?:cargo|kargo)\b/i', $raw_sm ) ) {
+						$detected_service = 'CARGO';
+					} elseif ( preg_match( '/\b(?:ez)\b/i', $raw_sm ) ) {
+						$detected_service = 'EZ';
+					} else {
+						$clean_sm = preg_replace( '/\bbiteship[a-z0-9_]*\b/i', '', $raw_sm );
+						$clean_sm = preg_replace( '/\bshipping\b/i', '', $clean_sm );
+						$clean_sm = preg_replace( '/\b(?:jne|sicepat|pos|spx|jnt|lion)[a-z0-9_]*\b/i', '', $clean_sm );
+						$clean_sm = trim( preg_replace( '/[_\s\-]+/', ' ', $clean_sm ) );
+						if ( ! empty( $clean_sm ) ) {
+							$detected_service = strtoupper( $clean_sm );
+						}
+					}
 				} elseif ( preg_match( '/(?:jne|sicepat|pos|goorita|dhl|fedex|lion|j&t|jnt|spx|anteraja|ninja|rayspeed)\s*\(([A-Za-z0-9_\s]+)\)/i', $st_clean, $sm ) ) {
-					$detected_service = strtoupper( trim( $sm[1] ) );
+					$raw_sm = trim( $sm[1] );
+					if ( preg_match( '/\b(?:reg|regular|reguler)\b/i', $raw_sm ) ) {
+						$detected_service = 'REG';
+					} elseif ( preg_match( '/\b(?:best)\b/i', $raw_sm ) ) {
+						$detected_service = 'BEST';
+					} elseif ( preg_match( '/\b(?:yes)\b/i', $raw_sm ) ) {
+						$detected_service = 'YES';
+					} else {
+						$detected_service = strtoupper( $raw_sm );
+					}
 				}
 			}
 
@@ -2184,6 +2222,7 @@ class Exacoat_Order_Manager {
 			} else {
 				$carrier_display = $base_carrier;
 			}
+			$carrier_display = self::clean_courier_display( $carrier_display, $carrier_key );
 		}
 
 		$tracking = null;
@@ -2653,7 +2692,7 @@ class Exacoat_Order_Manager {
 			'coupon_codes'                  => $coupon_codes,
 			'shipping_total'                => floatval( $order->get_shipping_total() ),
 			'shipping_tax'                  => floatval( $order->get_shipping_tax() ),
-			'shipping_method_name'          => $is_store_pickup ? 'Store Pickup (Summarecon Bekasi)' : ( ( ! empty( $carrier_display ) && 'Store Pickup (SMB)' !== $carrier_display ) ? $carrier_display : ( preg_match( '/pickup/i', (string) $order->get_shipping_method() ) ? 'Standard Tracked Delivery' : ( $order->get_shipping_method() ?: 'Standard Tracked Delivery' ) ) ),
+			'shipping_method_name'          => $is_store_pickup ? 'Store Pickup (Summarecon Bekasi)' : self::clean_courier_display( ( ! empty( $carrier_display ) && 'Store Pickup (SMB)' !== $carrier_display ) ? $carrier_display : ( preg_match( '/pickup/i', (string) $order->get_shipping_method() ) ? 'Standard Tracked Delivery' : ( $order->get_shipping_method() ?: 'Standard Tracked Delivery' ) ), $carrier_key ),
 			'is_store_pickup'               => $is_store_pickup,
 			'total_tax'                     => floatval( $order->get_total_tax() ),
 			'total'                         => floatval( $order->get_total() ),
@@ -2715,9 +2754,9 @@ class Exacoat_Order_Manager {
 			'shipping_lines'             => $shipping_lines_data,
 			'items'                      => $items_data,
 			'item_count'                 => count( $items_data ),
-			'tracking'                   => ( ! $is_store_pickup && is_array( $tracking ) ) ? $tracking : null,
+			'tracking'                   => ( ! $is_store_pickup && is_array( $tracking ) ) ? array_merge( $tracking, [ 'courier' => self::clean_courier_display( $tracking['courier'] ?? $carrier_display, $carrier_key ) ] ) : null,
 			'detected_courier'           => $is_store_pickup ? 'pickup' : ( $detected_carrier ?: $carrier_key ?: 'jne' ),
-			'shipping_courier_name'      => $is_store_pickup ? 'Store Pickup (SMB)' : $carrier_display,
+			'shipping_courier_name'      => $is_store_pickup ? 'Store Pickup (SMB)' : self::clean_courier_display( $carrier_display, $carrier_key ),
 			'notes'                      => $notes_data,
 			'total_commission'           => round( $total_commissions, 2 ),
 			'total_commission_usd'       => round( $total_commissions, 2 ),
@@ -2730,6 +2769,126 @@ class Exacoat_Order_Manager {
 			'warranty_claim_status'      => $effective_claim_status,
 			'warranty_replacement_order_id' => $rep_warranty_order_id ? (int) $rep_warranty_order_id : null,
 		];
+	}
+
+	/**
+	 * Clean and format courier display string to standard "JNE - REG", "SiCepat - BEST", etc.
+	 * Eliminates biteship tokens, duplicate suffixes, and raw instance IDs.
+	 *
+	 * @param string|null $raw_courier
+	 * @param string      $fallback_carrier
+	 * @return string
+	 */
+	public static function clean_courier_display( $raw_courier, $fallback_carrier = '' ) {
+		$s = trim( (string) $raw_courier );
+		if ( empty( $s ) || 'Express Courier' === $s ) {
+			$s = $fallback_carrier;
+		}
+		if ( empty( $s ) ) {
+			return 'Courier';
+		}
+		if ( preg_match( '/pickup|ambil|summarecon/i', $s ) ) {
+			return 'Store Pickup (SMB)';
+		}
+
+		// Detect courier prefix
+		$s_lower = strtolower( $s );
+		$prefix = '';
+		if ( str_contains( $s_lower, 'sicepat' ) ) {
+			$prefix = 'SiCepat';
+		} elseif ( str_contains( $s_lower, 'jne' ) ) {
+			$prefix = 'JNE';
+		} elseif ( str_contains( $s_lower, 'pos indonesia' ) || preg_match( '/\bpos\b/', $s_lower ) ) {
+			$prefix = 'POS';
+		} elseif ( str_contains( $s_lower, 'spx' ) || str_contains( $s_lower, 'shopee express' ) || str_contains( $s_lower, 'shopee_express' ) ) {
+			$prefix = 'SPX';
+		} elseif ( str_contains( $s_lower, 'j&t' ) || str_contains( $s_lower, 'jnt' ) ) {
+			$prefix = 'J&T';
+		} elseif ( str_contains( $s_lower, 'lion' ) ) {
+			$prefix = 'Lion';
+		} elseif ( str_contains( $s_lower, 'anteraja' ) ) {
+			$prefix = 'Anteraja';
+		} elseif ( str_contains( $s_lower, 'ninja' ) ) {
+			$prefix = 'Ninja';
+		} elseif ( str_contains( $s_lower, 'goorita' ) ) {
+			return 'Goorita';
+		} elseif ( str_contains( $s_lower, 'dhl' ) ) {
+			return 'DHL Express';
+		} elseif ( str_contains( $s_lower, 'fedex' ) ) {
+			return 'FedEx';
+		} elseif ( str_contains( $s_lower, 'rayspeed' ) ) {
+			return 'Rayspeed';
+		} else {
+			if ( ! empty( $fallback_carrier ) ) {
+				$fb = strtolower( $fallback_carrier );
+				if ( 'jne' === $fb ) $prefix = 'JNE';
+				elseif ( 'sicepat' === $fb ) $prefix = 'SiCepat';
+				elseif ( 'pos' === $fb ) $prefix = 'POS';
+				elseif ( 'spx' === $fb ) $prefix = 'SPX';
+				elseif ( 'jnt' === $fb ) $prefix = 'J&T';
+				else $prefix = ucfirst( $fallback_carrier );
+			} else {
+				$prefix = 'Courier';
+			}
+		}
+
+		// Extract service tier
+		$service = '';
+		if ( preg_match( '/\b(?:reg|regular|reguler)\b/i', $s ) ) {
+			$service = 'REG';
+		} elseif ( preg_match( '/\b(?:best)\b/i', $s ) ) {
+			$service = 'BEST';
+		} elseif ( preg_match( '/\b(?:yes)\b/i', $s ) ) {
+			$service = 'YES';
+		} elseif ( preg_match( '/\b(?:oke)\b/i', $s ) ) {
+			$service = 'OKE';
+		} elseif ( preg_match( '/\b(?:gokil)\b/i', $s ) ) {
+			$service = 'GOKIL';
+		} elseif ( preg_match( '/\b(?:siuntung)\b/i', $s ) ) {
+			$service = 'SIUNTUNG';
+		} elseif ( preg_match( '/\b(?:jtr)\b/i', $s ) ) {
+			$service = 'JTR';
+		} elseif ( preg_match( '/\b(?:cargo|kargo)\b/i', $s ) ) {
+			$service = 'CARGO';
+		} elseif ( preg_match( '/\b(?:ez)\b/i', $s ) ) {
+			$service = 'EZ';
+		} elseif ( preg_match( '/\b(?:sameday|same day)\b/i', $s ) ) {
+			$service = 'SAMEDAY';
+		} elseif ( preg_match( '/\b(?:instant)\b/i', $s ) ) {
+			$service = 'INSTANT';
+		} elseif ( preg_match( '/\b(?:onepack)\b/i', $s ) ) {
+			$service = 'ONEPACK';
+		} elseif ( preg_match( '/\b(?:regpack)\b/i', $s ) ) {
+			$service = 'REGPACK';
+		} elseif ( preg_match( '/\b(?:jagopack)\b/i', $s ) ) {
+			$service = 'JAGOPACK';
+		} elseif ( preg_match( '/tracked shipment/i', $s ) ) {
+			$service = 'Tracked Shipment';
+		} elseif ( preg_match( '/pos reguler/i', $s ) ) {
+			$service = 'Pos Reguler';
+		} else {
+			$parts = explode( '-', $s );
+			if ( count( $parts ) > 1 ) {
+				$raw_srv = implode( ' ', array_slice( $parts, 1 ) );
+				$raw_srv = preg_replace( '/\bbiteship[a-z0-9_]*\b/i', '', $raw_srv );
+				$raw_srv = preg_replace( '/\bshipping\b/i', '', $raw_srv );
+				$raw_srv = preg_replace( '/\b(?:jne|sicepat|pos|spx|jnt|lion)[a-z0-9_]*\b/i', '', $raw_srv );
+				$raw_srv = trim( preg_replace( '/[_\s\-]+/', ' ', $raw_srv ) );
+				if ( ! empty( $raw_srv ) ) {
+					$service = strtoupper( $raw_srv );
+				}
+			}
+		}
+
+		if ( empty( $service ) && in_array( $prefix, [ 'JNE', 'SiCepat', 'SPX', 'J&T' ], true ) ) {
+			$service = 'REG';
+		}
+
+		if ( 'POS' === $prefix && empty( $service ) ) {
+			$service = 'Tracked Shipment';
+		}
+
+		return ! empty( $service ) ? "{$prefix} - {$service}" : $prefix;
 	}
 
 	/**

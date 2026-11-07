@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.219",
+  "version": "0.1.220",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.219.zip?v=0.1.219",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.220.zip?v=0.1.220",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-11-07T09:17:17.526Z",
+  "last_updated": "2026-11-07T09:50:30.953Z",
   "sections": {
-    "changelog": "### Version 0.1.219\n- Default Order Notes Reminder position to bottom floating across image generators and injectors\n- Promote Order Notes Notice in Shopee & TikTok Image Injector to a prominent, always-visible dedicated settings section with active toggle switch\n- Add dedicated 1-click 'Inject Variants Only (Skip Cover)' injection mode and dynamic button adapting to checked assets"
+    "changelog": "### Version 0.1.220\n- Clean and standardize shipping courier and service display across orders (e.g. JNE - REG, SiCepat - REG)\n- Eliminate internal Biteship tokens, duplicate carrier suffixes, and raw instance IDs from courier names"
   }
 }

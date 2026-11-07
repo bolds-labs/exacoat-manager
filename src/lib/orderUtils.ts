@@ -366,6 +366,85 @@ export function detectCourierFromTrackingNumber(rawTracking?: string): { courier
 }
 
 /**
+ * Cleans raw service string, stripping Biteship artifacts, courier slugs, and internal tokens.
+ */
+export function extractCleanService(raw?: string | null): string | undefined {
+  if (!raw) return undefined;
+  const s = String(raw).trim();
+  if (/\b(?:reg|regular|reguler)\b/i.test(s)) return 'REG';
+  if (/\b(?:best)\b/i.test(s)) return 'BEST';
+  if (/\b(?:yes)\b/i.test(s)) return 'YES';
+  if (/\b(?:oke)\b/i.test(s)) return 'OKE';
+  if (/\b(?:gokil)\b/i.test(s)) return 'GOKIL';
+  if (/\b(?:siuntung)\b/i.test(s)) return 'SIUNTUNG';
+  if (/\b(?:jtr)\b/i.test(s)) return 'JTR';
+  if (/\b(?:cargo|kargo)\b/i.test(s)) return 'CARGO';
+  if (/\b(?:ez)\b/i.test(s)) return 'EZ';
+  if (/\b(?:sameday|same day)\b/i.test(s)) return 'SAMEDAY';
+  if (/\b(?:instant)\b/i.test(s)) return 'INSTANT';
+  if (/\b(?:onepack)\b/i.test(s)) return 'ONEPACK';
+  if (/\b(?:regpack)\b/i.test(s)) return 'REGPACK';
+  if (/\b(?:jagopack)\b/i.test(s)) return 'JAGOPACK';
+  if (/tracked shipment/i.test(s)) return 'Tracked Shipment';
+  if (/pos reguler/i.test(s)) return 'Pos Reguler';
+
+  const cleaned = s
+    .replace(/\bbiteship[a-z0-9_]*\b/gi, '')
+    .replace(/\bshipping\b/gi, '')
+    .replace(/\b(?:jne|sicepat|pos|spx|jnt|lion)[a-z0-9_]*\b/gi, '')
+    .replace(/[_\s\-]+/g, ' ')
+    .trim();
+  return cleaned ? cleaned.toUpperCase() : undefined;
+}
+
+/**
+ * Clean and format courier display string to standard "JNE - REG", "SiCepat - BEST", etc.
+ * Eliminates biteship tokens, duplicate suffixes, and raw instance IDs.
+ */
+export function cleanCourierDisplay(str?: string | null): string {
+  if (!str) return 'Courier';
+  const s = String(str).trim();
+  if (/pickup|ambil|summarecon/i.test(s)) return 'Store Pickup (SMB)';
+
+  // Detect courier prefix
+  let prefix = '';
+  const sLower = s.toLowerCase();
+  if (sLower.includes('sicepat')) prefix = 'SiCepat';
+  else if (sLower.includes('jne')) prefix = 'JNE';
+  else if (sLower.includes('pos')) prefix = 'POS';
+  else if (sLower.includes('spx') || sLower.includes('shopee express')) prefix = 'SPX';
+  else if (sLower.includes('j&t') || sLower.includes('jnt')) prefix = 'J&T';
+  else if (sLower.includes('lion')) prefix = 'Lion';
+  else if (sLower.includes('anteraja')) prefix = 'Anteraja';
+  else if (sLower.includes('ninja')) prefix = 'Ninja';
+  else if (sLower.includes('goorita')) return 'Goorita';
+  else if (sLower.includes('dhl')) return 'DHL Express';
+  else if (sLower.includes('fedex')) return 'FedEx';
+  else if (sLower.includes('rayspeed')) return 'Rayspeed';
+  else prefix = 'Courier';
+
+  // Extract service
+  let service = extractCleanService(s);
+
+  if (!service && s.includes('-')) {
+    const parts = s.split('-');
+    if (parts.length > 1) {
+      service = extractCleanService(parts.slice(1).join(' '));
+    }
+  }
+
+  if (!service && ['JNE', 'SiCepat', 'SPX', 'J&T'].includes(prefix)) {
+    service = 'REG';
+  }
+
+  if (prefix === 'POS' && !service) {
+    service = 'Tracked Shipment';
+  }
+
+  return service ? `${prefix} - ${service}` : prefix;
+}
+
+/**
  * Intelligently resolves the intended shipping courier for an order.
  * Inspects customer note (e.g. "Shipping Courier: SICEPAT - BEST"),
  * shipping method name, shipping lines, and order tracking metadata.
@@ -435,11 +514,12 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
       const cleanTitle = isStoreMethod ? '' : slTitle;
       const serviceMatch = cleanTitle.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*[-:]\s*([A-Za-z0-9_\s]+)/i) ||
                            cleanTitle.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*\(([A-Za-z0-9_\s]+)\)/i);
+      const cleanService = extractCleanService(serviceMatch ? serviceMatch[1] : undefined);
       const defaultService = (isDomestic && ['sicepat', 'jne', 'pos', 'spx', 'jnt'].includes(effectiveCarrier)) ? 'REG' : undefined;
       return {
         courierId: effectiveCarrier,
         courierName: PRESET_MAP[effectiveCarrier],
-        serviceName: serviceMatch ? serviceMatch[1].trim().toUpperCase() : defaultService,
+        serviceName: cleanService || defaultService,
         rawMatch: cleanTitle || PRESET_MAP[effectiveCarrier],
         isCustom: false,
       };
@@ -451,11 +531,12 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
       const cleanSaved = isStoreSaved ? '' : savedCourier;
       const serviceMatch = cleanSaved.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*[-:]\s*([A-Za-z0-9_\s]+)/i) ||
                            cleanSaved.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*\(([A-Za-z0-9_\s]+)\)/i);
+      const cleanService = extractCleanService(serviceMatch ? serviceMatch[1] : undefined);
       const defaultService = (isDomestic && ['sicepat', 'jne', 'pos', 'spx', 'jnt'].includes(normSavedCourier)) ? 'REG' : undefined;
       return {
         courierId: normSavedCourier,
         courierName: PRESET_MAP[normSavedCourier],
-        serviceName: serviceMatch ? serviceMatch[1].trim().toUpperCase() : defaultService,
+        serviceName: cleanService || defaultService,
         rawMatch: cleanSaved || PRESET_MAP[normSavedCourier],
         isCustom: false,
       };
@@ -517,7 +598,7 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
     // Extract service code if present (e.g. from "SICEPAT - BEST" -> "BEST", "JNE - REG" -> "REG", "JNE (REG)" -> "REG")
     const serviceMatch = text.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee\s*express)\s*[-:]\s*([A-Za-z0-9_\s]+)/i) ||
                          text.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee\s*express)\s*\(([A-Za-z0-9_\s]+)\)/i);
-    const serviceName = serviceMatch ? serviceMatch[1].trim().toUpperCase() : undefined;
+    const serviceName = extractCleanService(serviceMatch ? serviceMatch[1] : undefined);
 
     if (t.includes('sicepat')) {
       return {
@@ -700,14 +781,16 @@ export function getOrderCourierDisplay(order: any): string {
     String(order.shipping?.company || '').toLowerCase().includes('goorita')
   );
 
-  // If backend already resolved a formatted courier like "JNE - REG", use it directly
-  let backendCourier = String(order.tracking?.courier || order.shipping_courier_name || '').trim();
-  if (isConsolidation && backendCourier.toLowerCase().includes('goorita')) {
-    backendCourier = '';
+  if (isConsolidation) {
+    return 'JNE - REG';
   }
-  // Conflict guard: If backend courier says e.g. "Spx - REG" but explicit shipping line says "JNE - REG",
-  // discard backendCourier and resolve from the true shipping line
+
+  // If backend already resolved a formatted courier like "JNE - REG", sanitize and use it
+  let backendCourier = String(order.tracking?.courier || order.shipping_courier_name || '').trim();
   const explicitMethod = String(order.shipping_lines?.[0]?.method_title || order.shipping_method_name || '').toLowerCase();
+
+  // Conflict guard: If backend courier says e.g. "SPX - REG" but explicit shipping line says "JNE - REG",
+  // discard backendCourier and resolve from the true shipping line
   if (backendCourier && explicitMethod) {
     const backendCarrierPrefix = backendCourier.split('-')[0].trim().toLowerCase();
     if (
@@ -720,8 +803,19 @@ export function getOrderCourierDisplay(order: any): string {
       backendCourier = '';
     }
   }
-  if (backendCourier && backendCourier.includes('-') && !backendCourier.toLowerCase().includes('unknown')) {
-    return backendCourier;
+
+  if (backendCourier && !backendCourier.toLowerCase().includes('unknown')) {
+    const cleaned = cleanCourierDisplay(backendCourier);
+    if (cleaned && cleaned !== 'Courier') {
+      return cleaned;
+    }
+  }
+
+  if (explicitMethod) {
+    const cleanExplicit = cleanCourierDisplay(explicitMethod);
+    if (cleanExplicit && cleanExplicit !== 'Courier') {
+      return cleanExplicit;
+    }
   }
 
   const resolved = resolveOrderCourier(order);
@@ -732,8 +826,8 @@ export function getOrderCourierDisplay(order: any): string {
     if (resolved.courierId === 'jne') prefix = 'JNE';
     else if (resolved.courierId === 'sicepat') prefix = 'SiCepat';
     else if (resolved.courierId === 'pos') prefix = 'POS';
-    else if (resolved.courierId === 'goorita') prefix = isConsolidation ? 'JNE' : 'Goorita';
-    else if (resolved.courierId === 'dhl') prefix = 'DHL';
+    else if (resolved.courierId === 'goorita') prefix = 'Goorita';
+    else if (resolved.courierId === 'dhl') prefix = 'DHL Express';
     else if (resolved.courierId === 'fedex') prefix = 'FedEx';
     else if (resolved.courierId === 'rayspeed') prefix = 'Rayspeed';
     else if (resolved.courierId === 'jnt') prefix = 'J&T';
@@ -743,44 +837,17 @@ export function getOrderCourierDisplay(order: any): string {
     else if (resolved.courierId === 'ninja') prefix = 'Ninja';
     else if (resolved.courierName) prefix = resolved.courierName.split(' ')[0];
 
-    return `${prefix} - ${resolved.serviceName}`;
+    return cleanCourierDisplay(`${prefix} - ${resolved.serviceName}`);
   }
 
   // If raw match already has courier and service code separated by hyphen (never for store pickup)
   if (resolved.rawMatch && resolved.rawMatch.includes('-') && !/pickup|ambil|summarecon/i.test(resolved.rawMatch)) {
-    const cleanMatch = resolved.rawMatch
-      .replace(/^(?:shipping courier|jasa kirim|courier)\s*:\s*/i, '')
-      .trim();
-    if (cleanMatch.includes('-') && !/pickup|ambil|summarecon/i.test(cleanMatch)) {
-      const parts = cleanMatch.split('-').map(s => s.trim());
-      if (parts.length >= 2 && parts[0] && parts[1]) {
-        let p0 = parts[0];
-        const p0Lower = p0.toLowerCase();
-        if (p0Lower.includes('jne')) p0 = 'JNE';
-        else if (p0Lower.includes('sicepat')) p0 = 'SiCepat';
-        else if (p0Lower.includes('pos')) p0 = 'POS';
-        else if (p0Lower.includes('goorita')) p0 = isConsolidation ? 'JNE' : 'Goorita';
-        else if (p0Lower.includes('rayspeed')) p0 = 'Rayspeed';
-        else if (p0Lower.includes('j&t') || p0Lower.includes('jnt')) p0 = 'J&T';
-        else if (p0Lower.includes('lion')) p0 = 'Lion';
-        else if (p0Lower.includes('spx') || p0Lower.includes('shopee express') || p0Lower.includes('shopee_express')) p0 = 'SPX';
-        else if (p0Lower.includes('anteraja')) p0 = 'Anteraja';
-        else if (p0Lower.includes('ninja')) p0 = 'Ninja';
-        return `${p0} - ${parts.slice(1).join('-').trim().toUpperCase()}`;
-      }
-    }
+    return cleanCourierDisplay(resolved.rawMatch);
   }
 
-  if (backendCourier && backendCourier !== 'Express Courier') {
-    if (isConsolidation && backendCourier.toLowerCase().includes('goorita')) {
-      return 'JNE - REG';
-    }
-    if (backendCourier.toLowerCase() === 'jne express') return 'JNE';
-    return backendCourier;
-  }
-
-  if (resolved.courierId === 'jne') return 'JNE';
-  return resolved.courierName || order.shipping_method_name || 'Courier';
+  if (resolved.courierId === 'jne') return 'JNE - REG';
+  if (resolved.courierId === 'sicepat') return 'SiCepat - REG';
+  return cleanCourierDisplay(resolved.courierName || order.shipping_method_name || 'Courier');
 }
 
 /**

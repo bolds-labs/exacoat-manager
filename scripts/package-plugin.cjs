@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Default Order Notes Reminder position to bottom floating across image generators and injectors\n- Promote Order Notes Notice in Shopee & TikTok Image Injector to a prominent, always-visible dedicated settings section with active toggle switch\n- Add dedicated 1-click 'Inject Variants Only (Skip Cover)' injection mode and dynamic button adapting to checked assets`,
+      changelog: `### Version ${version}\n- Clean and standardize shipping courier and service display across orders (e.g. JNE - REG, SiCepat - REG)\n- Eliminate internal Biteship tokens, duplicate carrier suffixes, and raw instance IDs from courier names`,
     },
   };
 

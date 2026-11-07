@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.220] - 2026-11-07
+
+### Courier & Service Display Sanitization
+- **Clean Courier Display & Internal Token Stripping (`orderUtils.ts`, `class-order-manager.php`)**:
+  - Implemented `cleanCourierDisplay()` in the frontend and `Exacoat_Order_Manager::clean_courier_display()` in the backend to eliminate internal gateway artifacts (e.g. `biteship`, `biteship_shipping`), raw instance IDs, and duplicate carrier suffixes from shipping courier strings.
+  - Standardized all courier labels to clean, canonical formats such as `JNE - REG`, `SiCepat - REG`, `SiCepat - BEST`, `POS - Tracked Shipment`, and `SPX - REG`.
+  - Prevented shipping line method IDs and instance IDs from concatenating directly into searchable carrier strings, resolving redundant titles like `JNE - REG JNE_REG` and `JNE - REG BITESHIP JNE_REG` across operator tables and waybill badges.
+
+---
+
 ## [0.1.219] - 2026-11-07
 
 ### Order Notes Default Bottom Floating, Injector Toggle & Variants-Only Mode
