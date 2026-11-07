@@ -1788,3 +1788,29 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - `Exacoat_Store_Enhancements` registers `sanitize_product_price_for_php8` at priority 9999 on `woocommerce_product_get_price` and `woocommerce_product_variation_get_price`, and `harden_email_preview_dummy_product` on `woocommerce_email_preview_dummy_product`.
   - All product prices during preview or dummy order calculations are strictly normalized and cast to numeric floats (`(float) $price`, defaulting to `25.0` for dummy products), permanently eliminating `TypeError` exceptions in WooCommerce Admin.
 
+---
+
+## 57. Marketplace Image Generator & Injector Invariants (Order Notes Notice & Variants-Only Mode)
+
+- **Order Notes Reminder Default Placement Invariant (`marketplaceCanvasRenderer.ts`, `MarketplaceImageGeneratorModal.tsx`, `ShopeeImageInjectorModal.tsx`)**:
+  - The default position for the Order Notes Reminder is strictly configured to `'bottom'` (`'bottom floating'`) across all canvas drawing functions and configurator state initializers.
+  - When no position is stored in `localStorage` or device metadata, `'bottom'` is resolved rather than `'top'`.
+  - In `MarketplaceImageGeneratorModal.tsx` and `ShopeeImageInjectorModal.tsx`, the position picker displays "Bottom Floating (Default)" first.
+
+- **Dedicated Order Notes Notice Settings Card in Injector (`ShopeeImageInjectorModal.tsx`)**:
+  - The Order Notes Reminder toggle is elevated to a dedicated top-level section ("4. Variant Order Notes Notice") in the injector settings panel.
+  - It remains permanently accessible regardless of whether Cover Preview or Variant Preview is currently selected on the canvas.
+  - Features an instant on/off checkbox toggle, status pill (`Active` / `Off`), "Preview in Variant Layout →" jump shortcut, custom notice text input with reset default, quick fill buttons (English / Indonesian), and position selector.
+  - Device settings auto-save (`saveMarketplaceDeviceSettingsDirect`) strictly includes `show_variant_order_note`, `variant_order_note`, and `variant_order_note_position` during injection commits and manual position saves, keeping Shopee and TikTok in sync.
+
+- **Variants-Only Injection Pipeline & UI Mode (`ShopeeImageInjectorModal.tsx`)**:
+  - In addition to Cover-Only (`cover_only`) and Metadata-Only (`metadata_only`), the injector natively supports Variants-Only (`variant_only`) injection.
+  - When `isVariantOnly` is triggered (either via the dedicated 1-click button or by unchecking "Inject Primary Cover Photo"):
+    - `shouldUploadCover = false`, completely skipping primary cover generation and upload.
+    - `uploadedCoverImageId = undefined`, leaving existing listing cover and gallery photos intact in both Shopee Open Platform and TikTok Shop Open Platform endpoints.
+    - `selectedVariantsList` renders and uploads every selected variant photo.
+    - `variantPlan` commits new variant option images, pricing updates, stock initialization (100), and tier ordering without replacing the listing cover.
+    - Total pipeline step count and progress indicators accurately compute `selectedVariantsList.length + 1` steps.
+    - The bottom action bar includes a dedicated 1-click "Inject Variant Images Only ({selectedVariantsCount} Photos, No Cover)" button with purple accent, alongside the dynamic primary injection button that automatically adapts to checked asset modes.
+
+

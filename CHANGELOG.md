@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.219] - 2026-11-07
+
+### Order Notes Default Bottom Floating, Injector Toggle & Variants-Only Mode
+- **Default Position to Bottom Floating (`marketplaceCanvasRenderer.ts`, `MarketplaceImageGeneratorModal.tsx`, `ShopeeImageInjectorModal.tsx`)**:
+  - Configured Order Notes Reminder position to default to `'bottom'` (`'bottom floating'`) across all canvas rendering and configurator modals.
+- **Prominent Order Notes Notice Toggle in Shopee & TikTok Injector (`ShopeeImageInjectorModal.tsx`)**:
+  - Elevated the Order Notes Reminder into a dedicated, top-level section ("4. Variant Order Notes Notice") in the injector settings panel.
+  - Controls are always accessible regardless of whether Cover or Variant preview is active, featuring an instant on/off toggle switch, status badge (Active / Off), live preview switcher, text input with language presets (English / Indonesian), and position selector.
+  - Automatically persists order note settings to device profile metadata during injection and manual saves.
+- **Variants-Only Injection Mode (`ShopeeImageInjectorModal.tsx`)**:
+  - Added dedicated 1-click "Inject Variant Images Only ({selectedVariantsCount} Photos, No Cover)" button with purple accent and `<Layers />` icon.
+  - The primary gold injection action button dynamically adapts when "Inject Primary Cover Photo" is unchecked to become "Inject Variants Only", preserving existing listing cover and gallery images while updating variant photos, pricing, stock, and ordering.
+
+---
+
 ## [0.1.218] - 2026-11-07
 
 ### Primary Orange Outline & Left Column Sister Card to 100% Original

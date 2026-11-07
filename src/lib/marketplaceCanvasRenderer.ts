@@ -553,7 +553,7 @@ function parseCardHeadlineSubtitle(text: string): { headline: string; subtitle: 
 function drawVariantOrderNote(
   ctx: CanvasRenderingContext2D,
   text: string = 'Mention your device model in the order notes.',
-  position: 'top' | 'bottom' | 'left' = 'top'
+  position: 'top' | 'bottom' | 'left' = 'bottom'
 ) {
   const cleanText = text.trim();
   if (!cleanText) return;
@@ -2599,7 +2599,7 @@ export async function renderMarketplaceImageToCanvas(
       drawVariantOrderNote(
         ctx,
         config.variantOrderNoteText || 'Mention your device model in the order notes.',
-        config.variantOrderNotePosition || 'top'
+        config.variantOrderNotePosition || 'bottom'
       );
     }
   } else {

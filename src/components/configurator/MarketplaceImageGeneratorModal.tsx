@@ -223,9 +223,9 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   const [variantOrderNotePosition, setVariantOrderNotePosition] = useState<'top' | 'bottom' | 'left'>(() => {
     try {
       const p = localStorage.getItem('exacoat_marketplace_variant_order_note_pos');
-      return p === 'bottom' || p === 'left' ? p : 'top';
+      return p === 'top' || p === 'left' ? p : 'bottom';
     } catch {
-      return 'top';
+      return 'bottom';
     }
   });
   const [batchVariantsLayoutMode, setBatchVariantsLayoutMode] = useState<'variant' | 'cover'>('variant');
@@ -2228,24 +2228,6 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    setVariantOrderNotePosition('top');
-                                    try {
-                                      localStorage.setItem('exacoat_marketplace_variant_order_note_pos', 'top');
-                                    } catch {}
-                                  }}
-                                  className={clsx(
-                                    'px-2 py-1.5 rounded-lg text-[10px] font-semibold text-center border transition',
-                                    variantOrderNotePosition === 'top'
-                                      ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
-                                      : 'bg-zinc-900 border-zinc-700 text-zinc-400 hover:text-zinc-200'
-                                  )}
-                                  title="Placed under Top-Right Skin Name Pill (Recommended)"
-                                >
-                                  Under Skin Name
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
                                     setVariantOrderNotePosition('bottom');
                                     try {
                                       localStorage.setItem('exacoat_marketplace_variant_order_note_pos', 'bottom');
@@ -2257,9 +2239,27 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                                       ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
                                       : 'bg-zinc-900 border-zinc-700 text-zinc-400 hover:text-zinc-200'
                                   )}
-                                  title="Floating capsule at the bottom right"
+                                  title="Floating capsule at the bottom right (Default)"
                                 >
-                                  Bottom Floating
+                                  Bottom Floating (Default)
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setVariantOrderNotePosition('top');
+                                    try {
+                                      localStorage.setItem('exacoat_marketplace_variant_order_note_pos', 'top');
+                                    } catch {}
+                                  }}
+                                  className={clsx(
+                                    'px-2 py-1.5 rounded-lg text-[10px] font-semibold text-center border transition',
+                                    variantOrderNotePosition === 'top'
+                                      ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
+                                      : 'bg-zinc-900 border-zinc-700 text-zinc-400 hover:text-zinc-200'
+                                  )}
+                                  title="Placed under Top-Right Skin Name Pill"
+                                >
+                                  Under Skin Name
                                 </button>
                                 <button
                                   type="button"

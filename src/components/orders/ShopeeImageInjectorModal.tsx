@@ -59,6 +59,7 @@ import {
   Trash2,
   Coins,
   Minimize2,
+  Layers,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -177,9 +178,9 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
   const [variantOrderNotePosition, setVariantOrderNotePosition] = useState<'top' | 'bottom' | 'left'>(() => {
     try {
       const p = localStorage.getItem('exacoat_marketplace_variant_order_note_pos');
-      return p === 'bottom' || p === 'left' ? p : 'top';
+      return p === 'top' || p === 'left' ? p : 'bottom';
     } catch {
-      return 'top';
+      return 'bottom';
     }
   });
 
@@ -1093,29 +1094,40 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
     }
   };
 
-  // Execute Complete Image & Variant Injection Pipeline (supports: 'cover_only', 'metadata_only', or 'full')
+  // Execute Complete Image & Variant Injection Pipeline (supports: 'cover_only', 'variant_only', 'metadata_only', or 'full')
   const handleStartInjection = async (
-    modeInput?: 'cover_only' | 'metadata_only' | 'full' | boolean
+    modeInput?: 'cover_only' | 'variant_only' | 'metadata_only' | 'full' | boolean
   ) => {
     if ((!item && !tiktokItem) || !deviceProfile) {
       showToast('error', 'Device Profile Missing', 'Please select a valid device profile first.');
       return;
     }
 
-    let mode: 'cover_only' | 'metadata_only' | 'full' = 'full';
+    let mode: 'cover_only' | 'variant_only' | 'metadata_only' | 'full' = 'full';
     if (modeInput === true || modeInput === 'cover_only') {
       mode = 'cover_only';
+    } else if (modeInput === 'variant_only') {
+      mode = 'variant_only';
     } else if (modeInput === 'metadata_only') {
       mode = 'metadata_only';
     } else if (modeInput === false || modeInput === 'full') {
-      mode = 'full';
+      if (!updateCover && updateVariants) {
+        mode = 'variant_only';
+      } else if (updateCover && !updateVariants) {
+        mode = 'cover_only';
+      } else {
+        mode = 'full';
+      }
     } else if (!updateVariants) {
       mode = 'cover_only';
+    } else if (!updateCover) {
+      mode = 'variant_only';
     }
 
     const isMetadataOnly = mode === 'metadata_only';
     const isCoverOnly = mode === 'cover_only';
-    const shouldUploadCover = isMetadataOnly ? false : isCoverOnly ? true : updateCover;
+    const isVariantOnly = mode === 'variant_only';
+    const shouldUploadCover = isMetadataOnly || isVariantOnly ? false : isCoverOnly ? true : updateCover;
 
     const selectedVariantsList =
       isCoverOnly || isMetadataOnly
@@ -1181,6 +1193,9 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
         active_layer_ids: activeLayerIds,
         logo_cutout: logoCutout,
         pencil_cutout: pencilCutout,
+        show_variant_order_note: showVariantOrderNote,
+        variant_order_note: variantOrderNoteText,
+        variant_order_note_position: variantOrderNotePosition,
       })
         .then((res) => {
           if (res.success) setHasSavedDevicePosition(true);
@@ -1297,6 +1312,8 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
         ? `Syncing title, prices, and variant order to ${channelLabel} (no photo upload)...`
         : isCoverOnly
         ? `Updating primary cover image on ${channelLabel} (preserving gallery & variants)...`
+        : isVariantOnly
+        ? `Updating ${selectedVariantsList.length} variant photos, ordering, and prices to ${channelLabel} (preserving cover)...`
         : `Syncing cover, variant options, ordering, and prices to ${channelLabel}...`;
 
       setInjectionProgress({
@@ -1975,95 +1992,6 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
                         />
                       </div>
                     </div>
-
-                    {/* Variant Order Note Reminder Controls */}
-                    {activePreviewType === 'variant' && (
-                      <div className="pt-3 border-t border-zinc-800 space-y-2.5">
-                        <div className="flex items-center justify-between">
-                          <label className="text-xs font-bold text-zinc-200 flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={showVariantOrderNote}
-                              onChange={(e) => {
-                                const val = e.target.checked;
-                                setShowVariantOrderNote(val);
-                                try {
-                                  localStorage.setItem('exacoat_marketplace_show_variant_order_note', String(val));
-                                } catch {}
-                              }}
-                              className="w-3.5 h-3.5 rounded border-zinc-700 text-[#f3aa18] focus:ring-[#f3aa18]"
-                            />
-                            <span>Order Notes Reminder (Variant)</span>
-                          </label>
-                          <span className="text-[10px] text-amber-400 font-mono">Modern Capsule</span>
-                        </div>
-                        {showVariantOrderNote && (
-                          <div className="space-y-2 pt-1 pl-5">
-                            <input
-                              type="text"
-                              value={variantOrderNoteText}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setVariantOrderNoteText(val);
-                                try {
-                                  localStorage.setItem('exacoat_marketplace_variant_order_note_text', val);
-                                } catch {}
-                              }}
-                              placeholder="Mention your device model in the order notes."
-                              className="w-full px-2.5 py-1.5 rounded-lg text-xs bg-zinc-950 border border-zinc-700 text-zinc-100 focus:outline-none focus:border-[#f3aa18]"
-                            />
-                            <div className="flex items-center justify-between">
-                              <div className="flex gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const en = 'Mention your device model in the order notes.';
-                                    setVariantOrderNoteText(en);
-                                    try {
-                                      localStorage.setItem('exacoat_marketplace_variant_order_note_text', en);
-                                    } catch {}
-                                  }}
-                                  className="px-2 py-0.5 rounded text-[10px] font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition"
-                                >
-                                  English
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const id = 'Tuliskan tipe hp kamu di catatan pesanan.';
-                                    setVariantOrderNoteText(id);
-                                    try {
-                                      localStorage.setItem('exacoat_marketplace_variant_order_note_text', id);
-                                    } catch {}
-                                  }}
-                                  className="px-2 py-0.5 rounded text-[10px] font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition"
-                                >
-                                  Indonesian
-                                </button>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <span className="text-[10px] text-zinc-500">Pos:</span>
-                                <select
-                                  value={variantOrderNotePosition}
-                                  onChange={(e) => {
-                                    const pos = e.target.value as 'top' | 'bottom' | 'left';
-                                    setVariantOrderNotePosition(pos);
-                                    try {
-                                      localStorage.setItem('exacoat_marketplace_variant_order_note_pos', pos);
-                                    } catch {}
-                                  }}
-                                  className="text-[10px] bg-zinc-950 border border-zinc-700 rounded px-1.5 py-0.5 text-zinc-300 focus:outline-none"
-                                >
-                                  <option value="top">Under Skin Name</option>
-                                  <option value="bottom">Bottom Floating</option>
-                                  <option value="left">Left Column</option>
-                                </select>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -2224,7 +2152,194 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
                   )}
                 </div>
 
-                {/* 4. Variant Options, Missing Finishes, Placement & Pricing */}
+                {/* 4. Variant Order Notes Notice */}
+                <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800 space-y-3.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-zinc-200 flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={showVariantOrderNote}
+                        onChange={(e) => {
+                          const val = e.target.checked;
+                          setShowVariantOrderNote(val);
+                          try {
+                            localStorage.setItem(
+                              'exacoat_marketplace_show_variant_order_note',
+                              String(val)
+                            );
+                          } catch {}
+                        }}
+                        className="rounded border-zinc-700 text-[#f3aa18] focus:ring-[#f3aa18]"
+                      />
+                      <span>Show Order Notes Notice on Variant Photos</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      {activePreviewType !== 'variant' && (
+                        <button
+                          type="button"
+                          onClick={() => setActivePreviewType('variant')}
+                          className="text-[10px] text-amber-400 hover:text-amber-300 underline font-medium cursor-pointer"
+                        >
+                          Preview in Variant Layout →
+                        </button>
+                      )}
+                      <span
+                        className={clsx(
+                          'text-[10px] px-2 py-0.5 rounded-full font-mono font-semibold',
+                          showVariantOrderNote
+                            ? 'bg-amber-400/15 text-amber-400 border border-amber-400/30'
+                            : 'bg-zinc-800 text-zinc-500'
+                        )}
+                      >
+                        {showVariantOrderNote ? 'Active' : 'Off'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-zinc-400 leading-snug">
+                    Displays a noticeable, modern notice on variant photos reminding buyers to mention their phone or device model in the order notes.
+                  </p>
+
+                  {showVariantOrderNote && (
+                    <div className="space-y-3 pt-2 border-t border-zinc-800">
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[11px] font-medium text-zinc-400">Notice Text</label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const def = 'Mention your device model in the order notes.';
+                              setVariantOrderNoteText(def);
+                              try {
+                                localStorage.setItem('exacoat_marketplace_variant_order_note_text', def);
+                              } catch {}
+                            }}
+                            className="text-[10px] text-zinc-500 hover:text-zinc-300 cursor-pointer"
+                          >
+                            Reset Default
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          value={variantOrderNoteText}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setVariantOrderNoteText(val);
+                            try {
+                              localStorage.setItem('exacoat_marketplace_variant_order_note_text', val);
+                            } catch {}
+                          }}
+                          placeholder="Mention your device model in the order notes."
+                          className="w-full min-h-[40px] px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-700 text-xs text-zinc-100 focus:outline-none focus:border-[#f3aa18]"
+                        />
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] text-zinc-500">Quick fill:</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const en = 'Mention your device model in the order notes.';
+                              setVariantOrderNoteText(en);
+                              try {
+                                localStorage.setItem('exacoat_marketplace_variant_order_note_text', en);
+                              } catch {}
+                            }}
+                            className={clsx(
+                              'px-2 py-1 rounded-lg text-[10px] font-medium transition cursor-pointer',
+                              variantOrderNoteText === 'Mention your device model in the order notes.'
+                                ? 'bg-[#f3aa18]/20 border border-[#f3aa18] text-[#f3aa18]'
+                                : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+                            )}
+                          >
+                            English (Default)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const id = 'Tuliskan tipe hp kamu di catatan pesanan.';
+                              setVariantOrderNoteText(id);
+                              try {
+                                localStorage.setItem('exacoat_marketplace_variant_order_note_text', id);
+                              } catch {}
+                            }}
+                            className={clsx(
+                              'px-2 py-1 rounded-lg text-[10px] font-medium transition cursor-pointer',
+                              variantOrderNoteText === 'Tuliskan tipe hp kamu di catatan pesanan.'
+                                ? 'bg-[#f3aa18]/20 border border-[#f3aa18] text-[#f3aa18]'
+                                : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+                            )}
+                          >
+                            Indonesian
+                          </button>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] text-zinc-400 font-medium">Position:</span>
+                          <div className="inline-flex rounded-lg bg-zinc-950 border border-zinc-800 p-0.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setVariantOrderNotePosition('bottom');
+                                try {
+                                  localStorage.setItem('exacoat_marketplace_variant_order_note_pos', 'bottom');
+                                } catch {}
+                              }}
+                              className={clsx(
+                                'px-2 py-1 rounded text-[10px] font-semibold transition cursor-pointer',
+                                variantOrderNotePosition === 'bottom'
+                                  ? 'bg-[#f3aa18]/20 text-[#f3aa18] border border-[#f3aa18]'
+                                  : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
+                              )}
+                              title="Floating capsule at bottom right (Default)"
+                            >
+                              Bottom Floating (Default)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setVariantOrderNotePosition('top');
+                                try {
+                                  localStorage.setItem('exacoat_marketplace_variant_order_note_pos', 'top');
+                                } catch {}
+                              }}
+                              className={clsx(
+                                'px-2 py-1 rounded text-[10px] font-semibold transition cursor-pointer',
+                                variantOrderNotePosition === 'top'
+                                  ? 'bg-[#f3aa18]/20 text-[#f3aa18] border border-[#f3aa18]'
+                                  : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
+                              )}
+                              title="Placed under Top-Right Skin Name Pill"
+                            >
+                              Under Skin Name
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setVariantOrderNotePosition('left');
+                                try {
+                                  localStorage.setItem('exacoat_marketplace_variant_order_note_pos', 'left');
+                                } catch {}
+                              }}
+                              className={clsx(
+                                'px-2 py-1 rounded text-[10px] font-semibold transition cursor-pointer',
+                                variantOrderNotePosition === 'left'
+                                  ? 'bg-[#f3aa18]/20 text-[#f3aa18] border border-[#f3aa18]'
+                                  : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
+                              )}
+                              title="Placed under device subheader in left column"
+                            >
+                              Left Column
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 5. Variant Options, Missing Finishes, Placement & Pricing */}
                 <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800 space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <label className="text-xs font-bold text-zinc-200 flex items-center gap-2 cursor-pointer">
@@ -2845,67 +2960,115 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
                     )}
                   </button>
 
-                  {/* Primary 1-Click Cover Image Only Button */}
-                  <button
-                    type="button"
-                    onClick={() => handleStartInjection('cover_only')}
-                    disabled={isCurrentlyInjecting || isLoadingInitialData || !deviceProfile}
-                    className={clsx(
-                      'w-full min-h-[44px] px-4 py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-md',
-                      isCurrentlyInjecting || !deviceProfile
-                        ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
-                        : !updateVariants
-                        ? 'bg-[#f3aa18] hover:bg-[#e09b15] text-zinc-950'
-                        : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border border-emerald-500/40'
-                    )}
-                  >
-                    {isCurrentlyInjecting && !updateVariants ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>Uploading Primary Cover to {channelLabel}...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="w-4 h-4" />
-                        <span>
-                          Save & Upload Cover Image Only (No Variant Changes)
-                        </span>
-                      </>
-                    )}
-                  </button>
-
-                  {/* Full Cover + Variants Injection Button (shown when Variant Options enabled) */}
-                  {updateVariants && (
+                  {/* Dedicated 1-Click Variant Images Only (Skip Cover) */}
+                  {updateVariants && selectedVariantsCount > 0 && updateCover && (
                     <button
                       type="button"
-                      onClick={() => handleStartInjection('full')}
+                      onClick={() => handleStartInjection('variant_only')}
                       disabled={isCurrentlyInjecting || isLoadingInitialData || !deviceProfile}
                       className={clsx(
                         'w-full min-h-[44px] px-4 py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-md',
                         isCurrentlyInjecting || !deviceProfile
                           ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
-                          : 'bg-[#f3aa18] hover:bg-[#e09b15] text-zinc-950'
+                          : 'bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/40'
                       )}
                     >
                       {isCurrentlyInjecting ? (
                         <>
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                          <span>Updating {channelLabel} Listing...</span>
+                          <RefreshCw className="w-4 h-4 animate-spin text-purple-400" />
+                          <span>Uploading Variant Images to {channelLabel}...</span>
                         </>
                       ) : (
                         <>
-                          <Sparkles className="w-4 h-4" />
+                          <Layers className="w-4 h-4 text-purple-400" />
                           <span>
-                            Inject Cover + Variants ({updateCover ? 1 : 0} Cover +{' '}
-                            {selectedVariantsCount} Photos
-                            {newVariantsCount > 0 ? ` • +${newVariantsCount} New` : ''}
-                            {changedPricesCount > 0 ? ` • ${changedPricesCount} Prices` : ''}
-                            )
+                            Inject Variant Images Only ({selectedVariantsCount} Photos, No Cover)
                           </span>
                         </>
                       )}
                     </button>
                   )}
+
+                  {/* Primary 1-Click Cover Image Only Button */}
+                  {updateCover && updateVariants && (
+                    <button
+                      type="button"
+                      onClick={() => handleStartInjection('cover_only')}
+                      disabled={isCurrentlyInjecting || isLoadingInitialData || !deviceProfile}
+                      className={clsx(
+                        'w-full min-h-[44px] px-4 py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-md',
+                        isCurrentlyInjecting || !deviceProfile
+                          ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                          : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border border-emerald-500/40'
+                      )}
+                    >
+                      {isCurrentlyInjecting ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin text-emerald-400" />
+                          <span>Uploading Primary Cover to {channelLabel}...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-4 h-4 text-emerald-400" />
+                          <span>
+                            Save & Upload Cover Image Only (No Variant Changes)
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  {/* Primary Main Injection Action Button */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleStartInjection(
+                        updateCover && !updateVariants
+                          ? 'cover_only'
+                          : !updateCover && updateVariants
+                          ? 'variant_only'
+                          : 'full'
+                      )
+                    }
+                    disabled={isCurrentlyInjecting || isLoadingInitialData || !deviceProfile}
+                    className={clsx(
+                      'w-full min-h-[44px] px-4 py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-md',
+                      isCurrentlyInjecting || !deviceProfile
+                        ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                        : 'bg-[#f3aa18] hover:bg-[#e09b15] text-zinc-950'
+                    )}
+                  >
+                    {isCurrentlyInjecting ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Updating {channelLabel} Listing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        <span>
+                          {!updateCover && updateVariants ? (
+                            <>
+                              Inject Variants Only ({selectedVariantsCount} Photos, No Cover
+                              {newVariantsCount > 0 ? ` • +${newVariantsCount} New` : ''}
+                              {changedPricesCount > 0 ? ` • ${changedPricesCount} Prices` : ''}
+                              )
+                            </>
+                          ) : updateCover && !updateVariants ? (
+                            <>Save & Upload Cover Image Only (No Variant Changes)</>
+                          ) : (
+                            <>
+                              Inject Cover + Variants ({updateCover ? 1 : 0} Cover +{' '}
+                              {selectedVariantsCount} Photos
+                              {newVariantsCount > 0 ? ` • +${newVariantsCount} New` : ''}
+                              {changedPricesCount > 0 ? ` • ${changedPricesCount} Prices` : ''}
+                              )
+                            </>
+                          )}
+                        </span>
+                      </>
+                    )}
+                  </button>
 
                   {isCurrentlyInjecting ? (
                     <button

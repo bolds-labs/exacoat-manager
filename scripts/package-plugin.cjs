@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Add Exacoat primary orange outline (#f3aa18) to Order Notes Reminder capsules and cards\n- Redesign left column Order Notes card to closely match the 100% Original card layout (460x114px, r=26, top-right floating corner badge with orange border and black info icon, centered 36px bold headline and 21px italic subtitle)`,
+      changelog: `### Version ${version}\n- Default Order Notes Reminder position to bottom floating across image generators and injectors\n- Promote Order Notes Notice in Shopee & TikTok Image Injector to a prominent, always-visible dedicated settings section with active toggle switch\n- Add dedicated 1-click 'Inject Variants Only (Skip Cover)' injection mode and dynamic button adapting to checked assets`,
     },
   };
 
