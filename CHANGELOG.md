@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.218] - 2026-11-07
+
+### Primary Orange Outline & Left Column Sister Card to 100% Original
+- **Exacoat Primary Orange Outline (`#f3aa18`)**:
+  - Added vibrant Exacoat primary orange outline (`#f3aa18`, 2.0px on capsules, 2.4px on left card) across all Order Note Reminder positions.
+- **Left Column Card Match with 100% Original (`marketplaceCanvasRenderer.ts`)**:
+  - Re-architected the left column reminder card to be an exact sibling to the "100% Original" card:
+    - Standard card dimensions: `460px` width, `114px` height, `26px` corner radius.
+    - Protruding top-right circular badge (`circleR = 26`, `x + w - 12`, `y`) with white fill, primary orange `#f3aa18` border, and crisp black outline info icon `(i)` inside.
+    - Symmetrical centered 2-tier typography: 36px bold Chakra Petch headline at `y + 42` (e.g. "Order Notes" / "Catatan Pesanan") and 21px italic Plus Jakarta Sans subtitle at `y + 80` (e.g. "Mention your device model" / "Tuliskan tipe hp kamu").
+
+---
+
 ## [0.1.217] - 2026-11-07
 
 ### Variant Order Notes Reminder Visual Polish & Alignment

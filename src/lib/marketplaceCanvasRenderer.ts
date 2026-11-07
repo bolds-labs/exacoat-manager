@@ -496,37 +496,54 @@ function drawBrandTagline(
 }
 
 /**
- * Helper to split text into two balanced lines for fixed-width cards
+ * Helper to parse reminder text into a headline and subtitle for the left column card
+ * (matching the layout of the '100% Original' card)
  */
-function splitTextIntoBalancedLines(
-  text: string,
-  ctx: CanvasRenderingContext2D,
-  maxW: number
-): [string, string] {
-  const words = text.split(/\s+/).filter(Boolean);
-  if (words.length <= 1) return [text, ''];
+function parseCardHeadlineSubtitle(text: string): { headline: string; subtitle: string } {
+  const clean = text.trim();
+  const lower = clean.toLowerCase();
 
-  let bestIndex = Math.ceil(words.length / 2);
-  let bestDiff = Infinity;
-
-  for (let i = 1; i < words.length; i++) {
-    const l1 = words.slice(0, i).join(' ');
-    const l2 = words.slice(i).join(' ');
-    const w1 = ctx.measureText(l1).width;
-    const w2 = ctx.measureText(l2).width;
-    if (w1 <= maxW && w2 <= maxW) {
-      const diff = Math.abs(w1 - w2);
-      if (diff < bestDiff) {
-        bestDiff = diff;
-        bestIndex = i;
-      }
-    }
+  if (clean.includes(':')) {
+    const [h, ...rest] = clean.split(':');
+    return { headline: h.trim(), subtitle: rest.join(':').trim() };
+  }
+  if (clean.includes(' - ')) {
+    const [h, ...rest] = clean.split(' - ');
+    return { headline: h.trim(), subtitle: rest.join(' - ').trim() };
   }
 
-  return [
-    words.slice(0, bestIndex).join(' '),
-    words.slice(bestIndex).join(' '),
-  ];
+  // Common order notes phrasing
+  if (lower.includes('order note')) {
+    const stripped = clean
+      .replace(/in\s+the\s+order\s+notes\.?/i, '')
+      .replace(/order\s+notes\.?/i, '')
+      .trim();
+    return {
+      headline: 'Order Notes',
+      subtitle: stripped || 'Mention your device model',
+    };
+  }
+  if (lower.includes('catatan')) {
+    const stripped = clean
+      .replace(/di\s+catatan\s+pesanan\.?/i, '')
+      .replace(/catatan\s+pesanan\.?/i, '')
+      .trim();
+    return {
+      headline: 'Catatan Pesanan',
+      subtitle: stripped || 'Tuliskan tipe hp kamu',
+    };
+  }
+
+  // Fallback: split words into headline and subtitle
+  const words = clean.split(/\s+/).filter(Boolean);
+  if (words.length <= 2) {
+    return { headline: clean, subtitle: '' };
+  }
+  const mid = Math.ceil(words.length / 2);
+  return {
+    headline: words.slice(0, mid).join(' '),
+    subtitle: words.slice(mid).join(' '),
+  };
 }
 
 /**
@@ -548,42 +565,117 @@ function drawVariantOrderNote(
 
   const isLeft = position === 'left';
 
-  // 1. Proportions & Typography:
-  // On left column, make it bigger: 460px wide, 80px tall, 24px bold font, matching left card styling!
-  // On top/bottom: dynamic content-fit width, 58px tall, 28px bold font!
-  let fontSize = isLeft ? 24 : 28;
-  ctx.font = `700 ${fontSize}px "Plus Jakarta Sans", sans-serif`;
-
-  const iconW = isLeft ? 28 : 24;
-  const iconR = iconW / 2;
-  const iconGap = isLeft ? 14 : 12;
-  const hPad = isLeft ? 24 : 24;
-
-  let pillW: number;
-  let pillH: number;
-  let pillR: number;
-  let x: number;
-  let y: number;
-
-  let line1 = cleanText;
-  let line2 = '';
-  let isTwoLines = false;
+  // 1. Ambient shadow: EXACTLY matches the left stacked feature cards (blur: 24, offsetY: 8, opacity: 0.12)
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.12)';
+  ctx.shadowBlur = 24;
+  ctx.shadowOffsetY = 8;
 
   if (isLeft) {
-    pillW = 460;
-    pillH = 80;
-    pillR = 26; // matches cardR = 26 of stacked cards
-    x = 50;
-    y = 344;
+    // Left column card design: styled to match the '100% Original' card (460x114px, r=26, top-right floating badge)
+    const cardW = 460;
+    const cardH = 114;
+    const cardR = 26;
+    const x = 50;
+    const y = 356;
 
-    const maxTextW = pillW - iconW - iconGap - hPad * 2;
-    if (ctx.measureText(cleanText).width > maxTextW) {
-      const [l1, l2] = splitTextIntoBalancedLines(cleanText, ctx, maxTextW);
-      line1 = l1;
-      line2 = l2;
-      isTwoLines = Boolean(l2);
+    // Glass card background
+    pathRoundedRect(ctx, x, y, cardW, cardH, cardR);
+    const bgGrad = ctx.createLinearGradient(x, y, x, y + cardH);
+    bgGrad.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
+    bgGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.92)');
+    bgGrad.addColorStop(1, 'rgba(255, 255, 255, 0.86)');
+    ctx.fillStyle = bgGrad;
+    ctx.fill();
+
+    // Primary orange outline on card
+    ctx.shadowColor = 'transparent';
+    ctx.strokeStyle = '#f3aa18';
+    ctx.lineWidth = 2.4;
+    ctx.stroke();
+
+    // Top-right circular corner badge (identical to 100% Original card)
+    const circleR = 26;
+    const circleX = x + cardW - 12;
+    const circleY = y;
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.14)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 3;
+    ctx.beginPath();
+    ctx.arc(circleX, circleY, circleR, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+
+    // Primary orange border on corner badge
+    ctx.shadowColor = 'transparent';
+    ctx.strokeStyle = '#f3aa18';
+    ctx.lineWidth = 2.4;
+    ctx.stroke();
+
+    // Black outline Info Icon (i) inside corner badge
+    ctx.strokeStyle = '#18181b';
+    ctx.fillStyle = '#18181b';
+    ctx.lineWidth = 2.4;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    const infoR = 12;
+    ctx.beginPath();
+    ctx.arc(circleX, circleY, infoR - 1.2, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(circleX, circleY - 4.5, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(circleX, circleY - 1.0);
+    ctx.lineTo(circleX, circleY + 5.0);
+    ctx.stroke();
+    ctx.restore();
+
+    // Centered typography (matching 100% Original card structure)
+    const { headline, subtitle } = parseCardHeadlineSubtitle(cleanText);
+
+    ctx.save();
+    ctx.fillStyle = '#09090b';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    let headFontSize = 36;
+    ctx.font = `900 ${headFontSize}px "Chakra Petch", "Plus Jakarta Sans", sans-serif`;
+    while (ctx.measureText(headline).width > cardW - 48 && headFontSize > 22) {
+      headFontSize -= 2;
+      ctx.font = `900 ${headFontSize}px "Chakra Petch", "Plus Jakarta Sans", sans-serif`;
     }
+
+    if (subtitle) {
+      ctx.fillText(headline, x + cardW / 2 - 4, y + 42);
+
+      let subFontSize = 21;
+      ctx.font = `italic 600 ${subFontSize}px "Plus Jakarta Sans", sans-serif`;
+      ctx.fillStyle = '#52525b';
+      while (ctx.measureText(subtitle).width > cardW - 40 && subFontSize > 14) {
+        subFontSize -= 1;
+        ctx.font = `italic 600 ${subFontSize}px "Plus Jakarta Sans", sans-serif`;
+      }
+      ctx.fillText(subtitle, x + cardW / 2 - 4, y + 80);
+    } else {
+      // Single line centered vertically
+      ctx.fillText(headline, x + cardW / 2 - 4, y + cardH / 2);
+    }
+    ctx.restore();
   } else {
+    // Top or Bottom capsule mode: dynamic content-fit width with primary orange outline
+    let fontSize = 28;
+    ctx.font = `700 ${fontSize}px "Plus Jakarta Sans", sans-serif`;
+
+    const iconW = 24;
+    const iconR = iconW / 2;
+    const iconGap = 12;
+    const hPad = 24;
+
     const maxAllowedW = 910;
     const maxTextW = maxAllowedW - iconW - iconGap - hPad * 2;
 
@@ -595,91 +687,66 @@ function drawVariantOrderNote(
     const textW = ctx.measureText(cleanText).width;
     const contentW = iconW + iconGap + textW;
 
-    pillW = Math.min(maxAllowedW, Math.round(contentW + hPad * 2));
-    pillH = 58;
-    pillR = Math.round(pillH / 2);
+    const pillW = Math.min(maxAllowedW, Math.round(contentW + hPad * 2));
+    const pillH = 58;
+    const pillR = Math.round(pillH / 2);
 
-    x = Math.round(995 - pillW / 2);
+    const x = Math.round(995 - pillW / 2);
+    let y = 206;
 
-    if (position === 'top') {
-      y = 206;
-    } else {
-      // Bottom floating: exact same bottom margin as left card (targetBottomY = 1450, margin = 50px)
+    if (position === 'bottom') {
+      // Baseline aligns with the bottom of the left card stack (targetBottomY = 1450, bottom margin = 50px)
       y = 1450 - pillH;
     }
-  }
 
-  // 2. Ambient shadow: EXACTLY matches the left stacked feature cards (blur: 24, offsetY: 8, opacity: 0.12)
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.12)';
-  ctx.shadowBlur = 24;
-  ctx.shadowOffsetY = 8;
+    // Frosted glass capsule background
+    pathRoundedRect(ctx, x, y, pillW, pillH, pillR);
+    const bgGrad = ctx.createLinearGradient(x, y, x, y + pillH);
+    bgGrad.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
+    bgGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.92)');
+    bgGrad.addColorStop(1, 'rgba(255, 255, 255, 0.86)');
+    ctx.fillStyle = bgGrad;
+    ctx.fill();
 
-  // 3. Background capsule with frosted glass gradient
-  pathRoundedRect(ctx, x, y, pillW, pillH, pillR);
-  const bgGrad = ctx.createLinearGradient(x, y, x, y + pillH);
-  bgGrad.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
-  bgGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.92)');
-  bgGrad.addColorStop(1, 'rgba(255, 255, 255, 0.86)');
-  ctx.fillStyle = bgGrad;
-  ctx.fill();
+    // Primary orange color outline
+    ctx.shadowColor = 'transparent';
+    ctx.strokeStyle = '#f3aa18';
+    ctx.lineWidth = 2.0;
+    ctx.stroke();
 
-  // 4. Subtle, refined monochrome glass border (matches left cards)
-  ctx.shadowColor = 'transparent';
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.10)';
-  ctx.lineWidth = 1.4;
-  ctx.stroke();
+    // Thicker, bolder black outline Info Icon (i)
+    const startContentX = x + Math.round((pillW - contentW) / 2);
+    const iconCx = startContentX + iconR;
+    const iconCy = y + Math.round(pillH / 2);
 
-  // 5. Thicker, bolder black outline Info Icon (i)
-  let startContentX: number;
-  if (isLeft) {
-    startContentX = x + hPad;
-  } else {
-    const textW = ctx.measureText(cleanText).width;
-    const contentW = iconW + iconGap + textW;
-    startContentX = x + Math.round((pillW - contentW) / 2);
-  }
+    ctx.save();
+    ctx.strokeStyle = '#18181b';
+    ctx.fillStyle = '#18181b';
+    ctx.lineWidth = 2.6;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
 
-  const iconCx = startContentX + iconR;
-  const iconCy = y + Math.round(pillH / 2);
+    ctx.beginPath();
+    ctx.arc(iconCx, iconCy, iconR - 1.3, 0, Math.PI * 2);
+    ctx.stroke();
 
-  ctx.save();
-  ctx.strokeStyle = '#18181b';
-  ctx.fillStyle = '#18181b';
-  ctx.lineWidth = isLeft ? 2.8 : 2.6;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.arc(iconCx, iconCy - iconR * 0.38, 2.0, 0, Math.PI * 2);
+    ctx.fill();
 
-  // Outer circular outline (thicker stroke)
-  ctx.beginPath();
-  ctx.arc(iconCx, iconCy, iconR - (isLeft ? 1.4 : 1.3), 0, Math.PI * 2);
-  ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(iconCx, iconCy - iconR * 0.06);
+    ctx.lineTo(iconCx, iconCy + iconR * 0.48);
+    ctx.stroke();
+    ctx.restore();
 
-  // Info dot (top)
-  const dotR = isLeft ? 2.2 : 2.0;
-  ctx.beginPath();
-  ctx.arc(iconCx, iconCy - iconR * 0.38, dotR, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Info stem (vertical line, thicker stroke)
-  ctx.beginPath();
-  ctx.moveTo(iconCx, iconCy - iconR * 0.06);
-  ctx.lineTo(iconCx, iconCy + iconR * 0.48);
-  ctx.stroke();
-  ctx.restore();
-
-  // 6. Typography: Dark charcoal, bold Plus Jakarta Sans
-  ctx.fillStyle = '#18181b';
-  ctx.font = `700 ${fontSize}px "Plus Jakarta Sans", sans-serif`;
-  ctx.textAlign = 'left';
-
-  const textX = startContentX + iconW + iconGap;
-
-  if (isTwoLines) {
+    // Typography: Dark charcoal, bold Plus Jakarta Sans
+    ctx.fillStyle = '#18181b';
+    ctx.font = `700 ${fontSize}px "Plus Jakarta Sans", sans-serif`;
+    ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText(line1, textX, y + pillH / 2 - 13);
-    ctx.fillText(line2, textX, y + pillH / 2 + 15);
-  } else {
-    ctx.textBaseline = 'middle';
+
+    const textX = startContentX + iconW + iconGap;
     ctx.fillText(cleanText, textX, y + pillH / 2 + 1);
   }
 

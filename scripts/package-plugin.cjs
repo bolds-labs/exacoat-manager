@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Thicken info icon outline and dot for higher prominence\n- Unify order note capsule shadow with stacked feature cards (blur 24, offsetY 8)\n- Align bottom floating capsule baseline with left card stack (targetBottomY 1450)\n- Scale up left column reminder card (460px full width, 80px height, 24px bold font, smart 2-line wrap)`,
+      changelog: `### Version ${version}\n- Add Exacoat primary orange outline (#f3aa18) to Order Notes Reminder capsules and cards\n- Redesign left column Order Notes card to closely match the 100% Original card layout (460x114px, r=26, top-right floating corner badge with orange border and black info icon, centered 36px bold headline and 21px italic subtitle)`,
     },
   };
 
