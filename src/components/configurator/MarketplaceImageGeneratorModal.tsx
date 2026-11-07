@@ -51,6 +51,7 @@ import {
   ChevronDown,
   ChevronUp,
   Copy,
+  FileText,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { ShopeeProductDuplicatorModal } from '../orders/ShopeeProductDuplicatorModal';
@@ -81,6 +82,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     channel: false,
     template: false,
     variantStack: false,
+    variantNote: false,
     skinBadge: false,
     coverSettings: false,
     tagline: false,
@@ -98,6 +100,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
       channel: true,
       template: true,
       variantStack: true,
+      variantNote: true,
       skinBadge: true,
       coverSettings: true,
       tagline: true,
@@ -112,6 +115,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
       channel: false,
       template: false,
       variantStack: false,
+      variantNote: false,
       skinBadge: false,
       coverSettings: false,
       tagline: false,
@@ -196,6 +200,34 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   const [texturePhotoUrl, setTexturePhotoUrl] = useState<string>(
     '/assets/brand/textured-skins-product-info.jpg'
   );
+
+  // Variant Order Note Reminder state ("Mention your device model in the order notes.")
+  const [showVariantOrderNote, setShowVariantOrderNote] = useState<boolean>(() => {
+    try {
+      const v = localStorage.getItem('exacoat_marketplace_show_variant_order_note');
+      return v !== null ? v === 'true' : false;
+    } catch {
+      return false;
+    }
+  });
+  const [variantOrderNoteText, setVariantOrderNoteText] = useState<string>(() => {
+    try {
+      return (
+        localStorage.getItem('exacoat_marketplace_variant_order_note_text') ||
+        'Mention your device model in the order notes.'
+      );
+    } catch {
+      return 'Mention your device model in the order notes.';
+    }
+  });
+  const [variantOrderNotePosition, setVariantOrderNotePosition] = useState<'top' | 'bottom' | 'left'>(() => {
+    try {
+      const p = localStorage.getItem('exacoat_marketplace_variant_order_note_pos');
+      return p === 'bottom' || p === 'left' ? p : 'top';
+    } catch {
+      return 'top';
+    }
+  });
   const [batchVariantsLayoutMode, setBatchVariantsLayoutMode] = useState<'variant' | 'cover'>('variant');
   const [batchCoverageMode, setBatchCoverageMode] = useState<'both' | '360' | 'cut'>('both');
 
@@ -380,6 +412,16 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     setVariantOffsetX(savedMp?.variant_offset_x ?? defVariantX);
     setVariantOffsetY(savedMp?.variant_offset_y ?? defVariantY);
 
+    if (savedMp?.show_variant_order_note !== undefined) {
+      setShowVariantOrderNote(savedMp.show_variant_order_note);
+    }
+    if (savedMp?.variant_order_note) {
+      setVariantOrderNoteText(savedMp.variant_order_note);
+    }
+    if (savedMp?.variant_order_note_position) {
+      setVariantOrderNotePosition(savedMp.variant_order_note_position);
+    }
+
     // Initialize active skin layer IDs: default strictly to base skin (without price, e.g. Back skin)
     const resolvedLayerIds = resolveInitialActiveLayerIds(
       profile.layers || [],
@@ -560,6 +602,9 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
         texturePhotoUrl,
         warrantyTitle: 'Installation Warranty',
       },
+      showVariantOrderNote,
+      variantOrderNoteText,
+      variantOrderNotePosition,
       showSkinsStack: false,
       skinsCountText: '20+',
       skinsLabelText: 'SKINS',
@@ -802,6 +847,9 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
         active_layer_ids: Array.from(activeLayerIds),
         logo_cutout: logoCutout,
         pencil_cutout: pencilCutout,
+        show_variant_order_note: showVariantOrderNote,
+        variant_order_note: variantOrderNoteText,
+        variant_order_note_position: variantOrderNotePosition,
       });
       if (res.success) {
         setHasSavedDevicePosition(true);
@@ -2048,6 +2096,188 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
                             <p className="text-[10px] text-zinc-500">
                               Preloaded with Exacoat official textured surface photo.
                             </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 2b. Variant Mode: Order Notes Device Model Reminder */}
+                {layoutMode === 'variant' && (
+                  <div className="rounded-xl bg-gradient-to-r from-amber-500/10 via-zinc-800/80 to-zinc-800/80 border border-amber-500/30 overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => toggleCopySection('variantNote')}
+                      className="w-full flex items-center justify-between p-3.5 hover:bg-zinc-750/50 transition text-left"
+                    >
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-[#f3aa18]" />
+                        <span className="text-xs font-bold text-zinc-100">Variant Note: Order Notes Reminder</span>
+                        <span
+                          className={clsx(
+                            'text-[10px] px-2 py-0.5 rounded-full font-mono font-bold',
+                            showVariantOrderNote
+                              ? 'bg-[#f3aa18]/20 text-[#f3aa18] border border-[#f3aa18]/30'
+                              : 'bg-zinc-700/80 text-zinc-400'
+                          )}
+                        >
+                          {showVariantOrderNote ? 'Active' : 'Off'}
+                        </span>
+                      </div>
+                      {openCopySections.variantNote ? (
+                        <ChevronUp className="w-4 h-4 text-zinc-400" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 text-zinc-400" />
+                      )}
+                    </button>
+
+                    {openCopySections.variantNote && (
+                      <div className="p-3.5 pt-0 space-y-3 border-t border-amber-500/20">
+                        <div className="pt-2">
+                          <label className="flex items-center justify-between p-2.5 rounded-lg bg-zinc-900/80 border border-zinc-700/60 cursor-pointer">
+                            <div className="space-y-0.5 pr-2">
+                              <span className="text-xs font-bold text-zinc-200">Show Order Note Reminder</span>
+                              <p className="text-[10px] text-zinc-400 leading-snug">
+                                Displays a noticeable, modern capsule reminding buyers to state their phone model in order notes.
+                              </p>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={showVariantOrderNote}
+                              onChange={(e) => {
+                                const val = e.target.checked;
+                                setShowVariantOrderNote(val);
+                                try {
+                                  localStorage.setItem('exacoat_marketplace_show_variant_order_note', String(val));
+                                } catch {}
+                              }}
+                              className="w-4 h-4 rounded text-[#f3aa18] focus:ring-[#f3aa18] cursor-pointer"
+                            />
+                          </label>
+                        </div>
+
+                        {showVariantOrderNote && (
+                          <div className="space-y-3 pt-1">
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between text-[11px] text-zinc-300 font-semibold">
+                                <span>Reminder Text:</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const def = 'Mention your device model in the order notes.';
+                                    setVariantOrderNoteText(def);
+                                    try {
+                                      localStorage.setItem('exacoat_marketplace_variant_order_note_text', def);
+                                    } catch {}
+                                  }}
+                                  className="text-[10px] text-[#f3aa18] hover:underline"
+                                >
+                                  Reset Default
+                                </button>
+                              </div>
+                              <input
+                                type="text"
+                                value={variantOrderNoteText}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setVariantOrderNoteText(val);
+                                  try {
+                                    localStorage.setItem('exacoat_marketplace_variant_order_note_text', val);
+                                  } catch {}
+                                }}
+                                placeholder="Mention your device model in the order notes."
+                                className="w-full px-2.5 py-1.5 rounded-lg text-xs bg-zinc-900 border border-zinc-700 text-zinc-100 focus:outline-none focus:border-[#f3aa18]"
+                              />
+                              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const en = 'Mention your device model in the order notes.';
+                                    setVariantOrderNoteText(en);
+                                    try {
+                                      localStorage.setItem('exacoat_marketplace_variant_order_note_text', en);
+                                    } catch {}
+                                  }}
+                                  className="px-2 py-0.5 rounded text-[10px] font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition"
+                                >
+                                  English (Default)
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const id = 'Tuliskan tipe hp kamu di catatan pesanan.';
+                                    setVariantOrderNoteText(id);
+                                    try {
+                                      localStorage.setItem('exacoat_marketplace_variant_order_note_text', id);
+                                    } catch {}
+                                  }}
+                                  className="px-2 py-0.5 rounded text-[10px] font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition"
+                                >
+                                  Indonesian
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <label className="text-[11px] text-zinc-300 font-semibold">Position on Image:</label>
+                              <div className="grid grid-cols-3 gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setVariantOrderNotePosition('top');
+                                    try {
+                                      localStorage.setItem('exacoat_marketplace_variant_order_note_pos', 'top');
+                                    } catch {}
+                                  }}
+                                  className={clsx(
+                                    'px-2 py-1.5 rounded-lg text-[10px] font-semibold text-center border transition',
+                                    variantOrderNotePosition === 'top'
+                                      ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
+                                      : 'bg-zinc-900 border-zinc-700 text-zinc-400 hover:text-zinc-200'
+                                  )}
+                                  title="Placed under Top-Right Skin Name Pill (Recommended)"
+                                >
+                                  Under Skin Name
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setVariantOrderNotePosition('bottom');
+                                    try {
+                                      localStorage.setItem('exacoat_marketplace_variant_order_note_pos', 'bottom');
+                                    } catch {}
+                                  }}
+                                  className={clsx(
+                                    'px-2 py-1.5 rounded-lg text-[10px] font-semibold text-center border transition',
+                                    variantOrderNotePosition === 'bottom'
+                                      ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
+                                      : 'bg-zinc-900 border-zinc-700 text-zinc-400 hover:text-zinc-200'
+                                  )}
+                                  title="Floating capsule at the bottom right"
+                                >
+                                  Bottom Floating
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setVariantOrderNotePosition('left');
+                                    try {
+                                      localStorage.setItem('exacoat_marketplace_variant_order_note_pos', 'left');
+                                    } catch {}
+                                  }}
+                                  className={clsx(
+                                    'px-2 py-1.5 rounded-lg text-[10px] font-semibold text-center border transition',
+                                    variantOrderNotePosition === 'left'
+                                      ? 'bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]'
+                                      : 'bg-zinc-900 border-zinc-700 text-zinc-400 hover:text-zinc-200'
+                                  )}
+                                  title="Placed under device subheader in left column"
+                                >
+                                  Left Column
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         )}
                       </div>

@@ -1694,6 +1694,12 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - "Save Defaults" button persists preferred skin selections to localStorage (exacoat_marketplace_default_finishes).
   - "Generate All as ZIP" renders all selected finishes sequentially on the 1500x1500px offscreen canvas and packages them into a single .zip file using JSZip (exacoat-marketplace-[device-slug].zip).
   - Includes 1-click single image download button for instant single-skin export.
+- **Variant Order Note Reminder Invariant (Order Notes Capsule)**:
+  - When selling skins on multi-model marketplace listings, buyers must specify their exact device model in order notes.
+  - Variant layout supports a configurable Order Note Reminder (`showVariantOrderNote`, default text: "Mention your device model in the order notes.").
+  - Visual treatment: modern frosted glass capsule (`rgba(255, 255, 255, 0.96)` to `0.88`), subtle amber accent border (`rgba(243, 170, 24, 0.40)`), amber circular badge with vector notepad glyph, and crisp high-contrast `#18181b` typography in Plus Jakarta Sans bold.
+  - Position options: `'top'` (under Top-Right Skin Name Pill at y=206, perfectly symmetrical with Brand Tagline on the left), `'bottom'` (bottom floating capsule), or `'left'` (left column under subheader).
+  - Automatically propagated across single preview canvas, batch ZIP exports, and Shopee Image Injector variant uploads. Settings are saved per device in `_exacoat_marketplace_image_settings`.
 
 
 

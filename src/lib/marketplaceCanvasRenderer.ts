@@ -64,6 +64,11 @@ export interface MarketplaceImageConfig {
     warrantyTitle?: string;
   };
 
+  // Variant Order Note Reminder ("Mention your device model in the order notes.")
+  showVariantOrderNote?: boolean;
+  variantOrderNoteText?: string;
+  variantOrderNotePosition?: 'top' | 'bottom' | 'left';
+
   // Device Positioning & Angles
   selectedViewId?: string;
   coverage: 'model_360' | 'model_cut';
@@ -486,6 +491,119 @@ function drawBrandTagline(
   ctx.fillStyle = '#18181b';
   ctx.font = '700 25px "Plus Jakarta Sans", sans-serif';
   ctx.fillText(text, textX, textY);
+
+  ctx.restore();
+}
+
+/**
+ * Draws a modern, minimal, noticeable order note reminder capsule on variant images.
+ * Reminds marketplace buyers to mention their exact device model in the order notes (catatan pesanan).
+ */
+function drawVariantOrderNote(
+  ctx: CanvasRenderingContext2D,
+  text: string = 'Mention your device model in the order notes.',
+  position: 'top' | 'bottom' | 'left' = 'top'
+) {
+  const cleanText = text.trim();
+  if (!cleanText) return;
+
+  ctx.save();
+
+  let x = 540;
+  let y = 206;
+  let pillW = 910;
+  let pillH = 48;
+  let pillR = 24;
+
+  if (position === 'bottom') {
+    pillW = 860;
+    pillH = 54;
+    pillR = 27;
+    x = 540 + (910 - pillW) / 2;
+    y = 1385;
+  } else if (position === 'left') {
+    x = 50;
+    y = 336;
+    pillW = 460;
+    pillH = 56;
+    pillR = 20;
+  }
+
+  // 1. Soft ambient drop shadow
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.05)';
+  ctx.shadowBlur = 12;
+  ctx.shadowOffsetY = 4;
+
+  // 2. Background capsule with frosted glass gradient
+  pathRoundedRect(ctx, x, y, pillW, pillH, pillR);
+  const bgGrad = ctx.createLinearGradient(x, y, x, y + pillH);
+  bgGrad.addColorStop(0, 'rgba(255, 255, 255, 0.96)');
+  bgGrad.addColorStop(1, 'rgba(255, 255, 255, 0.88)');
+  ctx.fillStyle = bgGrad;
+  ctx.fill();
+
+  // 3. Subtle amber accent border (noticeable yet clean and refined)
+  ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = 'rgba(243, 170, 24, 0.40)';
+  ctx.lineWidth = 1.6;
+  ctx.stroke();
+
+  // 4. Measure text and compute content centering
+  let fontSize = position === 'left' ? 20 : 23;
+  ctx.font = `700 ${fontSize}px "Plus Jakarta Sans", sans-serif`;
+  const iconW = 22;
+  const iconGap = 12;
+  const maxTextW = pillW - iconW - iconGap - 40;
+
+  while (ctx.measureText(cleanText).width > maxTextW && fontSize > 14) {
+    fontSize -= 1;
+    ctx.font = `700 ${fontSize}px "Plus Jakarta Sans", sans-serif`;
+  }
+
+  const textMetrics = ctx.measureText(cleanText);
+  const totalContentW = iconW + iconGap + textMetrics.width;
+  const startContentX = x + Math.max(16, (pillW - totalContentW) / 2);
+
+  // 5. Circular amber badge with vector notepad/pencil glyph
+  const iconCx = startContentX + iconW / 2;
+  const iconCy = y + pillH / 2;
+
+  ctx.fillStyle = '#f3aa18';
+  ctx.beginPath();
+  ctx.arc(iconCx, iconCy, 12, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Vector notepad & pencil icon
+  ctx.save();
+  ctx.strokeStyle = '#18181b';
+  ctx.fillStyle = '#18181b';
+  ctx.lineWidth = 1.5;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  const padX = iconCx - 4.5;
+  const padY = iconCy - 5.5;
+  const padW = 9;
+  const padH = 11;
+  pathRoundedRect(ctx, padX, padY, padW, padH, 1.8);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(iconCx - 2.5, iconCy - 1.8);
+  ctx.lineTo(iconCx + 2.5, iconCy - 1.8);
+  ctx.moveTo(iconCx - 2.5, iconCy + 1.8);
+  ctx.lineTo(iconCx + 1.2, iconCy + 1.8);
+  ctx.stroke();
+  ctx.restore();
+
+  // 6. Typography: Dark charcoal, high-contrast, modern
+  const textX = startContentX + iconW + iconGap;
+  const textY = y + pillH / 2 + 1;
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#18181b';
+  ctx.font = `700 ${fontSize}px "Plus Jakarta Sans", sans-serif`;
+  ctx.fillText(cleanText, textX, textY);
 
   ctx.restore();
 }
@@ -2326,6 +2444,15 @@ export async function renderMarketplaceImageToCanvas(
     // 2) Stacked trust cards and Textured Surface macro preview photo on left column
     await drawLeftStackedFeatureCards(ctx, config.variantLeftCards || {}, 50, 340, 460);
     // Bottom feature cards omitted on variant images, leaving the phone body clean and visible!
+
+    // 3) Variant Order Note Reminder ("Mention your device model in the order notes.")
+    if (config.showVariantOrderNote) {
+      drawVariantOrderNote(
+        ctx,
+        config.variantOrderNoteText || 'Mention your device model in the order notes.',
+        config.variantOrderNotePosition || 'top'
+      );
+    }
   } else {
     // Cover Layout: Sub-badge & Big Bold Headline (displays the Product / Device Name with highlight outline)
     drawLeftHeadlineBlock(

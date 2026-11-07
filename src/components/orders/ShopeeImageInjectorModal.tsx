@@ -155,6 +155,34 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
   const [variantOffsetX, setVariantOffsetX] = useState<number>(0);
   const [variantOffsetY, setVariantOffsetY] = useState<number>(80);
 
+  // Variant Order Note Reminder state ("Mention your device model in the order notes.")
+  const [showVariantOrderNote, setShowVariantOrderNote] = useState<boolean>(() => {
+    try {
+      const v = localStorage.getItem('exacoat_marketplace_show_variant_order_note');
+      return v !== null ? v === 'true' : false;
+    } catch {
+      return false;
+    }
+  });
+  const [variantOrderNoteText, setVariantOrderNoteText] = useState<string>(() => {
+    try {
+      return (
+        localStorage.getItem('exacoat_marketplace_variant_order_note_text') ||
+        'Mention your device model in the order notes.'
+      );
+    } catch {
+      return 'Mention your device model in the order notes.';
+    }
+  });
+  const [variantOrderNotePosition, setVariantOrderNotePosition] = useState<'top' | 'bottom' | 'left'>(() => {
+    try {
+      const p = localStorage.getItem('exacoat_marketplace_variant_order_note_pos');
+      return p === 'bottom' || p === 'left' ? p : 'top';
+    } catch {
+      return 'top';
+    }
+  });
+
   const [hasSavedDevicePosition, setHasSavedDevicePosition] = useState<boolean>(false);
   const [isSavingDevicePosition, setIsSavingDevicePosition] = useState<boolean>(false);
 
@@ -329,6 +357,16 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
         setVariantScale(savedMp?.variant_scale ?? 0.75);
         setVariantOffsetX(savedMp?.variant_offset_x ?? (isLaptop ? 140 : 0));
         setVariantOffsetY(savedMp?.variant_offset_y ?? (isLaptop ? -20 : 80));
+
+        if (savedMp?.show_variant_order_note !== undefined) {
+          setShowVariantOrderNote(savedMp.show_variant_order_note);
+        }
+        if (savedMp?.variant_order_note) {
+          setVariantOrderNoteText(savedMp.variant_order_note);
+        }
+        if (savedMp?.variant_order_note_position) {
+          setVariantOrderNotePosition(savedMp.variant_order_note_position);
+        }
 
         if (savedMp?.headline_text && savedMp.headline_text.trim()) {
           setHeadlineText(savedMp.headline_text);
@@ -852,6 +890,9 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
         active_layer_ids: activeLayerIds,
         logo_cutout: logoCutout,
         pencil_cutout: pencilCutout,
+        show_variant_order_note: showVariantOrderNote,
+        variant_order_note: variantOrderNoteText,
+        variant_order_note_position: variantOrderNotePosition,
       });
       if (res.success) {
         setHasSavedDevicePosition(true);
@@ -909,6 +950,9 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
           texturePhotoUrl: '/assets/brand/textured-skins-product-info.jpg',
           warrantyTitle: 'Installation Warranty',
         },
+        showVariantOrderNote,
+        variantOrderNoteText,
+        variantOrderNotePosition,
         showSkinsStack: false,
         skinsCountText: '20+',
         skinsLabelText: 'SKINS',
@@ -943,6 +987,9 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
       variantScale,
       variantOffsetX,
       variantOffsetY,
+      showVariantOrderNote,
+      variantOrderNoteText,
+      variantOrderNotePosition,
     ]
   );
 
@@ -1928,6 +1975,95 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
                         />
                       </div>
                     </div>
+
+                    {/* Variant Order Note Reminder Controls */}
+                    {activePreviewType === 'variant' && (
+                      <div className="pt-3 border-t border-zinc-800 space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-zinc-200 flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={showVariantOrderNote}
+                              onChange={(e) => {
+                                const val = e.target.checked;
+                                setShowVariantOrderNote(val);
+                                try {
+                                  localStorage.setItem('exacoat_marketplace_show_variant_order_note', String(val));
+                                } catch {}
+                              }}
+                              className="w-3.5 h-3.5 rounded border-zinc-700 text-[#f3aa18] focus:ring-[#f3aa18]"
+                            />
+                            <span>Order Notes Reminder (Variant)</span>
+                          </label>
+                          <span className="text-[10px] text-amber-400 font-mono">Modern Capsule</span>
+                        </div>
+                        {showVariantOrderNote && (
+                          <div className="space-y-2 pt-1 pl-5">
+                            <input
+                              type="text"
+                              value={variantOrderNoteText}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setVariantOrderNoteText(val);
+                                try {
+                                  localStorage.setItem('exacoat_marketplace_variant_order_note_text', val);
+                                } catch {}
+                              }}
+                              placeholder="Mention your device model in the order notes."
+                              className="w-full px-2.5 py-1.5 rounded-lg text-xs bg-zinc-950 border border-zinc-700 text-zinc-100 focus:outline-none focus:border-[#f3aa18]"
+                            />
+                            <div className="flex items-center justify-between">
+                              <div className="flex gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const en = 'Mention your device model in the order notes.';
+                                    setVariantOrderNoteText(en);
+                                    try {
+                                      localStorage.setItem('exacoat_marketplace_variant_order_note_text', en);
+                                    } catch {}
+                                  }}
+                                  className="px-2 py-0.5 rounded text-[10px] font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition"
+                                >
+                                  English
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const id = 'Tuliskan tipe hp kamu di catatan pesanan.';
+                                    setVariantOrderNoteText(id);
+                                    try {
+                                      localStorage.setItem('exacoat_marketplace_variant_order_note_text', id);
+                                    } catch {}
+                                  }}
+                                  className="px-2 py-0.5 rounded text-[10px] font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition"
+                                >
+                                  Indonesian
+                                </button>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-[10px] text-zinc-500">Pos:</span>
+                                <select
+                                  value={variantOrderNotePosition}
+                                  onChange={(e) => {
+                                    const pos = e.target.value as 'top' | 'bottom' | 'left';
+                                    setVariantOrderNotePosition(pos);
+                                    try {
+                                      localStorage.setItem('exacoat_marketplace_variant_order_note_pos', pos);
+                                    } catch {}
+                                  }}
+                                  className="text-[10px] bg-zinc-950 border border-zinc-700 rounded px-1.5 py-0.5 text-zinc-300 focus:outline-none"
+                                >
+                                  <option value="top">Under Skin Name</option>
+                                  <option value="bottom">Bottom Floating</option>
+                                  <option value="left">Left Column</option>
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 

@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Fix false-positive Exacoat Store address warning when an order has a valid customer delivery address\n- Fix Store Pickup method title leakage in Courier section by sanitizing store pickup titles during courier delivery\n- Fix courier and tracking persistence: enforce delivery override on tracking save and prevent store pickup auto-reversion\n- Default domestic courier deliveries to REG tier (e.g. SiCepat - REG) when service tier is not explicitly set`,
+      changelog: `### Version ${version}\n- Add Order Notes Reminder setting to Marketplace Image Generator for variant images\n- Render noticeable yet minimal modern frosted glass capsule reminding buyers to mention device model in order notes\n- Support flexible capsule positions (under top-right skin name pill, bottom floating, or left column)\n- Automatically propagate order note settings across live preview, batch ZIP exports, and Shopee image injector\n- Persist order note settings to device profile metadata (_exacoat_marketplace_image_settings) and browser storage`,
     },
   };
 

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.214] - 2026-11-07
+
+### Marketplace Image Generator Variant Order Notes Reminder
+- **Variant Order Note Reminder Invariant (`marketplaceCanvasRenderer.ts`)**:
+  - Added modern, minimal, noticeable order note reminder capsule on variant images to remind marketplace buyers to specify their exact device model in order notes.
+  - Rendered with frosted glass gradient (`rgba(255, 255, 255, 0.96)` to `0.88`), subtle amber accent border (`rgba(243, 170, 24, 0.40)`), circular amber icon badge with crisp vector notepad glyph, and high-contrast `#18181b` typography in Plus Jakarta Sans bold.
+  - Supports flexible positioning: `'top'` (under Top-Right Skin Name Pill at y=206, perfectly symmetrical with Brand Tagline on the left), `'bottom'` (bottom floating capsule), or `'left'` (left column under subheader).
+  - Automatically propagated across single preview canvas, batch ZIP exports, and Shopee image injector variant uploads.
+- **Configurator Studio & Marketplace Image Generator Modal (`MarketplaceImageGeneratorModal.tsx`)**:
+  - Added collapsible "Variant Note: Order Notes Reminder" section in the Template tab when in Variant mode.
+  - Added toggle, customizable text input defaulting to "Mention your device model in the order notes.", quick English and Indonesian preset pills, and position selectors.
+  - Persists settings to product profile metadata (`_exacoat_marketplace_image_settings`) and browser localStorage.
+- **Shopee Image Injector Modal (`ShopeeImageInjectorModal.tsx`)**:
+  - Integrated Order Notes Reminder toggle and customization into the Variant Position controls section.
+  - Automatically includes order note reminder settings when generating and injecting variant images directly to Shopee/Tokopedia listings.
+- **Backend Post Meta Sanitization (`class-configurator-engine.php`)**:
+  - Augmented `rest_save_marketplace_settings` to sanitize and persist `show_variant_order_note`, `variant_order_note`, and `variant_order_note_position`.
+
+---
+
 ## [0.1.213] - 2026-11-04
 
 ### Delivery Address False Alert Elimination & Courier Persistence Invariants

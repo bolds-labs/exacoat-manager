@@ -3385,6 +3385,9 @@ class Exacoat_Configurator_Engine {
 			'active_layer_ids'       => is_array( $raw_settings['active_layer_ids'] ?? null ) ? array_values( array_map( 'sanitize_text_field', $raw_settings['active_layer_ids'] ) ) : [],
 			'logo_cutout'            => isset( $raw_settings['logo_cutout'] ) ? (bool) $raw_settings['logo_cutout'] : true,
 			'pencil_cutout'          => isset( $raw_settings['pencil_cutout'] ) ? (bool) $raw_settings['pencil_cutout'] : true,
+			'show_variant_order_note' => isset( $raw_settings['show_variant_order_note'] ) ? (bool) $raw_settings['show_variant_order_note'] : false,
+			'variant_order_note'      => isset( $raw_settings['variant_order_note'] ) ? sanitize_text_field( (string) $raw_settings['variant_order_note'] ) : 'Mention your device model in the order notes.',
+			'variant_order_note_position' => in_array( $raw_settings['variant_order_note_position'] ?? '', [ 'top', 'bottom', 'left' ], true ) ? $raw_settings['variant_order_note_position'] : 'top',
 			'updated_at'             => current_time( 'mysql' ),
 		];
 

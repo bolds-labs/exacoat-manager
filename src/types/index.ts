@@ -637,6 +637,9 @@ export interface MarketplaceDeviceImageSettings {
   active_layer_ids?: string[];
   logo_cutout?: boolean;
   pencil_cutout?: boolean;
+  show_variant_order_note?: boolean;
+  variant_order_note?: string;
+  variant_order_note_position?: 'top' | 'bottom' | 'left';
   updated_at?: string;
 }
 
