@@ -205,9 +205,9 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
   const [showVariantOrderNote, setShowVariantOrderNote] = useState<boolean>(() => {
     try {
       const v = localStorage.getItem('exacoat_marketplace_show_variant_order_note');
-      return v !== null ? v === 'true' : false;
+      return v !== null ? v === 'true' : true;
     } catch {
-      return false;
+      return true;
     }
   });
   const [variantOrderNoteText, setVariantOrderNoteText] = useState<string>(() => {
@@ -679,6 +679,9 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
     brandTagline,
     bgType,
     customBgUrl,
+    showVariantOrderNote,
+    variantOrderNoteText,
+    variantOrderNotePosition,
   ]);
 
   // Single Image Download (1500x1500px JPEG)

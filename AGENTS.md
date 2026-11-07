@@ -1700,6 +1700,7 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Visual treatment: modern frosted glass capsule (`rgba(255, 255, 255, 0.96)` to `0.88`), subtle amber accent border (`rgba(243, 170, 24, 0.40)`), amber circular badge with vector notepad glyph, and crisp high-contrast `#18181b` typography in Plus Jakarta Sans bold.
   - Position options: `'top'` (under Top-Right Skin Name Pill at y=206, perfectly symmetrical with Brand Tagline on the left), `'bottom'` (bottom floating capsule), or `'left'` (left column under subheader).
   - Automatically propagated across single preview canvas, batch ZIP exports, and Shopee Image Injector variant uploads. Settings are saved per device in `_exacoat_marketplace_image_settings`.
+  - **Live Canvas Preview Synchronization**: All variant note state variables (`showVariantOrderNote`, `variantOrderNoteText`, `variantOrderNotePosition`) must always be bound in the `useEffect` dependencies driving the master preview canvas in `MarketplaceImageGeneratorModal.tsx` and `ShopeeImageInjectorModal.tsx`. Missing any variable prevents live re-rendering when toggles or inputs change in the sidebar.
 
 
 

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.215] - 2026-11-07
+
+### Fix: Live Canvas Preview Synchronization for Marketplace Variant Order Notes Reminder
+- **Canvas Preview React Dependency Invariant (`MarketplaceImageGeneratorModal.tsx`)**:
+  - Added `showVariantOrderNote`, `variantOrderNoteText`, and `variantOrderNotePosition` to the live HTML5 Canvas preview synchronization `useEffect` dependency array. Previously, changing the toggle, editing text, or changing position did not re-trigger canvas rendering because these state variables were omitted from the effect dependencies.
+  - Defaulted `showVariantOrderNote` to `true` when unconfigured so variant listings display the reminder capsule by default upon first open.
+  - Added letter-spacing reset protection (`letterSpacing = '0px'`) in `drawVariantOrderNote` and `drawTopRightPill` (`marketplaceCanvasRenderer.ts`) to prevent canvas font metrics overflow across browsers.
+
+---
+
 ## [0.1.214] - 2026-11-07
 
 ### Marketplace Image Generator Variant Order Notes Reminder

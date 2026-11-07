@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Add Order Notes Reminder setting to Marketplace Image Generator for variant images\n- Render noticeable yet minimal modern frosted glass capsule reminding buyers to mention device model in order notes\n- Support flexible capsule positions (under top-right skin name pill, bottom floating, or left column)\n- Automatically propagate order note settings across live preview, batch ZIP exports, and Shopee image injector\n- Persist order note settings to device profile metadata (_exacoat_marketplace_image_settings) and browser storage`,
+      changelog: `### Version ${version}\n- Fix live canvas preview synchronization for Order Notes Reminder in Marketplace Image Generator\n- Add missing dependencies (showVariantOrderNote, variantOrderNoteText, variantOrderNotePosition) to preview canvas useEffect\n- Default Order Notes Reminder to enabled for variant images when unconfigured\n- Reset canvas letter spacing to prevent font metrics spillover from skin name badge`,
     },
   };
 

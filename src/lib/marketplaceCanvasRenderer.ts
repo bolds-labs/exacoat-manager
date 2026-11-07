@@ -508,6 +508,9 @@ function drawVariantOrderNote(
   if (!cleanText) return;
 
   ctx.save();
+  try {
+    (ctx as any).letterSpacing = '0px';
+  } catch {}
 
   let x = 540;
   let y = 206;
@@ -762,6 +765,10 @@ function drawTopRightPill(
   }
 
   ctx.fillText(cleanText, x + w / 2, y + h / 2 + 2);
+
+  try {
+    (ctx as any).letterSpacing = '0px';
+  } catch {}
 
   ctx.restore();
 }
