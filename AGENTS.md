@@ -1697,8 +1697,8 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 - **Variant Order Note Reminder Invariant (Order Notes Capsule)**:
   - When selling skins on multi-model marketplace listings, buyers must specify their exact device model in order notes.
   - Variant layout supports a configurable Order Note Reminder (`showVariantOrderNote`, default text: "Mention your device model in the order notes.").
-  - Visual treatment: modern frosted glass capsule (`rgba(255, 255, 255, 0.97)` to `0.90`), subtle monochrome glass border (`rgba(0, 0, 0, 0.12)`), black outline info icon (`(i)`), dynamic content-fit width (width hugs text and icon), and larger 27px bold typography (`#18181b` in Plus Jakarta Sans).
-  - Position options: `'top'` (dynamically centered under Top-Right Skin Name Pill at y=206), `'bottom'` (bottom floating capsule), or `'left'` (left column under subheader).
+  - Visual treatment: modern frosted glass capsule (`rgba(255, 255, 255, 0.98)` to `0.86`), ambient shadow identical to left stacked feature cards (`rgba(0, 0, 0, 0.12)`, blur 24, offsetY 8), bold 2.6px black outline info icon (`(i)`), dynamic content-fit width on top/bottom, and 28px bold typography (`#18181b` in Plus Jakarta Sans).
+  - Position options: `'top'` (dynamically centered under Top-Right Skin Name Pill at y=206), `'bottom'` (bottom floating capsule aligned with left card baseline at y = 1450 - pillH with identical 50px bottom margin), or `'left'` (full 460px width card, 80px height, 26px radius, and balanced 2-line 24px bold typography).
   - Automatically propagated across single preview canvas, batch ZIP exports, and Shopee Image Injector variant uploads. Settings are saved per device in `_exacoat_marketplace_image_settings`.
   - **Live Canvas Preview Synchronization**: All variant note state variables (`showVariantOrderNote`, `variantOrderNoteText`, `variantOrderNotePosition`) must always be bound in the `useEffect` dependencies driving the master preview canvas in `MarketplaceImageGeneratorModal.tsx` and `ShopeeImageInjectorModal.tsx`. Missing any variable prevents live re-rendering when toggles or inputs change in the sidebar.
 

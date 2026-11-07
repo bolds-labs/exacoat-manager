@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.217] - 2026-11-07
+
+### Variant Order Notes Reminder Visual Polish & Alignment
+- **Thicker Info Icon & Unified Glass Shadow (`marketplaceCanvasRenderer.ts`)**:
+  - Increased line width of info icon circular outline and vertical stem from 1.8px to 2.6px (2.8px on left column) and enlarged dot radius to 2.0px for a punchier, bolder mark.
+  - Aligned capsule shadow parameters to match the left stacked feature cards exactly (`rgba(0, 0, 0, 0.12)`, `shadowBlur = 24`, `shadowOffsetY = 8`).
+- **Unified Bottom Margin for Bottom Floating Mode**:
+  - Aligned bottom floating capsule baseline with the bottom edge of the left card stack (`y = 1450 - pillH`, creating an identical 50px bottom margin).
+- **Scaled-Up Left Column Card**:
+  - Expanded left column reminder card to full column width (460px) and 80px height with 26px corner radius.
+  - Configured 24px bold typography with intelligent balanced 2-line text wrapping for multi-word reminders.
+
+---
+
 ## [0.1.216] - 2026-11-07
 
 ### Marketplace Variant Order Notes Reminder Styling & Content-Fit Redesign

@@ -496,6 +496,40 @@ function drawBrandTagline(
 }
 
 /**
+ * Helper to split text into two balanced lines for fixed-width cards
+ */
+function splitTextIntoBalancedLines(
+  text: string,
+  ctx: CanvasRenderingContext2D,
+  maxW: number
+): [string, string] {
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length <= 1) return [text, ''];
+
+  let bestIndex = Math.ceil(words.length / 2);
+  let bestDiff = Infinity;
+
+  for (let i = 1; i < words.length; i++) {
+    const l1 = words.slice(0, i).join(' ');
+    const l2 = words.slice(i).join(' ');
+    const w1 = ctx.measureText(l1).width;
+    const w2 = ctx.measureText(l2).width;
+    if (w1 <= maxW && w2 <= maxW) {
+      const diff = Math.abs(w1 - w2);
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        bestIndex = i;
+      }
+    }
+  }
+
+  return [
+    words.slice(0, bestIndex).join(' '),
+    words.slice(bestIndex).join(' '),
+  ];
+}
+
+/**
  * Draws a modern, minimal, noticeable order note reminder capsule on variant images.
  * Reminds marketplace buyers to mention their exact device model in the order notes (catatan pesanan).
  */
@@ -512,104 +546,142 @@ function drawVariantOrderNote(
     (ctx as any).letterSpacing = '0px';
   } catch {}
 
-  // 1. Typography configuration: larger, crisp, modern bold
-  let fontSize = position === 'left' ? 22 : 27;
+  const isLeft = position === 'left';
+
+  // 1. Proportions & Typography:
+  // On left column, make it bigger: 460px wide, 80px tall, 24px bold font, matching left card styling!
+  // On top/bottom: dynamic content-fit width, 58px tall, 28px bold font!
+  let fontSize = isLeft ? 24 : 28;
   ctx.font = `700 ${fontSize}px "Plus Jakarta Sans", sans-serif`;
 
-  const iconW = 22; // info icon diameter
-  const iconGap = 10;
-  const hPad = 22; // padding on each side of the capsule
+  const iconW = isLeft ? 28 : 24;
+  const iconR = iconW / 2;
+  const iconGap = isLeft ? 14 : 12;
+  const hPad = isLeft ? 24 : 24;
 
-  const maxAllowedW = position === 'left' ? 460 : 910;
-  const maxTextW = maxAllowedW - iconW - iconGap - hPad * 2;
+  let pillW: number;
+  let pillH: number;
+  let pillR: number;
+  let x: number;
+  let y: number;
 
-  // Auto-fit font downscaling if custom text is exceptionally long
-  while (ctx.measureText(cleanText).width > maxTextW && fontSize > 15) {
-    fontSize -= 1;
-    ctx.font = `700 ${fontSize}px "Plus Jakarta Sans", sans-serif`;
+  let line1 = cleanText;
+  let line2 = '';
+  let isTwoLines = false;
+
+  if (isLeft) {
+    pillW = 460;
+    pillH = 80;
+    pillR = 26; // matches cardR = 26 of stacked cards
+    x = 50;
+    y = 344;
+
+    const maxTextW = pillW - iconW - iconGap - hPad * 2;
+    if (ctx.measureText(cleanText).width > maxTextW) {
+      const [l1, l2] = splitTextIntoBalancedLines(cleanText, ctx, maxTextW);
+      line1 = l1;
+      line2 = l2;
+      isTwoLines = Boolean(l2);
+    }
+  } else {
+    const maxAllowedW = 910;
+    const maxTextW = maxAllowedW - iconW - iconGap - hPad * 2;
+
+    while (ctx.measureText(cleanText).width > maxTextW && fontSize > 16) {
+      fontSize -= 1;
+      ctx.font = `700 ${fontSize}px "Plus Jakarta Sans", sans-serif`;
+    }
+
+    const textW = ctx.measureText(cleanText).width;
+    const contentW = iconW + iconGap + textW;
+
+    pillW = Math.min(maxAllowedW, Math.round(contentW + hPad * 2));
+    pillH = 58;
+    pillR = Math.round(pillH / 2);
+
+    x = Math.round(995 - pillW / 2);
+
+    if (position === 'top') {
+      y = 206;
+    } else {
+      // Bottom floating: exact same bottom margin as left card (targetBottomY = 1450, margin = 50px)
+      y = 1450 - pillH;
+    }
   }
 
-  const textMetrics = ctx.measureText(cleanText);
-  const textW = textMetrics.width;
-  const contentW = iconW + iconGap + textW;
-
-  // Width dynamically hugs the text and icon cleanly
-  const pillW = Math.min(maxAllowedW, Math.round(contentW + hPad * 2));
-  const pillH = position === 'left' ? 52 : 54;
-  const pillR = Math.round(pillH / 2);
-
-  let x = 540;
-  let y = 206;
-
-  if (position === 'top') {
-    // Center dynamically under the Top-Right Skin Name Pill (centered at x = 995)
-    x = Math.round(995 - pillW / 2);
-    y = 206;
-  } else if (position === 'bottom') {
-    x = Math.round(995 - pillW / 2);
-    y = 1385;
-  } else if (position === 'left') {
-    x = Math.round(50 + (460 - pillW) / 2);
-    y = 336;
-  }
-
-  // 2. Soft ambient drop shadow
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.06)';
-  ctx.shadowBlur = 10;
-  ctx.shadowOffsetY = 3;
+  // 2. Ambient shadow: EXACTLY matches the left stacked feature cards (blur: 24, offsetY: 8, opacity: 0.12)
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.12)';
+  ctx.shadowBlur = 24;
+  ctx.shadowOffsetY = 8;
 
   // 3. Background capsule with frosted glass gradient
   pathRoundedRect(ctx, x, y, pillW, pillH, pillR);
   const bgGrad = ctx.createLinearGradient(x, y, x, y + pillH);
-  bgGrad.addColorStop(0, 'rgba(255, 255, 255, 0.97)');
-  bgGrad.addColorStop(1, 'rgba(255, 255, 255, 0.90)');
+  bgGrad.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
+  bgGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.92)');
+  bgGrad.addColorStop(1, 'rgba(255, 255, 255, 0.86)');
   ctx.fillStyle = bgGrad;
   ctx.fill();
 
-  // 4. Subtle, clean monochrome border (strictly no orange, pure modern glass)
+  // 4. Subtle, refined monochrome glass border (matches left cards)
   ctx.shadowColor = 'transparent';
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.12)';
-  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.10)';
+  ctx.lineWidth = 1.4;
   ctx.stroke();
 
-  // 5. Clean black outline Info Icon (i)
-  const startContentX = x + Math.round((pillW - contentW) / 2);
-  const iconR = 10.5;
+  // 5. Thicker, bolder black outline Info Icon (i)
+  let startContentX: number;
+  if (isLeft) {
+    startContentX = x + hPad;
+  } else {
+    const textW = ctx.measureText(cleanText).width;
+    const contentW = iconW + iconGap + textW;
+    startContentX = x + Math.round((pillW - contentW) / 2);
+  }
+
   const iconCx = startContentX + iconR;
   const iconCy = y + Math.round(pillH / 2);
 
   ctx.save();
   ctx.strokeStyle = '#18181b';
   ctx.fillStyle = '#18181b';
-  ctx.lineWidth = 1.8;
+  ctx.lineWidth = isLeft ? 2.8 : 2.6;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
-  // Outer circular outline
+  // Outer circular outline (thicker stroke)
   ctx.beginPath();
-  ctx.arc(iconCx, iconCy, iconR, 0, Math.PI * 2);
+  ctx.arc(iconCx, iconCy, iconR - (isLeft ? 1.4 : 1.3), 0, Math.PI * 2);
   ctx.stroke();
 
   // Info dot (top)
+  const dotR = isLeft ? 2.2 : 2.0;
   ctx.beginPath();
-  ctx.arc(iconCx, iconCy - 4.2, 1.4, 0, Math.PI * 2);
+  ctx.arc(iconCx, iconCy - iconR * 0.38, dotR, 0, Math.PI * 2);
   ctx.fill();
 
-  // Info stem (vertical line)
+  // Info stem (vertical line, thicker stroke)
   ctx.beginPath();
-  ctx.moveTo(iconCx, iconCy - 1.0);
-  ctx.lineTo(iconCx, iconCy + 4.8);
+  ctx.moveTo(iconCx, iconCy - iconR * 0.06);
+  ctx.lineTo(iconCx, iconCy + iconR * 0.48);
   ctx.stroke();
   ctx.restore();
 
-  // 6. Typography: Dark charcoal, bold, high-contrast, modern
-  const textX = startContentX + iconW + iconGap;
-  const textY = y + pillH / 2 + 1;
-  ctx.textBaseline = 'middle';
-  ctx.textAlign = 'left';
+  // 6. Typography: Dark charcoal, bold Plus Jakarta Sans
   ctx.fillStyle = '#18181b';
   ctx.font = `700 ${fontSize}px "Plus Jakarta Sans", sans-serif`;
-  ctx.fillText(cleanText, textX, textY);
+  ctx.textAlign = 'left';
+
+  const textX = startContentX + iconW + iconGap;
+
+  if (isTwoLines) {
+    ctx.textBaseline = 'middle';
+    ctx.fillText(line1, textX, y + pillH / 2 - 13);
+    ctx.fillText(line2, textX, y + pillH / 2 + 15);
+  } else {
+    ctx.textBaseline = 'middle';
+    ctx.fillText(cleanText, textX, y + pillH / 2 + 1);
+  }
 
   ctx.restore();
 }

@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Redesign Order Notes Reminder capsule with dynamic content-fit width\n- Replace badge with crisp black outline info icon (no orange)\n- Increase typography size to 27px bold Plus Jakarta Sans with refined monochrome frosted glass border`,
+      changelog: `### Version ${version}\n- Thicken info icon outline and dot for higher prominence\n- Unify order note capsule shadow with stacked feature cards (blur 24, offsetY 8)\n- Align bottom floating capsule baseline with left card stack (targetBottomY 1450)\n- Scale up left column reminder card (460px full width, 80px height, 24px bold font, smart 2-line wrap)`,
     },
   };
 
