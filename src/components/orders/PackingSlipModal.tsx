@@ -6,7 +6,7 @@ import { Printer, CheckCircle2, ClipboardCheck, Package } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { EXACOAT_LOGO_BASE64 } from '../../lib/assets/logo';
 import { extractItemSpecs, formatSeparatedItemSpecs, cleanItemTitle } from '../../lib/orderItems';
-import { isStorePickupOrder, resolveOrderCourier } from '../../lib/orderUtils';
+import { isStorePickupOrder, resolveOrderCourier, cleanCourierDisplay, getOrderCourierDisplay } from '../../lib/orderUtils';
 import { resolveCountryName } from '../../lib/countries';
 import { formatCleanText } from '../../lib/utils';
 
@@ -57,12 +57,9 @@ export const PackingSlipModal: React.FC<PackingSlipModalProps> = ({
         resolveCountryName(shipping.country || billing.country || 'Indonesia'),
       ].filter(Boolean);
 
-  const resolvedCourier = resolveOrderCourier(order);
   const courierName = isPickup
     ? 'Store Pickup (Summarecon Bekasi)'
-    : (order.tracking?.courier && order.tracking.courier !== 'JNE Express')
-      ? order.tracking.courier
-      : (resolvedCourier.rawMatch || (resolvedCourier.serviceName ? `${resolvedCourier.courierName} - ${resolvedCourier.serviceName}` : resolvedCourier.courierName));
+    : cleanCourierDisplay(getOrderCourierDisplay(order));
   const trackingNumber = isPickup
     ? 'STORE-PICKUP'
     : order.tracking?.tracking_number && !order.tracking.tracking_number.startsWith('field_')

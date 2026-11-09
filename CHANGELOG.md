@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.221] - 2026-11-09
+
+### Shipping Label & Manifest Courier Sanitization
+- **Clean Courier Display on Thermal Labels & Documents (`ShippingLabelA6Modal.tsx`, `CustomLabelPage.tsx`, `PackingSlipModal.tsx`, `CustomerInvoiceModal.tsx`, `class-store-enhancements.php`)**:
+  - Integrated `cleanCourierDisplay()` and `getOrderCourierDisplay()` directly into 4x6 thermal shipping label templates (`ShippingLabelA6Modal.tsx`), eliminating raw carrier metadata artifacts such as `SICEPAT - REG BITESHIP SICEPAT_REG` or `JNE - REG BITESHIP JNE_REG` from physical printed labels.
+  - Initialized and sanitized courier name state upon order selection and on blur, formatting titles to clean standard formats like `SICEPAT - REG` and `JNE - REG`.
+  - Applied courier sanitization across `CustomLabelPage.tsx`, `PackingSlipModal.tsx`, and `CustomerInvoiceModal.tsx`.
+  - Integrated `Exacoat_Order_Manager::clean_courier_display()` into WordPress shipping method title filters in `class-store-enhancements.php` to sanitize WooCommerce shipping rate titles at the core source.
+
+---
+
 ## [0.1.220] - 2026-11-07
 
 ### Courier & Service Display Sanitization

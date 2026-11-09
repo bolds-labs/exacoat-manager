@@ -1106,9 +1106,14 @@ class Exacoat_Store_Enhancements {
 		$clean = preg_replace( '/\s*[\(\[]\s*[^)\]]*applied[^)\]]*[\)\]]/i', '', $title );
 		$clean = preg_replace( '/\s*\[[^\]]*applied[^\]]*\]/i', '', $clean );
 		$clean = preg_replace( '/\s*[\(\[]\s*free\s*shipping\s*[\)\]]/i', '', $clean );
-		$clean = preg_replace( '/\s*[-–—:]\s*free\s*shipping\b/i', '', $clean );
+		$clean = preg_replace( '/\s*[-\x{2013}\x{2014}:]\s*free\s*shipping\b/iu', '', $clean );
+		$clean = trim( preg_replace( '/\s{2,}/', ' ', $clean ) );
 
-		return trim( preg_replace( '/\s{2,}/', ' ', $clean ) );
+		if ( class_exists( 'Exacoat_Order_Manager' ) && method_exists( 'Exacoat_Order_Manager', 'clean_courier_display' ) ) {
+			return Exacoat_Order_Manager::clean_courier_display( $clean );
+		}
+
+		return $clean;
 	}
 
 	/**

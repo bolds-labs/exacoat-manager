@@ -288,6 +288,9 @@ export function cleanItemTitle(name?: string): string {
   - Raw shipping strings originating from Biteship or WooCommerce shipping lines often contain concatenated internal instance IDs or gateway tokens (e.g. `JNE - REG JNE_REG`, `JNE - REG BITESHIP JNE_REG`, `SiCepat - REG BITESHIP SICEPAT_REG`).
   - Both backend (`Exacoat_Order_Manager::clean_courier_display()`) and frontend (`cleanCourierDisplay()` and `getOrderCourierDisplay()` in `src/lib/orderUtils.ts`) strictly sanitize all courier strings into clean, canonical display formats (e.g. `JNE - REG`, `SiCepat - REG`, `SiCepat - BEST`, `POS - Tracked Shipment`).
   - Internal gateway tokens (`biteship`, `biteship_shipping`), raw instance identifiers (`jne_reg`, `sicepat_reg`), and redundant carrier suffixes are stripped, guaranteeing that operator views and waybill badges never leak internal API slugs.
+  - **Thermal Shipping Label & Document Sanitization Invariant (`ShippingLabelA6Modal.tsx`, `CustomLabelPage.tsx`, `PackingSlipModal.tsx`, `CustomerInvoiceModal.tsx`)**:
+    - 4x6 thermal shipping labels, custom labels, packing slips, and customer invoices must strictly format courier titles using `cleanCourierDisplay()` and `getOrderCourierDisplay()`.
+    - Modal state initialization (`useEffect`) and label rendering passes (Page 1 and Page 2+ continuation sheets) always clean courier names, ensuring that physical printed labels output standard titles (`SICEPAT - REG`, `JNE - REG`) instead of raw concatenated gateway slugs (`SICEPAT - REG BITESHIP SICEPAT_REG`).
 
 ---
 

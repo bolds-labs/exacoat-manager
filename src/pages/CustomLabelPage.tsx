@@ -20,6 +20,7 @@ import {
 import { EXACOAT_LOGO_BASE64 } from '../lib/assets/logo';
 import { resolveCountryName } from '../lib/countries';
 import { formatCleanText } from '../lib/utils';
+import { cleanCourierDisplay } from '../lib/orderUtils';
 import {
   Printer,
   Copy,
@@ -453,7 +454,7 @@ export const CustomLabelPage: React.FC = () => {
   // Copy formatted text (ready for Biteship, Goorita, WhatsApp, or carrier dispatch)
   const handleCopyFormattedText = () => {
     const text = [
-      `*EXACOAT SHIPMENT - ${courierName.toUpperCase()}*`,
+      `*EXACOAT SHIPMENT - ${cleanCourierDisplay(courierName).toUpperCase()}*`,
       `Order Ref: #${orderRef}`,
       trackingNumber ? `Tracking No: ${trackingNumber}` : '',
       '',
@@ -689,7 +690,7 @@ export const CustomLabelPage: React.FC = () => {
         </div>
         <div style="text-align: right; display: flex; align-items: center; gap: 6px;">
           <span style="font-size: 13.5px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">
-            ${escapeHtml(courierName.toUpperCase())}
+            ${escapeHtml(cleanCourierDisplay(courierName).toUpperCase())}
           </span>
         </div>
       </div>
@@ -1070,6 +1071,7 @@ export const CustomLabelPage: React.FC = () => {
                   type="text"
                   value={courierName}
                   onChange={(e) => setCourierName(e.target.value)}
+                  onBlur={() => setCourierName(prev => cleanCourierDisplay(prev))}
                   placeholder="e.g. POS ID - Tracked Shipment"
                   className="w-full px-3.5 py-2.5 rounded-xl bg-white/[0.035] border border-white/[0.09] text-white text-sm focus:border-[#f3aa18]/60 focus:ring-2 focus:ring-[#f3aa18]/15 outline-none transition-all placeholder:text-zinc-600 font-medium"
                 />
@@ -1391,7 +1393,7 @@ export const CustomLabelPage: React.FC = () => {
                   </div>
                   <div className="text-right">
                     <span className="text-[13px] font-black uppercase tracking-tight text-black">
-                      {courierName.toUpperCase()}
+                      {cleanCourierDisplay(courierName).toUpperCase()}
                     </span>
                   </div>
                 </div>

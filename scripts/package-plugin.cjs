@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Clean and standardize shipping courier and service display across orders (e.g. JNE - REG, SiCepat - REG)\n- Eliminate internal Biteship tokens, duplicate carrier suffixes, and raw instance IDs from courier names`,
+      changelog: `### Version ${version}\n- Clean and standardize shipping courier and service display on 4x6 thermal shipping labels, custom labels, packing slips, and invoices\n- Eliminate internal Biteship tokens, duplicate carrier suffixes, and raw instance IDs from physical shipping label headers`,
     },
   };
 

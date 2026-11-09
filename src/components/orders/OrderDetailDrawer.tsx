@@ -62,7 +62,7 @@ import {
 import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { extractItemSpecs } from '../../lib/orderItems';
-import { isStorePickupOrder, toggleLocalStorePickupOrder, resolveOrderCourier, getOrderCourierDisplay, formatOrderNumber, cleanOrderNumber, normalizeCourierSlug, detectCourierFromTrackingNumber } from '../../lib/orderUtils';
+import { isStorePickupOrder, toggleLocalStorePickupOrder, resolveOrderCourier, getOrderCourierDisplay, cleanCourierDisplay, formatOrderNumber, cleanOrderNumber, normalizeCourierSlug, detectCourierFromTrackingNumber } from '../../lib/orderUtils';
 import { resolveCountryName } from '../../lib/countries';
 import { getWpBaseUrl } from '../../lib/wordpressBridge';
 import { GooritaBookingModal } from './GooritaBookingModal';
@@ -3770,7 +3770,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                       if (courierDisplay && courierDisplay !== 'Courier') {
                         return courierDisplay;
                       }
-                      return COURIER_PRESETS.find((p) => p.value === courier)?.label || order.tracking?.courier || courier;
+                      return cleanCourierDisplay(COURIER_PRESETS.find((p) => p.value === courier)?.label || order.tracking?.courier || courier);
                     })()}
                   </span>
                 </div>

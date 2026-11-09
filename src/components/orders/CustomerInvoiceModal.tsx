@@ -8,6 +8,7 @@ import { EXACOAT_LOGO_BASE64 } from '../../lib/assets/logo';
 import { cleanItemTitle } from '../../lib/orderItems';
 import { resolveCountryName } from '../../lib/countries';
 import { formatCleanText } from '../../lib/utils';
+import { cleanCourierDisplay, getOrderCourierDisplay } from '../../lib/orderUtils';
 
 interface CustomerInvoiceModalProps {
   order: Order | null;
@@ -288,7 +289,7 @@ export const CustomerInvoiceModal: React.FC<CustomerInvoiceModalProps> = ({
             <div class="col-name">${customerName}</div>
             <div class="col-text">Email: ${customerEmail} &bull; Tel: ${customerPhone}</div>
             <div class="col-text" style="margin-top: 4px;">${(shippingAddress.length > 0 ? shippingAddress : billingAddress).join('<br />')}</div>
-            ${order.tracking?.courier ? `<div class="col-text" style="margin-top: 4px; font-weight: 700;">Carrier: ${order.tracking.courier}</div>` : ''}
+            ${cleanCourierDisplay(order.tracking?.courier || getOrderCourierDisplay(order)) ? `<div class="col-text" style="margin-top: 4px; font-weight: 700;">Carrier: ${cleanCourierDisplay(order.tracking?.courier || getOrderCourierDisplay(order))}</div>` : ''}
           </div>
 
           <!-- Line Items Table -->
@@ -463,9 +464,9 @@ export const CustomerInvoiceModal: React.FC<CustomerInvoiceModalProps> = ({
                 <span key={i} className="block">{line}</span>
               ))}
             </div>
-            {order.tracking?.courier && (
+            {Boolean(cleanCourierDisplay(order.tracking?.courier || getOrderCourierDisplay(order))) && (
               <p className="text-[10.5px] font-bold text-neutral-900 mt-1.5">
-                Courier: {order.tracking.courier}
+                Courier: {cleanCourierDisplay(order.tracking?.courier || getOrderCourierDisplay(order))}
               </p>
             )}
           </div>

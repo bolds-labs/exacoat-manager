@@ -16,7 +16,7 @@ import { clsx } from 'clsx';
 import { useToast } from '../../context/ToastContext';
 import { EXACOAT_LOGO_BASE64 } from '../../lib/assets/logo';
 import { formatSeparatedItemSpecs, cleanItemTitle } from '../../lib/orderItems';
-import { resolveOrderCourier, isStorePickupOrder } from '../../lib/orderUtils';
+import { resolveOrderCourier, isStorePickupOrder, cleanCourierDisplay, getOrderCourierDisplay } from '../../lib/orderUtils';
 import { resolveCountryName } from '../../lib/countries';
 import { formatCleanText } from '../../lib/utils';
 import { isGooritaOrder, isOrderGooritaBooked, loadGooritaAwbImage } from '../../lib/gooritaAwbRenderer';
@@ -183,7 +183,7 @@ function renderSinglePageHtml(
     resolveCountryName(shp.country || ord.billing?.country || 'Indonesia'),
   ].filter(Boolean);
 
-  const cCourier = config.courierName || 'JNE Express';
+  const cCourier = cleanCourierDisplay(config.courierName || getOrderCourierDisplay(ord));
   const validTrk = config.trackingNo && !config.trackingNo.startsWith('field_') ? config.trackingNo : '';
 
   const bData = generateBarcodeSvgData(cOrderNum, 36);
@@ -294,7 +294,7 @@ function renderSinglePageHtml(
             <div style="text-align: right; display: flex; align-items: center; gap: 6px;">
               ${config.isGooritaWithAwb ? `<span style="font-size: 10px; font-weight: 900; border: 1.5px solid #000; padding: 1px 5px; border-radius: 2px; font-variant-numeric: tabular-nums;">2/${totalPages + 1}</span>` : (totalPages > 1 ? `<span style="font-size: 10px; font-weight: 900; border: 1.5px solid #000; padding: 1px 5px; border-radius: 2px; font-variant-numeric: tabular-nums;">1/${totalPages}</span>` : '')}
               <span style="font-size: 13.5px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">
-                ${isPickup ? 'STORE PICKUP (SMB)' : cCourier.toUpperCase()}
+                ${isPickup ? 'STORE PICKUP (SMB)' : cleanCourierDisplay(cCourier).toUpperCase()}
               </span>
             </div>
           </div>
@@ -366,7 +366,7 @@ function renderSinglePageHtml(
           </div>
           <div style="text-align: right; display: flex; align-items: center; gap: 6px;">
             <span style="font-size: 10px; font-weight: 900; border: 1.5px solid #000; padding: 1px 5px; border-radius: 2px; font-variant-numeric: tabular-nums;">${config.isGooritaWithAwb ? `${pageIdx + 2}/${totalPages + 1}` : `${pageIdx + 1}/${totalPages}`}</span>
-            <span style="font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">${isPickup ? 'STORE PICKUP' : cCourier.toUpperCase()}</span>
+            <span style="font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">${isPickup ? 'STORE PICKUP' : cleanCourierDisplay(cCourier).toUpperCase()}</span>
           </div>
         </div>
 
@@ -684,10 +684,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
   // Sync state whenever active order changes
   useEffect(() => {
     if (activeOrder) {
-      const resolved = resolveOrderCourier(activeOrder);
-      const displayCourier = (activeOrder.tracking?.courier && activeOrder.tracking.courier !== 'JNE Express')
-        ? activeOrder.tracking.courier
-        : (resolved.rawMatch || (resolved.serviceName ? `${resolved.courierName} - ${resolved.serviceName}` : resolved.courierName));
+      const displayCourier = cleanCourierDisplay(getOrderCourierDisplay(activeOrder));
       setCourierName(displayCourier);
       const rawTrack = String(activeOrder.tracking?.tracking_number || '').trim();
       setTrackingNo(rawTrack && !rawTrack.startsWith('field_') ? rawTrack : '');
@@ -786,9 +783,8 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
 
     const allLabelsHtml = activeOrdersList.map((ord, ordIdx) => {
       const isCurrentActiveOrder = ord.id === activeOrder.id;
-      const ordResolved = resolveOrderCourier(ord);
-      const ordFallbackCourier = ordResolved.rawMatch || (ordResolved.serviceName ? `${ordResolved.courierName} - ${ordResolved.serviceName}` : ordResolved.courierName);
-      const cCourier = (isCurrentActiveOrder ? courierName : (ord.tracking?.courier && ord.tracking.courier !== 'JNE Express' ? ord.tracking.courier : ordFallbackCourier)) || 'JNE Express';
+      const ordCourier = isCurrentActiveOrder ? courierName : getOrderCourierDisplay(ord);
+      const cCourier = cleanCourierDisplay(ordCourier);
       const rawTrk = (isCurrentActiveOrder ? trackingNo : (ord.tracking?.tracking_number || ''));
       const cTrack = rawTrk && !rawTrk.startsWith('field_') ? rawTrk : '';
 
@@ -1007,7 +1003,8 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
                 type="text"
                 value={courierName}
                 onChange={e => setCourierName(e.target.value)}
-                placeholder="e.g. JNE Express, SiCepat, J&amp;T"
+                onBlur={() => setCourierName(prev => cleanCourierDisplay(prev))}
+                placeholder="e.g. JNE - REG, SiCepat - REG"
                 className="w-full px-3 py-2 rounded-lg bg-[#1a1a1a] border border-white/[0.08] text-white text-xs focus:outline-none focus:border-[#f3aa18] transition-colors font-sans font-medium"
               />
             </div>
