@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.222] - 2026-11-13
+
+### Laptop & Tablet Size Multiplier Calibration & MacBook 13/14 Bottom Pricing
+- **Laptop & Tablet Size Multiplier (1.5x Calibration)**:
+  - Calibrated the finish size multiplier for `laptop`, `tablet`, and `keyboard` device families from 2.0x down to 1.5x across `class-configurator-engine.php` (`infer_device_family`, `rest_sync_device_families`), `ConfiguratorStudioPage.tsx`, and `configurator-loader.ts`.
+  - For premium/signature skins (+IDR 30.000 in Master Textures), laptops and tablets now calculate a +IDR 45.000 surcharge ($30.000 \times 1.5 = 45.000$).
+- **MacBook 13" and 14" Bottom Base Price Standardization**:
+  - Updated all 13" and 14" MacBook products in WooCommerce to base extra_price IDR 200.000 for the bottom cover.
+  - With the 1.5x size multiplier on major body layers, bottom matte black is IDR 200.000 and bottom swarm/signature skins are IDR 245.000 ($200.000 + 45.000$).
+- **Trackpad Accent Tier Surcharge Resolution**:
+  - Resolved an issue where standard signature skins with baked slice textures in `render_texture_map` were treated as custom device finishes and bypassed surcharge tiers.
+  - All signature finishes on trackpad now consistently use the small accent tier (+IDR 5.000), pricing uniformly at IDR 50.000.
+
+---
+
 ## [0.1.221] - 2026-11-09
 
 ### Shipping Label & Manifest Courier Sanitization

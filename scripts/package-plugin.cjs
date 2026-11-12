@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Clean and standardize shipping courier and service display on 4x6 thermal shipping labels, custom labels, packing slips, and invoices\n- Eliminate internal Biteship tokens, duplicate carrier suffixes, and raw instance IDs from physical shipping label headers`,
+      changelog: `### Version ${version}\n- Set laptop and tablet finish size multiplier to 1.5x (IDR 45.000) catalog-wide\n- Standardize MacBook 13 and 14 inch bottom base price to IDR 200.000\n- Unify trackpad signature skin pricing to standard small accent tier (+IDR 5.000)`,
     },
   };
 

@@ -1411,7 +1411,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
             family: fallbackSummary.family || 'phone',
             base_price: fallbackSummary.price || 0,
             currency: 'IDR',
-            size_multiplier: (fallbackSummary.family === 'laptop' || fallbackSummary.family === 'tablet') ? 2.0 : (fallbackSummary.size_multiplier || 1.0),
+            size_multiplier: (fallbackSummary.family === 'laptop' || fallbackSummary.family === 'tablet') ? 1.5 : (fallbackSummary.size_multiplier || 1.0),
             texture_scale: fallbackSummary.texture_scale ?? 1.0,
             is_configurable: true,
             configurator_version: fallbackSummary.configurator_version || 'v1',
@@ -12287,7 +12287,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     onChange={(e) => {
                                       const selected = e.target.value as DeviceFamily;
                                       let nextMult = 1.0;
-                                      if (selected === 'tablet' || selected === 'laptop' || selected === 'keyboard' || selected === 'console' || (selected as string) === 'tablet_laptop') {
+                                      if (selected === 'tablet' || selected === 'laptop' || selected === 'keyboard' || (selected as string) === 'tablet_laptop') {
+                                        nextMult = 1.5;
+                                      } else if (selected === 'console') {
                                         nextMult = 2.0;
                                       } else if (selected === 'foldable') {
                                         nextMult = 1.3;
@@ -12303,10 +12305,10 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                     className="w-full px-2 py-1.5 text-xs rounded-lg bg-zinc-950 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
                                   >
                                     <option value="phone">Phone (1.0x - +IDR 30.000)</option>
-                                    <option value="tablet">Tablet (2.0x - +IDR 60.000)</option>
-                                    <option value="laptop">Laptop (2.0x - +IDR 60.000)</option>
+                                    <option value="tablet">Tablet (1.5x - +IDR 45.000)</option>
+                                    <option value="laptop">Laptop (1.5x - +IDR 45.000)</option>
                                     <option value="foldable">Foldable (1.3x - +IDR 39.000)</option>
-                                    <option value="keyboard">Keyboard / Folio (2.0x - +IDR 60.000)</option>
+                                    <option value="keyboard">Keyboard / Folio (1.5x - +IDR 45.000)</option>
                                     <option value="console">Gaming Console (2.0x - +IDR 60.000)</option>
                                     <option value="accessory">Accessory (0.8x - +IDR 24.000)</option>
                                   </select>

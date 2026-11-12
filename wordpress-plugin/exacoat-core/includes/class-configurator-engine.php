@@ -2264,17 +2264,17 @@ class Exacoat_Configurator_Engine {
 
 		// 1. Keyboards / Folios / Book Covers
 		if ( preg_match( '/\b(keyboard|folio|book cover)\b/i', $haystack ) ) {
-			return [ 'family' => 'keyboard', 'size_multiplier' => 2.0 ];
+			return [ 'family' => 'keyboard', 'size_multiplier' => 1.5 ];
 		}
 
 		// 2. Laptops / Notebooks
 		if ( preg_match( '/\b(macbook|xps|laptop|notebook|zenbook|thinkpad|blade|surface laptop|surface book|realme book|galaxy book|redmibook)\b/i', $haystack ) ) {
-			return [ 'family' => 'laptop', 'size_multiplier' => 2.0 ];
+			return [ 'family' => 'laptop', 'size_multiplier' => 1.5 ];
 		}
 
 		// 3. Tablets (Galaxy Tab, Mi Pad, Xiaomi Pad, iPad, Surface Pro, Surface Go, etc.)
 		if ( preg_match( '/\b(tab|pad|surface pro|surface go|tablet|ipad)\b/i', $haystack ) ) {
-			return [ 'family' => 'tablet', 'size_multiplier' => 2.0 ];
+			return [ 'family' => 'tablet', 'size_multiplier' => 1.5 ];
 		}
 
 		// 4. Foldables
@@ -3832,7 +3832,10 @@ class Exacoat_Configurator_Engine {
 				$next_fam = $inferred['family'];
 				$next_mult = $inferred['size_multiplier'];
 				$needs_save = true;
-			} elseif ( in_array( $current_fam, [ 'laptop', 'tablet', 'keyboard', 'console' ], true ) && ( $current_mult <= 1.0 || in_array( $current_mult, [ 2.5, 1.8 ], true ) ) ) {
+			} elseif ( in_array( $current_fam, [ 'laptop', 'tablet', 'keyboard' ], true ) && $current_mult !== 1.5 ) {
+				$next_mult = 1.5;
+				$needs_save = true;
+			} elseif ( $current_fam === 'console' && $current_mult <= 1.0 ) {
 				$next_mult = 2.0;
 				$needs_save = true;
 			} elseif ( $current_fam === 'foldable' && $current_mult <= 1.0 ) {

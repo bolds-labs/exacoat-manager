@@ -1821,3 +1821,27 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
     - The bottom action bar includes a dedicated 1-click "Inject Variant Images Only ({selectedVariantsCount} Photos, No Cover)" button with purple accent, alongside the dynamic primary injection button that automatically adapts to checked asset modes.
 
 
+
+
+---
+
+## 58. Configurator Pricing Architecture: Laptop & Tablet Multipliers, MacBook Bottom & Trackpad Invariants
+
+- **Laptop & Tablet Size Multiplier Invariant (1.5x Multiplier)**:
+  - Master texture extra prices are calibrated for handheld phone devices at base value (`extra_price: 30000` for Signature skins such as Swarm, Black Camo, Forged Carbon, Titanium+, Burgundy, Slate, Woven).
+  - For Laptops (MacBook Pro, MacBook Air), Tablets (iPad, Galaxy Tab, Xiaomi Pad), and Keyboards (Magic Keyboard), the device family `size_multiplier` is strictly **`1.5`** (yielding an extra surcharge of IDR 45.000 for standard 30.000 signature skins), reduced from the legacy 2.0x multiplier (+IDR 60.000).
+  - In `class-configurator-engine.php` and `ConfiguratorStudioPage.tsx`, `infer_device_family` and device family sync set `size_multiplier: 1.5` for `laptop`, `tablet`, and `keyboard`.
+  - In `exacoat-web` (`lib/server/configurator-loader.ts`), `inferWebDeviceFamily` and `parseV2ConfiguratorProfile` normalize any legacy 2.0 multipliers to 1.5.
+
+- **MacBook 13" and 14" Bottom Base Price Invariant (IDR 200.000 Base)**:
+  - For 13" and 14" MacBook models (including MacBook Air 11", 13", and MacBook Pro 13", 14" across M1-M5 and Intel generations), the bottom layer base price is strictly **IDR 200.000** (calibrated down from 230.000).
+  - Standard finishes on Bottom (e.g. Matte Black, Carbon Fiber Black, Leather Black, Marble White) are priced at IDR 200.000.
+  - The Bottom layer is classified as `isMajorBodyLayer` (`isPrimaryLayer || lId === 'bottom' || lName.includes('bottom') || lId === 'back-glass'`).
+  - Signature finishes on Bottom (Swarm, Black Camo, Burgundy, Titanium+, Forged Carbon, etc.) apply the 1.5x multiplier (`30.000 * 1.5 = IDR 45.000`), resulting in exactly **IDR 245.000** (200.000 base + 45.000 surcharge).
+  - MacBook Top skin Swarm surcharge is **+IDR 45.000**.
+
+- **Trackpad Accent Cutout Tier Small Pricing Invariant (50k Uniform Pricing Fix)**:
+  - The Trackpad layer on MacBooks is a small accent cutout rather than a major body surface.
+  - Accent layers apply `tier_small` surcharge (+IDR 5.000) over the base trackpad layer price (IDR 45.000), making signature skins **IDR 50.000** uniformly.
+  - **Root Cause of the 75k Discrepancy**: In `configurator-loader.ts`, `isCustomDeviceFinish` previously evaluated `Boolean(isCustomPerDev || customTexUrl)`. Swarm and Black Camo had pre-rendered texture slices in `render_texture_map`, causing `customTexUrl` to be populated. This mistakenly treated them as custom device finishes and bypassed the small accent tier (+5k), charging full master extra price (+30k = 75k), whereas Burgundy, Titanium+, and Forged Carbon used master texture URLs and were correctly priced at 50k.
+  - **Resolution**: `isCustomDeviceFinish` is strictly evaluated as `Boolean(isCustomPerDev)`. Slices in `render_texture_map` are recognized as standard visual render optimizations, ensuring all signature skins (Burgundy, Titanium+, Swarm, Black Camo, Forged Carbon, Woven, Slate) are priced at IDR 50.000 uniformly across all MacBook trackpads.
