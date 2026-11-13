@@ -95,7 +95,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Set laptop and tablet finish size multiplier to 1.5x (IDR 45.000) catalog-wide\n- Standardize MacBook 13 and 14 inch bottom base price to IDR 200.000\n- Unify trackpad signature skin pricing to standard small accent tier (+IDR 5.000)`,
+      changelog: `### Version ${version}\n- Calibrate laptop and tablet finish size multiplier back to 2.0x (IDR 60.000)\n- Standardize MacBook 13 and 14 inch bottom base price to IDR 200.000 (IDR 260.000 for signature finishes)\n- Unify trackpad signature skin pricing to standard small accent tier (+IDR 5.000)`,
     },
   };
 

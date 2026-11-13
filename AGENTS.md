@@ -1827,18 +1827,18 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 
 ## 58. Configurator Pricing Architecture: Laptop & Tablet Multipliers, MacBook Bottom & Trackpad Invariants
 
-- **Laptop & Tablet Size Multiplier Invariant (1.5x Multiplier)**:
+- **Laptop & Tablet Size Multiplier Invariant (2.0x Multiplier)**:
   - Master texture extra prices are calibrated for handheld phone devices at base value (`extra_price: 30000` for Signature skins such as Swarm, Black Camo, Forged Carbon, Titanium+, Burgundy, Slate, Woven).
-  - For Laptops (MacBook Pro, MacBook Air), Tablets (iPad, Galaxy Tab, Xiaomi Pad), and Keyboards (Magic Keyboard), the device family `size_multiplier` is strictly **`1.5`** (yielding an extra surcharge of IDR 45.000 for standard 30.000 signature skins), reduced from the legacy 2.0x multiplier (+IDR 60.000).
-  - In `class-configurator-engine.php` and `ConfiguratorStudioPage.tsx`, `infer_device_family` and device family sync set `size_multiplier: 1.5` for `laptop`, `tablet`, and `keyboard`.
-  - In `exacoat-web` (`lib/server/configurator-loader.ts`), `inferWebDeviceFamily` and `parseV2ConfiguratorProfile` normalize any legacy 2.0 multipliers to 1.5.
+  - For Laptops (MacBook Pro, MacBook Air), Tablets (iPad, Galaxy Tab, Xiaomi Pad), and Keyboards (Magic Keyboard), the device family `size_multiplier` is strictly **`2.0`** (yielding an extra surcharge of IDR 60.000 for standard 30.000 signature skins).
+  - In `class-configurator-engine.php` and `ConfiguratorStudioPage.tsx`, `infer_device_family` and device family sync set `size_multiplier: 2.0` for `laptop`, `tablet`, and `keyboard`.
+  - In `exacoat-web` (`lib/server/configurator-loader.ts`), `inferWebDeviceFamily` and `parseV2ConfiguratorProfile` enforce 2.0 multiplier for `laptop`, `tablet`, and `keyboard`.
 
-- **MacBook 13" and 14" Bottom Base Price Invariant (IDR 200.000 Base)**:
+- **MacBook 13" and 14" Bottom Base Price Invariant (IDR 200.000 Base, IDR 260.000 Swarm)**:
   - For 13" and 14" MacBook models (including MacBook Air 11", 13", and MacBook Pro 13", 14" across M1-M5 and Intel generations), the bottom layer base price is strictly **IDR 200.000** (calibrated down from 230.000).
   - Standard finishes on Bottom (e.g. Matte Black, Carbon Fiber Black, Leather Black, Marble White) are priced at IDR 200.000.
   - The Bottom layer is classified as `isMajorBodyLayer` (`isPrimaryLayer || lId === 'bottom' || lName.includes('bottom') || lId === 'back-glass'`).
-  - Signature finishes on Bottom (Swarm, Black Camo, Burgundy, Titanium+, Forged Carbon, etc.) apply the 1.5x multiplier (`30.000 * 1.5 = IDR 45.000`), resulting in exactly **IDR 245.000** (200.000 base + 45.000 surcharge).
-  - MacBook Top skin Swarm surcharge is **+IDR 45.000**.
+  - Signature finishes on Bottom (Swarm, Black Camo, Burgundy, Titanium+, Forged Carbon, etc.) apply the 2.0x multiplier (`30.000 * 2.0 = IDR 60.000`), resulting in exactly **IDR 260.000** (200.000 base + 60.000 surcharge).
+  - MacBook Top skin Swarm surcharge is **+IDR 60.000**.
 
 - **Trackpad Accent Cutout Tier Small Pricing Invariant (50k Uniform Pricing Fix)**:
   - The Trackpad layer on MacBooks is a small accent cutout rather than a major body surface.

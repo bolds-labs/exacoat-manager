@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.223] - 2026-11-13
+
+### Laptop & Tablet 2.0x Multiplier Calibration & MacBook 13/14 Bottom Pricing
+- **Laptop & Tablet Size Multiplier (2.0x Multiplier)**:
+  - Calibrated the finish size multiplier for `laptop`, `tablet`, and `keyboard` device families back to 2.0x across `class-configurator-engine.php`, `ConfiguratorStudioPage.tsx`, and `configurator-loader.ts`.
+  - For signature skins (+IDR 30.000 base in Master Textures), laptops and tablets now calculate a +IDR 60.000 surcharge ($30.000 \times 2.0 = 60.000$).
+- **MacBook 13" and 14" Bottom Base Price Standardization**:
+  - Maintained base extra_price of IDR 200.000 for the bottom cover across all 13" and 14" MacBook products.
+  - With the 2.0x size multiplier on major body layers, bottom matte black is IDR 200.000 and bottom swarm/signature skins are IDR 260.000 ($200.000 + 60.000$).
+- **Trackpad Accent Tier Surcharge Resolution**:
+  - Retained uniform trackpad pricing: all signature finishes on trackpad consistently use the small accent tier (+IDR 5.000), pricing uniformly at IDR 50.000 across all MacBook models.
+
+---
+
 ## [0.1.222] - 2026-11-13
 
 ### Laptop & Tablet Size Multiplier Calibration & MacBook 13/14 Bottom Pricing

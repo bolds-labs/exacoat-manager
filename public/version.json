@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.222",
+  "version": "0.1.223",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.222.zip?v=0.1.222",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.223.zip?v=0.1.223",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-11-12T17:40:48.456Z",
+  "last_updated": "2026-11-13T10:22:13.624Z",
   "sections": {
-    "changelog": "### Version 0.1.222\n- Set laptop and tablet finish size multiplier to 1.5x (IDR 45.000) catalog-wide\n- Standardize MacBook 13 and 14 inch bottom base price to IDR 200.000\n- Unify trackpad signature skin pricing to standard small accent tier (+IDR 5.000)"
+    "changelog": "### Version 0.1.223\n- Calibrate laptop and tablet finish size multiplier back to 2.0x (IDR 60.000)\n- Standardize MacBook 13 and 14 inch bottom base price to IDR 200.000 (IDR 260.000 for signature finishes)\n- Unify trackpad signature skin pricing to standard small accent tier (+IDR 5.000)"
   }
 }
