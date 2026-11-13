@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.224] - 2026-11-14
+
+### Security: Remove Localhost Header Bypass from REST Bridge Permission
+- `Exacoat_Core::verify_bridge_permission()` used to grant access when the `Origin` or `Referer` header pointed at `localhost` and `WP_DEBUG` or `EXACOAT_LOCAL_DEV` was on. Those headers are set by the client, so anyone could fake them. On production this exposed about 70 manager endpoints (customers, orders, emails, reviews, payments, labels, configurator), including write endpoints.
+- Removed the shortcut and `is_local_dev_request()` entirely. Access now requires a real credential: a WordPress admin session, WooCommerce API keys, an application password, the webhook secret, a staff bearer session, or a manager Supabase session.
+
+---
+
 ## [0.1.223] - 2026-11-13
 
 ### Laptop & Tablet 2.0x Multiplier Calibration & MacBook 13/14 Bottom Pricing

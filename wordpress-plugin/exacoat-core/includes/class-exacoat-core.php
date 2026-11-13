@@ -433,11 +433,7 @@ class Exacoat_Core {
 			return true;
 		}
 
-		// 7. Local development loopback (requests originating from localhost / local Vite dev server)
-		if ( self::is_local_dev_request( $request ) ) {
-			return true;
-		}
-
+		// No header-based shortcuts: Origin, Referer and Host are client-controlled and must never grant access.
 		return false;
 	}
 
@@ -574,35 +570,6 @@ class Exacoat_Core {
 
 		if ( $user->has_cap( 'manage_woocommerce' ) || $user->has_cap( 'manage_options' ) || in_array( 'shop_manager', (array) $user->roles, true ) ) {
 			wp_set_current_user( $user_id );
-			return true;
-		}
-
-		return false;
-	}
-
-	/**
-	 * Check if request originates from localhost development environment
-	 */
-	private static function is_local_dev_request( WP_REST_Request $request ): bool {
-		$origin  = (string) $request->get_header( 'Origin' );
-		$referer = (string) $request->get_header( 'Referer' );
-		$host    = (string) $request->get_header( 'Host' );
-
-		$is_local_origin = false;
-		foreach ( [ $origin, $referer ] as $url ) {
-			if ( ! empty( $url ) && preg_match( '#^https?://(localhost|127\.0\.0\.1)(:\d+)?#i', $url ) ) {
-				$is_local_origin = true;
-				break;
-			}
-		}
-
-		if ( ! $is_local_origin ) {
-			return false;
-		}
-
-		if ( ( defined( 'WP_DEBUG' ) && WP_DEBUG )
-			|| ( defined( 'EXACOAT_LOCAL_DEV' ) && EXACOAT_LOCAL_DEV )
-			|| in_array( $host, [ 'localhost', '127.0.0.1', 'localhost:8080', 'localhost:8000', 'localhost:3005' ], true ) ) {
 			return true;
 		}
 

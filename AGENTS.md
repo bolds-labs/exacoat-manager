@@ -1845,3 +1845,13 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Accent layers apply `tier_small` surcharge (+IDR 5.000) over the base trackpad layer price (IDR 45.000), making signature skins **IDR 50.000** uniformly.
   - **Root Cause of the 75k Discrepancy**: In `configurator-loader.ts`, `isCustomDeviceFinish` previously evaluated `Boolean(isCustomPerDev || customTexUrl)`. Swarm and Black Camo had pre-rendered texture slices in `render_texture_map`, causing `customTexUrl` to be populated. This mistakenly treated them as custom device finishes and bypassed the small accent tier (+5k), charging full master extra price (+30k = 75k), whereas Burgundy, Titanium+, and Forged Carbon used master texture URLs and were correctly priced at 50k.
   - **Resolution**: `isCustomDeviceFinish` is strictly evaluated as `Boolean(isCustomPerDev)`. Slices in `render_texture_map` are recognized as standard visual render optimizations, ensuring all signature skins (Burgundy, Titanium+, Swarm, Black Camo, Forged Carbon, Woven, Slate) are priced at IDR 50.000 uniformly across all MacBook trackpads.
+
+---
+
+## 59. REST Permission Invariant: No Header-Based Trust
+
+- Permission callbacks must never grant access based on `Origin`, `Referer`, `Host` or any other client-supplied header. Any HTTP client can set them.
+- Root cause (fixed in 0.1.224): `verify_bridge_permission()` had a "local dev loopback" step that returned true for `Origin: http://localhost` whenever `WP_DEBUG` or `EXACOAT_LOCAL_DEV` was on. Production had one of them on, so `GET /wp-json/exacoat-core/v1/customers` answered 200 to anonymous requests carrying that header. Most other permission callbacks (`verify_permission`, `rest_permission_check`, `check_permission`, `verify_admin_permission`) delegate to `verify_bridge_permission()`, so the hole reached about 70 routes.
+- Local development must authenticate the same way production does (application password or WooCommerce API keys from a local env file), never through a bypass.
+- `WP_DEBUG` must be off on production (`cms.exacoat.com`).
+- Live probe after any auth change: `curl -s -o /dev/null -w "%{http_code}" -H "Origin: http://localhost:5173" https://cms.exacoat.com/wp-json/exacoat-core/v1/customers?per_page=1` must print `401`.
