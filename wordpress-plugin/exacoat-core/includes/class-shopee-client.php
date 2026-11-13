@@ -18,7 +18,7 @@ class Exacoat_Shopee_Client {
 	const ORDERS_CACHE_KEY       = '_exacoat_shopee_orders_cache';
 	const DEFAULT_TEST_PID       = 1244885;
 	const DEFAULT_LIVE_PID       = 2011551;
-	const DEFAULT_TEST_PUSH_KEY  = 'aaaaaaaaaaaaaactd5mbgvzd3cjhmhh48v428zpt6ywwnuosz567nweg42ey8pky';
+	const DEFAULT_TEST_PUSH_KEY  = '';
 	const DEFAULT_WEBHOOK_URL    = 'https://exacoat.com/wp-json/exacoat-core/v1/shopee/webhook';
 	const SANDBOX_BASE_URL       = 'https://partner.test-stable.shopeemobile.com';
 	const LIVE_BASE_URL          = 'https://partner.shopeemobile.com';
@@ -60,11 +60,11 @@ class Exacoat_Shopee_Client {
 		$defaults = [
 			'environment'           => 'live', // 'sandbox' | 'live'
 			'test_partner_id'       => self::DEFAULT_TEST_PID,
-			'test_partner_key'      => 'shpk666c6843537a484142475a44787861767052765558666f635a434f58566e',
+			'test_partner_key'      => '',
 			'test_push_partner_key' => self::DEFAULT_TEST_PUSH_KEY,
 			'live_partner_id'       => self::DEFAULT_LIVE_PID,
-			'live_partner_key'      => 'shpk706c666c6f42674755427a546a79445a78417449554e5674616b4b665a4f',
-			'live_push_partner_key' => '58724959565954534b6d797147587a55505a4f79614243526464424a66686e63',
+			'live_partner_key'      => '',
+			'live_push_partner_key' => '',
 			'redirect_url'          => 'https://manager.exacoat.com/shopee/callback',
 			'push_callback_url'     => self::DEFAULT_WEBHOOK_URL,
 			'shop_id'               => 0,
@@ -2358,7 +2358,8 @@ class Exacoat_Shopee_Client {
 			);
 		}
 
-		// Optional signature verification check
+		// Signature verification: unsigned or mismatched pushes may not write anything (see below)
+		$is_valid_sign = false;
 		if ( ! empty( $auth_header ) ) {
 			$is_valid_sign = self::verify_push_signature( $request_url, $raw_body, $auth_header );
 			if ( ! $is_valid_sign && class_exists( 'Exacoat_Logger' ) ) {
@@ -2372,6 +2373,15 @@ class Exacoat_Shopee_Client {
 					]
 				);
 			}
+		}
+
+		if ( ! $is_valid_sign ) {
+			// Unverified push: never trust its contents. At most, refresh the order from the Shopee API.
+			$hint_sn = preg_replace( '/[^0-9A-Za-z]/', '', (string) ( $data['ordersn'] ?? ( $data['order_sn'] ?? '' ) ) );
+			if ( '' !== $hint_sn ) {
+				self::fetch_single_order_live( $hint_sn );
+			}
+			return new WP_REST_Response( [ 'success' => true, 'verified' => false ], 200 );
 		}
 
 		// Process push events by code

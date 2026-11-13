@@ -29,10 +29,21 @@ export const getEnv = (key: string, defaultValue: string = ''): string => {
   return defaultValue;
 };
 
+/** Only exacoat.com hosts (and local development) may receive the staff session token. */
+export const isTrustedWordPressUrl = (url: string): boolean => {
+  try {
+    const { protocol, hostname } = new URL(url);
+    if (hostname === 'localhost' || hostname === '127.0.0.1') return true;
+    return protocol === 'https:' && (hostname === 'exacoat.com' || hostname.endsWith('.exacoat.com'));
+  } catch {
+    return false;
+  }
+};
+
 export const getWordPressBaseUrl = (): string => {
   if (typeof localStorage !== 'undefined') {
     const localUrl = localStorage.getItem('exacoat_wordpress_url') || localStorage.getItem('wordpress_url');
-    if (localUrl && localUrl.trim()) {
+    if (localUrl && localUrl.trim() && isTrustedWordPressUrl(localUrl.trim())) {
       return localUrl.trim().replace(/\/$/, '');
     }
   }
@@ -47,39 +58,23 @@ export const setWordPressBaseUrl = (url: string) => {
     if (!url || !url.trim()) {
       localStorage.removeItem('exacoat_wordpress_url');
       localStorage.removeItem('wordpress_url');
-    } else {
+    } else if (isTrustedWordPressUrl(url.trim())) {
       localStorage.setItem('exacoat_wordpress_url', url.trim().replace(/\/$/, ''));
     }
   }
 };
 
-export const getWcCredentials = () => {
-  const localKey = typeof localStorage !== 'undefined' ? (localStorage.getItem('exacoat_wc_consumer_key') || localStorage.getItem('wc_consumer_key') || '') : '';
-  const localSecret = typeof localStorage !== 'undefined' ? (localStorage.getItem('exacoat_wc_consumer_secret') || localStorage.getItem('wc_consumer_secret') || '') : '';
+const LEGACY_KEY_STORAGE = ['exacoat_wc_consumer_key', 'wc_consumer_key', 'exacoat_wc_consumer_secret', 'wc_consumer_secret'];
 
-  return {
-    key: localKey || getEnv('VITE_WC_CONSUMER_KEY', 'ck_d3c2e9b67aa61b8c189dc89d7b99974002420cec'),
-    secret: localSecret || getEnv('VITE_WC_CONSUMER_SECRET', 'cs_c0ff3f48991c0c0a66cb5c7b14749cbc0f6a5b52'),
-  };
+/** Removes WooCommerce keys that older manager versions saved in this browser. */
+export const purgeLegacyWcCredentials = () => {
+  if (typeof localStorage === 'undefined') return;
+  for (const k of LEGACY_KEY_STORAGE) localStorage.removeItem(k);
 };
 
-export const setWcCredentials = (key: string, secret: string) => {
-  if (typeof localStorage !== 'undefined') {
-    if (!key && !secret) {
-      localStorage.removeItem('exacoat_wc_consumer_key');
-      localStorage.removeItem('wc_consumer_key');
-      localStorage.removeItem('exacoat_wc_consumer_secret');
-      localStorage.removeItem('wc_consumer_secret');
-    } else {
-      if (key) {
-        localStorage.setItem('exacoat_wc_consumer_key', key.trim());
-        localStorage.setItem('wc_consumer_key', key.trim());
-      }
-      if (secret) {
-        localStorage.setItem('exacoat_wc_consumer_secret', secret.trim());
-        localStorage.setItem('wc_consumer_secret', secret.trim());
-      }
-    }
-  }
-};
+/**
+ * The manager no longer uses WooCommerce API keys; requests authenticate with the
+ * staff session token. Kept so older call sites compile; always returns empty values.
+ */
+export const getWcCredentials = () => ({ key: '', secret: '' });
 

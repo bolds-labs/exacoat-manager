@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { ExacoatRole, UserSession } from '../types';
 import { getWordPressBaseUrl } from '../lib/env';
+import { roleFromWpUser, isSessionUsable } from '../lib/authRoles';
+import { SESSION_EXPIRED_EVENT } from '../lib/sessionEvents';
 
 export interface LoginResult {
   success: boolean;
@@ -31,7 +33,6 @@ interface AuthContextType {
   clearPasswordRecovery: () => void;
   isPasswordRecovery: boolean;
   logout: () => Promise<void>;
-  loginAsDevAdmin: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -66,11 +67,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const actualRole = rawUser?.actualRole || rawUser?.role || 'super_admin';
-  const canSimulateRoles = Boolean(
-    actualRole === 'super_admin' || 
-    rawUser?.email?.includes('admin')
-  );
+  const actualRole = rawUser?.actualRole || rawUser?.role || 'affiliate';
+  const canSimulateRoles = actualRole === 'super_admin';
   const isSimulatingRole = Boolean(canSimulateRoles && simulatedRole && simulatedRole !== actualRole);
 
   const user = useMemo(() => {
@@ -95,8 +93,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          if (parsed && parsed.email) {
+          if (isSessionUsable(parsed)) {
             setRawUser(parsed);
+          } else {
+            // Drops sessions from the old offline fallback (no token) and expired tokens
+            localStorage.removeItem(STORAGE_SESSION_KEY);
           }
         } catch {
           localStorage.removeItem(STORAGE_SESSION_KEY);
@@ -104,6 +105,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
     setIsLoading(false);
+  }, []);
+
+  // Sign out when WordPress rejects the session token
+  useEffect(() => {
+    const onExpired = () => {
+      localStorage.removeItem(STORAGE_SESSION_KEY);
+      sessionStorage.removeItem(STORAGE_SIM_ROLE_KEY);
+      setRawUser(null);
+      setSimulatedRoleState(null);
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
   }, []);
 
   const login = async (email: string, pass: string): Promise<LoginResult> => {
@@ -126,15 +139,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (res.ok && data.success && data.token) {
         const wpUser = data.user || {};
-        const roles: string[] = Array.isArray(wpUser.roles) ? wpUser.roles : [];
-        let role: ExacoatRole = 'shop_manager';
-        if (roles.includes('administrator') || wpUser.role === 'super_admin' || cleanEmail.includes('admin')) {
-          role = 'super_admin';
-        } else if (roles.includes('shop_manager') || wpUser.role === 'shop_manager') {
-          role = 'shop_manager';
-        } else if (roles.includes('manager') || wpUser.role === 'manager') {
-          role = 'manager';
-        }
+        const role: ExacoatRole = roleFromWpUser(wpUser);
 
         const sessionUser: UserSession = {
           id: String(wpUser.id || `user-${Date.now()}`),
@@ -154,85 +159,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: true };
       }
 
-      // Offline dev / pre-installation fallback for developer testing when exacoat-core is not yet active on WordPress
-      if (res.status === 404 || !res.ok) {
-        let role: ExacoatRole = 'super_admin';
-        if (cleanEmail.includes('shop') || cleanEmail.includes('fulfillment')) {
-          role = 'shop_manager';
-        } else if (cleanEmail.includes('manager')) {
-          role = 'manager';
-        }
-        const sessionUser: UserSession = {
-          id: `exacoat-user-${Date.now()}`,
-          email: cleanEmail,
-          name: cleanEmail.split('@')[0].toUpperCase(),
-          role,
-          actualRole: role,
-          loginAt: new Date().toISOString(),
-        };
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(sessionUser));
-        }
-        setRawUser(sessionUser);
-        return { success: true };
-      }
-
       return {
         success: false,
         error: data.message || (res.status === 401 ? 'The email or password is incorrect.' : `Sign in failed (HTTP ${res.status}).`),
       };
-    } catch (err: any) {
-      let role: ExacoatRole = 'super_admin';
-      if (cleanEmail.includes('shop') || cleanEmail.includes('fulfillment')) {
-        role = 'shop_manager';
-      } else if (cleanEmail.includes('manager')) {
-        role = 'manager';
-      }
-      const sessionUser: UserSession = {
-        id: `exacoat-user-${Date.now()}`,
-        email: cleanEmail,
-        name: cleanEmail.split('@')[0].toUpperCase(),
-        role,
-        actualRole: role,
-        loginAt: new Date().toISOString(),
-      };
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(sessionUser));
-      }
-      setRawUser(sessionUser);
-      return { success: true };
+    } catch {
+      return { success: false, error: 'Could not reach the server. Check your connection and try again.' };
     }
   };
 
-  const loginAsDevAdmin = () => {
-    const devUser: UserSession = {
-      id: 'exacoat-local-admin',
-      email: 'admin@exacoat.com',
-      name: 'Exacoat Administrator',
-      role: 'super_admin',
-      actualRole: 'super_admin',
-      avatarUrl: undefined,
-      loginAt: new Date().toISOString(),
-    };
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(devUser));
-    }
-    setRawUser(devUser);
-    setIsLoading(false);
-  };
+  const UNSUPPORTED = 'This sign-in method is not available. Use your WordPress email and password.';
 
   const verifyMfa = async (_factorId: string, _challengeId: string, _code: string) => {
-    return { success: true };
+    return { success: false, error: UNSUPPORTED };
   };
 
   const loginWithGoogle = async () => {
-    loginAsDevAdmin();
-    return { success: true };
+    return { success: false, error: UNSUPPORTED };
   };
 
   const loginWithOAuth = async (_provider: 'google' | 'github') => {
-    loginAsDevAdmin();
-    return { success: true };
+    return { success: false, error: UNSUPPORTED };
   };
 
   const resetPassword = async (email: string) => {
@@ -251,21 +198,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const resendConfirmationEmail = async (_email: string) => {
-    return { success: true };
+    return { success: false, error: UNSUPPORTED };
   };
 
   const verifyEmailOtp = async (_email: string, _token: string) => {
-    return { success: true };
+    return { success: false, error: UNSUPPORTED };
   };
 
   const verifyRecoveryOtp = async (_email: string, _token: string) => {
-    setIsPasswordRecovery(true);
-    return { success: true };
+    return { success: false, error: UNSUPPORTED };
   };
 
   const updatePassword = async (_newPassword: string) => {
-    setIsPasswordRecovery(false);
-    return { success: true };
+    return { success: false, error: UNSUPPORTED };
   };
 
   const clearPasswordRecovery = () => {
@@ -304,7 +249,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         clearPasswordRecovery,
         isPasswordRecovery,
         logout,
-        loginAsDevAdmin,
       }}
     >
       {children}

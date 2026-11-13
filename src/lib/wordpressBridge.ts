@@ -5,6 +5,8 @@
  */
 
 import { getEnv, getWordPressBaseUrl, getWcCredentials } from './env';
+import { prepareWordPressRequest } from './requestAuth';
+import { notifySessionExpired } from './sessionEvents';
 import { 
   CreateReviewPayload, 
   Order, 
@@ -661,69 +663,41 @@ export function getWpBaseUrl(): string {
   return getWordPressBaseUrl();
 }
 
-function getAuthHeader(): Record<string, string> {
+function getSessionToken(): string | null {
   try {
     const session = typeof localStorage !== 'undefined' ? localStorage.getItem('exacoat_admin_session') : null;
     if (session) {
       const parsed = JSON.parse(session);
-      if (parsed?.token) {
-        return { Authorization: `Bearer ${parsed.token}` };
+      if (typeof parsed?.token === 'string' && parsed.token) {
+        return parsed.token;
       }
     }
   } catch {}
-
-  // Do NOT return Basic auth header for WooCommerce consumer keys (ck_ / cs_).
-  // WordPress core Application Passwords intercepts "Authorization: Basic" on all /wp-json/ routes
-  // and rejects ck_ as an "Unknown username". WooCommerce consumer keys are safely passed via query params.
-  return {};
+  return null;
 }
 
+/**
+ * Every manager request to WordPress authenticates as the signed-in staff member
+ * (Bearer session token). WooCommerce API keys are never sent from the browser.
+ */
 export async function authenticatedFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.href : (input as any).url;
-  const baseUrl = getWordPressBaseUrl();
+  const token = getSessionToken();
+  const prepared = prepareWordPressRequest(urlStr, getWordPressBaseUrl(), token);
 
-  let isWordPressRequest = false;
-  let targetUrlObj: URL | null = null;
-  try {
-    const defaultOrigin = globalThis.location?.origin || baseUrl;
-    targetUrlObj = new URL(urlStr, defaultOrigin);
-    const targetUrl = new URL(baseUrl, defaultOrigin);
-    isWordPressRequest = (targetUrlObj.origin === targetUrl.origin) || (targetUrlObj.origin === defaultOrigin && targetUrlObj.pathname.startsWith('/cms/'));
-  } catch {
-    isWordPressRequest = false;
+  const isWordPressRequest = prepared.authorization !== undefined || prepared.url !== urlStr;
+  if (prepared.authorization && !headers.has('Authorization')) {
+    headers.set('Authorization', prepared.authorization);
   }
 
-  let finalInput: RequestInfo | URL = input;
+  const finalInput: RequestInfo | URL = prepared.url !== urlStr ? prepared.url : input;
+  const response = await globalThis.fetch(finalInput, { ...init, headers });
 
-  if (isWordPressRequest && targetUrlObj) {
-    const auth = getAuthHeader();
-    if (auth.Authorization && !headers.has('Authorization')) {
-      headers.set('Authorization', auth.Authorization);
-    }
-
-    // Attach WooCommerce credentials to /wp-json/wc/, /wp-json/exacoat-core/, /wp-json/exacoat/, and /wp-json/wc-store-credits/ requests if not using JWT Bearer
-    const isWcOrPluginRoute = targetUrlObj.pathname.includes('/wp-json/wc/') ||
-      targetUrlObj.pathname.includes('/wp-json/exacoat-core/') ||
-      targetUrlObj.pathname.includes('/wp-json/exacoat/') ||
-      targetUrlObj.pathname.includes('/wp-json/wc-store-credits/');
-
-    if (isWcOrPluginRoute && !auth.Authorization?.startsWith('Bearer')) {
-      const { key, secret } = getWcCredentials();
-      if (key && secret) {
-        targetUrlObj.searchParams.set('consumer_key', key);
-        targetUrlObj.searchParams.set('consumer_secret', secret);
-        finalInput = targetUrlObj.toString();
-        // Remove any Authorization header so WordPress Application Passwords does not intercept ck_ as a WP username
-        headers.delete('Authorization');
-      }
-    }
+  if (response.status === 401 && token && isWordPressRequest) {
+    notifySessionExpired();
   }
-
-  return globalThis.fetch(finalInput, {
-    ...init,
-    headers,
-  });
+  return response;
 }
 
 const SETTINGS_CACHE_KEY = 'exacoat_wp_settings_cache';
@@ -731,16 +705,29 @@ const SETTINGS_CACHE_KEY = 'exacoat_wp_settings_cache';
 export function getCachedPluginSettings(): WordPressPluginSettings {
   try {
     const cached = localStorage.getItem(SETTINGS_CACHE_KEY);
-    return cached ? JSON.parse(cached) : {};
+    return cached ? stripSecretSettings(JSON.parse(cached)) : {};
   } catch {
     return {};
   }
 }
 
+/** Secret settings stay on the server; the browser cache never holds them. */
+const SECRET_SETTING_KEYS = [
+  'gemini_api_key', 'openai_api_key', 'r2_access_key', 'r2_secret_key', 'cloudflare_api_token',
+  'drime_access_token', 'drime_access_key', 'drime_secret_key', 'zeptomail_token',
+  'supabase_service_role_key', 'webhook_secret',
+];
+
+export function stripSecretSettings<T extends Record<string, any>>(settings: T): T {
+  const copy: Record<string, any> = { ...settings };
+  for (const k of SECRET_SETTING_KEYS) delete copy[k];
+  return copy as T;
+}
+
 function setCachedPluginSettings(settings: Partial<WordPressPluginSettings>): void {
   try {
     const current = getCachedPluginSettings();
-    const merged = { ...current, ...settings };
+    const merged = stripSecretSettings({ ...current, ...settings });
     localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(merged));
   } catch {}
 }
@@ -2110,10 +2097,7 @@ export interface AcumbamailList {
 }
 
 export async function fetchAcumbamailListsDirect(tokenOverride?: string): Promise<{ success: boolean; lists: AcumbamailList[]; error?: string }> {
-  const token = tokenOverride || getCachedPluginSettings().acumbamail_token || 'c7b494d1f2354a7aadb7aba0e260364b';
-  if (!token) {
-    return { success: false, lists: [], error: 'Acumbamail Auth Token is required' };
-  }
+  const token = tokenOverride || getCachedPluginSettings().acumbamail_token || ''; // empty: the WordPress route uses the server-side token
 
   // 1. Try direct call to Acumbamail API
   try {
@@ -2173,10 +2157,7 @@ export async function sendAcumbamailCampaignDirect(params: {
   tokenOverride?: string;
 }): Promise<{ success: boolean; campaign_id?: number | string; latency_ms?: number; message?: string; error?: string }> {
   const start = performance.now();
-  const token = params.tokenOverride || getCachedPluginSettings().acumbamail_token || 'c7b494d1f2354a7aadb7aba0e260364b';
-  if (!token) {
-    return { success: false, error: 'Acumbamail Auth Token is missing' };
-  }
+  const token = params.tokenOverride || getCachedPluginSettings().acumbamail_token || ''; // empty: the WordPress route uses the server-side token
 
   // Normalize content HTML with Acumbamail's official merge tags (*|UNSUBSCRIBE_URL|*, *|BROWSER_VIEW|*)
   const cleanContentHtml = normalizeAcumbamailCampaignHtml(params.contentHtml);
@@ -2263,12 +2244,8 @@ export async function sendAcumbamailSingleEmailDirect(params: {
   tokenOverride?: string;
 }): Promise<{ success: boolean; result?: any; latency_ms?: number; message?: string; error?: string }> {
   const start = performance.now();
-  const token = params.tokenOverride || getCachedPluginSettings().acumbamail_token || 'c7b494d1f2354a7aadb7aba0e260364b';
+  const token = params.tokenOverride || getCachedPluginSettings().acumbamail_token || ''; // empty: the WordPress route uses the server-side token
   const fromEmail = params.fromEmail || getCachedPluginSettings().acumbamail_from_email || 'sales@exacoat.com';
-
-  if (!token) {
-    return { success: false, error: 'Acumbamail Auth Token is missing' };
-  }
 
   // Normalize body HTML for single/test email send (replace merge tags and placeholders with valid URLs)
   const cleanBodyHtml = normalizeAcumbamailSingleEmailHtml(params.bodyHtml);
@@ -2395,8 +2372,7 @@ export async function fetchAcumbamailCampaignsDirect(tokenOverride?: string): Pr
   campaigns?: Array<{ id: string; name: string }>;
   error?: string;
 }> {
-  const token = tokenOverride || getCachedPluginSettings().acumbamail_token || 'c7b494d1f2354a7aadb7aba0e260364b';
-  if (!token) return { success: false, error: 'Acumbamail token missing' };
+  const token = tokenOverride || getCachedPluginSettings().acumbamail_token || ''; // empty: the WordPress route uses the server-side token
 
   try {
     const formData = new URLSearchParams();
@@ -2456,8 +2432,7 @@ export async function fetchAcumbamailCampaignDetailDirect(campaignId: string, to
   html?: string;
   error?: string;
 }> {
-  const token = tokenOverride || getCachedPluginSettings().acumbamail_token || 'c7b494d1f2354a7aadb7aba0e260364b';
-  if (!token) return { success: false, error: 'Acumbamail token missing' };
+  const token = tokenOverride || getCachedPluginSettings().acumbamail_token || ''; // empty: the WordPress route uses the server-side token
 
   try {
     const [infoRes, htmlRes] = await Promise.all([
@@ -4078,15 +4053,6 @@ export async function toggleFinishStockDirect(
     is_coming_soon: targetStatus === 'coming_soon',
   };
 
-  try {
-    const webBase = getEnv('VITE_WEB_URL', 'https://exacoat.com').replace(/\/$/, '');
-    await fetch(`${webBase}/api/configurator/finishes`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(postPayload),
-    });
-  } catch {}
-
   const base = getWordPressBaseUrl();
   const url = `${base}/wp-json/exacoat-core/v1/finishes/toggle-stock`;
 
@@ -4128,15 +4094,6 @@ export async function toggleFinishActiveDirect(id: string, isActive: boolean): P
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(updatedList));
     }
-  } catch {}
-
-  try {
-    const webBase = getEnv('VITE_WEB_URL', 'https://exacoat.com').replace(/\/$/, '');
-    await fetch(`${webBase}/api/configurator/finishes`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, is_active: isActive }),
-    });
   } catch {}
 
   const base = getWordPressBaseUrl();
@@ -10059,56 +10016,6 @@ export async function fetchAdminSliceWpStatus(): Promise<{
     console.warn('Backend SliceWP status check failed, checking SliceWP REST API fallback...', err.message);
   }
 
-  // Client-side fallback check directly against SliceWP REST API
-  try {
-    const ck = 'ck_tzL8mw8a3BI1y2ypr2x7D6lnsmkkof';
-    const cs = 'cs_fbqylIFi6Zi29Zmnmir8km2wv4mJRb';
-    const authHeader = 'Basic ' + btoa(`${ck}:${cs}`);
-    const restHost = getWordPressBaseUrl() || 'https://cms.exacoat.com';
-
-    const affRes = await fetch(`${restHost}/wp-json/slicewp/v1/affiliates?number=1000`, {
-      headers: { Authorization: authHeader, Accept: 'application/json' },
-    });
-
-    if (affRes.ok) {
-      const affs = await affRes.json();
-      if (Array.isArray(affs) && affs.length > 0) {
-        let commsCount = 882;
-        let unpaidTotal = 4458607.72;
-        let paidTotal = 13238993.29;
-
-        try {
-          const commRes = await fetch(`${restHost}/wp-json/slicewp/v1/commissions?number=5000`, {
-            headers: { Authorization: authHeader, Accept: 'application/json' },
-          });
-          if (commRes.ok) {
-            const comms = await commRes.json();
-            if (Array.isArray(comms)) {
-              commsCount = comms.length;
-              unpaidTotal = comms.reduce((acc: number, c: any) => acc + (c.status === 'unpaid' ? parseFloat(c.amount || 0) : 0), 0);
-              paidTotal = comms.reduce((acc: number, c: any) => acc + (c.status === 'paid' ? parseFloat(c.amount || 0) : 0), 0);
-            }
-          }
-        } catch {
-          // Keep defaults
-        }
-
-        return {
-          success: true,
-          available: true,
-          source: 'rest_api',
-          source_url: restHost,
-          affiliates_count: affs.length,
-          commissions_count: commsCount,
-          visits_count: 22923,
-          unpaid_total: unpaidTotal,
-          paid_total: paidTotal,
-        };
-      }
-    }
-  } catch (err: any) {
-    console.warn('SliceWP REST API fallback check failed:', err.message);
-  }
 
   return {
     success: false,
@@ -10140,13 +10047,13 @@ export async function runAdminSliceWpMigration(options: {
   const base = getWordPressBaseUrl();
   const wcCreds = getWcCredentials();
 
-  const authKey = wcCreds.key || 'ck_d3c2e9b67aa61b8c189dc89d7b99974002420cec';
-  const authSecret = wcCreds.secret || 'cs_c0ff3f48991c0c0a66cb5c7b14749cbc0f6a5b52';
+  const authKey = wcCreds.key;
+  const authSecret = wcCreds.secret;
 
   const payload = {
     use_rest: options.use_rest ?? true,
-    consumer_key: options.consumer_key || 'ck_tzL8mw8a3BI1y2ypr2x7D6lnsmkkof',
-    consumer_secret: options.consumer_secret || 'cs_fbqylIFi6Zi29Zmnmir8km2wv4mJRb',
+    consumer_key: options.consumer_key || '',
+    consumer_secret: options.consumer_secret || '',
     source_url: options.source_url || getWordPressBaseUrl() || 'https://cms.exacoat.com',
   };
 
@@ -10204,8 +10111,8 @@ export async function updateAdminAffiliateCommissionRate(payload: {
 }): Promise<{ success: boolean; message?: string; affiliate?: any; error?: string }> {
   const base = getWordPressBaseUrl();
   const wcCreds = getWcCredentials();
-  const authKey = wcCreds.key || 'ck_d3c2e9b67aa61b8c189dc89d7b99974002420cec';
-  const authSecret = wcCreds.secret || 'cs_c0ff3f48991c0c0a66cb5c7b14749cbc0f6a5b52';
+  const authKey = wcCreds.key;
+  const authSecret = wcCreds.secret;
   const queryParams = new URLSearchParams({
     consumer_key: authKey,
     consumer_secret: authSecret,
@@ -10236,8 +10143,8 @@ export async function updateAdminAffiliateCommissionRate(payload: {
 export async function deleteAdminAffiliate(affiliateId: number): Promise<{ success: boolean; message?: string; error?: string }> {
   const base = getWordPressBaseUrl();
   const wcCreds = getWcCredentials();
-  const authKey = wcCreds.key || 'ck_d3c2e9b67aa61b8c189dc89d7b99974002420cec';
-  const authSecret = wcCreds.secret || 'cs_c0ff3f48991c0c0a66cb5c7b14749cbc0f6a5b52';
+  const authKey = wcCreds.key;
+  const authSecret = wcCreds.secret;
   const queryParams = new URLSearchParams({
     consumer_key: authKey,
     consumer_secret: authSecret,
@@ -10274,8 +10181,8 @@ export async function createAdminManualCommission(payload: {
 }): Promise<{ success: boolean; message?: string; commission_id?: number; error?: string }> {
   const base = getWordPressBaseUrl();
   const wcCreds = getWcCredentials();
-  const authKey = wcCreds.key || 'ck_d3c2e9b67aa61b8c189dc89d7b99974002420cec';
-  const authSecret = wcCreds.secret || 'cs_c0ff3f48991c0c0a66cb5c7b14749cbc0f6a5b52';
+  const authKey = wcCreds.key;
+  const authSecret = wcCreds.secret;
   const queryParams = new URLSearchParams({
     consumer_key: authKey,
     consumer_secret: authSecret,
@@ -10313,8 +10220,8 @@ export async function updateAdminCommission(payload: {
 }): Promise<{ success: boolean; message?: string; commission?: any; error?: string }> {
   const base = getWordPressBaseUrl();
   const wcCreds = getWcCredentials();
-  const authKey = wcCreds.key || 'ck_d3c2e9b67aa61b8c189dc89d7b99974002420cec';
-  const authSecret = wcCreds.secret || 'cs_c0ff3f48991c0c0a66cb5c7b14749cbc0f6a5b52';
+  const authKey = wcCreds.key;
+  const authSecret = wcCreds.secret;
   const queryParams = new URLSearchParams({
     consumer_key: authKey,
     consumer_secret: authSecret,
@@ -10847,12 +10754,7 @@ export async function getGooritaOrderRatesDirect(
 
 export function getGooritaAwbDocumentUrl(orderId: number | string): string {
   const base = getWordPressBaseUrl();
-  const wcCreds = getWcCredentials();
-  const query = new URLSearchParams({
-    order_id: String(orderId),
-    consumer_key: wcCreds.key || '',
-    consumer_secret: wcCreds.secret || '',
-  }).toString();
+  const query = new URLSearchParams({ order_id: String(orderId) }).toString();
   return `${base}/wp-json/exacoat-core/v1/shipping/goorita/awb-document?${query}`;
 }
 

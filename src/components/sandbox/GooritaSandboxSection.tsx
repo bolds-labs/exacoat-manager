@@ -9,10 +9,12 @@ import {
   createGooritaSandboxOrder,
   trackGooritaOrder,
   fetchGooritaTransactions,
-  downloadGooritaAwbPdf,
   simulateGooritaWebhook,
   buildSampleGooritaWebhookPayload,
   GOORITA_CONFIG,
+  getGooritaSessionKey,
+  setGooritaSessionKey,
+  openGooritaAwbUrlDirect,
   GOORITA_US_STATES,
   GooritaPackageRate,
   GooritaTrackingEvent,
@@ -94,7 +96,7 @@ export const GooritaSandboxSection: React.FC = () => {
   const [webhookTargetUrl, setWebhookTargetUrl] = useState<string>(
     'https://exacoat.com/wp-json/exacoat-core/v1/shipping/goorita-webhook'
   );
-  const [webhookToken, setWebhookToken] = useState<string>(GOORITA_CONFIG.PROD_API_KEY);
+  const [webhookToken, setWebhookToken] = useState<string>(() => getGooritaSessionKey('production'));
   const [webhookSimStatus, setWebhookSimStatus] = useState<string>('Delivered');
   const [webhookLocation, setWebhookLocation] = useState<string>('TEXAS CITY, TX, US');
   const [isSimulatingWebhook, setIsSimulatingWebhook] = useState<boolean>(false);
@@ -728,7 +730,7 @@ export const GooritaSandboxSection: React.FC = () => {
                   <div className="pt-2 flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => downloadGooritaAwbPdf(createdOrderResult.awbUrl)}
+                      onClick={() => openGooritaAwbUrlDirect(createdOrderResult.awbUrl, "staging")}
                       className="px-3.5 py-2 rounded-lg bg-emerald-500 text-zinc-950 font-bold text-xs flex items-center gap-1.5 hover:bg-emerald-400 transition"
                     >
                       <Printer className="w-3.5 h-3.5" />
@@ -887,7 +889,7 @@ export const GooritaSandboxSection: React.FC = () => {
                         {firstItem?.awb_url && (
                           <button
                             type="button"
-                            onClick={() => downloadGooritaAwbPdf(firstItem.awb_url)}
+                            onClick={() => openGooritaAwbUrlDirect(firstItem.awb_url, trackEnv)}
                             title="Print AWB"
                             className="p-1.5 rounded-lg bg-zinc-200 dark:bg-white/10 hover:bg-zinc-300 dark:hover:bg-white/20 text-zinc-800 dark:text-zinc-200 transition"
                           >
@@ -960,18 +962,25 @@ export const GooritaSandboxSection: React.FC = () => {
                 <label className="text-zinc-500 block text-[11px]">
                   Simulated Auth Token (Header X-Goorita-Token):
                 </label>
-                <select
+                <input
+                  type="password"
+                  autoComplete="off"
                   value={webhookToken}
-                  onChange={(e) => setWebhookToken(e.target.value)}
+                  onChange={(e) => {
+                    setWebhookToken(e.target.value);
+                    setGooritaSessionKey('production', e.target.value);
+                  }}
+                  placeholder="Production Goorita API key (kept for this tab only)"
                   className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-100 dark:bg-white/[0.04] border border-zinc-300 dark:border-white/10 text-xs text-zinc-900 dark:text-zinc-200 focus:outline-none"
-                >
-                  <option value={GOORITA_CONFIG.PROD_API_KEY} className="bg-zinc-900">
-                    Production Token ({GOORITA_CONFIG.PROD_API_KEY.substring(0, 12)}...)
-                  </option>
-                  <option value={GOORITA_CONFIG.DEV_API_KEY} className="bg-zinc-900">
-                    Staging Dev Token ({GOORITA_CONFIG.DEV_API_KEY.substring(0, 12)}...)
-                  </option>
-                </select>
+                />
+                <input
+                  type="password"
+                  autoComplete="off"
+                  defaultValue={getGooritaSessionKey('staging')}
+                  onChange={(e) => setGooritaSessionKey('staging', e.target.value)}
+                  placeholder="Staging Goorita API key, used by the sandbox order tools"
+                  className="mt-1.5 w-full px-2.5 py-1.5 rounded-lg bg-zinc-100 dark:bg-white/[0.04] border border-zinc-300 dark:border-white/10 text-xs text-zinc-900 dark:text-zinc-200 focus:outline-none"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-2 pt-1">

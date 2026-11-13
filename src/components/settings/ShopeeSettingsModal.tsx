@@ -42,11 +42,11 @@ export const ShopeeSettingsModal: React.FC<ShopeeSettingsModalProps> = ({
   // Form State
   const [environment, setEnvironment] = useState<'sandbox' | 'live'>('live');
   const [testPartnerId, setTestPartnerId] = useState<number>(1244885);
-  const [testPartnerKey, setTestPartnerKey] = useState<string>('shpk666c6843537a484142475a44787861767052765558666f635a434f58566e');
-  const [testPushPartnerKey, setTestPushPartnerKey] = useState<string>('aaaaaaaaaaaaaactd5mbgvzd3cjhmhh48v428zpt6ywwnuosz567nweg42ey8pky');
+  const [testPartnerKey, setTestPartnerKey] = useState<string>('');
+  const [testPushPartnerKey, setTestPushPartnerKey] = useState<string>('');
   const [livePartnerId, setLivePartnerId] = useState<number>(2011551);
-  const [livePartnerKey, setLivePartnerKey] = useState<string>('shpk706c666c6f42674755427a546a79445a78417449554e5674616b4b665a4f');
-  const [livePushPartnerKey, setLivePushPartnerKey] = useState<string>('aaaaaaaaaaaaaactd5mbgvzd3cjhmhh48v428zpt6ywwnuosz567nweg42ey8pky');
+  const [livePartnerKey, setLivePartnerKey] = useState<string>('');
+  const [livePushPartnerKey, setLivePushPartnerKey] = useState<string>('');
   const [shopId, setShopId] = useState<number>(0);
   const [shopName, setShopName] = useState<string>('Exacoat Official Store');
   const [showLiveKey, setShowLiveKey] = useState(false);

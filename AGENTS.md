@@ -102,10 +102,7 @@ Exacoat operations run across multiple admins using different physical PCs simul
   https://exacoat.com/wp-json/exacoat-core/v1/shopee/webhook
   ```
   (Staging: `https://staging.exacoat.com/wp-json/exacoat-core/v1/shopee/webhook`)
-- **Live Push Partner Key**:
-  ```
-  58724959565954534b6d797147587a55505a4f79614243526464424a66686e63
-  ```
+- **Live Push Partner Key**: stored only in WordPress (Shopee settings, `live_push_partner_key`). Never commit it.
 - **Live Push Status**: `ON` with `Status: Normal` (all 30 push mechanisms enabled).
 
 ### Supported Push Event Codes in Backend (`class-shopee-client.php`)
@@ -1855,3 +1852,13 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 - Local development must authenticate the same way production does (application password or WooCommerce API keys from a local env file), never through a bypass.
 - `WP_DEBUG` must be off on production (`cms.exacoat.com`).
 - Live probe after any auth change: `curl -s -o /dev/null -w "%{http_code}" -H "Origin: http://localhost:5173" https://cms.exacoat.com/wp-json/exacoat-core/v1/customers?per_page=1` must print `401`.
+
+---
+
+## 60. Manager Authentication & Secrets Invariants
+
+- **Staff sign-in only**: Exacoat Manager authenticates every WordPress request with the signed-in staff member's Bearer session token (`/auth/login`, resolved by `Exacoat_Customer_Auth::determine_current_user`). WooCommerce REST permissions then follow that user's WordPress role. The browser never holds WooCommerce consumer keys. `authenticatedFetch` (via `prepareWordPressRequest` in `src/lib/requestAuth.ts`) strips `consumer_key`/`consumer_secret` from any WordPress URL.
+- **No login fallbacks**: a failed or unreachable `/auth/login` is an error. Never add "offline", "dev admin" or OAuth stubs that create a session without a server token. Roles come only from `roleFromWpUser()` (`src/lib/authRoles.ts`): WordPress roles plus the server's `canManage` flag; never the email address.
+- **Secrets live on the server**: third-party keys (WooCommerce, Biteship, Goorita, Telegram, Acumbamail, Shopee, TikTok, Midtrans, revalidation) belong in WordPress settings, `wp-config.php` constants or the storefront's environment variables. Never hardcode them as fallbacks in TypeScript, PHP, scripts or docs; this repository has been public. Browser features that need a third-party service call the exacoat-core proxy route.
+- **Webhooks without a verified signature never write payload data**: they may only trigger a fresh read from the provider's API.
+- **Tests**: `npm test` runs Vitest (`src/lib/*.test.ts`).

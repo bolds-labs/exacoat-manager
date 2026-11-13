@@ -1,3 +1,4 @@
+import { authenticatedFetch, getGooritaAwbDocumentUrl } from './wordpressBridge';
 /**
  * Goorita USA Logistics Integration Service
  * Base: https://goosend-dev.on-forge.com/api
@@ -6,9 +7,10 @@
 
 export const GOORITA_CONFIG = {
   PROD_BASE_URL: 'https://send.goorita.com/api',
-  PROD_API_KEY: 'k4K1ObL2Jpard72nOks7O2Iae5INP7Mo',
+  // API keys live on the server (exacoat-core). The testing sandbox asks for a key per browser session.
+  PROD_API_KEY: '',
   DEV_BASE_URL: 'https://goosend-dev.on-forge.com/api',
-  DEV_API_KEY: 'iO9TyZTLFPD9xv1JJpzPLNWO6FPT0QDB',
+  DEV_API_KEY: '',
   ORIGIN_DISTRICT_ID: '9d70d21b-870e-4da9-a284-3905da004bbd', // Bekasi Barat
   ORIGIN_POSTAL_CODE: '17142', // Summarecon Bekasi / Marga Mulya
   ORIGIN_ADDRESS: {
@@ -33,17 +35,42 @@ export const GOORITA_CONFIG = {
 
 export type GooritaEnvironment = 'production' | 'staging';
 
-export function getGooritaApiConfig(env: GooritaEnvironment = 'production') {
-  if (env === 'staging') {
-    return {
-      baseUrl: GOORITA_CONFIG.DEV_BASE_URL,
-      apiKey: GOORITA_CONFIG.DEV_API_KEY,
-    };
+const sessionKeyName = (env: GooritaEnvironment) => `exacoat_goorita_key_${env}`;
+
+/** Sandbox-only: a Goorita key typed by the operator, kept for this browser tab only. */
+export function getGooritaSessionKey(env: GooritaEnvironment): string {
+  try {
+    return (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(sessionKeyName(env))) || '';
+  } catch {
+    return '';
   }
+}
+
+export function setGooritaSessionKey(env: GooritaEnvironment, key: string): void {
+  try {
+    if (key.trim()) sessionStorage.setItem(sessionKeyName(env), key.trim());
+    else sessionStorage.removeItem(sessionKeyName(env));
+  } catch {}
+}
+
+export function getGooritaApiConfig(env: GooritaEnvironment = 'production') {
   return {
-    baseUrl: GOORITA_CONFIG.PROD_BASE_URL,
-    apiKey: GOORITA_CONFIG.PROD_API_KEY,
+    baseUrl: env === 'staging' ? GOORITA_CONFIG.DEV_BASE_URL : GOORITA_CONFIG.PROD_BASE_URL,
+    apiKey: getGooritaSessionKey(env),
   };
+}
+
+/** Sandbox-only: opens a Goorita AWB URL directly with the session key. */
+export async function openGooritaAwbUrlDirect(awbUrl: string, env: GooritaEnvironment = 'production'): Promise<boolean> {
+  try {
+    const res = await fetch(awbUrl, { headers: { Authorization: `Bearer ${getGooritaSessionKey(env)}` } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    window.open(window.URL.createObjectURL(await res.blob()), '_blank');
+    return true;
+  } catch (err) {
+    console.error('Goorita AWB open failed:', err);
+    return false;
+  }
 }
 
 // US State code to Goorita state_id map
@@ -519,23 +546,15 @@ export async function fetchGooritaTransactions(env: GooritaEnvironment = 'produc
 /**
  * Download AWB PDF binary using Bearer token and trigger download or view
  */
-export async function downloadGooritaAwbPdf(awbUrl: string, filename = 'goorita-awb.pdf', env: GooritaEnvironment = 'production'): Promise<boolean> {
+/** Opens the official AWB PDF for an order, fetched through the exacoat-core proxy with the staff session. */
+export async function downloadGooritaAwbPdf(orderId: number | string): Promise<boolean> {
   try {
-    const apiKey = getGooritaApiConfig(env).apiKey;
-    const res = await fetch(awbUrl, {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-      },
-    });
-
+    const res = await authenticatedFetch(getGooritaAwbDocumentUrl(orderId));
     if (!res.ok) {
       throw new Error(`Failed to download AWB: HTTP ${res.status}`);
     }
-
     const blob = await res.blob();
     const blobUrl = window.URL.createObjectURL(blob);
-
-    // Open in a new tab for instant viewing/printing
     window.open(blobUrl, '_blank');
     return true;
   } catch (err) {
@@ -578,7 +597,7 @@ export function buildSampleGooritaWebhookPayload(
 export async function simulateGooritaWebhook(
   targetUrl: string,
   payload: any,
-  token = GOORITA_CONFIG.PROD_API_KEY
+  token = getGooritaSessionKey('production')
 ): Promise<{ success: boolean; status: number; data: any }> {
   try {
     let res: Response;

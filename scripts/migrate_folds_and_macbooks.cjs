@@ -1,6 +1,6 @@
 const https = require('https');
 
-const auth = Buffer.from('ck_d3c2e9b67aa61b8c189dc89d7b99974002420cec:cs_c0ff3f48991c0c0a66cb5c7b14749cbc0f6a5b52').toString('base64');
+const auth = Buffer.from(`${process.env.WC_CONSUMER_KEY}:${process.env.WC_CONSUMER_SECRET}`).toString('base64');
 const baseUrl = 'https://staging.exacoat.com';
 
 function request(url, options = {}, postData = null) {

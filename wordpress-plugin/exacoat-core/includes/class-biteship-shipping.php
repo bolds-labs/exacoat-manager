@@ -109,7 +109,7 @@ class Exacoat_Biteship_Engine {
 	public static function get_api_key() {
 		static $is_resolving = false;
 		if ( $is_resolving ) {
-			return 'biteship_live.eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiRXhhY29hdCIsInVzZXJJZCI6IjY2ZDM1NmE0OWEyOGQzMDAxMjUyN2Q1NCIsImlhdCI6MTc1ODQ1MTM5Mn0.zAWrMuQusXZc8_V0AyJCRO09Yig4n9uUjqza4E5lXag';
+			return '';
 		}
 		$is_resolving = true;
 
@@ -165,7 +165,7 @@ class Exacoat_Biteship_Engine {
 		}
 
 		$is_resolving = false;
-		return 'biteship_live.eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiRXhhY29hdCIsInVzZXJJZCI6IjY2ZDM1NmE0OWEyOGQzMDAxMjUyN2Q1NCIsImlhdCI6MTc1ODQ1MTM5Mn0.zAWrMuQusXZc8_V0AyJCRO09Yig4n9uUjqza4E5lXag';
+		return '';
 	}
 
 	public static function get_origin_zip() {

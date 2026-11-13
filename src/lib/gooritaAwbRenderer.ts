@@ -1,7 +1,6 @@
 import { Order } from '../types';
 import { renderPdfFirstPageToImage } from './pdfRenderer';
-import { getGooritaAwbDocumentUrl } from './wordpressBridge';
-import { GOORITA_CONFIG } from './gooritaService';
+import { getGooritaAwbDocumentUrl, authenticatedFetch } from './wordpressBridge';
 
 const awbImageCache = new Map<string, string>();
 
@@ -79,33 +78,10 @@ export async function loadGooritaAwbImage(order: Order): Promise<string | null> 
     return awbImageCache.get(cacheKey)!;
   }
 
-  // 1. Try direct fetch from Goorita API with Bearer token
-  if (awbUrl) {
-    try {
-      const apiKey = GOORITA_CONFIG.PROD_API_KEY;
-      const response = await fetch(awbUrl, {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-        },
-      });
-
-      if (response.ok) {
-        const arrayBuffer = await response.arrayBuffer();
-        const dataUrl = await renderPdfFirstPageToImage(arrayBuffer, cacheKey);
-        awbImageCache.set(cacheKey, dataUrl);
-        return dataUrl;
-      } else {
-        console.warn(`Direct Goorita AWB fetch returned HTTP ${response.status}`);
-      }
-    } catch (err) {
-      console.warn('Direct Goorita AWB fetch failed, attempting proxy fallback:', err);
-    }
-  }
-
-  // 2. Fallback: Fetch via Exacoat WordPress proxy endpoint
+  // Fetch through the exacoat-core proxy, which holds the Goorita key server-side
   try {
     const proxyUrl = getGooritaAwbDocumentUrl(order.id);
-    const response = await fetch(proxyUrl);
+    const response = await authenticatedFetch(proxyUrl);
     if (response.ok) {
       const arrayBuffer = await response.arrayBuffer();
       const dataUrl = await renderPdfFirstPageToImage(arrayBuffer, cacheKey);

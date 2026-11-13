@@ -1,5 +1,6 @@
 import { SystemHealthCheck, SystemAnomaly } from '../types';
-import { getWordPressBaseUrl, getWcCredentials } from './env';
+import { getWordPressBaseUrl } from './env';
+import { authenticatedFetch } from './wordpressBridge';
 
 export interface DiagnosticsReport {
   timestamp: string;
@@ -27,16 +28,12 @@ export async function runSystemDiagnostics(): Promise<DiagnosticsReport> {
   console.log('[DIAGNOSTICS] Starting WooCommerce and Exacoat Core health check...');
 
   const wpBase = getWordPressBaseUrl();
-  const wcCreds = getWcCredentials();
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (wcCreds.key && wcCreds.secret) {
-    headers['Authorization'] = 'Basic ' + btoa(`${wcCreds.key}:${wcCreds.secret}`);
-  }
 
   // 1. Check WooCommerce Orders API
   const t0 = performance.now();
   try {
-    const ordersRes = await fetch(`${wpBase}/wp-json/wc/v3/orders?per_page=1`, {
+    const ordersRes = await authenticatedFetch(`${wpBase}/wp-json/wc/v3/orders?per_page=1`, {
       headers,
     });
     const latency = Math.round(performance.now() - t0);
@@ -84,7 +81,7 @@ export async function runSystemDiagnostics(): Promise<DiagnosticsReport> {
   // 2. Check WooCommerce Product Reviews API
   const t1 = performance.now();
   try {
-    const reviewsRes = await fetch(`${wpBase}/wp-json/wc/v3/products/reviews?per_page=1`, {
+    const reviewsRes = await authenticatedFetch(`${wpBase}/wp-json/wc/v3/products/reviews?per_page=1`, {
       headers,
     });
     const latency = Math.round(performance.now() - t1);
@@ -122,7 +119,7 @@ export async function runSystemDiagnostics(): Promise<DiagnosticsReport> {
   // 3. Check WooCommerce Reports API
   const t2 = performance.now();
   try {
-    const reportsRes = await fetch(`${wpBase}/wp-json/wc/v3/reports/sales?period=month`, {
+    const reportsRes = await authenticatedFetch(`${wpBase}/wp-json/wc/v3/reports/sales?period=month`, {
       headers,
     });
     const latency = Math.round(performance.now() - t2);
@@ -159,7 +156,7 @@ export async function runSystemDiagnostics(): Promise<DiagnosticsReport> {
   // 4. Check Exacoat Core Plugin API
   const t3 = performance.now();
   try {
-    const pluginRes = await fetch(`${wpBase}/wp-json/exacoat-core/v1/health`);
+    const pluginRes = await authenticatedFetch(`${wpBase}/wp-json/exacoat-core/v1/health`);
     const latency = Math.round(performance.now() - t3);
 
     if (pluginRes.ok) {

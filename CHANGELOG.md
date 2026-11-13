@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.225] - 2026-11-14
+
+### Security: Staff Sign-In Only, No Keys in the Browser
+- **Login**: removed the offline fallback that signed anyone in as super admin when WordPress rejected the password, the Google/OAuth stubs that did the same, and `loginAsDevAdmin`. Roles come from WordPress roles and the new `canManage` flag only, never from the email address. Non-staff accounts land in the affiliate portal. Stored sessions without a real, unexpired WordPress token are discarded.
+- **Requests**: `authenticatedFetch` sends only the staff Bearer session token and strips any `consumer_key`/`consumer_secret` left in older call sites (`src/lib/requestAuth.ts`). A 401 signs the user out. The WooCommerce key card and "Pre-fill Staging Keys" button are gone from Settings, and old keys saved in browsers are purged on load.
+- **Hardcoded secrets removed**: WooCommerce keys (several), SliceWP keys, Acumbamail token, Telegram bot token, Goorita production and staging keys (manager); Biteship key, Telegram token, Acumbamail token, Shopee partner and push keys, TikTok app secret, revalidation secret (plugin); WooCommerce and WP Swings keys (scripts); Shopee push key (docs). Secret settings are no longer cached in the browser.
+- **WordPress host lock**: the WordPress address in Settings only accepts `https://*.exacoat.com` (or localhost), so the staff token cannot be sent elsewhere.
+- **Endpoints**: `checkout/cancel-order` requires the order key; `shipping/goorita/awb-document`, `shipping/sync-order` and `shipping/sync-active` require staff sign-in; unverified Shopee pushes and TikTok webhooks only trigger a fresh read from the marketplace API instead of writing the payload into the order cache.
+- **Packaging**: only the current versioned plugin zip is kept in `public/`, `dist/`, the repo root and `wordpress-plugin/`.
+
+---
+
 ## [0.1.224] - 2026-11-14
 
 ### Security: Remove Localhost Header Bypass from REST Bridge Permission

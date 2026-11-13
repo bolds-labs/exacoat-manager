@@ -34,9 +34,10 @@ import {
   flushWordPressPermalinks, 
   revertWordPressMedia,
   WordPressPluginSettings,
-  PrivateSettingStatus
+  PrivateSettingStatus,
+  authenticatedFetch
 } from '../../lib/wordpressBridge';
-import { getWordPressBaseUrl, setWordPressBaseUrl, getWcCredentials, setWcCredentials } from '../../lib/env';
+import { getWordPressBaseUrl, setWordPressBaseUrl } from '../../lib/env';
 import { PLUGIN_VERSION, PLUGIN_ZIP_NAME } from '../../config/version';
 import { TeamRolesManager } from './TeamRolesManager';
 import { WhatsAppAutomationSection } from './WhatsAppAutomationSection';
@@ -54,7 +55,6 @@ export const SettingsPanel: React.FC = () => {
   const [currentWpUrl, setCurrentWpUrl] = useState(getWordPressBaseUrl());
   const [wpUrlInput, setWpUrlInput] = useState(getWordPressBaseUrl());
   const wpBaseUrl = currentWpUrl;
-  const wcCredentials = getWcCredentials();
 
   const handleSaveWpUrl = (urlToSet?: string) => {
     const target = (urlToSet !== undefined ? urlToSet : wpUrlInput).trim();
@@ -74,25 +74,6 @@ export const SettingsPanel: React.FC = () => {
     showToast('info', 'Target Reset', `Restored environment default: ${updated}`);
   };
 
-  const [wcKeyInput, setWcKeyInput] = useState(wcCredentials.key);
-  const [wcSecretInput, setWcSecretInput] = useState(wcCredentials.secret);
-  const [showWcSecret, setShowWcSecret] = useState(false);
-
-  const handleSaveWcCredentials = (k?: string, s?: string) => {
-    const kVal = (k !== undefined ? k : wcKeyInput).trim();
-    const sVal = (s !== undefined ? s : wcSecretInput).trim();
-    setWcCredentials(kVal, sVal);
-    setWcKeyInput(kVal);
-    setWcSecretInput(sVal);
-    showToast('success', 'Credentials Saved', 'WooCommerce API keys stored in local browser storage.');
-  };
-
-  const handleClearWcCredentials = () => {
-    setWcCredentials('', '');
-    setWcKeyInput('');
-    setWcSecretInput('');
-    showToast('info', 'Credentials Cleared', 'Reset to container environment default.');
-  };
 
   // Remote WordPress Plugin Settings State
   const [wpSettings, setWpSettings] = useState<WordPressPluginSettings>({
@@ -106,7 +87,7 @@ export const SettingsPanel: React.FC = () => {
     pushover_notify_affiliate_payout: 1,
     pushover_notify_errors: 1,
     telegram_enabled: 1,
-    telegram_bot_token: '5576968403:AAFxQrqNYAfO9GSi6QElD6fMI0-yPUTtcFA',
+    telegram_bot_token: '',
     telegram_chat_id: '-1002257662366',
     telegram_thread_id: '774',
     telegram_notify_new_sale: 1,
@@ -167,7 +148,7 @@ export const SettingsPanel: React.FC = () => {
         ...prev,
         ...localCreds,
         ...res.settings,
-        telegram_bot_token: res.settings?.telegram_bot_token || localCreds?.telegram_bot_token || prev.telegram_bot_token || '5576968403:AAFxQrqNYAfO9GSi6QElD6fMI0-yPUTtcFA',
+        telegram_bot_token: res.settings?.telegram_bot_token || localCreds?.telegram_bot_token || prev.telegram_bot_token,
         telegram_chat_id: res.settings?.telegram_chat_id || localCreds?.telegram_chat_id || prev.telegram_chat_id || '-1002257662366',
         telegram_thread_id: (res.settings?.telegram_thread_id !== undefined && res.settings?.telegram_thread_id !== '') ? res.settings.telegram_thread_id : (localCreds?.telegram_thread_id !== undefined ? localCreds.telegram_thread_id : (prev.telegram_thread_id ?? '774')),
         pushover_app_token: res.settings?.pushover_app_token || localCreds?.pushover_app_token || prev.pushover_app_token || '',
@@ -213,12 +194,10 @@ export const SettingsPanel: React.FC = () => {
 
     setIsSavingSettings(true);
     try {
+      // Tokens stay on the server; only non-secret routing IDs are remembered locally
       localStorage.setItem('exacoat_notification_credentials', JSON.stringify({
-        telegram_bot_token: wpSettings.telegram_bot_token,
         telegram_chat_id: wpSettings.telegram_chat_id,
         telegram_thread_id: wpSettings.telegram_thread_id,
-        pushover_app_token: wpSettings.pushover_app_token,
-        pushover_user_key: wpSettings.pushover_user_key,
       }));
     } catch (e) {}
 
@@ -309,25 +288,12 @@ export const SettingsPanel: React.FC = () => {
     setIsTestingWcApi(true);
     setWcApiTestResult(null);
     const startTime = Date.now();
-    const activeKey = (wcKeyInput || wcCredentials.key).trim();
-    const activeSecret = (wcSecretInput || wcCredentials.secret).trim();
-
-    if (!activeKey || !activeSecret) {
-      setIsTestingWcApi(false);
-      setWcApiTestResult({
-        status: 'error',
-        message: 'Consumer Key and Secret are required to test the WooCommerce API.',
-      });
-      showToast('error', 'Missing Keys', 'Please enter and save your Consumer Key and Secret first.');
-      return;
-    }
 
     try {
-      // Over HTTPS, WooCommerce REST API natively uses consumer_key and consumer_secret query params.
-      // Do NOT send Basic Auth header: WordPress core Application Passwords intercepts it and rejects ck_ as an unknown username.
-      const endpoint = `${wpBaseUrl}/wp-json/wc/v3/system_status?consumer_key=${encodeURIComponent(activeKey)}&consumer_secret=${encodeURIComponent(activeSecret)}`;
+      // Authenticates with the signed-in staff session (see authenticatedFetch)
+      const endpoint = `${wpBaseUrl}/wp-json/wc/v3/system_status`;
 
-      const response = await fetch(endpoint, {
+      const response = await authenticatedFetch(endpoint, {
         headers: {
           'Content-Type': 'application/json',
         },
@@ -793,7 +759,7 @@ export const SettingsPanel: React.FC = () => {
                     type={showSecrets['telegram_bot_token'] ? 'text' : 'password'}
                     value={wpSettings.telegram_bot_token || ''}
                     onChange={e => setWpSettings({ ...wpSettings, telegram_bot_token: e.target.value })}
-                    placeholder="5576968403:AAFxQrqNYAfO9GSi6QElD6fMI0-yPUTtcFA"
+                    placeholder="Stored on the server (leave blank to keep)"
                     className="w-full p-2.5 pr-10 rounded-xl bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-white/10 text-xs font-mono text-zinc-900 dark:text-white focus:outline-hidden focus:border-[#f3aa18]"
                   />
                   <button
@@ -1252,99 +1218,13 @@ export const SettingsPanel: React.FC = () => {
             </div>
           </div>
 
-          {/* Credentials Card */}
-          <div className="p-5 rounded-2xl bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/[0.06] space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <h4 className="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider font-mono flex items-center gap-2">
-                  <span>Store Credentials & Authentication</span>
-                  {wcKeyInput ? (
-                    <span className="text-[10px] font-normal px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 lowercase">
-                      configured
-                    </span>
-                  ) : (
-                    <span className="text-[10px] font-normal px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 lowercase">
-                      not set
-                    </span>
-                  )}
-                </h4>
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono mt-1">
-                  Configure WooCommerce REST API keys for order synchronization and operations.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => handleSaveWcCredentials(
-                    'ck_c6898072346d5098a584e142d19ab0cbd03700d6',
-                    'cs_96cfb9b7614b309919f778686988f7f102de5029'
-                  )}
-                  className="px-2.5 py-1 rounded-lg text-xs font-mono font-medium bg-[#f3aa18]/15 border border-[#f3aa18]/40 text-[#f3aa18] hover:bg-[#f3aa18]/25 transition-colors cursor-pointer"
-                  title="Fill in the verified staging keys"
-                >
-                  Pre-fill Staging Keys
-                </button>
-                <button
-                  type="button"
-                  onClick={handleClearWcCredentials}
-                  className="px-2.5 py-1 rounded-lg text-xs font-mono font-medium bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:text-rose-400 transition-colors cursor-pointer"
-                >
-                  Clear Keys
-                </button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
-              <div className="p-3.5 rounded-xl bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-white/10 space-y-2">
-                <label className="text-[10px] text-zinc-500 uppercase font-bold block">
-                  Consumer Key (ck_...)
-                </label>
-                <input
-                  type="text"
-                  value={wcKeyInput}
-                  onChange={(e) => setWcKeyInput(e.target.value)}
-                  placeholder="ck_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                  className="w-full px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-xs font-mono text-zinc-900 dark:text-white focus:outline-none focus:border-[#f3aa18]"
-                />
-              </div>
-
-              <div className="p-3.5 rounded-xl bg-white dark:bg-zinc-900/80 border border-zinc-200 dark:border-white/10 space-y-2">
-                <label className="text-[10px] text-zinc-500 uppercase font-bold block">
-                  Consumer Secret (cs_...)
-                </label>
-                <div className="relative flex items-center">
-                  <input
-                    type={showWcSecret ? 'text' : 'password'}
-                    value={wcSecretInput}
-                    onChange={(e) => setWcSecretInput(e.target.value)}
-                    placeholder="cs_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                    className="w-full px-3 py-2 pr-10 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-xs font-mono text-zinc-900 dark:text-white focus:outline-none focus:border-[#f3aa18]"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowWcSecret(!showWcSecret)}
-                    className="absolute right-2 text-zinc-400 hover:text-white p-1 cursor-pointer"
-                  >
-                    {showWcSecret ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between pt-1">
-              <div className="text-[11px] text-zinc-500 font-sans">
-                Credentials are saved securely in your local browser storage and used for all direct WooCommerce REST calls.
-              </div>
-              <button
-                type="button"
-                onClick={() => handleSaveWcCredentials()}
-                className="px-4 py-2 rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-zinc-950 font-bold text-xs font-mono transition-colors flex items-center gap-2 cursor-pointer shadow-sm"
-              >
-                <Save className="w-3.5 h-3.5" />
-                <span>Save Credentials</span>
-              </button>
-            </div>
+          {/* Authentication Card */}
+          <div className="p-5 rounded-2xl bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/[0.06] space-y-2">
+            <h4 className="text-xs font-bold text-zinc-900 dark:text-white uppercase tracking-wider font-mono">Authentication</h4>
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+              Every request uses your own WordPress sign-in. Exacoat Manager never stores or sends WooCommerce API keys, so
+              what you can do here follows your WordPress role (Administrator, Shop Manager, and so on).
+            </p>
           </div>
 
           {/* Active Data Schemas */}

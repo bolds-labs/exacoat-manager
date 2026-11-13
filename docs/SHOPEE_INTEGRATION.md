@@ -69,7 +69,7 @@ Shopee separates development and live operations into distinct endpoints and par
 | **Deployment Area** | Singapore | Singapore |
 | **Partner ID** | Stored in test_partner_id (Default: 1244885) | Stored in live_partner_id (Default: 2011551) |
 | **Partner Key** | Stored in test_partner_key | Stored in live_partner_key |
-| **Push Partner Key** | Stored in test_push_partner_key | `58724959565954534b6d797147587a55505a4f79614243526464424a66686e63` |
+| **Push Partner Key** | Stored in test_push_partner_key | Stored in live_push_partner_key |
 | **Default Shop ID** | 227918647 (Sandbox Exacoat ID) | Configured upon seller authorization |
 | **Redirect URL** | https://manager.exacoat.com/shopee/callback | Configured in Shopee Partner Console |
 | **Push Webhook URL** | https://exacoat.com/wp-json/exacoat-core/v1/shopee/webhook | Staging: https://staging.exacoat.com/... |

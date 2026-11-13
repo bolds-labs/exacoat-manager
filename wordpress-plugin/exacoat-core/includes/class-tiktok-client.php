@@ -61,7 +61,7 @@ class Exacoat_TikTok_Client {
 			'environment'      => 'live', // 'sandbox' | 'live'
 			'service_id'       => self::DEFAULT_SERVICE_ID,
 			'app_key'          => '6lauu7vv75n01',
-			'app_secret'       => '8ddf6cf5571d6c09168bed1b62b60ef56e448e5e',
+			'app_secret'       => '',
 			'shop_cipher'      => '',
 			'shop_id'          => '',
 			'shop_name'        => 'Exacoat TikTok Shop',
@@ -1847,47 +1847,12 @@ class Exacoat_TikTok_Client {
 			);
 		}
 
-		// Event 1: ORDER_STATUS_CHANGE
-		if ( $type === '1' || $type === 1 || $type === 'ORDER_STATUS_CHANGE' ) {
-			$order_id = (string) ( $data['order_id'] ?? '' );
-			$status   = (string) ( $data['order_status'] ?? '' );
-			if ( ! empty( $order_id ) && ! empty( $status ) ) {
-				$status_upper = strtoupper( $status );
-				$is_delivered = in_array( $status_upper, [ 'COMPLETED', 'DELIVERED' ], true );
-				$update_ts    = ! empty( $data['update_time'] ) ? ( (int) ( strlen( (string) $data['update_time'] ) > 10 ? $data['update_time'] / 1000 : $data['update_time'] ) ) : time();
-				$fields       = [
-					'order_status' => $status,
-				];
-				if ( $is_delivered ) {
-					$fields['is_delivered']   = true;
-					$fields['delivered_time'] = function_exists( 'wp_date' ) ? wp_date( 'Y-m-d H:i:s', $update_ts ) : date( 'Y-m-d H:i:s', $update_ts );
-					$fields['delivered_ts']   = $update_ts;
-				}
-
-				$updated = self::update_order_cache_field( $order_id, $fields );
-				if ( ! $updated ) {
-					self::fetch_single_order_live( $order_id );
-				}
-			}
-		} elseif ( $type === '6' || $type === 6 || $type === 'PACKAGE_UPDATE' ) {
-			$order_id = (string) ( $data['order_id'] ?? '' );
-			$tracking = (string) ( $data['tracking_number'] ?? '' );
-			$carrier  = (string) ( $data['shipping_provider_name'] ?? ( $data['shipping_provider'] ?? '' ) );
-			if ( ! empty( $order_id ) ) {
-				$fields = [];
-				if ( ! empty( $tracking ) ) {
-					$fields['tracking_number'] = $tracking;
-				}
-				if ( ! empty( $carrier ) ) {
-					$fields['shipping_carrier'] = $carrier;
-				}
-				if ( ! empty( $fields ) ) {
-					$updated = self::update_order_cache_field( $order_id, $fields );
-					if ( ! $updated ) {
-						self::fetch_single_order_live( $order_id );
-					}
-				}
-			}
+		// Webhooks are unsigned here, so the payload is only a hint: re-read the order from the
+		// TikTok Shop API (authoritative) instead of writing status or tracking from the request.
+		$is_order_event = in_array( (string) $type, [ '1', 'ORDER_STATUS_CHANGE', '6', 'PACKAGE_UPDATE' ], true );
+		$order_id       = preg_replace( '/[^0-9A-Za-z_-]/', '', (string) ( $data['order_id'] ?? '' ) );
+		if ( $is_order_event && '' !== $order_id ) {
+			self::fetch_single_order_live( $order_id );
 		}
 
 		return new \WP_REST_Response([

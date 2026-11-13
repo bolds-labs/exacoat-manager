@@ -542,7 +542,7 @@ class Exacoat_Shipping_Tracker {
 	public static function get_biteship_api_key(): string {
 		static $is_resolving = false;
 		if ( $is_resolving ) {
-			return 'biteship_live.eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiRXhhY29hdCIsInVzZXJJZCI6IjY2ZDM1NmE0OWEyOGQzMDAxMjUyN2Q1NCIsImlhdCI6MTc1ODQ1MTM5Mn0.zAWrMuQusXZc8_V0AyJCRO09Yig4n9uUjqza4E5lXag';
+			return '';
 		}
 		$is_resolving = true;
 
@@ -581,7 +581,7 @@ class Exacoat_Shipping_Tracker {
 
 			// Guard: If key is only 24 hex characters or empty, fallback to production live token
 			if ( empty( $key ) || ( strlen( $key ) === 24 && ctype_xdigit( $key ) ) || strpos( $key, 'biteship_live.' ) === false ) {
-				$fallback = 'biteship_live.eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiRXhhY29hdCIsInVzZXJJZCI6IjY2ZDM1NmE0OWEyOGQzMDAxMjUyN2Q1NCIsImlhdCI6MTc1ODQ1MTM5Mn0.zAWrMuQusXZc8_V0AyJCRO09Yig4n9uUjqza4E5lXag';
+				$fallback = '';
 				if ( empty( $key ) || ( strlen( $key ) === 24 && ctype_xdigit( $key ) ) ) {
 					$is_resolving = false;
 					return $fallback;
@@ -592,7 +592,7 @@ class Exacoat_Shipping_Tracker {
 		}
 
 		$is_resolving = false;
-		return $key ?: 'biteship_live.eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiRXhhY29hdCIsInVzZXJJZCI6IjY2ZDM1NmE0OWEyOGQzMDAxMjUyN2Q1NCIsImlhdCI6MTc1ODQ1MTM5Mn0.zAWrMuQusXZc8_V0AyJCRO09Yig4n9uUjqza4E5lXag';
+		return $key ?: '';
 	}
 
 	/**
@@ -2024,13 +2024,13 @@ class Exacoat_Shipping_Tracker {
 			register_rest_route( $ns, '/shipping/sync-order', [
 				'methods'             => [ 'POST', 'GET' ],
 				'callback'            => [ __CLASS__, 'rest_sync_order_tracking' ],
-				'permission_callback' => '__return_true',
+				'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
 			] );
 
 			register_rest_route( $ns, '/shipping/sync-active', [
 				'methods'             => [ 'POST', 'GET' ],
 				'callback'            => [ __CLASS__, 'rest_sync_active_shipments' ],
-				'permission_callback' => '__return_true',
+				'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
 			] );
 		}
 	}

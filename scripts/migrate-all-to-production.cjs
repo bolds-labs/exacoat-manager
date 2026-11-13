@@ -15,12 +15,12 @@ const fs = require('fs');
 const path = require('path');
 
 const STAGING_URL = 'https://staging.exacoat.com';
-const STAGING_KEY = 'ck_d3c2e9b67aa61b8c189dc89d7b99974002420cec';
-const STAGING_SECRET = 'cs_c0ff3f48991c0c0a66cb5c7b14749cbc0f6a5b52';
+const STAGING_KEY = process.env.WC_CONSUMER_KEY;
+const STAGING_SECRET = process.env.WC_CONSUMER_SECRET;
 
 const PROD_URL = process.env.PROD_URL || 'https://cms.exacoat.com';
-const PROD_KEY = process.env.PROD_WC_KEY || 'ck_ad7c742000ec2eb56acb45c99e4b3c9fb6676cb6';
-const PROD_SECRET = process.env.PROD_WC_SECRET || 'cs_277bf1ad64d2f3c6cd3b4e3837a62fe5a49d0712';
+const PROD_KEY = process.env.PROD_WC_KEY || process.env.WC_CONSUMER_KEY;
+const PROD_SECRET = process.env.PROD_WC_SECRET || process.env.WC_CONSUMER_SECRET;
 const MEDIA_URL = process.env.MEDIA_URL || 'https://media.exacoat.com';
 
 console.log('===============================================================');

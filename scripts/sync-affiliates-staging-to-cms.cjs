@@ -6,8 +6,8 @@
 
 const STAGING_URL = 'https://staging.exacoat.com';
 const CMS_URL = 'https://cms.exacoat.com';
-const CK = 'ck_d3c2e9b67aa61b8c189dc89d7b99974002420cec';
-const CS = 'cs_c0ff3f48991c0c0a66cb5c7b14749cbc0f6a5b52';
+const CK = process.env.WC_CONSUMER_KEY;
+const CS = process.env.WC_CONSUMER_SECRET;
 
 const queryAuth = `consumer_key=${encodeURIComponent(CK)}&consumer_secret=${encodeURIComponent(CS)}`;
 

@@ -1814,7 +1814,7 @@ class Exacoat_Export_Manager {
 						$api_key           = $biteship_settings['api_key'] ?? '';
 					}
 					if ( empty( $api_key ) ) {
-						$api_key = 'biteship_live.eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiRXhhY29hdCIsInVzZXJJZCI6IjY2ZDM1NmE0OWEyOGQzMDAxMjUyN2Q1NCIsImlhdCI6MTc1ODQ1MTM5Mn0.zAWrMuQusXZc8_V0AyJCRO09Yig4n9uUjqza4E5lXag';
+						$api_key = '';
 					}
 
 					$biteship_res = wp_remote_post( 'https://api.biteship.com/v1/rates/couriers', [

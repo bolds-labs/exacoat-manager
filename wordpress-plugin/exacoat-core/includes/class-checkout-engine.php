@@ -206,7 +206,9 @@ class Exacoat_Checkout_Engine {
 			return new WP_Error( 'invalid_order', 'Order ID required', [ 'status' => 400 ] );
 		}
 		$order = wc_get_order( $order_id );
-		if ( ! $order instanceof WC_Order ) {
+		$order_key = sanitize_text_field( (string) $request->get_param( 'order_key' ) );
+		// Only the buyer (holding the order key) may cancel; order IDs are sequential and guessable.
+		if ( ! $order instanceof WC_Order || '' === $order_key || ! $order->key_is_valid( $order_key ) ) {
 			return new WP_Error( 'not_found', 'Order not found', [ 'status' => 404 ] );
 		}
 		if ( $order->has_status( [ 'pending', 'on-hold', 'failed' ] ) ) {

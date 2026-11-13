@@ -12,7 +12,7 @@ if ( ! class_exists( 'Exacoat_Telegram_Service' ) ) {
 
 class Exacoat_Telegram_Service {
 
-	private const DEFAULT_BOT_TOKEN = '5576968403:AAFxQrqNYAfO9GSi6QElD6fMI0-yPUTtcFA';
+	private const DEFAULT_BOT_TOKEN = '';
 	private const DEFAULT_CHAT_ID   = '-1002257662366';
 	private const DEFAULT_THREAD_ID = '774';
 

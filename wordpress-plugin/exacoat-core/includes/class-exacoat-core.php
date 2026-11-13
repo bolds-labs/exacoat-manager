@@ -2692,7 +2692,7 @@ class Exacoat_Core {
 
 		// Defaults for Telegram Notification Gateway
 		if ( empty( $settings['telegram_bot_token'] ) ) {
-			$settings['telegram_bot_token'] = ! empty( $environment_values['telegram_bot_token'] ) ? $environment_values['telegram_bot_token'] : '5576968403:AAFxQrqNYAfO9GSi6QElD6fMI0-yPUTtcFA';
+			$settings['telegram_bot_token'] = ! empty( $environment_values['telegram_bot_token'] ) ? $environment_values['telegram_bot_token'] : '';
 		}
 		if ( empty( $settings['telegram_chat_id'] ) ) {
 			$settings['telegram_chat_id'] = ! empty( $environment_values['telegram_chat_id'] ) ? $environment_values['telegram_chat_id'] : '-1002257662366';
@@ -2743,7 +2743,7 @@ class Exacoat_Core {
 				'source'     => ! empty( $environment_value ) ? 'environment' : ( ! empty( $settings[ $key ] ) ? 'settings' : 'missing' ),
 			];
 		}
-		foreach ( [ 'gemini_api_key', 'openai_api_key', 'r2_access_key', 'r2_secret_key', 'cloudflare_api_token', 'drime_access_token', 'drime_access_key', 'drime_secret_key', 'zeptomail_token', 'supabase_service_role_key', 'webhook_secret' ] as $secret_key ) {
+		foreach ( [ 'gemini_api_key', 'openai_api_key', 'r2_access_key', 'r2_secret_key', 'cloudflare_api_token', 'drime_access_token', 'drime_access_key', 'drime_secret_key', 'zeptomail_token', 'supabase_service_role_key', 'webhook_secret', 'acumbamail_token', 'telegram_bot_token', 'pushover_app_token', 'pushover_user_key' ] as $secret_key ) {
 			unset( $settings[ $secret_key ] );
 		}
 

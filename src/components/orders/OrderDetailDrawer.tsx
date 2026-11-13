@@ -2227,7 +2227,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                   {gooritaAwbUrl && (
                     <button
                       type="button"
-                      onClick={() => downloadGooritaAwbPdf(gooritaAwbUrl)}
+                      onClick={() => downloadGooritaAwbPdf(order.id)}
                       className="px-3.5 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-white text-xs font-bold font-sans flex items-center gap-1.5 border border-white/[0.1] transition-all cursor-pointer"
                     >
                       <ExternalLink className="w-3.5 h-3.5 text-sky-400" />

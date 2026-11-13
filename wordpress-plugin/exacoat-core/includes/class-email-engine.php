@@ -3707,7 +3707,7 @@ class Exacoat_Email_Engine {
 	public static function get_acumbamail_config(): array {
 		$settings = Exacoat_Core::get_settings();
 		return [
-			'auth_token'   => trim( $settings['acumbamail_token'] ?? 'c7b494d1f2354a7aadb7aba0e260364b' ),
+			'auth_token'   => trim( $settings['acumbamail_token'] ?? '' ),
 			'from_email'   => trim( $settings['acumbamail_from_email'] ?? 'sales@exacoat.com' ),
 			'from_name'    => trim( $settings['acumbamail_from_name'] ?? 'Exacoat' ),
 			'default_list' => trim( $settings['acumbamail_default_list'] ?? '678690' ),

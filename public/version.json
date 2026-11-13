@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.224",
+  "version": "0.1.225",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.224.zip?v=0.1.224",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.225.zip?v=0.1.225",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-11-13T23:09:15.660Z",
+  "last_updated": "2026-11-13T23:35:18.952Z",
   "sections": {
-    "changelog": "### Version 0.1.224\n- Security: remove the localhost Origin/Referer shortcut from the REST bridge permission check (any client could fake the header while WP_DEBUG was on)"
+    "changelog": "### Version 0.1.225\n- Security: manager signs in with each staff member's WordPress account only; no WooCommerce keys in the browser\n- Security: remove hardcoded third-party keys (Biteship, Telegram, Acumbamail, Shopee, TikTok, revalidation) from the plugin\n- Security: order cancel needs the order key, AWB and tracking sync need staff sign-in, unverified Shopee/TikTok pushes only trigger a fresh API read"
   }
 }

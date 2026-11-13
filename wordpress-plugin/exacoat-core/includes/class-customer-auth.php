@@ -1179,6 +1179,7 @@ class Exacoat_Customer_Auth {
 			'lastName'        => $user->last_name,
 			'roles'           => $roles,
 			'role'            => $role,
+			'canManage'       => user_can( $user, 'manage_woocommerce' ) || user_can( $user, 'manage_options' ),
 			'createdAt'       => $user->user_registered,
 			'linkedProviders' => $linked_providers,
 			'billingAddress'  => $billing,

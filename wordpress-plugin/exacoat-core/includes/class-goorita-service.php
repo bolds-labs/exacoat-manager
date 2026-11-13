@@ -638,7 +638,7 @@ class Exacoat_Goorita_Service {
 			register_rest_route( $ns, '/shipping/goorita/awb-document', [
 				'methods'             => 'GET',
 				'callback'            => [ __CLASS__, 'rest_stream_awb' ],
-				'permission_callback' => '__return_true',
+				'permission_callback' => [ 'Exacoat_Core', 'verify_bridge_permission' ],
 			] );
 
 			// 3. Preview Order Rates & Service Breakdown

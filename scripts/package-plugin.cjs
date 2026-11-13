@@ -81,6 +81,26 @@ async function createPluginZip() {
     }
   });
 
+  // Keep only the current versioned archive. Old zips pile up in git and get deployed with public/.
+  const currentName = `exacoat-core-v${version}.zip`;
+  [
+    path.join(__dirname, '../public'),
+    path.join(__dirname, '../dist'),
+    path.join(__dirname, '..'),
+    path.join(__dirname, '../wordpress-plugin'),
+  ].forEach((dir) => {
+    if (!fs.existsSync(dir)) return;
+    for (const name of fs.readdirSync(dir)) {
+      if (/^exacoat-core-v[\d.]+\.zip$/.test(name) && name !== currentName) {
+        try {
+          fs.unlinkSync(path.join(dir, name));
+        } catch (err) {
+          console.warn(`[ZIP BUILDER WARNING] Could not remove old archive ${name}: ${err.message}`);
+        }
+      }
+    }
+  });
+
   // Write version manifest to public/version.json for automated WordPress updates
   const manifest = {
     name: 'Exacoat Core Engine',
@@ -95,7 +115,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Security: remove the localhost Origin/Referer shortcut from the REST bridge permission check (any client could fake the header while WP_DEBUG was on)`,
+      changelog: `### Version ${version}\n- Security: manager signs in with each staff member's WordPress account only; no WooCommerce keys in the browser\n- Security: remove hardcoded third-party keys (Biteship, Telegram, Acumbamail, Shopee, TikTok, revalidation) from the plugin\n- Security: order cancel needs the order key, AWB and tracking sync need staff sign-in, unverified Shopee/TikTok pushes only trigger a fresh API read`,
     },
   };
 

@@ -7,6 +7,10 @@ import { ThemeProvider } from './context/ThemeContext';
 import { ConfirmProvider } from './context/ConfirmContext';
 import { MarketplaceInjectionProvider } from './context/MarketplaceInjectionContext';
 import './index.css';
+import { purgeLegacyWcCredentials } from './lib/env';
+
+// Older versions saved WooCommerce API keys in the browser; remove them.
+purgeLegacyWcCredentials();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

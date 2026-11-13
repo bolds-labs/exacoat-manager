@@ -4499,7 +4499,7 @@ class Exacoat_Configurator_Engine {
 			defined( 'EXACOAT_WEB_URL' ) ? EXACOAT_WEB_URL : '',
 		];
 		$targets = array_unique( array_filter( $targets ) );
-		$secret  = defined( 'EXACOAT_REVALIDATE_SECRET' ) ? EXACOAT_REVALIDATE_SECRET : 'exacoat_revalidate_secret_2026';
+		$secret  = defined( 'EXACOAT_REVALIDATE_SECRET' ) ? EXACOAT_REVALIDATE_SECRET : '';
 
 		$payload = [
 			'tag'        => $tag,
@@ -4509,6 +4509,11 @@ class Exacoat_Configurator_Engine {
 			'category'   => $category,
 			'path'       => $path,
 		];
+
+		if ( '' === $secret ) {
+			// Define EXACOAT_REVALIDATE_SECRET in wp-config.php (same value as REVALIDATION_SECRET on the storefront)
+			$targets = [];
+		}
 
 		foreach ( $targets as $storefront_base ) {
 			$revalidate_url = trailingslashit( $storefront_base ) . 'api/revalidate?secret=' . rawurlencode( $secret );

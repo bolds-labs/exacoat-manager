@@ -44,7 +44,7 @@ export const TikTokSettingsModal: React.FC<TikTokSettingsModalProps> = ({
   const [environment, setEnvironment] = useState<'sandbox' | 'live'>('live');
   const [serviceId, setServiceId] = useState<string>('7686433028542351124');
   const [appKey, setAppKey] = useState<string>('6lauu7vv75n01');
-  const [appSecret, setAppSecret] = useState<string>('8ddf6cf5571d6c09168bed1b62b60ef56e448e5e');
+  const [appSecret, setAppSecret] = useState<string>('');
   const [shopCipher, setShopCipher] = useState<string>('');
   const [shopName, setShopName] = useState<string>('Exacoat TikTok Shop');
 

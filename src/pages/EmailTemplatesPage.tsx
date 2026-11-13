@@ -64,7 +64,7 @@ export const EmailTemplatesPage: React.FC<EmailTemplatesPageProps> = ({ defaultT
     zeptomail_token: '',
     email_from_address: 'orders@exacoat.com',
     email_from_name: 'Exacoat',
-    acumbamail_token: 'c7b494d1f2354a7aadb7aba0e260364b',
+    acumbamail_token: '',
     acumbamail_from_email: 'sales@exacoat.com',
     acumbamail_from_name: 'Exacoat',
     acumbamail_default_list: '678690',
