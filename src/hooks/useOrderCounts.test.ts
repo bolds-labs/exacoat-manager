@@ -76,4 +76,17 @@ describe('useOrderCounts', () => {
     await waitFor(() => expect(b.result.current.counts).toEqual(sample));
     expect(calls).toBe(1);
   });
+
+  it('does not fetch while disabled and fetches once when it becomes enabled', async () => {
+    impl = async () => ({ success: true, counts: sample });
+    const { result, rerender } = renderHook(({ enabled }) => useOrderCounts(enabled), { initialProps: { enabled: false } });
+    await act(async () => { await Promise.resolve(); });
+    expect(calls).toBe(0);
+    expect(result.current.loaded).toBe(false);
+    rerender({ enabled: true });
+    await waitFor(() => expect(result.current.counts).toEqual(sample));
+    expect(calls).toBe(1);
+    rerender({ enabled: true });
+    expect(calls).toBe(1);
+  });
 });

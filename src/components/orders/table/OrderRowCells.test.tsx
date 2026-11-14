@@ -37,6 +37,10 @@ describe('CustomerCell', () => {
 });
 
 describe('ItemsCell', () => {
+  it('keeps a second line when the order has no items', () => {
+    render(<ItemsCell order={{ ...base, items: [], item_count: 0 }} />);
+    expect(screen.getByText('No items')).toBeTruthy();
+  });
   it('shows the item count and the cleaned product name with its quantity', () => {
     render(<ItemsCell order={base} />);
     expect(screen.getByText('1 item')).toBeTruthy();

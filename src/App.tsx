@@ -305,7 +305,7 @@ export const App: React.FC = () => {
   const needsOrderList = tabNeedsOrderList(currentTab, isShopManager);
   const [ordersLoaded, setOrdersLoaded] = useState(false);
   const [processingCount, setProcessingCount] = useState(0);
-  const { counts: orderCounts, loaded: countsLoaded, refresh: refreshOrderCounts } = useOrderCounts();
+  const { counts: orderCounts, loaded: countsLoaded, refresh: refreshOrderCounts } = useOrderCounts(Boolean(user) && !isAffiliatePortal);
 
   const loadWorkspaceData = useCallback(async (quiet = false) => {
     if (!user || isAffiliatePortal) return;

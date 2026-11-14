@@ -107,7 +107,7 @@ export function CustomerCell({ order }: { order: Order }) {
         {formatCleanText(order.customer_name) || 'Customer'}
         {handle && <span className="ml-1.5 font-normal text-faint">{String(handle)}</span>}
       </div>
-      <div className={subClass}>{isStorePickupOrder(order) ? 'Store Pickup' : formatDestination(order)}</div>
+      <div className={subClass}>{isStorePickupOrder(order) ? 'Store Pickup' : formatDestination(order) || <span className="text-faint">No address</span>}</div>
     </div>
   );
 }
@@ -122,7 +122,7 @@ export function ItemsCell({ order }: { order: Order }) {
         <Package className="h-[15px] w-[15px] flex-none text-faint" strokeWidth={1.8} aria-hidden />
         {count} {count === 1 ? 'item' : 'items'}
       </div>
-      <div className={subClass} title={names}>{names}</div>
+      <div className={subClass} title={names}>{names || <span className="text-faint">No items</span>}</div>
     </div>
   );
 }

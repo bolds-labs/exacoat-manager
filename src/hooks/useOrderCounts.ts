@@ -21,7 +21,8 @@ function loadCountsOnce(): Promise<OrderCounts | null> {
   return inFlight;
 }
 
-export function useOrderCounts(): { counts: OrderCounts | null; loaded: boolean; refresh: () => Promise<void> } {
+/** Pass enabled=false until a session exists, so the request is not sent (and 401s) on the login page. */
+export function useOrderCounts(enabled = true): { counts: OrderCounts | null; loaded: boolean; refresh: () => Promise<void> } {
   const [counts, setCounts] = useState<OrderCounts | null>(null);
   const [loaded, setLoaded] = useState(false);
   const mounted = useRef(true);
@@ -35,11 +36,11 @@ export function useOrderCounts(): { counts: OrderCounts | null; loaded: boolean;
 
   useEffect(() => {
     mounted.current = true;
-    void refresh();
+    if (enabled) void refresh();
     return () => {
       mounted.current = false;
     };
-  }, [refresh]);
+  }, [refresh, enabled]);
 
   return { counts, loaded, refresh };
 }
