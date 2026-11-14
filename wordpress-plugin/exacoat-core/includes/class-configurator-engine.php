@@ -3531,6 +3531,9 @@ class Exacoat_Configurator_Engine {
 			'variants'             => self::sanitize_variants( $params['variants'] ?? [], $params['family'] ?? 'phone', $dev_name, $dev_slug ),
 			'coverage_and_cutouts' => $raw_coverage,
 			'presets'              => $raw_presets,
+			'bundle_pricing'       => array_key_exists( 'bundle_pricing', $params )
+				? self::sanitize_bundle_pricing( $params['bundle_pricing'] )
+				: self::stored_bundle_pricing( $product_id ),
 			'marketplace_image_settings' => $existing_mp_settings,
 			'updated_at'           => current_time( 'mysql' ),
 		];
@@ -4230,6 +4233,44 @@ class Exacoat_Configurator_Engine {
 	/**
 	 * Sorts configurator addon layers so Back Skin / primary base layer appears on top.
 	 */
+	/**
+	 * Part bundle prices (Camera & Back Glass product): the price when every part is
+	 * selected, and the flat surcharge per layer id for finishes that carry a surcharge.
+	 * Returns null when nothing usable is set.
+	 */
+	public static function sanitize_bundle_pricing( $raw ): ?array {
+		if ( ! is_array( $raw ) ) {
+			return null;
+		}
+		$out = [];
+		if ( isset( $raw['all_parts_price'] ) && is_numeric( $raw['all_parts_price'] ) && (float) $raw['all_parts_price'] > 0 ) {
+			$out['all_parts_price'] = (float) $raw['all_parts_price'];
+		}
+		if ( isset( $raw['part_finish_surcharges'] ) && is_array( $raw['part_finish_surcharges'] ) ) {
+			$parts = [];
+			foreach ( $raw['part_finish_surcharges'] as $layer_id => $amount ) {
+				$key = sanitize_key( (string) $layer_id );
+				if ( '' !== $key && is_numeric( $amount ) && (float) $amount >= 0 ) {
+					$parts[ $key ] = (float) $amount;
+				}
+			}
+			if ( ! empty( $parts ) ) {
+				$out['part_finish_surcharges'] = $parts;
+			}
+		}
+		return empty( $out ) ? null : $out;
+	}
+
+	/** Bundle prices already saved on the product, kept when a save does not send them. */
+	public static function stored_bundle_pricing( int $product_id ): ?array {
+		$stored_meta = get_post_meta( $product_id, self::PROFILE_META_KEY, true );
+		$stored      = is_array( $stored_meta ) ? $stored_meta : ( is_string( $stored_meta ) && '' !== $stored_meta ? json_decode( $stored_meta, true ) : null );
+		if ( is_string( $stored_meta ) && ! is_array( $stored ) ) {
+			$stored = json_decode( wp_unslash( $stored_meta ), true );
+		}
+		return is_array( $stored ) ? self::sanitize_bundle_pricing( $stored['bundle_pricing'] ?? null ) : null;
+	}
+
 	public static function sort_addon_layers( array $addons ): array {
 		if ( count( $addons ) <= 1 ) {
 			return $addons;
@@ -4266,21 +4307,99 @@ class Exacoat_Configurator_Engine {
 		return $addons;
 	}
 
+	const CART_PRICE_SIGNATURE_VERSION = 'exacoat-cart-v1';
+	const CART_PRICE_MIN_SECRET_LENGTH = 32;
+	const CART_PRICE_MAX_TTL           = 3600;
+
+	/**
+	 * Shared secret for signed cart prices: the EXACOAT_CART_PRICE_SECRET constant in
+	 * wp-config.php, the same value as the storefront's EXACOAT_CART_PRICE_SECRET
+	 * environment variable. Empty when unset or shorter than 32 characters.
+	 */
+	public static function cart_price_secret(): string {
+		if ( defined( 'EXACOAT_CART_PRICE_SECRET' ) && is_string( EXACOAT_CART_PRICE_SECRET ) && strlen( EXACOAT_CART_PRICE_SECRET ) >= self::CART_PRICE_MIN_SECRET_LENGTH ) {
+			return EXACOAT_CART_PRICE_SECRET;
+		}
+		return '';
+	}
+
+	/**
+	 * Signed payload, identical to cartPricePayload() in the storefront
+	 * (lib/server/cart-price-signature.ts).
+	 *
+	 * @param int    $item_id    Variation id for a variation, otherwise the product id.
+	 * @param string $price      IDR price as an integer string, or '' when WooCommerce's own price applies.
+	 * @param string $addon_json The exact exacoat_addon_data string.
+	 * @param int    $exp        Unix expiry.
+	 */
+	public static function cart_price_payload( int $item_id, string $price, string $addon_json, int $exp ): string {
+		return implode( "\n", [ self::CART_PRICE_SIGNATURE_VERSION, (string) $item_id, $price, hash( 'sha256', $addon_json ), (string) $exp ] );
+	}
+
+	public static function verify_cart_price_signature( string $secret, int $item_id, string $price, string $addon_json, int $exp, string $signature, int $now ): bool {
+		if ( strlen( $secret ) < self::CART_PRICE_MIN_SECRET_LENGTH || $item_id <= 0 ) {
+			return false;
+		}
+		if ( '' !== $price && ! ctype_digit( $price ) ) {
+			return false;
+		}
+		if ( $exp < $now || $exp > $now + self::CART_PRICE_MAX_TTL ) {
+			return false;
+		}
+		if ( ! preg_match( '/^[0-9a-f]{64}$/', $signature ) ) {
+			return false;
+		}
+		$expected = hash_hmac( 'sha256', self::cart_price_payload( $item_id, $price, $addon_json, $exp ), $secret );
+		return hash_equals( $expected, $signature );
+	}
+
+	/**
+	 * Cart line price and lines come only from the storefront's server, signed with the
+	 * shared secret (see AGENTS.md "Signed Cart Prices"). A request that carries
+	 * exacoat_custom_price or exacoat_addon_data without a valid, unexpired signature is
+	 * refused, so a buyer can no longer choose their own price. Plain add to cart
+	 * requests (no configurator fields) are untouched and keep WooCommerce's price.
+	 *
+	 * @throws Exception When the signature is missing or invalid (WooCommerce turns it into a notice).
+	 */
 	public static function add_addon_data_to_cart_item( $cart_item_data, $product_id, $variation_id ) {
-		if ( ! empty( $_POST['exacoat_addon_data'] ) ) {
-			$raw = wp_unslash( $_POST['exacoat_addon_data'] );
-			$parsed = json_decode( $raw, true );
-			if ( is_array( $parsed ) ) {
-				$cart_item_data['exacoat_addons'] = self::sort_addon_layers( $parsed );
-				$cart_item_data['unique_key'] = md5( microtime() . rand() );
+		$posted_price  = isset( $_POST['exacoat_custom_price'] ) ? trim( (string) wp_unslash( $_POST['exacoat_custom_price'] ) ) : '';
+		$posted_addons = isset( $_POST['exacoat_addon_data'] ) ? (string) wp_unslash( $_POST['exacoat_addon_data'] ) : '';
+
+		if ( '' !== $posted_price || '' !== $posted_addons ) {
+			$item_id   = (int) $variation_id > 0 ? (int) $variation_id : (int) $product_id;
+			$exp       = isset( $_POST['exacoat_price_exp'] ) ? absint( wp_unslash( $_POST['exacoat_price_exp'] ) ) : 0;
+			$signature = isset( $_POST['exacoat_price_sig'] ) ? strtolower( trim( (string) wp_unslash( $_POST['exacoat_price_sig'] ) ) ) : '';
+
+			if ( ! self::verify_cart_price_signature( self::cart_price_secret(), $item_id, $posted_price, $posted_addons, $exp, $signature, time() ) ) {
+				if ( '' === self::cart_price_secret() ) {
+					error_log( '[exacoat-core] EXACOAT_CART_PRICE_SECRET is not set in wp-config.php (32+ characters); configured add to cart refused.' );
+				}
+				throw new Exception( __( 'This configured item could not be priced. Please refresh the page and add it again.', 'exacoat-core' ) );
+			}
+
+			if ( '' !== $posted_addons ) {
+				$parsed = json_decode( $posted_addons, true );
+				if ( is_array( $parsed ) ) {
+					$addons = [];
+					foreach ( $parsed as $row ) {
+						if ( is_array( $row ) && isset( $row['label'], $row['value'] ) && is_scalar( $row['label'] ) && is_scalar( $row['value'] ) ) {
+							$addons[] = [ 'label' => (string) $row['label'], 'value' => (string) $row['value'] ];
+						}
+					}
+					if ( ! empty( $addons ) ) {
+						$cart_item_data['exacoat_addons'] = self::sort_addon_layers( $addons );
+						$cart_item_data['unique_key']     = md5( microtime() . wp_rand() );
+					}
+				}
+			}
+
+			if ( '' !== $posted_price && (int) $posted_price > 0 ) {
+				$cart_item_data['exacoat_custom_price']   = (float) $posted_price;
+				$cart_item_data['exacoat_price_verified'] = 1;
 			}
 		}
-		if ( ! empty( $_POST['exacoat_custom_price'] ) ) {
-			$custom_price = floatval( $_POST['exacoat_custom_price'] );
-			if ( $custom_price > 0 ) {
-				$cart_item_data['exacoat_custom_price'] = $custom_price;
-			}
-		}
+
 		if ( ! empty( $_POST['exacoat_custom_image'] ) ) {
 			$cart_item_data['exacoat_custom_image'] = esc_url_raw( wp_unslash( $_POST['exacoat_custom_image'] ) );
 		}
@@ -4297,6 +4416,9 @@ class Exacoat_Configurator_Engine {
 		if ( ! empty( $values['exacoat_custom_price'] ) ) {
 			$cart_item['exacoat_custom_price'] = $values['exacoat_custom_price'];
 		}
+		if ( ! empty( $values['exacoat_price_verified'] ) ) {
+			$cart_item['exacoat_price_verified'] = 1;
+		}
 		return $cart_item;
 	}
 
@@ -4310,6 +4432,15 @@ class Exacoat_Configurator_Engine {
 
 		foreach ( $cart->get_cart() as $cart_item_key => $cart_item ) {
 			if ( isset( $cart_item['exacoat_custom_price'] ) && floatval( $cart_item['exacoat_custom_price'] ) > 0 ) {
+				// A custom price stored before signed prices existed was chosen by the browser:
+				// drop the line instead of charging it.
+				if ( empty( $cart_item['exacoat_price_verified'] ) ) {
+					$cart->remove_cart_item( $cart_item_key );
+					if ( function_exists( 'wc_add_notice' ) ) {
+						wc_add_notice( __( 'A configured item in your bag needs to be added again so its price can be checked.', 'exacoat-core' ), 'notice' );
+					}
+					continue;
+				}
 				$base_idr_price = floatval( $cart_item['exacoat_custom_price'] );
 				if ( ! empty( $active_currency ) && 'IDR' !== $active_currency ) {
 					if ( class_exists( 'Exacoat_Store_Enhancements' ) ) {
@@ -4382,10 +4513,18 @@ class Exacoat_Configurator_Engine {
 	public static function save_custom_addons_to_order_item( $item, $cart_item_key, $values, $order ) {
 		if ( ! empty( $values['exacoat_addons'] ) && is_array( $values['exacoat_addons'] ) ) {
 			$sorted = self::sort_addon_layers( $values['exacoat_addons'] );
-			foreach ( $sorted as $addon ) {
+			$raw    = [];
+			foreach ( $sorted as $idx => $addon ) {
 				if ( ! empty( $addon['label'] ) && ! empty( $addon['value'] ) ) {
-					$item->add_meta_data( sanitize_text_field( $addon['label'] ), sanitize_text_field( $addon['value'] ), true );
+					$label = sanitize_text_field( $addon['label'] );
+					$value = sanitize_text_field( $addon['value'] );
+					$item->add_meta_data( $label, $value, true );
+					$raw[] = [ 'layerId' => (string) ( $idx + 1 ), 'layerName' => $label, 'choiceName' => $value ];
 				}
+			}
+			// Signed cart lines; the storefront no longer writes browser-sent lines after checkout.
+			if ( ! empty( $raw ) ) {
+				$item->add_meta_data( '_configurator_data_raw', wp_slash( wp_json_encode( $raw, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ), true );
 			}
 		}
 		if ( ! empty( $values['exacoat_custom_image'] ) ) {
