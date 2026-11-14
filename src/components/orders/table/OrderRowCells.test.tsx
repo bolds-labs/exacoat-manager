@@ -37,10 +37,23 @@ describe('CustomerCell', () => {
 });
 
 describe('ItemsCell', () => {
-  it('shows the item count and the cleaned product name', () => {
+  it('shows the item count and the cleaned product name with its quantity', () => {
     render(<ItemsCell order={base} />);
     expect(screen.getByText('1 item')).toBeTruthy();
-    expect(screen.getByText('iPhone 15 Pro Skins')).toBeTruthy();
+    expect(screen.getByText('1x iPhone 15 Pro Skins')).toBeTruthy();
+  });
+  it('keeps per-line quantities and counts lines like the old row', () => {
+    const order = {
+      ...base,
+      item_count: undefined,
+      items: [
+        { name: 'Galaxy Z Fold 7 Skins', quantity: 2 },
+        { name: '[EXACOAT] Camera Skin', quantity: 1 },
+      ],
+    };
+    render(<ItemsCell order={order} />);
+    expect(screen.getByText('2 items')).toBeTruthy();
+    expect(screen.getByText('2x Galaxy Z Fold 7 Skins, 1x Camera Skin')).toBeTruthy();
   });
 });
 
@@ -87,6 +100,17 @@ describe('OrderIdCell', () => {
     expect(screen.getByText('#101')).toBeTruthy();
     expect(screen.getByText('Warranty')).toBeTruthy();
     expect(screen.getByText('Approved')).toBeTruthy();
+  });
+  it('shows a redeem claim chip with the review state for redeem orders', () => {
+    render(<OrderIdCell order={{ ...base, status: 'pending', rma: { order_type: 'Redeem', status: 'approved' } }} />);
+    expect(screen.getByText('Redeem')).toBeTruthy();
+    expect(screen.getByText('Approved')).toBeTruthy();
+    expect(screen.queryByText('Warranty')).toBeNull();
+  });
+  it('shows Redeem claimed, not a review chip, on the original redeemed order', () => {
+    render(<OrderIdCell order={{ ...base, rma: { order_type: 'Redeem', is_parent_order: true } }} />);
+    expect(screen.getByText('Redeem claimed')).toBeTruthy();
+    expect(screen.queryByText('Pending')).toBeNull();
   });
   it('shows no warranty chip for a normal order', () => {
     render(<OrderIdCell order={base} />);

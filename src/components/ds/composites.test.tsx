@@ -121,6 +121,20 @@ describe('Menu', () => {
     fireEvent.click(danger);
     expect(onSelect).toHaveBeenCalledOnce();
   });
+  it('marks the selected item with a check', () => {
+    render(
+      <Menu
+        trigger={<button>Pick</button>}
+        items={[
+          { icon: Pencil, title: 'Redeem', onSelect: () => {}, selected: true },
+          { icon: Trash2, title: 'Endorsements', onSelect: () => {} },
+        ]}
+      />,
+    );
+    fireEvent.pointerDown(screen.getByText('Pick'), { button: 0, ctrlKey: false });
+    expect(screen.getAllByLabelText('Selected')).toHaveLength(1);
+    expect(screen.getByText('Redeem').closest('[role="menuitem"]')?.getAttribute('aria-current')).toBe('true');
+  });
 });
 
 describe('token classes', () => {

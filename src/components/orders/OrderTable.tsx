@@ -587,6 +587,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
       title: t.label,
       description: typeof n === 'number' ? `${n} ${n === 1 ? 'order' : 'orders'}` : undefined,
       onSelect: () => handleTabSelect(t.key),
+      selected: t.key === activeStatus,
     };
   });
 

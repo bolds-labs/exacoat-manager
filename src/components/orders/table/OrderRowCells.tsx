@@ -6,7 +6,7 @@ import { getOrderCourierDisplay, isStorePickupOrder } from '../../../lib/orderUt
 import { resolveCountryName } from '../../../lib/countries';
 import { formatCleanText } from '../../../lib/utils';
 import { cleanItemTitle } from '../../../lib/orderItems';
-import { getWarrantyClaimMeta } from '../../../lib/orderStatus';
+import { getRedeemClaimMeta, getWarrantyClaimMeta } from '../../../lib/orderStatus';
 import { WarrantyChip } from '../../ds/WarrantyChip';
 
 // WooCommerce Indonesia province codes, so the row can show "City, Province"
@@ -58,11 +58,12 @@ function isEndorsementOrder(order: Partial<Order>): boolean {
   );
 }
 
-/** Small neutral tags kept from the old row badges (Redeem, Endorsement, claimed parent orders). */
+/** Small neutral tags kept from the old row badges (Endorsement, claimed parent orders). Redeem claims get a claim chip. */
 function orderTypeTags(order: Order): string[] {
   const tags: string[] = [];
   const rma = getOrderRma(order);
-  if (rma?.order_type === 'Redeem') tags.push(rma.is_parent_order ? 'Redeem claimed' : 'Redeem');
+  if (rma?.order_type === 'Redeem' && rma.is_parent_order) tags.push('Redeem claimed');
+  else if (rma?.order_type === 'Redeem' && getRedeemClaimMeta(order) === null) tags.push('Redeem');
   if (rma?.order_type === 'Warranty' && rma.is_parent_order) tags.push('Warranty claimed');
   if (isEndorsementOrder(order)) tags.push('Endorsement');
   return tags;
@@ -83,10 +84,12 @@ export function OrderIdCell({ order }: { order: Order }) {
 
 function WarrantyRowTags({ order, tags }: { order: Order; tags: string[] }) {
   const hasWarranty = getWarrantyClaimMeta(order) !== null;
-  if (tags.length === 0 && !hasWarranty) return null;
+  const hasRedeem = getRedeemClaimMeta(order) !== null;
+  if (tags.length === 0 && !hasWarranty && !hasRedeem) return null;
   return (
     <div className="mt-1.5 flex min-w-0 items-center gap-1.5 overflow-hidden">
       {hasWarranty && <WarrantyChip order={order} />}
+      {hasRedeem && <WarrantyChip order={order} kind="redeem" />}
       {tags.map((t) => (
         <span key={t} className="truncate rounded-full bg-chip px-2 py-[2px] text-[12px] font-medium text-muted">
           {t}
@@ -110,8 +113,9 @@ export function CustomerCell({ order }: { order: Order }) {
 }
 
 export function ItemsCell({ order }: { order: Order }) {
+  // Same count and "Nx name" list as the pre-redesign row
   const count = order.item_count ?? (order.items?.length || 0);
-  const names = (order.items || []).map((it) => cleanItemTitle(it.name)).filter(Boolean).join(', ');
+  const names = (order.items || []).map((it) => `${it.quantity}x ${cleanItemTitle(it.name)}`).join(', ');
   return (
     <div className="min-w-0">
       <div className="flex items-center gap-1.5 text-fg">

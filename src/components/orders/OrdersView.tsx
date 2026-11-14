@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Order } from '../../types';
 import { OrderTable } from './OrderTable';
 import { OrderDetailDrawer } from './OrderDetailDrawer';
@@ -61,6 +61,8 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
   const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [courierFilter, setCourierFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  // Only the newest list request may update state (arrowing across tabs fires one load per tab)
+  const latestRequestRef = useRef(0);
 
   const loadOrders = useCallback(async (
     quiet = false,
@@ -70,6 +72,8 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
     courier = courierFilter,
     search = searchQuery
   ) => {
+    const requestId = ++latestRequestRef.current;
+    const isStale = () => requestId !== latestRequestRef.current;
     try {
       if (!quiet) setIsLoading(true);
       else setIsRefreshing(true);
@@ -86,6 +90,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
         courier: !hasSearch && courier !== 'all' ? courier : undefined,
         search: hasSearch ? search.trim() : undefined,
       });
+      if (isStale()) return;
       if (res.success && Array.isArray(res.orders)) {
         setOrders(res.orders as Order[]);
         const fetchedTotal = typeof res.total_orders === 'number' && res.total_orders > 0 
@@ -103,12 +108,14 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
         }
       }
     } catch (err: any) {
-      if (!quiet) {
+      if (!quiet && !isStale()) {
         showToast('error', 'Orders Fetch Failed', err.message);
       }
     } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
+      if (!isStale()) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
     }
   }, [currentPage, pageSize, statusFilter, courierFilter, searchQuery, showToast]);
 
@@ -315,15 +322,14 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
       </div>
 
       {/* Sales channel switcher */}
-      <div className="inline-flex w-fit items-center gap-1 rounded-[12px] border border-line bg-chip p-1" role="tablist" aria-label="Sales channel">
+      <div className="inline-flex w-fit items-center gap-1 rounded-[12px] border border-line bg-chip p-1" role="group" aria-label="Sales channel">
         {channels.map((c) => {
           const active = activeChannel === c.key;
           return (
             <button
               key={c.key}
               type="button"
-              role="tab"
-              aria-selected={active}
+              aria-pressed={active}
               onClick={() => setActiveChannel(c.key)}
               className={`flex items-center gap-2 rounded-[9px] border px-3.5 py-[7px] text-[13px] font-[450] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
                 active ? 'border-field-border bg-field text-fg' : 'border-transparent text-muted hover:text-fg'

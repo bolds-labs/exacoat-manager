@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import type { LucideIcon } from 'lucide-react';
+import { Check, type LucideIcon } from 'lucide-react';
 
 export type MenuItem =
-  | { icon: LucideIcon; title: string; description?: string; onSelect: () => void; danger?: boolean }
+  | { icon: LucideIcon; title: string; description?: string; onSelect: () => void; danger?: boolean; selected?: boolean }
   | 'separator';
 
 export interface MenuProps {
@@ -33,13 +33,17 @@ export function Menu({ trigger, items, align = 'end' }: MenuProps) {
               <DropdownMenu.Item
                 key={`${item.title}-${index}`}
                 onSelect={item.onSelect}
-                className="group flex cursor-pointer items-start gap-3 rounded-lg px-2.5 py-[9px] outline-none data-[highlighted]:bg-chip"
+                aria-current={item.selected ? 'true' : undefined}
+                className={`group flex cursor-pointer items-start gap-3 rounded-lg px-2.5 py-[9px] outline-none data-[highlighted]:bg-chip ${item.selected ? 'bg-chip' : ''}`}
               >
                 <Icon className={`mt-0.5 h-4 w-4 flex-none ${iconColor}`} strokeWidth={1.8} aria-hidden />
                 <span className="min-w-0">
                   <span className={`block text-[13.5px] font-medium ${text}`}>{item.title}</span>
                   {item.description && <span className="block text-[12.5px] text-faint">{item.description}</span>}
                 </span>
+                {item.selected && (
+                  <Check className="ml-auto mt-0.5 h-4 w-4 flex-none text-accent-fg" strokeWidth={2} aria-label="Selected" />
+                )}
               </DropdownMenu.Item>
             );
           })}

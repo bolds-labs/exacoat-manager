@@ -102,10 +102,26 @@ export function getWarrantyClaimMeta(
   order: Partial<Order>
 ): { label: 'Pending' | 'Approved' | 'Rejected'; family: StatusFamily } | null {
   if (!isWarrantyOrder(order)) return null;
+  return claimReviewState(order);
+}
+
+function claimReviewState(order: Partial<Order>): { label: 'Pending' | 'Approved' | 'Rejected'; family: StatusFamily } {
   const raw = String(order.rma?.status || order.warranty_claim_status || 'pending').toLowerCase();
   if (raw === 'approved') return { label: 'Approved', family: 'done' };
   if (raw === 'rejected') return { label: 'Rejected', family: 'stop' };
   return { label: 'Pending', family: 'act' };
+}
+
+/** Review state of a redeem replacement order (same rma fields as warranty claims); null for other orders. */
+export function getRedeemClaimMeta(
+  order: Partial<Order>
+): { label: 'Pending' | 'Approved' | 'Rejected'; family: StatusFamily } | null {
+  const rma: any = order.rma;
+  if (rma?.is_parent_order) return null;
+  const meta: any[] = Array.isArray(order.meta_data) ? order.meta_data : [];
+  const badge = String(meta.find((m) => m?.key === '_order_badge')?.value ?? '').toUpperCase();
+  if (String(rma?.order_type || '').toLowerCase() !== 'redeem' && badge !== 'REDEEM') return null;
+  return claimReviewState(order);
 }
 
 const COURIER_STEPS: StatusStep[] = [
