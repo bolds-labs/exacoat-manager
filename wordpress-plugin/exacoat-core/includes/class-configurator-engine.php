@@ -2306,9 +2306,12 @@ class Exacoat_Configurator_Engine {
 
 		// The configurator base price is the regular price: the active price drops during a sale, and a
 		// base price taken from it stays low after the sale ends.
-		$price = (float) ( $product->get_regular_price() ?: $product->get_price() ?: 0 );
+		// Variable products have no regular price of their own, and get_price() is the lowest active
+		// (possibly sale) variation price, so read the variation regular price first.
+		$is_variable = method_exists( $product, 'is_type' ) && $product->is_type( 'variable' );
+		$price       = $is_variable ? 0.0 : (float) ( $product->get_regular_price() ?: $product->get_price() ?: 0 );
 
-		if ( $price <= 0 && method_exists( $product, 'is_type' ) && $product->is_type( 'variable' ) ) {
+		if ( $price <= 0 && $is_variable ) {
 			if ( method_exists( $product, 'get_variation_regular_price' ) ) {
 				$min_reg_price = (float) $product->get_variation_regular_price( 'min', true );
 				if ( $min_reg_price > 0 ) {
