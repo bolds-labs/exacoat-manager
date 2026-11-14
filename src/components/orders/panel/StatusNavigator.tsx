@@ -8,6 +8,8 @@ export interface StatusNavigatorProps {
   order: Partial<Order>;
   onChangeStatus: (status: string) => void;
   disabled?: boolean;
+  /** A status update is running (sets aria-busy). */
+  busy?: boolean;
 }
 
 function StepTile({ icon: Icon }: { icon: LucideIcon }) {
@@ -33,7 +35,7 @@ function SideStep({
   const caption = isNext ? 'Next step' : 'Previous';
   const Arrow = isNext ? ArrowRight : ArrowLeft;
   const text = (
-    <span className={`flex min-w-0 flex-col leading-[1.3] ${isNext ? 'items-end text-right' : ''}`}>
+    <span className={`hidden min-w-0 flex-col leading-[1.3] md:flex ${isNext ? 'items-end text-right' : ''}`}>
       <span className="text-[12px] text-faint">{caption}</span>
       <span className={`truncate text-[13px] ${isNext ? 'text-fg' : 'text-muted'}`}>{step ? step.label : 'None'}</span>
     </span>
@@ -44,8 +46,8 @@ function SideStep({
       onClick={onClick}
       disabled={disabled}
       aria-label={step ? `${caption}: ${step.label}` : caption}
-      className={`flex h-[52px] w-[210px] flex-none items-center gap-2.5 rounded-[10px] border border-field-border bg-field px-3.5 transition-colors hover:bg-chip focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-45 ${
-        isNext ? 'justify-end' : ''
+      className={`flex h-[52px] min-w-0 flex-1 items-center justify-center gap-2.5 rounded-[10px] border border-field-border bg-field px-3 transition-colors hover:bg-chip focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-45 md:w-[210px] md:flex-none md:px-3.5 ${
+        isNext ? 'md:justify-end' : 'md:justify-start'
       }`}
     >
       {!isNext && <Arrow className="h-[15px] w-[15px] flex-none text-faint" strokeWidth={1.8} aria-hidden />}
@@ -61,23 +63,28 @@ function SideStep({
  * Previous / current / next status blocks plus an "All steps" menu. Every move goes through
  * onChangeStatus so the caller keeps today's confirmations and side effects.
  */
-export function StatusNavigator({ order, onChangeStatus, disabled = false }: StatusNavigatorProps) {
+export function StatusNavigator({ order, onChangeStatus, disabled = false, busy = false }: StatusNavigatorProps) {
   const steps = getStatusSteps(order);
   const index = getCurrentStepIndex(order, steps);
   const inFlow = index >= 0;
   const meta = getOrderStatusMeta({ status: '', ...order });
   const prev = inFlow && index > 0 ? steps[index - 1] : undefined;
   const next = inFlow && index < steps.length - 1 ? steps[index + 1] : undefined;
-  const currentLabel = inFlow ? steps[index].label : meta.label;
+  // Real status label (e.g. Delivered); the step it maps onto goes in the caption when it differs.
+  const currentLabel = meta.label;
+  const stepLabel = inFlow ? steps[index].label : '';
+  const caption = inFlow
+    ? `Step ${index + 1} of ${steps.length}${stepLabel && stepLabel !== currentLabel ? ` (${stepLabel})` : ''}`
+    : 'Outside the order flow';
   const CurrentIcon = meta.icon;
 
   return (
-    <div className="flex items-stretch gap-3">
+    <div aria-busy={busy || undefined} className="flex flex-wrap items-stretch gap-2 md:flex-nowrap md:gap-3">
       <SideStep direction="prev" step={prev} disabled={disabled || !prev} onClick={() => prev && onChangeStatus(prev.status)} />
 
       <div
         data-testid="status-current"
-        className={`flex h-[52px] min-w-0 flex-1 items-center gap-3 rounded-[10px] border px-4 ${
+        className={`order-first flex h-[52px] w-full min-w-0 items-center gap-3 rounded-[10px] border px-4 md:order-none md:w-auto md:flex-1 ${
           inFlow ? 'border-accent-border bg-accent-soft' : 'border-card-border bg-card'
         }`}
       >
@@ -87,13 +94,13 @@ export function StatusNavigator({ order, onChangeStatus, disabled = false }: Sta
         <span className="flex min-w-0 flex-col leading-[1.3]">
           <span className="truncate text-[14.5px] font-medium text-fg">{currentLabel}</span>
           <span className="text-[12px] text-faint">
-            {inFlow ? `Step ${index + 1} of ${steps.length}` : 'Outside the order flow'}
+            {caption}
           </span>
         </span>
         <span
           data-testid="status-track"
           aria-hidden
-          className="ml-auto grid w-[180px] flex-none gap-1"
+          className="ml-auto hidden w-[180px] flex-none gap-1 sm:grid"
           style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}
         >
           {steps.map((step, i) => {
@@ -108,7 +115,12 @@ export function StatusNavigator({ order, onChangeStatus, disabled = false }: Sta
 
       <Menu
         trigger={
-          <Button trailingIcon={ChevronDown} disabled={disabled} className="h-[52px] rounded-[10px]">
+          <Button
+            trailingIcon={ChevronDown}
+            disabled={disabled}
+            aria-label="All steps"
+            className="h-[52px] flex-1 rounded-[10px] md:flex-none"
+          >
             All steps
           </Button>
         }
@@ -117,9 +129,10 @@ export function StatusNavigator({ order, onChangeStatus, disabled = false }: Sta
           title: step.label,
           description: i === index ? 'Current step' : undefined,
           selected: i === index,
-          onSelect: () => {
-            if (i !== index) onChangeStatus(step.status);
-          },
+          // The current step stays selectable, as in the old stage grid: aliased statuses (delivered,
+          // smb-picked, pending, in-production, awaiting-pickup) can then be set to the canonical one,
+          // and re-sending processing retries the tracking pool assignment.
+          onSelect: () => onChangeStatus(step.status),
         }))}
       />
     </div>

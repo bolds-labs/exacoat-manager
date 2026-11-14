@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Check, ChevronDown, ClipboardCheck, Copy, FileText, Play, Printer, X, type LucideIcon } from 'lucide-react';
-import type { Order } from '../../../types';
+import { getOrderRma, type Order } from '../../../types';
 import { formatDateTime } from '../../../lib/formatters';
 import { Button, IconButton, Menu, WarrantyChip, type MenuItem } from '../../ds';
 
@@ -42,6 +42,8 @@ export function PanelHeader({
 }: PanelHeaderProps) {
   const [copied, setCopied] = useState(false);
   const orderNumber = orderNumberOf(order);
+  // Claim chips read the same RMA details as the rest of the panel (order.rma or the _rma_* meta fallback).
+  const claimOrder = { ...order, rma: getOrderRma(order) };
   const meta = [
     formatDateTime(order.created_at),
     order.payment_method_title || order.payment_method || 'Direct Payment',
@@ -58,9 +60,9 @@ export function PanelHeader({
   const printTitle = `${isStorePickup ? 'Print workshop label' : 'Print 4x6 label'}${isPrinted ? '' : ' (not printed yet)'}`;
 
   return (
-    <div className="px-7 pb-5 pt-[22px]">
-      <div className="flex items-start gap-4">
-        <div className="min-w-0">
+    <div className="px-4 pb-4 pt-4 md:px-7 md:pb-5 md:pt-[22px]">
+      <div className="flex flex-wrap items-start gap-x-4 gap-y-3">
+        <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="m-0 font-mono text-[22px] font-semibold tracking-[-0.03em] text-fg">#{orderNumber}</h2>
             <IconButton
@@ -70,8 +72,8 @@ export function PanelHeader({
               variant="ghost"
               onClick={copy}
             />
-            <WarrantyChip order={order} />
-            <WarrantyChip order={order} kind="redeem" />
+            <WarrantyChip order={claimOrder} />
+            <WarrantyChip order={claimOrder} kind="redeem" />
             {isStorePickup && (
               <span className="inline-flex items-center rounded-full bg-chip px-2.5 py-[2px] text-[12px] font-medium text-muted">
                 Store Pickup
@@ -93,7 +95,7 @@ export function PanelHeader({
           </div>
         </div>
 
-        <div className="ml-auto flex flex-none items-center gap-2">
+        <div className="order-3 flex w-full flex-wrap items-center gap-2 md:order-none md:ml-auto md:w-auto">
           <Button variant="primary" icon={Printer} onClick={onPrintLabel} title={printTitle} className="relative">
             Print label
             {!isPrinted && (
@@ -112,8 +114,8 @@ export function PanelHeader({
           {moreItems.length > 0 && (
             <Menu trigger={<Button trailingIcon={ChevronDown}>More</Button>} items={moreItems} />
           )}
-          <IconButton icon={X} label="Close details" variant="ghost" onClick={onClose} />
         </div>
+        <IconButton icon={X} label="Close details" variant="ghost" onClick={onClose} className="order-2 flex-none md:order-none" />
       </div>
 
       {banner}
@@ -150,7 +152,7 @@ export function ClaimBanner({
   reviewLabel = 'Review claim proof',
 }: ClaimBannerProps) {
   return (
-    <div className="mt-3.5 flex items-center gap-3 rounded-[10px] border border-st-act-border bg-st-act-bg px-3 py-2.5">
+    <div className="mt-3.5 flex flex-wrap items-center gap-3 rounded-[10px] border border-st-act-border bg-st-act-bg px-3 py-2.5">
       <span className="grid h-8 w-8 flex-none place-items-center rounded-lg bg-chip text-st-act-fg">
         <Icon className="h-4 w-4" strokeWidth={1.8} aria-hidden />
       </span>
@@ -184,4 +186,16 @@ export function ClaimBanner({
       )}
     </div>
   );
+}
+
+/** Review state pill for the claim banner, from the RMA status (approved, rejected, anything else pending). */
+export function ClaimStatusPill({ status }: { status?: string }) {
+  const raw = String(status || '').toLowerCase();
+  const [label, tone] =
+    raw === 'approved'
+      ? ['Approved', 'bg-st-done-bg text-st-done-fg']
+      : raw === 'rejected'
+      ? ['Rejected', 'bg-st-stop-bg text-st-stop-fg']
+      : ['Pending review', 'bg-chip text-st-act-fg'];
+  return <span className={`inline-flex items-center rounded-full px-2 py-[1px] text-[12px] font-medium ${tone}`}>{label}</span>;
 }

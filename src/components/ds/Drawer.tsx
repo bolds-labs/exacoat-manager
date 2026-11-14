@@ -31,7 +31,10 @@ export function Drawer({ open, onOpenChange, header, children, width = 1180, lab
         <Dialog.Content
           ref={contentRef}
           aria-describedby={undefined}
-          style={{ width }}
+          // The transform makes the panel the containing block for position: fixed descendants, so inline
+          // overlays rendered inside it (the order panel's refund overlay) cover the panel only, as the
+          // old SlideDrawer did. Portaled modals are unaffected.
+          style={{ width, transform: 'translateX(0)' }}
           onInteractOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => {
             const active = document.activeElement;

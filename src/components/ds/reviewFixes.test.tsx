@@ -73,6 +73,11 @@ describe('Drawer layering with legacy modals', () => {
     fireEvent.click(btn);
     expect(onOpenChange).not.toHaveBeenCalled();
   });
+  it('is the containing block for inline fixed overlays rendered inside it', () => {
+    render(<Drawer open onOpenChange={() => {}} header={<div>Panel header</div>}>B</Drawer>);
+    const drawer = screen.getByText('Panel header').closest('[role="dialog"]') as HTMLElement;
+    expect(drawer.style.transform).toBe('translateX(0)');
+  });
 });
 
 describe('kit native controls opt out of legacy light-mode form overrides', () => {

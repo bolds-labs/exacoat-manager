@@ -81,4 +81,31 @@ describe('StatusNavigator', () => {
     expect(nextButton().disabled).toBe(true);
     expect((screen.getByRole('button', { name: /All steps/ }) as HTMLButtonElement).disabled).toBe(true);
   });
+
+  it('lets a delivered courier order be set to completed from All steps', () => {
+    const onChangeStatus = vi.fn();
+    render(<StatusNavigator order={{ status: 'delivered' } as any} onChangeStatus={onChangeStatus} />);
+    expect(screen.getByTestId('status-current').textContent).toContain('Delivered');
+    expect(screen.getByText('Step 6 of 6 (Completed)')).toBeTruthy();
+    fireEvent.pointerDown(screen.getByRole('button', { name: /All steps/ }), { button: 0, ctrlKey: false });
+    fireEvent.click(screen.getByRole('menuitem', { name: /^Completed/ }));
+    expect(onChangeStatus).toHaveBeenCalledWith('completed');
+  });
+
+  it('re-sends the current status when the current step is chosen', () => {
+    const onChangeStatus = vi.fn();
+    render(<StatusNavigator order={{ status: 'processing' } as any} onChangeStatus={onChangeStatus} />);
+    fireEvent.pointerDown(screen.getByRole('button', { name: /All steps/ }), { button: 0, ctrlKey: false });
+    fireEvent.click(screen.getByRole('menuitem', { name: /^To prepare/ }));
+    expect(onChangeStatus).toHaveBeenCalledWith('processing');
+  });
+
+  it('sets aria-busy while a status update runs', () => {
+    const { container, rerender } = render(
+      <StatusNavigator order={{ status: 'processing' } as any} onChangeStatus={() => {}} busy disabled />,
+    );
+    expect((container.firstChild as HTMLElement).getAttribute('aria-busy')).toBe('true');
+    rerender(<StatusNavigator order={{ status: 'processing' } as any} onChangeStatus={() => {}} />);
+    expect((container.firstChild as HTMLElement).getAttribute('aria-busy')).toBeNull();
+  });
 });

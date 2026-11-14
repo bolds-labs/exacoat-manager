@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Drawer, type MenuItem } from '../ds';
-import { PanelHeader, ClaimBanner } from './panel/PanelHeader';
+import { PanelHeader, ClaimBanner, ClaimStatusPill } from './panel/PanelHeader';
 import { StatusNavigator } from './panel/StatusNavigator';
 import { lockBodyScroll } from '../../lib/bodyScrollLock';
 import { Badge } from '../ui/Badge';
@@ -1115,6 +1115,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                   }
                   channel={findOrderMeta('_rma_marketplace_channel') ? String(findOrderMeta('_rma_marketplace_channel')) : undefined}
                   reason={rmaDetails.claim_reason}
+                  status={<ClaimStatusPill status={rmaDetails.status} />}
                   note={rmaDetails.video_deleted ? 'Proof video auto-deleted on review.' : undefined}
                   onReview={rmaDetails.video_proof_url ? () => setIsWarrantyReviewModalOpen(true) : undefined}
                 />
@@ -1124,6 +1125,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
             <StatusNavigator
               order={{ ...order, is_store_pickup: isStorePickup }}
               disabled={isUpdatingStatus}
+              busy={isUpdatingStatus}
               onChangeStatus={(status) => {
                 if (!isStorePickup && status === 'completed') {
                   setShowManualCompletedModal(true);
