@@ -435,6 +435,7 @@ require_once EXACOAT_CORE_PATH . 'includes/class-abandoned-cart.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-affiliate-manager.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-customer-manager.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-custom-label-manager.php';
+require_once EXACOAT_CORE_PATH . 'includes/class-staff-dashboard.php';
 require_once EXACOAT_CORE_PATH . 'admin/class-admin-settings.php';
 require_once EXACOAT_CORE_PATH . 'admin/class-github-updater.php';
 
@@ -538,6 +539,11 @@ if ( class_exists( 'Exacoat_Notification_Service' ) ) {
 // Initialize Custom Label & Shared Address Book Manager
 if ( class_exists( 'Exacoat_Custom_Label_Manager' ) ) {
 	Exacoat_Custom_Label_Manager::init();
+}
+
+// Initialize Staff Dashboard (team notes, overdue international orders)
+if ( class_exists( 'Exacoat_Staff_Dashboard' ) ) {
+	Exacoat_Staff_Dashboard::init();
 }
 
 // Safe version tracking on admin_init
