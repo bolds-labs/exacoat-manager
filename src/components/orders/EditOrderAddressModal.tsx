@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Modal } from '../ui/Modal';
-import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
+import { Modal } from '../ds/Modal';
+import { Button } from '../ds/Button';
+import { TextField } from '../ds/TextField';
+import { Select } from '../ds/Select';
+import { Checkbox } from '../ds/Checkbox';
 import { Order, OrderShipping } from '../../types';
 import { updateOrderDirect, UpdateOrderPayload } from '../../lib/wordpressBridge';
 import { toggleLocalStorePickupOrder } from '../../lib/orderUtils';
 import { useToast } from '../../context/ToastContext';
 import { COUNTRY_OPTIONS } from '../../lib/countries';
-import { MapPin, User, Mail, Phone, Building, Globe, FileText, Check, AlertCircle } from 'lucide-react';
+import { MapPin, User, FileText, Check, AlertCircle } from 'lucide-react';
+
+const PRIORITY_COUNTRIES = ['Indonesia', 'United States', 'Singapore', 'Malaysia', 'Australia', 'United Kingdom', 'Canada', 'Germany', 'Japan', 'Philippines', 'Thailand', 'Vietnam'];
 
 interface EditOrderAddressModalProps {
   order: Order | null;
@@ -177,211 +181,98 @@ export const EditOrderAddressModal: React.FC<EditOrderAddressModalProps> = ({
     }
   };
 
+  const countryOptions = (() => {
+    const seen = new Set<string>();
+    const list: { value: string; label: string }[] = [];
+    const add = (value: string, label = value) => {
+      if (!value || seen.has(value)) return;
+      seen.add(value);
+      list.push({ value, label });
+    };
+    // A stored ISO code (e.g. ID) that is not in the list stays selectable so the saved value is unchanged.
+    add(country);
+    PRIORITY_COUNTRIES.forEach((c) => add(c));
+    COUNTRY_OPTIONS.forEach((c) => add(c.value, c.label));
+    return list;
+  })();
+
+  const sectionClass = 'flex flex-col gap-3 rounded-[12px] border border-card-border bg-card p-4';
+  const sectionTitle = (Icon: typeof MapPin, label: string) => (
+    <div className="flex items-center gap-2 border-b border-line pb-2">
+      <Icon className="h-3.5 w-3.5 text-muted" strokeWidth={1.8} aria-hidden />
+      <h4 className="m-0 text-[13px] font-semibold text-fg">{label}</h4>
+    </div>
+  );
+
   return (
     <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      maxWidth="3xl"
-      title={
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-[#f3aa18]/15 border border-[#f3aa18]/30 flex items-center justify-center text-[#f3aa18]">
-            <MapPin className="w-4 h-4" />
-          </div>
-          <div>
-            <h3 className="text-base font-bold text-white font-sans tracking-tight">Edit Customer & Delivery Address</h3>
-            <p className="text-[11px] font-mono text-neutral-400">Order {order.order_number || `#${order.id}`}</p>
-          </div>
-        </div>
-      }
+      open={isOpen}
+      onOpenChange={(o) => {
+        if (!o && !isSaving) onClose();
+      }}
+      title="Edit customer and address"
+      reference={order.order_number ? `#${String(order.order_number).replace(/^#+/, '')}` : `#${order.id}`}
+      width={720}
       footer={
-        <div className="flex items-center justify-between w-full">
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={syncBilling}
-              onChange={(e) => setSyncBilling(e.target.checked)}
-              className="w-4 h-4 rounded border-white/20 bg-neutral-900 text-[#f3aa18] focus:ring-[#f3aa18] focus:ring-offset-0"
-            />
-            <span className="text-xs text-neutral-300 font-sans">
-              Sync billing address with shipping address
-            </span>
-          </label>
-          <div className="flex items-center gap-2.5">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={onClose}
-              disabled={isSaving}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              size="sm"
-              onClick={handleSubmit}
-              isLoading={isSaving}
-              leftIcon={<Check className="w-3.5 h-3.5" />}
-            >
-              Save Address Changes
-            </Button>
-          </div>
-        </div>
+        <>
+          <Checkbox
+            className="mr-auto"
+            label="Sync billing address with shipping address"
+            checked={syncBilling}
+            onChange={(e) => setSyncBilling(e.target.checked)}
+          />
+          <Button variant="ghost" onClick={onClose} disabled={isSaving}>
+            Cancel
+          </Button>
+          <Button variant="primary" icon={Check} onClick={handleSubmit} disabled={isSaving}>
+            {isSaving ? 'Saving...' : 'Save address'}
+          </Button>
+        </>
       }
     >
-      <form onSubmit={handleSubmit} className="space-y-5 py-1">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {errorMsg && (
-          <div className="p-3 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-xs flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+          <div className="flex items-center gap-2 rounded-[10px] border border-st-stop-border bg-st-stop-bg px-3 py-2.5 text-[12.5px] text-st-stop-fg">
+            <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{errorMsg}</span>
           </div>
         )}
 
-        {/* Section: Contact & Recipient */}
-        <div className="p-4 rounded-xl border border-white/[0.06] bg-[#141417] space-y-3.5">
-          <div className="flex items-center gap-2 border-b border-white/[0.06] pb-2">
-            <User className="w-3.5 h-3.5 text-[#f3aa18]" />
-            <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans">Recipient & Contact</h4>
+        <div className={sectionClass}>
+          {sectionTitle(User, 'Recipient and contact')}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <TextField label="First name *" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="e.g. Hendra" required />
+            <TextField label="Last name" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="e.g. Wijaya" />
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            <Input
-              label="First Name *"
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              placeholder="e.g. Hendra"
-              required
-            />
-            <Input
-              label="Last Name"
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              placeholder="e.g. Wijaya"
-            />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <TextField label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="customer@domain.com" />
+            <TextField label="Phone" type="tel" mono value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="08123456789 or +62..." />
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            <Input
-              label="Email Address"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="customer@domain.com"
-              leftIcon={<Mail className="w-3.5 h-3.5" />}
-            />
-            <Input
-              label="Phone Number"
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="08123456789 or +62..."
-              leftIcon={<Phone className="w-3.5 h-3.5" />}
-            />
-          </div>
-
-          <div>
-            <Input
-              label="Company Name (Optional)"
-              value={company}
-              onChange={(e) => setCompany(e.target.value)}
-              placeholder="Company, Building, or Studio Name"
-              leftIcon={<Building className="w-3.5 h-3.5" />}
-            />
-          </div>
+          <TextField label="Company (optional)" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Company, building or studio name" />
         </div>
 
-        {/* Section: Physical Destination Address */}
-        <div className="p-4 rounded-xl border border-white/[0.06] bg-[#141417] space-y-3.5">
-          <div className="flex items-center gap-2 border-b border-white/[0.06] pb-2">
-            <MapPin className="w-3.5 h-3.5 text-[#f3aa18]" />
-            <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans">Shipping Destination</h4>
+        <div className={sectionClass}>
+          {sectionTitle(MapPin, 'Shipping destination')}
+          <TextField label="Street address line 1 *" value={address1} onChange={(e) => setAddress1(e.target.value)} placeholder="Street name, house or building number, RT/RW" required />
+          <TextField label="Address line 2 (apartment, suite, unit, kelurahan)" value={address2} onChange={(e) => setAddress2(e.target.value)} placeholder="Apt, suite, floor or landmark" />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <TextField label="City" value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g. Jakarta Selatan" />
+            <TextField label="State / province" value={state} onChange={(e) => setState(e.target.value)} placeholder="e.g. DKI Jakarta" />
+            <TextField label="Postal code" mono value={postcode} onChange={(e) => setPostcode(e.target.value)} placeholder="e.g. 12190" />
           </div>
-
-          <div className="space-y-3">
-            <Input
-              label="Street Address Line 1 *"
-              value={address1}
-              onChange={(e) => setAddress1(e.target.value)}
-              placeholder="Street name, house/building number, RT/RW"
-              required
-            />
-            <Input
-              label="Address Line 2 (Apartment, Suite, Unit, Kelurahan)"
-              value={address2}
-              onChange={(e) => setAddress2(e.target.value)}
-              placeholder="Apt, Suite, Floor, or Landmark"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-            <Input
-              label="City / Kota"
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              placeholder="e.g. Jakarta Selatan"
-            />
-            <Input
-              label="State / Province"
-              value={state}
-              onChange={(e) => setState(e.target.value)}
-              placeholder="e.g. DKI Jakarta"
-            />
-            <Input
-              label="Postal Code"
-              value={postcode}
-              onChange={(e) => setPostcode(e.target.value)}
-              placeholder="e.g. 12190"
-            />
-          </div>
-
-          <div className="space-y-1.5 font-sans">
-            <label className="block text-xs font-medium text-zinc-300">
-              Country
-            </label>
-            <div className="relative">
-              <select
-                value={country}
-                onChange={(e) => setCountry(e.target.value)}
-                className="flex h-10 w-full rounded-xl border border-white/[0.09] bg-[#0c0d10] px-3.5 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]/70 focus:ring-2 focus:ring-[#f3aa18]/10 transition-all font-sans"
-              >
-                <option value="Indonesia">Indonesia</option>
-                <option value="United States">United States</option>
-                <option value="Singapore">Singapore</option>
-                <option value="Malaysia">Malaysia</option>
-                <option value="Australia">Australia</option>
-                <option value="United Kingdom">United Kingdom</option>
-                <option value="Canada">Canada</option>
-                <option value="Germany">Germany</option>
-                <option value="Japan">Japan</option>
-                <option value="Philippines">Philippines</option>
-                <option value="Thailand">Thailand</option>
-                <option value="Vietnam">Vietnam</option>
-                <option disabled>──────────</option>
-                {COUNTRY_OPTIONS.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+          <Select label="Country" value={country} options={countryOptions} onChange={setCountry} />
         </div>
 
-        {/* Section: Customer Note */}
-        <div className="p-4 rounded-xl border border-white/[0.06] bg-[#141417] space-y-2">
-          <div className="flex items-center gap-2">
-            <FileText className="w-3.5 h-3.5 text-neutral-400" />
-            <label className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans">
-              Customer Note / Special Delivery Instructions
-            </label>
-          </div>
+        <div className={sectionClass}>
+          {sectionTitle(FileText, 'Customer note and delivery instructions')}
           <textarea
+            data-ds=""
+            aria-label="Customer note"
             value={customerNote}
             onChange={(e) => setCustomerNote(e.target.value)}
             rows={2}
             placeholder="Delivery instructions, gate code, recipient note..."
-            className="w-full rounded-xl border border-white/[0.09] bg-[#0c0d10] px-3.5 py-2 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]/70 focus:ring-2 focus:ring-[#f3aa18]/10 transition-all font-sans leading-relaxed"
+            className="w-full rounded-[9px] border border-field-border bg-field px-3 py-2 text-[13.5px] leading-relaxed text-fg outline-none placeholder:text-faint focus:border-accent"
           />
         </div>
       </form>

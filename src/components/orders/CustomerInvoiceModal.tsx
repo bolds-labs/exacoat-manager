@@ -1,8 +1,9 @@
 import React, { useRef } from 'react';
-import { Modal } from '../ui/Modal';
+import { Modal } from '../ds/Modal';
+import { Button } from '../ds/Button';
 import { Order } from '../../types';
 import { formatCurrency, formatDate, formatDateTime } from '../../lib/formatters';
-import { Printer, Download, FileText, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { Printer, CheckCircle2 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { EXACOAT_LOGO_BASE64 } from '../../lib/assets/logo';
 import { cleanItemTitle } from '../../lib/orderItems';
@@ -390,40 +391,23 @@ export const CustomerInvoiceModal: React.FC<CustomerInvoiceModalProps> = ({
 
   return (
     <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      maxWidth="3xl"
-      title={
-        <div className="flex items-center gap-2">
-          <FileText className="w-5 h-5 text-[#f3aa18]" />
-          <span>Customer Tax Invoice #{cleanOrderNum}</span>
-        </div>
-      }
-      subtitle="Official customer tax receipt and itemized order invoice."
+      open={isOpen}
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+      title="Customer tax invoice"
+      reference={`#${cleanOrderNum}`}
+      description="Official customer tax receipt and itemized order invoice."
+      width={768}
       footer={
-        <div className="flex items-center justify-between w-full font-sans">
-          <div className="flex items-center gap-2 text-xs text-neutral-400">
-            <CheckCircle2 className="w-4 h-4 text-[#f3aa18]" />
+        <>
+          <span className="mr-auto flex items-center gap-2 text-[12px] text-faint">
+            <CheckCircle2 className="h-4 w-4" strokeWidth={1.8} aria-hidden />
             <span>Official Exacoat Electronic Receipt</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-neutral-300 hover:text-white text-xs font-semibold border border-white/[0.08] transition-all"
-            >
-              Close
-            </button>
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="px-5 py-2 rounded-xl bg-[#f3aa18] hover:bg-[#d9940c] text-[#0a0a0a] text-xs font-bold font-sans flex items-center gap-2 shadow-lg shadow-[#f3aa18]/10 transition-all active:scale-95 cursor-pointer"
-            >
-              <Printer className="w-4 h-4" />
-              <span>Print Invoice</span>
-            </button>
-          </div>
-        </div>
+          </span>
+          <Button variant="ghost" onClick={onClose}>Close</Button>
+          <Button variant="primary" icon={Printer} onClick={handlePrint}>Print invoice</Button>
+        </>
       }
     >
       <div className="space-y-4 font-sans text-xs">

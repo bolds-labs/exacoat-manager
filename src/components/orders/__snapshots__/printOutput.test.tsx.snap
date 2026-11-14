@@ -1,0 +1,1097 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`printed documents stay byte-identical > customer invoice > preview 1`] = `"<div class="bg-white text-black p-6 rounded-xl shadow-2xl border border-neutral-200" style="font-family: &quot;Inter&quot;, sans-serif;"><div class="flex items-start justify-between border-b-2 border-black pb-4 mb-4"><div><img alt="EXACOAT" class="h-6 max-w-[140px] object-contain block mb-1" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbDpzcGFjZT0icHJlc2VydmUiIHdpZHRoPSI0MDAiIGhlaWdodD0iNzAiIHZpZXdCb3g9IjAgMCAxMzY4MDAwIDI0MTAwMCIgc2hhcGUtcmVuZGVyaW5nPSJnZW9tZXRyaWNQcmVjaXNpb24iIHRleHQtcmVuZGVyaW5nPSJnZW9tZXRyaWNQcmVjaXNpb24iPgo8cGF0aCBmaWxsPSIjMDAwMDAwIiBmaWxsLXJ1bGU9Im5vbnplcm8iIGQ9Ik0xMjgxMDAwIDIxODAwMGwwIC00MDAwMCAyMjAwMCAtMjMwMDAgNDMwMDAgMCAyMjAwMCAyMzAwMCAwIDQwMDAwIC0yMjAwMCAyMzAwMCAtNDMwMDAgMCAtMjIwMDAgLTIzMDAwem01OTAwMCAxMDAwMGwxNDAwMCAtMTQwMDAgMCAtMzIwMDAgLTE0MDAwIC0xNDAwMCAtMzEwMDAgMCAtMTQwMDAgMTQwMDAgMCAzMjAwMCAxNDAwMCAxNDAwMCAzMTAwMCAwem0tMzMwMDAgLTUyMDAwbDI4MDAwIDAgODAwMCA4MDAwIDAgMTMwMDAgLTUwMDAgNTAwMCA2MDAwIDYwMDAgMCAxMDAwMCAtMTIwMDAgMCAwIC03MDAwIC00MDAwIC01MDAwIC05MDAwIDAgMCAxMjAwMCAtMTIwMDAgMCAwIC00MjAwMHptMjIwMDAgMjAwMDBsMzAwMCAtMjAwMCAwIC01MDAwIC0zMDAwIC0zMDAwIC0xMDAwMCAwIDAgMTAwMDAgMTAwMDAgMHoiLz4KPHBhdGggZmlsbD0iIzAwMDAwMCIgZmlsbC1ydWxlPSJub256ZXJvIiBkPSJNMCAyMDIwMDBsMCAtMTA4MDAwIDM2MDAwIC0zNjAwMCA5NzAwMCAwIDM3MDAwIDM2MDAwIDAgNjcwMDAgLTEyOTAwMCAwIDAgMjkwMDAgMTMwMDAgMTQwMDAgNjIwMDAgMCAxMzAwMCAtMTMwMDAgMCAtMTEwMDAgNDAwMDAgMCAwIDIzMDAwIC0zNTAwMCAzNTAwMCAtOTkwMDAgMCAtMzUwMDAgLTM2MDAwem0xMjkwMDAgLTcwMDAwbDAgLTI1MDAwIC0xNDAwMCAtMTUwMDAgLTYwMDAwIDAgLTE0MDAwIDE1MDAwIDAgMjUwMDAgODgwMDAgMHptMTgwMDAwIDEwNjAwMGwtNDMwMDAgLTYwMDAwIC00NDAwMCA2MDAwMCAtNDUwMDAgMCA2NjAwMCAtOTEwMDAgLTY1MDAwIC04OTAwMCA0NjAwMCAwIDQyMDAwIDU4MDAwIDQxMDAwIC01ODAwMCA0NjAwMCAwIC02NDAwMCA4OTAwMCA2NjAwMCA5MTAwMCAtNDYwMDAgMHptNTEwMDAgLTMyMDAwbDAgLTQzMDAwIDMyMDAwIC0zMTAwMCA5MzAwMCAwIDAgLTI3MDAwIC0xNDAwMCAtMTMwMDAgLTU2MDAwIDAgLTE0MDAwIDEzMDAwIDAgMTEwMDAgLTQwMDAwIDAgMCAtMjAwMDAgMzcwMDAgLTM4MDAwIDkwMDAwIDAgMzcwMDAgMzgwMDAgMCAxNDIwMDAgLTM3MDAwIDAgMCAtMjgwMDAgLTI5MDAwIDI4MDAwIC02NzAwMCAwIC0zMjAwMCAtMzIwMDB6bTk1MDAwIDBsMzAwMDAgLTI5MDAwIDAgLTE1MDAwIC03NDAwMCAwIC0xMTAwMCAxMTAwMCAwIDIyMDAwIDExMDAwIDExMDAwIDQ0MDAwIDB6bTEwMjAwMCAtNDAwMGwwIC0xMDgwMDAgMzUwMDAgLTM2MDAwIDk1MDAwIDAgMzUwMDAgMzYwMDAgMCAzMDAwMCAtNDAwMDAgMCAwIC0xNzAwMCAtMTUwMDAgLTE0MDAwIC01NTAwMCAwIC0xNTAwMCAxNDAwMCAwIDgyMDAwIDE1MDAwIDE0MDAwIDU1MDAwIDAgMTUwMDAgLTE0MDAwIDAgLTE3MDAwIDQwMDAwIDAgMCAzMDAwMCAtMzUwMDAgMzYwMDAgLTk1MDAwIDAgLTM1MDAwIC0zNjAwMHptMTg4MDAwIDBsMCAtMTA4MDAwIDM2MDAwIC0zNjAwMCAxMDAwMDAgMCAzNjAwMCAzNjAwMCAwIDEwODAwMCAtMzYwMDAgMzYwMDAgLTEwMDAwMCAwIC0zNjAwMCAtMzYwMDB6bTExNjAwMCAyMDAwbDE1MDAwIC0xNTAwMCAwIC04MjAwMCAtMTUwMDAgLTE0MDAwIC02MDAwMCAwIC0xNTAwMCAxNDAwMCAwIDgyMDAwIDE1MDAwIDE1MDAwIDYwMDAwIDB6bTg0MDAwIDIwMDBsMCAtNDMwMDAgMzIwMDAgLTMxMDAwIDkzMDAwIDAgMCAtMjcwMDAgLTE0MDAwIC0xMzAwMCAtNTYwMDAgMCAtMTQwMDAgMTMwMDAgMCAxMTAwMCAtNDAwMDAgMCAwIC0yMDAwMCAzNzAwMCAtMzgwMDAgOTAwMDAgMCAzNzAwMCAzODAwMCAwIDE0MjAwMCAtMzcwMDAgMCAwIC0yODAwMCAtMjkwMDAgMjgwMDAgLTY3MDAwIDAgLTMyMDAwIC0zMjAwMHptOTUwMDAgMGwzMDAwMCAtMjkwMDAgMCAtMTUwMDAgLTczMDAwIDAgLTEyMDAwIDExMDAwIDAgMjIwMDAgMTEwMDAgMTEwMDAgNDQwMDAgMHptMTE4MDAwIC00MDAwbDAgLTEwOTAwMCAtMzMwMDAgMCAwIC0zNTAwMCAzNDAwMCAwIDAgLTU4MDAwIDQwMDAwIDAgMCA1ODAwMCA1NTAwMCAwIDAgMzUwMDAgLTU1MDAwIDAgMCA5NjAwMCAxNDAwMCAxNDAwMCA0MTAwMCAwIDAgMzUwMDAgLTYwMDAwIDAgLTM2MDAwIC0zNjAwMHoiLz4KPC9zdmc+"><p class="text-[10px] text-neutral-500 font-mono">support@exacoat.com • https://exacoat.com</p></div><div class="text-right"><span class="text-lg font-black tracking-tight text-black block">TAX INVOICE</span><span class="text-[11px] font-mono font-bold text-neutral-700 block">INV-542887</span><span class="text-[10px] text-neutral-500 block">Nov 10, 2026</span><span class="inline-block mt-1 px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[9px] font-extrabold font-mono">PAID IN FULL</span></div></div><div class="p-3.5 rounded-lg bg-neutral-50 border border-neutral-200 mb-4"><span class="text-[9px] font-black uppercase text-neutral-500 tracking-wider block mb-1">CUSTOMER &amp; DELIVERY DETAILS</span><p class="font-extrabold text-xs text-black">Ayu Lestari</p><p class="text-[11px] text-neutral-700 font-mono mt-0.5">Email: ayu@example.com • Tel: 081234567890</p><div class="text-[10.5px] text-neutral-600 mt-1 leading-snug"><span class="block">Jl. Melati No. 5</span><span class="block">RT 02 RW 03</span><span class="block">Bandung, Jawa Barat, 40115</span><span class="block">Indonesia</span></div><p class="text-[10.5px] font-bold text-neutral-900 mt-1.5">Courier: JNE - REG</p></div><table class="w-full text-left border-collapse text-xs mb-4"><thead><tr class="bg-neutral-100 border-b-2 border-neutral-300 text-neutral-700 font-extrabold text-[10px] uppercase"><th class="py-2 px-3">Item Description</th><th class="py-2 px-3 text-center w-12">Qty</th><th class="py-2 px-3 text-right w-24">Unit Price</th><th class="py-2 px-3 text-right w-24">Total</th></tr></thead><tbody class="divide-y divide-neutral-200"><tr><td class="py-2.5 px-3"><p class="font-bold text-black">iPhone 16 Pro Skins</p><p class="text-[10px] text-neutral-500 font-mono mt-0.5">SKU: IP16P</p></td><td class="py-2.5 px-3 text-center font-bold text-neutral-800">1x</td><td class="py-2.5 px-3 text-right font-mono font-medium text-neutral-700">Rp 140.000</td><td class="py-2.5 px-3 text-right font-mono font-bold text-black">Rp 140.000</td></tr><tr><td class="py-2.5 px-3"><p class="font-bold text-black">Galaxy S25 Skins</p><p class="text-[10px] text-neutral-500 font-mono mt-0.5">SKU: SKU-200</p></td><td class="py-2.5 px-3 text-center font-bold text-neutral-800">2x</td><td class="py-2.5 px-3 text-right font-mono font-medium text-neutral-700">Rp 15.000</td><td class="py-2.5 px-3 text-right font-mono font-bold text-black">Rp 30.000</td></tr></tbody></table><div class="flex justify-end mb-4"><div class="w-64 space-y-1 text-xs"><div class="flex justify-between text-neutral-600 font-medium"><span>Subtotal:</span><span class="font-mono text-neutral-900 font-bold">Rp 170.000</span></div><div class="flex justify-between text-neutral-600 font-medium"><span>Shipping:</span><span class="font-mono text-neutral-900 font-bold">Rp 15.000</span></div><div class="flex justify-between text-black font-black text-sm pt-2 border-t-2 border-black"><span>Total Paid:</span><span class="font-mono">Rp 185.000</span></div></div></div><div class="border-t border-neutral-200 pt-3 flex items-center justify-between text-[9.5px] text-neutral-500"><span>Thank you for your order.</span><span>Electronic Tax Receipt</span></div></div>"`;
+
+exports[`printed documents stay byte-identical > customer invoice > print window 1`] = `
+"
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Customer Invoice - INV-542887</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+        <style>
+          @page {
+            size: A4 portrait;
+            margin: 15mm;
+          }
+          * {
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          body {
+            margin: 0;
+            padding: 20px;
+            background: #ffffff;
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: #111827;
+            text-rendering: geometricPrecision;
+            -webkit-font-smoothing: antialiased;
+          }
+          .invoice-box {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #ffffff;
+          }
+          .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 2px solid #111827;
+            padding-bottom: 18px;
+            margin-bottom: 20px;
+          }
+          .brand-logo {
+            height: 24px;
+            display: block;
+            margin-bottom: 6px;
+          }
+          .brand-sub {
+            font-size: 11px;
+            color: #4b5563;
+            font-weight: 500;
+          }
+          .inv-title {
+            font-size: 20px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: -0.5px;
+            color: #111827;
+          }
+          .inv-meta {
+            font-size: 11.5px;
+            color: #4b5563;
+            margin-top: 4px;
+            text-align: right;
+            line-height: 1.4;
+          }
+          .grid-2 {
+            display: flex;
+            gap: 24px;
+            margin-bottom: 24px;
+          }
+          .grid-col {
+            flex: 1;
+            background: #f9fafb;
+            padding: 14px 16px;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+          }
+          .col-label {
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #6b7280;
+            margin-bottom: 6px;
+          }
+          .col-name {
+            font-size: 14px;
+            font-weight: 800;
+            color: #111827;
+            margin-bottom: 3px;
+          }
+          .col-text {
+            font-size: 12px;
+            color: #374151;
+            line-height: 1.4;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+          }
+          th {
+            background: #f3f4f6;
+            padding: 10px 14px;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            color: #374151;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid #e5e7eb;
+          }
+          .totals-wrap {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 30px;
+          }
+          .totals-table {
+            width: 320px;
+            border-collapse: collapse;
+          }
+          .totals-table td {
+            padding: 6px 12px;
+            font-size: 12.5px;
+          }
+          .total-grand {
+            border-top: 2px solid #111827;
+            font-size: 15px !important;
+            font-weight: 900 !important;
+            color: #111827 !important;
+            padding-top: 10px !important;
+          }
+          .footer-note {
+            border-top: 1px solid #e5e7eb;
+            padding-top: 16px;
+            font-size: 11px;
+            color: #6b7280;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          }
+          .badge-paid {
+            display: inline-block;
+            background: #ecfdf5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="invoice-box">
+          <!-- Header -->
+          <div class="header-row">
+            <div>
+              <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbDpzcGFjZT0icHJlc2VydmUiIHdpZHRoPSI0MDAiIGhlaWdodD0iNzAiIHZpZXdCb3g9IjAgMCAxMzY4MDAwIDI0MTAwMCIgc2hhcGUtcmVuZGVyaW5nPSJnZW9tZXRyaWNQcmVjaXNpb24iIHRleHQtcmVuZGVyaW5nPSJnZW9tZXRyaWNQcmVjaXNpb24iPgo8cGF0aCBmaWxsPSIjMDAwMDAwIiBmaWxsLXJ1bGU9Im5vbnplcm8iIGQ9Ik0xMjgxMDAwIDIxODAwMGwwIC00MDAwMCAyMjAwMCAtMjMwMDAgNDMwMDAgMCAyMjAwMCAyMzAwMCAwIDQwMDAwIC0yMjAwMCAyMzAwMCAtNDMwMDAgMCAtMjIwMDAgLTIzMDAwem01OTAwMCAxMDAwMGwxNDAwMCAtMTQwMDAgMCAtMzIwMDAgLTE0MDAwIC0xNDAwMCAtMzEwMDAgMCAtMTQwMDAgMTQwMDAgMCAzMjAwMCAxNDAwMCAxNDAwMCAzMTAwMCAwem0tMzMwMDAgLTUyMDAwbDI4MDAwIDAgODAwMCA4MDAwIDAgMTMwMDAgLTUwMDAgNTAwMCA2MDAwIDYwMDAgMCAxMDAwMCAtMTIwMDAgMCAwIC03MDAwIC00MDAwIC01MDAwIC05MDAwIDAgMCAxMjAwMCAtMTIwMDAgMCAwIC00MjAwMHptMjIwMDAgMjAwMDBsMzAwMCAtMjAwMCAwIC01MDAwIC0zMDAwIC0zMDAwIC0xMDAwMCAwIDAgMTAwMDAgMTAwMDAgMHoiLz4KPHBhdGggZmlsbD0iIzAwMDAwMCIgZmlsbC1ydWxlPSJub256ZXJvIiBkPSJNMCAyMDIwMDBsMCAtMTA4MDAwIDM2MDAwIC0zNjAwMCA5NzAwMCAwIDM3MDAwIDM2MDAwIDAgNjcwMDAgLTEyOTAwMCAwIDAgMjkwMDAgMTMwMDAgMTQwMDAgNjIwMDAgMCAxMzAwMCAtMTMwMDAgMCAtMTEwMDAgNDAwMDAgMCAwIDIzMDAwIC0zNTAwMCAzNTAwMCAtOTkwMDAgMCAtMzUwMDAgLTM2MDAwem0xMjkwMDAgLTcwMDAwbDAgLTI1MDAwIC0xNDAwMCAtMTUwMDAgLTYwMDAwIDAgLTE0MDAwIDE1MDAwIDAgMjUwMDAgODgwMDAgMHptMTgwMDAwIDEwNjAwMGwtNDMwMDAgLTYwMDAwIC00NDAwMCA2MDAwMCAtNDUwMDAgMCA2NjAwMCAtOTEwMDAgLTY1MDAwIC04OTAwMCA0NjAwMCAwIDQyMDAwIDU4MDAwIDQxMDAwIC01ODAwMCA0NjAwMCAwIC02NDAwMCA4OTAwMCA2NjAwMCA5MTAwMCAtNDYwMDAgMHptNTEwMDAgLTMyMDAwbDAgLTQzMDAwIDMyMDAwIC0zMTAwMCA5MzAwMCAwIDAgLTI3MDAwIC0xNDAwMCAtMTMwMDAgLTU2MDAwIDAgLTE0MDAwIDEzMDAwIDAgMTEwMDAgLTQwMDAwIDAgMCAtMjAwMDAgMzcwMDAgLTM4MDAwIDkwMDAwIDAgMzcwMDAgMzgwMDAgMCAxNDIwMDAgLTM3MDAwIDAgMCAtMjgwMDAgLTI5MDAwIDI4MDAwIC02NzAwMCAwIC0zMjAwMCAtMzIwMDB6bTk1MDAwIDBsMzAwMDAgLTI5MDAwIDAgLTE1MDAwIC03NDAwMCAwIC0xMTAwMCAxMTAwMCAwIDIyMDAwIDExMDAwIDExMDAwIDQ0MDAwIDB6bTEwMjAwMCAtNDAwMGwwIC0xMDgwMDAgMzUwMDAgLTM2MDAwIDk1MDAwIDAgMzUwMDAgMzYwMDAgMCAzMDAwMCAtNDAwMDAgMCAwIC0xNzAwMCAtMTUwMDAgLTE0MDAwIC01NTAwMCAwIC0xNTAwMCAxNDAwMCAwIDgyMDAwIDE1MDAwIDE0MDAwIDU1MDAwIDAgMTUwMDAgLTE0MDAwIDAgLTE3MDAwIDQwMDAwIDAgMCAzMDAwMCAtMzUwMDAgMzYwMDAgLTk1MDAwIDAgLTM1MDAwIC0zNjAwMHptMTg4MDAwIDBsMCAtMTA4MDAwIDM2MDAwIC0zNjAwMCAxMDAwMDAgMCAzNjAwMCAzNjAwMCAwIDEwODAwMCAtMzYwMDAgMzYwMDAgLTEwMDAwMCAwIC0zNjAwMCAtMzYwMDB6bTExNjAwMCAyMDAwbDE1MDAwIC0xNTAwMCAwIC04MjAwMCAtMTUwMDAgLTE0MDAwIC02MDAwMCAwIC0xNTAwMCAxNDAwMCAwIDgyMDAwIDE1MDAwIDE1MDAwIDYwMDAwIDB6bTg0MDAwIDIwMDBsMCAtNDMwMDAgMzIwMDAgLTMxMDAwIDkzMDAwIDAgMCAtMjcwMDAgLTE0MDAwIC0xMzAwMCAtNTYwMDAgMCAtMTQwMDAgMTMwMDAgMCAxMTAwMCAtNDAwMDAgMCAwIC0yMDAwMCAzNzAwMCAtMzgwMDAgOTAwMDAgMCAzNzAwMCAzODAwMCAwIDE0MjAwMCAtMzcwMDAgMCAwIC0yODAwMCAtMjkwMDAgMjgwMDAgLTY3MDAwIDAgLTMyMDAwIC0zMjAwMHptOTUwMDAgMGwzMDAwMCAtMjkwMDAgMCAtMTUwMDAgLTczMDAwIDAgLTEyMDAwIDExMDAwIDAgMjIwMDAgMTEwMDAgMTEwMDAgNDQwMDAgMHptMTE4MDAwIC00MDAwbDAgLTEwOTAwMCAtMzMwMDAgMCAwIC0zNTAwMCAzNDAwMCAwIDAgLTU4MDAwIDQwMDAwIDAgMCA1ODAwMCA1NTAwMCAwIDAgMzUwMDAgLTU1MDAwIDAgMCA5NjAwMCAxNDAwMCAxNDAwMCA0MTAwMCAwIDAgMzUwMDAgLTYwMDAwIDAgLTM2MDAwIC0zNjAwMHoiLz4KPC9zdmc+" alt="EXACOAT" style="height: 22px; max-width: 140px; object-fit: contain; display: block; margin-bottom: 6px;" />
+              <div class="brand-sub">support@exacoat.com &bull; https://exacoat.com</div>
+            </div>
+            <div>
+              <div class="inv-title">TAX INVOICE</div>
+              <div class="inv-meta">
+                <div><strong>Invoice:</strong> INV-542887</div>
+                <div><strong>Order Ref:</strong> #542887</div>
+                <div><strong>Date:</strong> Nov 10, 2026</div>
+                <div style="margin-top: 6px;"><span class="badge-paid">&#10003; PAYMENT COMPLETED</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Customer & Delivery Details -->
+          <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px 16px; margin-bottom: 20px;">
+            <div class="col-label">CUSTOMER &amp; DELIVERY DETAILS</div>
+            <div class="col-name">Ayu Lestari</div>
+            <div class="col-text">Email: ayu@example.com &bull; Tel: 081234567890</div>
+            <div class="col-text" style="margin-top: 4px;">Jl. Melati No. 5<br />RT 02 RW 03<br />Bandung, Jawa Barat, 40115<br />Indonesia</div>
+            <div class="col-text" style="margin-top: 4px; font-weight: 700;">Carrier: JNE - REG</div>
+          </div>
+
+          <!-- Line Items Table -->
+          <table>
+            <thead>
+              <tr>
+                <th style="text-align: left;">Item Description</th>
+                <th style="text-align: center; width: 60px;">Qty</th>
+                <th style="text-align: right; width: 110px;">Unit Price</th>
+                <th style="text-align: right; width: 110px;">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              
+        <tr style="border-bottom: 1px solid #e5e7eb;">
+          <td style="padding: 12px 14px; color: #111827; font-weight: 700; font-size: 13px;">
+            <div>iPhone 16 Pro Skins</div>
+            <div style="font-size: 11px; color: #6b7280; font-weight: 500; margin-top: 2px;">
+              SKU: <span style="font-family: monospace;">IP16P</span>
+            </div>
+          </td>
+          <td style="padding: 12px 14px; text-align: center; color: #374151; font-weight: 600; font-size: 13px;">
+            1x
+          </td>
+          <td style="padding: 12px 14px; text-align: right; color: #374151; font-weight: 600; font-size: 13px; font-family: monospace;">
+            Rp 140.000
+          </td>
+          <td style="padding: 12px 14px; text-align: right; color: #111827; font-weight: 800; font-size: 13px; font-family: monospace;">
+            Rp 140.000
+          </td>
+        </tr>
+      
+        <tr style="border-bottom: 1px solid #e5e7eb;">
+          <td style="padding: 12px 14px; color: #111827; font-weight: 700; font-size: 13px;">
+            <div>Galaxy S25 Skins</div>
+            <div style="font-size: 11px; color: #6b7280; font-weight: 500; margin-top: 2px;">
+              SKU: <span style="font-family: monospace;">SKU-200</span>
+            </div>
+          </td>
+          <td style="padding: 12px 14px; text-align: center; color: #374151; font-weight: 600; font-size: 13px;">
+            2x
+          </td>
+          <td style="padding: 12px 14px; text-align: right; color: #374151; font-weight: 600; font-size: 13px; font-family: monospace;">
+            Rp 15.000
+          </td>
+          <td style="padding: 12px 14px; text-align: right; color: #111827; font-weight: 800; font-size: 13px; font-family: monospace;">
+            Rp 30.000
+          </td>
+        </tr>
+      
+            </tbody>
+          </table>
+
+          <!-- Totals Summary -->
+          <div class="totals-wrap">
+            <table class="totals-table">
+              <tbody>
+                <tr>
+                  <td style="color: #6b7280; font-weight: 600;">Items Subtotal</td>
+                  <td style="text-align: right; font-weight: 700; font-family: monospace;">
+                    Rp 170.000
+                  </td>
+                </tr>
+                
+                  <tr>
+                    <td style="color: #6b7280; font-weight: 600;">Shipping & Handling</td>
+                    <td style="text-align: right; font-weight: 700; font-family: monospace;">
+                      Rp 15.000
+                    </td>
+                  </tr>
+                
+                
+                
+                <tr class="total-grand">
+                  <td>Total Paid</td>
+                  <td style="text-align: right; font-family: monospace;">
+                    Rp 185.000
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Footer & Support -->
+          <div class="footer-note">
+            <div>
+              <span>Thank you for your order.</span>
+            </div>
+            <div>
+              <span>Authorized Official Electronic Receipt</span>
+            </div>
+          </div>
+        </div>
+
+        <script>
+          window.onload = function() {
+            window.print();
+          };
+        </script>
+      </body>
+      </html>
+    "
+`;
+
+exports[`printed documents stay byte-identical > packing slip > preview 1`] = `"<div class="bg-white text-black p-6 rounded-xl shadow-2xl border border-neutral-200" style="font-family: &quot;Inter&quot;, sans-serif;"><div class="flex items-start justify-between border-b-2 border-black pb-4 mb-4"><div><img alt="EXACOAT" class="h-6 max-w-[140px] object-contain block mb-1" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbDpzcGFjZT0icHJlc2VydmUiIHdpZHRoPSI0MDAiIGhlaWdodD0iNzAiIHZpZXdCb3g9IjAgMCAxMzY4MDAwIDI0MTAwMCIgc2hhcGUtcmVuZGVyaW5nPSJnZW9tZXRyaWNQcmVjaXNpb24iIHRleHQtcmVuZGVyaW5nPSJnZW9tZXRyaWNQcmVjaXNpb24iPgo8cGF0aCBmaWxsPSIjMDAwMDAwIiBmaWxsLXJ1bGU9Im5vbnplcm8iIGQ9Ik0xMjgxMDAwIDIxODAwMGwwIC00MDAwMCAyMjAwMCAtMjMwMDAgNDMwMDAgMCAyMjAwMCAyMzAwMCAwIDQwMDAwIC0yMjAwMCAyMzAwMCAtNDMwMDAgMCAtMjIwMDAgLTIzMDAwem01OTAwMCAxMDAwMGwxNDAwMCAtMTQwMDAgMCAtMzIwMDAgLTE0MDAwIC0xNDAwMCAtMzEwMDAgMCAtMTQwMDAgMTQwMDAgMCAzMjAwMCAxNDAwMCAxNDAwMCAzMTAwMCAwem0tMzMwMDAgLTUyMDAwbDI4MDAwIDAgODAwMCA4MDAwIDAgMTMwMDAgLTUwMDAgNTAwMCA2MDAwIDYwMDAgMCAxMDAwMCAtMTIwMDAgMCAwIC03MDAwIC00MDAwIC01MDAwIC05MDAwIDAgMCAxMjAwMCAtMTIwMDAgMCAwIC00MjAwMHptMjIwMDAgMjAwMDBsMzAwMCAtMjAwMCAwIC01MDAwIC0zMDAwIC0zMDAwIC0xMDAwMCAwIDAgMTAwMDAgMTAwMDAgMHoiLz4KPHBhdGggZmlsbD0iIzAwMDAwMCIgZmlsbC1ydWxlPSJub256ZXJvIiBkPSJNMCAyMDIwMDBsMCAtMTA4MDAwIDM2MDAwIC0zNjAwMCA5NzAwMCAwIDM3MDAwIDM2MDAwIDAgNjcwMDAgLTEyOTAwMCAwIDAgMjkwMDAgMTMwMDAgMTQwMDAgNjIwMDAgMCAxMzAwMCAtMTMwMDAgMCAtMTEwMDAgNDAwMDAgMCAwIDIzMDAwIC0zNTAwMCAzNTAwMCAtOTkwMDAgMCAtMzUwMDAgLTM2MDAwem0xMjkwMDAgLTcwMDAwbDAgLTI1MDAwIC0xNDAwMCAtMTUwMDAgLTYwMDAwIDAgLTE0MDAwIDE1MDAwIDAgMjUwMDAgODgwMDAgMHptMTgwMDAwIDEwNjAwMGwtNDMwMDAgLTYwMDAwIC00NDAwMCA2MDAwMCAtNDUwMDAgMCA2NjAwMCAtOTEwMDAgLTY1MDAwIC04OTAwMCA0NjAwMCAwIDQyMDAwIDU4MDAwIDQxMDAwIC01ODAwMCA0NjAwMCAwIC02NDAwMCA4OTAwMCA2NjAwMCA5MTAwMCAtNDYwMDAgMHptNTEwMDAgLTMyMDAwbDAgLTQzMDAwIDMyMDAwIC0zMTAwMCA5MzAwMCAwIDAgLTI3MDAwIC0xNDAwMCAtMTMwMDAgLTU2MDAwIDAgLTE0MDAwIDEzMDAwIDAgMTEwMDAgLTQwMDAwIDAgMCAtMjAwMDAgMzcwMDAgLTM4MDAwIDkwMDAwIDAgMzcwMDAgMzgwMDAgMCAxNDIwMDAgLTM3MDAwIDAgMCAtMjgwMDAgLTI5MDAwIDI4MDAwIC02NzAwMCAwIC0zMjAwMCAtMzIwMDB6bTk1MDAwIDBsMzAwMDAgLTI5MDAwIDAgLTE1MDAwIC03NDAwMCAwIC0xMTAwMCAxMTAwMCAwIDIyMDAwIDExMDAwIDExMDAwIDQ0MDAwIDB6bTEwMjAwMCAtNDAwMGwwIC0xMDgwMDAgMzUwMDAgLTM2MDAwIDk1MDAwIDAgMzUwMDAgMzYwMDAgMCAzMDAwMCAtNDAwMDAgMCAwIC0xNzAwMCAtMTUwMDAgLTE0MDAwIC01NTAwMCAwIC0xNTAwMCAxNDAwMCAwIDgyMDAwIDE1MDAwIDE0MDAwIDU1MDAwIDAgMTUwMDAgLTE0MDAwIDAgLTE3MDAwIDQwMDAwIDAgMCAzMDAwMCAtMzUwMDAgMzYwMDAgLTk1MDAwIDAgLTM1MDAwIC0zNjAwMHptMTg4MDAwIDBsMCAtMTA4MDAwIDM2MDAwIC0zNjAwMCAxMDAwMDAgMCAzNjAwMCAzNjAwMCAwIDEwODAwMCAtMzYwMDAgMzYwMDAgLTEwMDAwMCAwIC0zNjAwMCAtMzYwMDB6bTExNjAwMCAyMDAwbDE1MDAwIC0xNTAwMCAwIC04MjAwMCAtMTUwMDAgLTE0MDAwIC02MDAwMCAwIC0xNTAwMCAxNDAwMCAwIDgyMDAwIDE1MDAwIDE1MDAwIDYwMDAwIDB6bTg0MDAwIDIwMDBsMCAtNDMwMDAgMzIwMDAgLTMxMDAwIDkzMDAwIDAgMCAtMjcwMDAgLTE0MDAwIC0xMzAwMCAtNTYwMDAgMCAtMTQwMDAgMTMwMDAgMCAxMTAwMCAtNDAwMDAgMCAwIC0yMDAwMCAzNzAwMCAtMzgwMDAgOTAwMDAgMCAzNzAwMCAzODAwMCAwIDE0MjAwMCAtMzcwMDAgMCAwIC0yODAwMCAtMjkwMDAgMjgwMDAgLTY3MDAwIDAgLTMyMDAwIC0zMjAwMHptOTUwMDAgMGwzMDAwMCAtMjkwMDAgMCAtMTUwMDAgLTczMDAwIDAgLTEyMDAwIDExMDAwIDAgMjIwMDAgMTEwMDAgMTEwMDAgNDQwMDAgMHptMTE4MDAwIC00MDAwbDAgLTEwOTAwMCAtMzMwMDAgMCAwIC0zNTAwMCAzNDAwMCAwIDAgLTU4MDAwIDQwMDAwIDAgMCA1ODAwMCA1NTAwMCAwIDAgMzUwMDAgLTU1MDAwIDAgMCA5NjAwMCAxNDAwMCAxNDAwMCA0MTAwMCAwIDAgMzUwMDAgLTYwMDAwIDAgLTM2MDAwIC0zNjAwMHoiLz4KPC9zdmc+"><p class="text-[11px] text-neutral-600 font-medium">Exacoat Fulfillment Hub • Ruby Commercial TB12</p><p class="text-[10px] text-neutral-500 font-mono">support@exacoat.com • https://exacoat.com</p></div><div class="text-right"><span class="text-lg font-black tracking-tight text-black block">PACKING SLIP</span><span class="text-[11px] font-mono font-bold text-neutral-700 block">PS-542887</span><span class="text-[10px] text-neutral-500 block">Nov 10, 2026</span><div class="flex items-center justify-end gap-1 mt-1"><span class="inline-block px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-[9px] font-extrabold font-mono uppercase">JNE - REG</span></div></div></div><div class="grid grid-cols-2 gap-4 mb-4"><div class="p-3 rounded-lg bg-neutral-50 border border-neutral-200"><span class="text-[9px] font-black uppercase text-neutral-500 tracking-wider block mb-1">SHIP TO / RECIPIENT</span><p class="font-extrabold text-xs text-black">Ayu Lestari</p><p class="text-[11px] text-neutral-700 font-mono">081234567890</p><div class="text-[10.5px] text-neutral-600 mt-1 leading-snug"><span class="block">Jl. Melati No. 5</span><span class="block">RT 02 RW 03</span><span class="block">Bandung, Jawa Barat, 40115</span><span class="block">Indonesia</span></div></div><div class="p-3 rounded-lg bg-neutral-50 border border-neutral-200"><span class="text-[9px] font-black uppercase text-neutral-500 tracking-wider block mb-1">DISPATCH DETAILS</span><p class="text-[11px] text-neutral-800"><strong>Courier:</strong> JNE - REG</p><p class="text-[11px] text-neutral-800 font-mono"><strong>Tracking:</strong> 012345678901234</p><p class="text-[11px] text-neutral-800"><strong>Total Items:</strong> 2 lines (3 units)</p><div class="text-[10px] text-neutral-700 mt-2 border-t border-neutral-200 pt-1.5 whitespace-pre-line bg-amber-50/70 p-2 rounded border border-amber-200/60 leading-relaxed font-sans"><strong class="text-neutral-900 block font-bold mb-0.5">Production Note:</strong>Please pack carefully</div></div></div><table class="w-full text-left border-collapse text-xs mb-4"><thead><tr class="bg-neutral-100 border-b-2 border-neutral-300 text-neutral-700 font-extrabold text-[10px] uppercase"><th class="py-2 px-3 text-center w-10">Pick</th><th class="py-2 px-3">Item Description &amp; Model</th><th class="py-2 px-3 text-center w-16">Qty</th></tr></thead><tbody class="divide-y divide-neutral-200"><tr class="hover:bg-neutral-50"><td class="py-2.5 px-3 text-center align-top"><div class="w-4 h-4 rounded border-2 border-neutral-400 mx-auto"></div></td><td class="py-2.5 px-3 align-top"><span class="font-bold text-xs text-neutral-900 block leading-[1.15]">iPhone 16 Pro Skins</span><span class="text-[10.5px] text-sky-900 font-bold block mt-0.5 leading-tight">Back Skin: Swarm • Camera: Matte Black</span><span class="text-[10px] text-neutral-500 font-mono block mt-0.5">SKU: IP16P</span></td><td class="py-2.5 px-3 text-center font-mono font-bold text-xs text-neutral-900 align-top">1x</td></tr><tr class="hover:bg-neutral-50"><td class="py-2.5 px-3 text-center align-top"><div class="w-4 h-4 rounded border-2 border-neutral-400 mx-auto"></div></td><td class="py-2.5 px-3 align-top"><span class="font-bold text-xs text-neutral-900 block leading-[1.15]">Galaxy S25 Skins</span><span class="text-[10.5px] text-sky-900 font-bold block mt-0.5 leading-tight">Back Skin: Black Camo</span><span class="text-[10px] text-neutral-500 font-mono block mt-0.5">SKU: SKU-200</span></td><td class="py-2.5 px-3 text-center font-mono font-bold text-xs text-neutral-900 align-top">2x</td></tr></tbody></table><div class="border-t border-neutral-200 pt-3 flex items-center justify-between text-[10px] text-neutral-500"><span>Step-by-step video installation guides available at exacoat.com/guide</span><span>Exacoat Fulfillment Hub • Authorized Dispatch</span></div></div>"`;
+
+exports[`printed documents stay byte-identical > packing slip > print window 1`] = `
+"
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Packing Slip - PS-542887</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+        <style>
+          @page {
+            size: A4 portrait;
+            margin: 15mm;
+          }
+          * {
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          body {
+            margin: 0;
+            padding: 20px;
+            background: #ffffff;
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: #111827;
+            text-rendering: geometricPrecision;
+            -webkit-font-smoothing: antialiased;
+          }
+          .slip-box {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #ffffff;
+          }
+          .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 2px solid #111827;
+            padding-bottom: 18px;
+            margin-bottom: 20px;
+          }
+          .brand-logo {
+            height: 22px;
+            display: block;
+            margin-bottom: 6px;
+          }
+          .brand-sub {
+            font-size: 11px;
+            color: #4b5563;
+            font-weight: 500;
+          }
+          .slip-title {
+            font-size: 20px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: -0.5px;
+            color: #111827;
+            text-align: right;
+          }
+          .slip-meta {
+            font-size: 11.5px;
+            color: #4b5563;
+            margin-top: 4px;
+            text-align: right;
+            line-height: 1.4;
+          }
+          .grid-2 {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+          }
+          .grid-col {
+            flex: 1;
+            background: #f9fafb;
+            padding: 14px 16px;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+          }
+          .col-label {
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #6b7280;
+            margin-bottom: 6px;
+          }
+          .col-name {
+            font-size: 14px;
+            font-weight: 800;
+            color: #111827;
+            margin-bottom: 3px;
+          }
+          .col-text {
+            font-size: 12px;
+            color: #374151;
+            line-height: 1.4;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+          }
+          th {
+            background: #f3f4f6;
+            padding: 10px 12px;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            color: #374151;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid #e5e7eb;
+          }
+          .footer-note {
+            border-top: 1px solid #e5e7eb;
+            padding-top: 14px;
+            font-size: 11px;
+            color: #6b7280;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          }
+          .badge-channel {
+            display: inline-block;
+            background: #f3f4f6;
+            color: #1f2937;
+            border: 1px solid #d1d5db;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="slip-box">
+          <!-- Header -->
+          <div class="header-row">
+            <div>
+              <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbDpzcGFjZT0icHJlc2VydmUiIHdpZHRoPSI0MDAiIGhlaWdodD0iNzAiIHZpZXdCb3g9IjAgMCAxMzY4MDAwIDI0MTAwMCIgc2hhcGUtcmVuZGVyaW5nPSJnZW9tZXRyaWNQcmVjaXNpb24iIHRleHQtcmVuZGVyaW5nPSJnZW9tZXRyaWNQcmVjaXNpb24iPgo8cGF0aCBmaWxsPSIjMDAwMDAwIiBmaWxsLXJ1bGU9Im5vbnplcm8iIGQ9Ik0xMjgxMDAwIDIxODAwMGwwIC00MDAwMCAyMjAwMCAtMjMwMDAgNDMwMDAgMCAyMjAwMCAyMzAwMCAwIDQwMDAwIC0yMjAwMCAyMzAwMCAtNDMwMDAgMCAtMjIwMDAgLTIzMDAwem01OTAwMCAxMDAwMGwxNDAwMCAtMTQwMDAgMCAtMzIwMDAgLTE0MDAwIC0xNDAwMCAtMzEwMDAgMCAtMTQwMDAgMTQwMDAgMCAzMjAwMCAxNDAwMCAxNDAwMCAzMTAwMCAwem0tMzMwMDAgLTUyMDAwbDI4MDAwIDAgODAwMCA4MDAwIDAgMTMwMDAgLTUwMDAgNTAwMCA2MDAwIDYwMDAgMCAxMDAwMCAtMTIwMDAgMCAwIC03MDAwIC00MDAwIC01MDAwIC05MDAwIDAgMCAxMjAwMCAtMTIwMDAgMCAwIC00MjAwMHptMjIwMDAgMjAwMDBsMzAwMCAtMjAwMCAwIC01MDAwIC0zMDAwIC0zMDAwIC0xMDAwMCAwIDAgMTAwMDAgMTAwMDAgMHoiLz4KPHBhdGggZmlsbD0iIzAwMDAwMCIgZmlsbC1ydWxlPSJub256ZXJvIiBkPSJNMCAyMDIwMDBsMCAtMTA4MDAwIDM2MDAwIC0zNjAwMCA5NzAwMCAwIDM3MDAwIDM2MDAwIDAgNjcwMDAgLTEyOTAwMCAwIDAgMjkwMDAgMTMwMDAgMTQwMDAgNjIwMDAgMCAxMzAwMCAtMTMwMDAgMCAtMTEwMDAgNDAwMDAgMCAwIDIzMDAwIC0zNTAwMCAzNTAwMCAtOTkwMDAgMCAtMzUwMDAgLTM2MDAwem0xMjkwMDAgLTcwMDAwbDAgLTI1MDAwIC0xNDAwMCAtMTUwMDAgLTYwMDAwIDAgLTE0MDAwIDE1MDAwIDAgMjUwMDAgODgwMDAgMHptMTgwMDAwIDEwNjAwMGwtNDMwMDAgLTYwMDAwIC00NDAwMCA2MDAwMCAtNDUwMDAgMCA2NjAwMCAtOTEwMDAgLTY1MDAwIC04OTAwMCA0NjAwMCAwIDQyMDAwIDU4MDAwIDQxMDAwIC01ODAwMCA0NjAwMCAwIC02NDAwMCA4OTAwMCA2NjAwMCA5MTAwMCAtNDYwMDAgMHptNTEwMDAgLTMyMDAwbDAgLTQzMDAwIDMyMDAwIC0zMTAwMCA5MzAwMCAwIDAgLTI3MDAwIC0xNDAwMCAtMTMwMDAgLTU2MDAwIDAgLTE0MDAwIDEzMDAwIDAgMTEwMDAgLTQwMDAwIDAgMCAtMjAwMDAgMzcwMDAgLTM4MDAwIDkwMDAwIDAgMzcwMDAgMzgwMDAgMCAxNDIwMDAgLTM3MDAwIDAgMCAtMjgwMDAgLTI5MDAwIDI4MDAwIC02NzAwMCAwIC0zMjAwMCAtMzIwMDB6bTk1MDAwIDBsMzAwMDAgLTI5MDAwIDAgLTE1MDAwIC03NDAwMCAwIC0xMTAwMCAxMTAwMCAwIDIyMDAwIDExMDAwIDExMDAwIDQ0MDAwIDB6bTEwMjAwMCAtNDAwMGwwIC0xMDgwMDAgMzUwMDAgLTM2MDAwIDk1MDAwIDAgMzUwMDAgMzYwMDAgMCAzMDAwMCAtNDAwMDAgMCAwIC0xNzAwMCAtMTUwMDAgLTE0MDAwIC01NTAwMCAwIC0xNTAwMCAxNDAwMCAwIDgyMDAwIDE1MDAwIDE0MDAwIDU1MDAwIDAgMTUwMDAgLTE0MDAwIDAgLTE3MDAwIDQwMDAwIDAgMCAzMDAwMCAtMzUwMDAgMzYwMDAgLTk1MDAwIDAgLTM1MDAwIC0zNjAwMHptMTg4MDAwIDBsMCAtMTA4MDAwIDM2MDAwIC0zNjAwMCAxMDAwMDAgMCAzNjAwMCAzNjAwMCAwIDEwODAwMCAtMzYwMDAgMzYwMDAgLTEwMDAwMCAwIC0zNjAwMCAtMzYwMDB6bTExNjAwMCAyMDAwbDE1MDAwIC0xNTAwMCAwIC04MjAwMCAtMTUwMDAgLTE0MDAwIC02MDAwMCAwIC0xNTAwMCAxNDAwMCAwIDgyMDAwIDE1MDAwIDE1MDAwIDYwMDAwIDB6bTg0MDAwIDIwMDBsMCAtNDMwMDAgMzIwMDAgLTMxMDAwIDkzMDAwIDAgMCAtMjcwMDAgLTE0MDAwIC0xMzAwMCAtNTYwMDAgMCAtMTQwMDAgMTMwMDAgMCAxMTAwMCAtNDAwMDAgMCAwIC0yMDAwMCAzNzAwMCAtMzgwMDAgOTAwMDAgMCAzNzAwMCAzODAwMCAwIDE0MjAwMCAtMzcwMDAgMCAwIC0yODAwMCAtMjkwMDAgMjgwMDAgLTY3MDAwIDAgLTMyMDAwIC0zMjAwMHptOTUwMDAgMGwzMDAwMCAtMjkwMDAgMCAtMTUwMDAgLTczMDAwIDAgLTEyMDAwIDExMDAwIDAgMjIwMDAgMTEwMDAgMTEwMDAgNDQwMDAgMHptMTE4MDAwIC00MDAwbDAgLTEwOTAwMCAtMzMwMDAgMCAwIC0zNTAwMCAzNDAwMCAwIDAgLTU4MDAwIDQwMDAwIDAgMCA1ODAwMCA1NTAwMCAwIDAgMzUwMDAgLTU1MDAwIDAgMCA5NjAwMCAxNDAwMCAxNDAwMCA0MTAwMCAwIDAgMzUwMDAgLTYwMDAwIDAgLTM2MDAwIC0zNjAwMHoiLz4KPC9zdmc+" alt="EXACOAT" class="brand-logo" />
+              <div class="brand-sub">Exacoat Fulfillment Hub &bull; Ruby Commercial TB12</div>
+              <div class="brand-sub">Fulfillment Workstation &bull; support@exacoat.com</div>
+            </div>
+            <div>
+              <div class="slip-title">PACKING SLIP</div>
+              <div class="slip-meta">
+                <div><strong>Slip Ref:</strong> PS-542887</div>
+                <div><strong>Order #:</strong> #542887</div>
+                
+                <div><strong>Date:</strong> Nov 10, 2026</div>
+                <div style="margin-top: 4px;"><span class="badge-channel">Direct Web Order</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Shipping & Order Specification Grid -->
+          <div class="grid-2">
+            <div class="grid-col">
+              <div class="col-label">SHIP TO / RECIPIENT</div>
+              <div class="col-name">Ayu Lestari</div>
+              <div class="col-text">Phone: 081234567890</div>
+              <div class="col-text" style="margin-top: 4px;">Jl. Melati No. 5<br />RT 02 RW 03<br />Bandung, Jawa Barat, 40115<br />Indonesia</div>
+            </div>
+            <div class="grid-col">
+              <div class="col-label">DISPATCH SPECIFICATION</div>
+              <div class="col-text"><strong>Courier:</strong> JNE - REG</div>
+              <div class="col-text"><strong>Tracking Resi:</strong> 012345678901234</div>
+              <div class="col-text"><strong>Total Line Items:</strong> 2 (3 units)</div>
+              <div class="col-text" style="margin-top: 6px; padding: 8px; background: #fff; border: 1.5px solid #d1d5db; border-radius: 6px; font-size: 11px; line-height: 1.45; color: #111827; white-space: pre-line;"><strong>Production Note:</strong>
+Please pack carefully</div>
+            </div>
+          </div>
+
+          <!-- Line Items Checklist -->
+          <table>
+            <thead>
+              <tr>
+                <th style="text-align: center; width: 40px;">Pick</th>
+                <th style="text-align: left;">Item Description &amp; Specifications</th>
+                <th style="text-align: center; width: 70px;">Qty</th>
+              </tr>
+            </thead>
+            <tbody>
+              
+        <tr style="border-bottom: 1px solid #e5e7eb;">
+          <td style="padding: 10px 12px; text-align: center; width: 40px; vertical-align: top;">
+            <div style="width: 18px; height: 18px; border: 1.5px solid #9ca3af; border-radius: 4px; margin: 2px auto;"></div>
+          </td>
+          <td style="padding: 10px 12px; font-weight: 700; font-size: 13px; color: #111827; vertical-align: top;">
+            <div style="line-height: 1.15; margin-bottom: 2px;">iPhone 16 Pro Skins</div>
+            <div style="font-size: 11px; color: #1e3a8a; font-weight: 700; margin-top: 2px; line-height: 1.2;">Back Skin: Swarm • Camera: Matte Black</div>
+            
+            <div style="font-size: 10.5px; color: #6b7280; font-family: monospace; margin-top: 2px;">SKU: IP16P</div>
+          </td>
+          <td style="padding: 10px 12px; text-align: center; font-weight: 800; font-size: 14px; color: #111827; font-family: monospace; vertical-align: top; width: 70px;">
+            1x
+          </td>
+        </tr>
+      
+        <tr style="border-bottom: 1px solid #e5e7eb;">
+          <td style="padding: 10px 12px; text-align: center; width: 40px; vertical-align: top;">
+            <div style="width: 18px; height: 18px; border: 1.5px solid #9ca3af; border-radius: 4px; margin: 2px auto;"></div>
+          </td>
+          <td style="padding: 10px 12px; font-weight: 700; font-size: 13px; color: #111827; vertical-align: top;">
+            <div style="line-height: 1.15; margin-bottom: 2px;">Galaxy S25 Skins</div>
+            <div style="font-size: 11px; color: #1e3a8a; font-weight: 700; margin-top: 2px; line-height: 1.2;">Back Skin: Black Camo</div>
+            
+            <div style="font-size: 10.5px; color: #6b7280; font-family: monospace; margin-top: 2px;">SKU: SKU-200</div>
+          </td>
+          <td style="padding: 10px 12px; text-align: center; font-weight: 800; font-size: 14px; color: #111827; font-family: monospace; vertical-align: top; width: 70px;">
+            2x
+          </td>
+        </tr>
+      
+            </tbody>
+          </table>
+
+          <!-- Customer Instructions Footer -->
+          <div class="footer-note">
+            <div>
+              <span>Installation guide &amp; video tutorials available at <strong>exacoat.com/guide</strong></span>
+            </div>
+            <div>
+              <span>Official Exacoat Dispatch Manifest</span>
+            </div>
+          </div>
+        </div>
+
+        <script>
+          window.onload = function() {
+            window.print();
+          };
+        </script>
+      </body>
+      </html>
+    "
+`;
+
+exports[`printed documents stay byte-identical > shipping label > preview 1`] = `
+"<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Shipping Label</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    @page {
+      size: 4in 6in;
+      margin: 0;
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #ffffff;
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #000000;
+      width: 4in;
+      text-rendering: geometricPrecision;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    .label-container {
+      width: 4in;
+      height: 6in;
+      padding: 4mm;
+      background: #ffffff;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+      box-sizing: border-box;
+    }
+    .page-break {
+      page-break-after: always;
+      break-after: page;
+    }
+    .header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 2px solid #000;
+      padding-bottom: 5px;
+    }
+    .recipient-box {
+      padding: 5px 0 4px;
+      line-height: 1.3;
+    }
+    .recipient-name {
+      font-size: 16px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: -0.2px;
+      margin-top: 1px;
+    }
+    .recipient-phone {
+      font-size: 11.5px;
+      font-weight: 800;
+      margin: 1px 0;
+    }
+    .recipient-address {
+      font-size: 11.5px;
+      font-weight: 700;
+      margin-top: 1px;
+      color: #111;
+      line-height: 1.3;
+    }
+    .inline-from-barcode-row {
+      border-top: 2px solid #000;
+      border-bottom: 2px solid #000;
+      display: flex;
+      align-items: stretch;
+      padding: 3.5px 0;
+      margin: 2px 0 3px 0;
+    }
+    .from-subcol {
+      width: 42%;
+      border-right: 2px solid #000;
+      padding-right: 6px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .barcode-subcol {
+      width: 58%;
+      padding-left: 8px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .tag-label {
+      font-size: 7.5px;
+      font-weight: 800;
+      color: #555;
+      text-transform: uppercase;
+    }
+    .from-brand {
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+      line-height: 1.1;
+    }
+    .from-contact {
+      font-size: 8px;
+      font-weight: 600;
+      color: #222;
+      margin-top: 1px;
+      line-height: 1.2;
+    }
+    .barcode-track {
+      font-size: 7.5px;
+      font-weight: 800;
+      color: #222;
+      margin-bottom: 1px;
+      font-variant-numeric: tabular-nums;
+    }
+    .barcode-ref {
+      font-size: 10px;
+      font-weight: 900;
+      color: #000;
+      letter-spacing: 0.3px;
+      line-height: 1.1;
+      margin-bottom: 1px;
+      font-variant-numeric: tabular-nums;
+    }
+    .barcode-svg-wrap {
+      width: 100%;
+    }
+    .manifest-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10px;
+      margin-top: 2px;
+    }
+    .caution-bar {
+      background: #000;
+      color: #fff;
+      padding: 3.5px 6px;
+      font-size: 8px;
+      font-weight: 900;
+      text-align: center;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      border-radius: 1px;
+      line-height: 1.2;
+    }
+  </style>
+</head>
+<body>
+  
+      <div class="label-container ">
+        <div>
+          <div class="header-row">
+            <div style="display: flex; align-items: center;">
+              <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbDpzcGFjZT0icHJlc2VydmUiIHdpZHRoPSI0MDAiIGhlaWdodD0iNzAiIHZpZXdCb3g9IjAgMCAxMzY4MDAwIDI0MTAwMCIgc2hhcGUtcmVuZGVyaW5nPSJnZW9tZXRyaWNQcmVjaXNpb24iIHRleHQtcmVuZGVyaW5nPSJnZW9tZXRyaWNQcmVjaXNpb24iPgo8cGF0aCBmaWxsPSIjMDAwMDAwIiBmaWxsLXJ1bGU9Im5vbnplcm8iIGQ9Ik0xMjgxMDAwIDIxODAwMGwwIC00MDAwMCAyMjAwMCAtMjMwMDAgNDMwMDAgMCAyMjAwMCAyMzAwMCAwIDQwMDAwIC0yMjAwMCAyMzAwMCAtNDMwMDAgMCAtMjIwMDAgLTIzMDAwem01OTAwMCAxMDAwMGwxNDAwMCAtMTQwMDAgMCAtMzIwMDAgLTE0MDAwIC0xNDAwMCAtMzEwMDAgMCAtMTQwMDAgMTQwMDAgMCAzMjAwMCAxNDAwMCAxNDAwMCAzMTAwMCAwem0tMzMwMDAgLTUyMDAwbDI4MDAwIDAgODAwMCA4MDAwIDAgMTMwMDAgLTUwMDAgNTAwMCA2MDAwIDYwMDAgMCAxMDAwMCAtMTIwMDAgMCAwIC03MDAwIC00MDAwIC01MDAwIC05MDAwIDAgMCAxMjAwMCAtMTIwMDAgMCAwIC00MjAwMHptMjIwMDAgMjAwMDBsMzAwMCAtMjAwMCAwIC01MDAwIC0zMDAwIC0zMDAwIC0xMDAwMCAwIDAgMTAwMDAgMTAwMDAgMHoiLz4KPHBhdGggZmlsbD0iIzAwMDAwMCIgZmlsbC1ydWxlPSJub256ZXJvIiBkPSJNMCAyMDIwMDBsMCAtMTA4MDAwIDM2MDAwIC0zNjAwMCA5NzAwMCAwIDM3MDAwIDM2MDAwIDAgNjcwMDAgLTEyOTAwMCAwIDAgMjkwMDAgMTMwMDAgMTQwMDAgNjIwMDAgMCAxMzAwMCAtMTMwMDAgMCAtMTEwMDAgNDAwMDAgMCAwIDIzMDAwIC0zNTAwMCAzNTAwMCAtOTkwMDAgMCAtMzUwMDAgLTM2MDAwem0xMjkwMDAgLTcwMDAwbDAgLTI1MDAwIC0xNDAwMCAtMTUwMDAgLTYwMDAwIDAgLTE0MDAwIDE1MDAwIDAgMjUwMDAgODgwMDAgMHptMTgwMDAwIDEwNjAwMGwtNDMwMDAgLTYwMDAwIC00NDAwMCA2MDAwMCAtNDUwMDAgMCA2NjAwMCAtOTEwMDAgLTY1MDAwIC04OTAwMCA0NjAwMCAwIDQyMDAwIDU4MDAwIDQxMDAwIC01ODAwMCA0NjAwMCAwIC02NDAwMCA4OTAwMCA2NjAwMCA5MTAwMCAtNDYwMDAgMHptNTEwMDAgLTMyMDAwbDAgLTQzMDAwIDMyMDAwIC0zMTAwMCA5MzAwMCAwIDAgLTI3MDAwIC0xNDAwMCAtMTMwMDAgLTU2MDAwIDAgLTE0MDAwIDEzMDAwIDAgMTEwMDAgLTQwMDAwIDAgMCAtMjAwMDAgMzcwMDAgLTM4MDAwIDkwMDAwIDAgMzcwMDAgMzgwMDAgMCAxNDIwMDAgLTM3MDAwIDAgMCAtMjgwMDAgLTI5MDAwIDI4MDAwIC02NzAwMCAwIC0zMjAwMCAtMzIwMDB6bTk1MDAwIDBsMzAwMDAgLTI5MDAwIDAgLTE1MDAwIC03NDAwMCAwIC0xMTAwMCAxMTAwMCAwIDIyMDAwIDExMDAwIDExMDAwIDQ0MDAwIDB6bTEwMjAwMCAtNDAwMGwwIC0xMDgwMDAgMzUwMDAgLTM2MDAwIDk1MDAwIDAgMzUwMDAgMzYwMDAgMCAzMDAwMCAtNDAwMDAgMCAwIC0xNzAwMCAtMTUwMDAgLTE0MDAwIC01NTAwMCAwIC0xNTAwMCAxNDAwMCAwIDgyMDAwIDE1MDAwIDE0MDAwIDU1MDAwIDAgMTUwMDAgLTE0MDAwIDAgLTE3MDAwIDQwMDAwIDAgMCAzMDAwMCAtMzUwMDAgMzYwMDAgLTk1MDAwIDAgLTM1MDAwIC0zNjAwMHptMTg4MDAwIDBsMCAtMTA4MDAwIDM2MDAwIC0zNjAwMCAxMDAwMDAgMCAzNjAwMCAzNjAwMCAwIDEwODAwMCAtMzYwMDAgMzYwMDAgLTEwMDAwMCAwIC0zNjAwMCAtMzYwMDB6bTExNjAwMCAyMDAwbDE1MDAwIC0xNTAwMCAwIC04MjAwMCAtMTUwMDAgLTE0MDAwIC02MDAwMCAwIC0xNTAwMCAxNDAwMCAwIDgyMDAwIDE1MDAwIDE1MDAwIDYwMDAwIDB6bTg0MDAwIDIwMDBsMCAtNDMwMDAgMzIwMDAgLTMxMDAwIDkzMDAwIDAgMCAtMjcwMDAgLTE0MDAwIC0xMzAwMCAtNTYwMDAgMCAtMTQwMDAgMTMwMDAgMCAxMTAwMCAtNDAwMDAgMCAwIC0yMDAwMCAzNzAwMCAtMzgwMDAgOTAwMDAgMCAzNzAwMCAzODAwMCAwIDE0MjAwMCAtMzcwMDAgMCAwIC0yODAwMCAtMjkwMDAgMjgwMDAgLTY3MDAwIDAgLTMyMDAwIC0zMjAwMHptOTUwMDAgMGwzMDAwMCAtMjkwMDAgMCAtMTUwMDAgLTczMDAwIDAgLTEyMDAwIDExMDAwIDAgMjIwMDAgMTEwMDAgMTEwMDAgNDQwMDAgMHptMTE4MDAwIC00MDAwbDAgLTEwOTAwMCAtMzMwMDAgMCAwIC0zNTAwMCAzNDAwMCAwIDAgLTU4MDAwIDQwMDAwIDAgMCA1ODAwMCA1NTAwMCAwIDAgMzUwMDAgLTU1MDAwIDAgMCA5NjAwMCAxNDAwMCAxNDAwMCA0MTAwMCAwIDAgMzUwMDAgLTYwMDAwIDAgLTM2MDAwIC0zNjAwMHoiLz4KPC9zdmc+" alt="EXACOAT" style="height: 19px; max-width: 140px; object-fit: contain; display: block;" />
+            </div>
+            <div style="text-align: right; display: flex; align-items: center; gap: 6px;">
+              
+              <span style="font-size: 13.5px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">
+                JNE - REG
+              </span>
+            </div>
+          </div>
+
+          <div class="recipient-box">
+            <div style="font-size: 8px; font-weight: 800; color: #555; text-transform: uppercase; letter-spacing: 0.5px;">
+              SHIP TO / DELIVER TO:
+            </div>
+            <div class="recipient-name">Ayu Lestari</div>
+            <div class="recipient-phone">Tel: 081234567890</div>
+            <div class="recipient-address">Jl. Melati No. 5<br />RT 02 RW 03<br />Bandung, Jawa Barat, 40115<br />Indonesia</div>
+          </div>
+        </div>
+
+        <div class="inline-from-barcode-row">
+          <div class="from-subcol">
+            <div class="tag-label">FROM:</div>
+            <div class="from-brand">EXACOAT</div>
+            <div class="from-contact">
+              Tel: 628975556000<br />
+              support@exacoat.com
+            </div>
+          </div>
+
+          <div class="barcode-subcol">
+            
+              <div class="barcode-track">
+                <span>TRACKING:</span> <strong>012345678901234</strong>
+              </div>
+            
+            <div class="barcode-ref">ORDER REF #542887</div>
+            <div class="barcode-svg-wrap">
+              <svg width="100%" height="32" viewBox="0 0 702 36" preserveAspectRatio="none" style="display: block; width: 100%;">
+                <rect x="0" y="0" width="6" height="36" fill="#000" /><rect x="10" y="0" width="6" height="36" fill="#000" /><rect x="20" y="0" width="6" height="36" fill="#000" /><rect x="30" y="0" width="4" height="36" fill="#000" /><rect x="36" y="0" width="4" height="36" fill="#000" /><rect x="46" y="0" width="2" height="36" fill="#000" /><rect x="52" y="0" width="8" height="36" fill="#000" /><rect x="64" y="0" width="6" height="36" fill="#000" /><rect x="76" y="0" width="4" height="36" fill="#000" /><rect x="84" y="0" width="2" height="36" fill="#000" /><rect x="88" y="0" width="4" height="36" fill="#000" /><rect x="96" y="0" width="2" height="36" fill="#000" /><rect x="102" y="0" width="10" height="36" fill="#000" /><rect x="118" y="0" width="8" height="36" fill="#000" /><rect x="132" y="0" width="6" height="36" fill="#000" /><rect x="140" y="0" width="4" height="36" fill="#000" /><rect x="146" y="0" width="10" height="36" fill="#000" /><rect x="160" y="0" width="8" height="36" fill="#000" /><rect x="174" y="0" width="4" height="36" fill="#000" /><rect x="184" y="0" width="2" height="36" fill="#000" /><rect x="190" y="0" width="6" height="36" fill="#000" /><rect x="198" y="0" width="4" height="36" fill="#000" /><rect x="204" y="0" width="4" height="36" fill="#000" /><rect x="212" y="0" width="2" height="36" fill="#000" /><rect x="220" y="0" width="8" height="36" fill="#000" /><rect x="234" y="0" width="6" height="36" fill="#000" /><rect x="244" y="0" width="10" height="36" fill="#000" /><rect x="256" y="0" width="8" height="36" fill="#000" /><rect x="266" y="0" width="6" height="36" fill="#000" /><rect x="276" y="0" width="4" height="36" fill="#000" /><rect x="286" y="0" width="8" height="36" fill="#000" /><rect x="300" y="0" width="6" height="36" fill="#000" /><rect x="310" y="0" width="10" height="36" fill="#000" /><rect x="322" y="0" width="8" height="36" fill="#000" /><rect x="332" y="0" width="8" height="36" fill="#000" /><rect x="344" y="0" width="6" height="36" fill="#000" /><rect x="356" y="0" width="4" height="36" fill="#000" /><rect x="366" y="0" width="2" height="36" fill="#000" /><rect x="372" y="0" width="6" height="36" fill="#000" /><rect x="380" y="0" width="4" height="36" fill="#000" /><rect x="386" y="0" width="10" height="36" fill="#000" /><rect x="400" y="0" width="8" height="36" fill="#000" /><rect x="414" y="0" width="4" height="36" fill="#000" /><rect x="424" y="0" width="2" height="36" fill="#000" /><rect x="430" y="0" width="6" height="36" fill="#000" /><rect x="438" y="0" width="4" height="36" fill="#000" /><rect x="444" y="0" width="4" height="36" fill="#000" /><rect x="452" y="0" width="2" height="36" fill="#000" /><rect x="460" y="0" width="8" height="36" fill="#000" /><rect x="474" y="0" width="6" height="36" fill="#000" /><rect x="484" y="0" width="10" height="36" fill="#000" /><rect x="496" y="0" width="8" height="36" fill="#000" /><rect x="506" y="0" width="6" height="36" fill="#000" /><rect x="516" y="0" width="4" height="36" fill="#000" /><rect x="526" y="0" width="8" height="36" fill="#000" /><rect x="540" y="0" width="6" height="36" fill="#000" /><rect x="550" y="0" width="10" height="36" fill="#000" /><rect x="562" y="0" width="8" height="36" fill="#000" /><rect x="572" y="0" width="8" height="36" fill="#000" /><rect x="584" y="0" width="6" height="36" fill="#000" /><rect x="596" y="0" width="4" height="36" fill="#000" /><rect x="606" y="0" width="2" height="36" fill="#000" /><rect x="612" y="0" width="6" height="36" fill="#000" /><rect x="620" y="0" width="4" height="36" fill="#000" /><rect x="626" y="0" width="10" height="36" fill="#000" /><rect x="640" y="0" width="8" height="36" fill="#000" /><rect x="654" y="0" width="4" height="36" fill="#000" /><rect x="664" y="0" width="2" height="36" fill="#000" /><rect x="670" y="0" width="6" height="36" fill="#000" /><rect x="678" y="0" width="4" height="36" fill="#000" /><rect x="684" y="0" width="6" height="36" fill="#000" /><rect x="694" y="0" width="8" height="36" fill="#000" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin: 2px 0; flex: 1;">
+          <div style="display: flex; justify-content: space-between; font-size: 8px; font-weight: 900; text-transform: uppercase; border-bottom: 1.5px solid #000; padding-bottom: 2px;">
+            <span>MANIFEST DECLARATION (3 PCS)</span>
+            <span>PREMIUM DEVICE SKINS</span>
+          </div>
+          <table class="manifest-table">
+            <tbody>
+              
+        <tr style="border-bottom: 1px solid #e5e7eb;">
+          <td style="padding: 3px 5px; font-weight: 900; width: 26px; text-align: center; font-size: 11px; vertical-align: top; font-variant-numeric: tabular-nums;">
+            1x
+          </td>
+          <td style="padding: 3px 5px; vertical-align: top;">
+            <div style="font-size: 10.5px; font-weight: 900; color: #000; line-height: 1.15; letter-spacing: -0.15px; margin: 0 0 1px 0;">iPhone 16 Pro Skins</div>
+            
+          <div style="margin-top: 2px;">
+            
+              <div style="font-size: 9.5px; line-height: 1.25; color: #111;">
+                <span style="font-weight: 700; color: #333;">Back Skin:</span> <span style="font-weight: 900; color: #000;">Swarm</span>
+              </div>
+            
+              <div style="font-size: 9.5px; line-height: 1.25; color: #111;">
+                <span style="font-weight: 700; color: #333;">Camera:</span> <span style="font-weight: 900; color: #000;">Matte Black</span>
+              </div>
+            
+          </div>
+        
+            
+          </td>
+          <td style="padding: 3px 5px; font-size: 9px; text-align: right; color: #333; font-weight: 800; vertical-align: top; white-space: nowrap; font-variant-numeric: tabular-nums;">IP16P</td>
+        </tr>
+      
+        <tr style="border-bottom: 1px solid #e5e7eb;">
+          <td style="padding: 3px 5px; font-weight: 900; width: 26px; text-align: center; font-size: 11px; vertical-align: top; font-variant-numeric: tabular-nums;">
+            <u style="text-decoration: underline; text-underline-offset: 2px;">2x</u>
+          </td>
+          <td style="padding: 3px 5px; vertical-align: top;">
+            <div style="font-size: 10.5px; font-weight: 900; color: #000; line-height: 1.15; letter-spacing: -0.15px; margin: 0 0 1px 0;">Galaxy S25 Skins</div>
+            
+          <div style="margin-top: 2px;">
+            
+              <div style="font-size: 9.5px; line-height: 1.25; color: #111;">
+                <span style="font-weight: 700; color: #333;">Back Skin:</span> <span style="font-weight: 900; color: #000;">Black Camo</span>
+              </div>
+            
+          </div>
+        
+            
+          </td>
+          <td style="padding: 3px 5px; font-size: 9px; text-align: right; color: #333; font-weight: 800; vertical-align: top; white-space: nowrap; font-variant-numeric: tabular-nums;">SKU200</td>
+        </tr>
+      
+            </tbody>
+          </table>
+        </div>
+
+        <div>
+          <div class="caution-bar">
+            &#9650; FRAGILE • DO NOT BEND • KEEP DRY &#9650;
+          </div>
+        </div>
+      </div>
+    
+  
+</body>
+</html>"
+`;
+
+exports[`printed documents stay byte-identical > shipping label > print window 1`] = `
+"<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Shipping Label</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    @page {
+      size: 4in 6in;
+      margin: 0;
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #ffffff;
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #000000;
+      width: 4in;
+      text-rendering: geometricPrecision;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    .label-container {
+      width: 4in;
+      height: 6in;
+      padding: 4mm;
+      background: #ffffff;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+      box-sizing: border-box;
+    }
+    .page-break {
+      page-break-after: always;
+      break-after: page;
+    }
+    .header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 2px solid #000;
+      padding-bottom: 5px;
+    }
+    .recipient-box {
+      padding: 5px 0 4px;
+      line-height: 1.3;
+    }
+    .recipient-name {
+      font-size: 16px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: -0.2px;
+      margin-top: 1px;
+    }
+    .recipient-phone {
+      font-size: 11.5px;
+      font-weight: 800;
+      margin: 1px 0;
+    }
+    .recipient-address {
+      font-size: 11.5px;
+      font-weight: 700;
+      margin-top: 1px;
+      color: #111;
+      line-height: 1.3;
+    }
+    .inline-from-barcode-row {
+      border-top: 2px solid #000;
+      border-bottom: 2px solid #000;
+      display: flex;
+      align-items: stretch;
+      padding: 3.5px 0;
+      margin: 2px 0 3px 0;
+    }
+    .from-subcol {
+      width: 42%;
+      border-right: 2px solid #000;
+      padding-right: 6px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .barcode-subcol {
+      width: 58%;
+      padding-left: 8px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .tag-label {
+      font-size: 7.5px;
+      font-weight: 800;
+      color: #555;
+      text-transform: uppercase;
+    }
+    .from-brand {
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+      line-height: 1.1;
+    }
+    .from-contact {
+      font-size: 8px;
+      font-weight: 600;
+      color: #222;
+      margin-top: 1px;
+      line-height: 1.2;
+    }
+    .barcode-track {
+      font-size: 7.5px;
+      font-weight: 800;
+      color: #222;
+      margin-bottom: 1px;
+      font-variant-numeric: tabular-nums;
+    }
+    .barcode-ref {
+      font-size: 10px;
+      font-weight: 900;
+      color: #000;
+      letter-spacing: 0.3px;
+      line-height: 1.1;
+      margin-bottom: 1px;
+      font-variant-numeric: tabular-nums;
+    }
+    .barcode-svg-wrap {
+      width: 100%;
+    }
+    .manifest-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10px;
+      margin-top: 2px;
+    }
+    .caution-bar {
+      background: #000;
+      color: #fff;
+      padding: 3.5px 6px;
+      font-size: 8px;
+      font-weight: 900;
+      text-align: center;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      border-radius: 1px;
+      line-height: 1.2;
+    }
+  </style>
+</head>
+<body>
+  
+      <div class="label-container ">
+        <div>
+          <div class="header-row">
+            <div style="display: flex; align-items: center;">
+              <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbDpzcGFjZT0icHJlc2VydmUiIHdpZHRoPSI0MDAiIGhlaWdodD0iNzAiIHZpZXdCb3g9IjAgMCAxMzY4MDAwIDI0MTAwMCIgc2hhcGUtcmVuZGVyaW5nPSJnZW9tZXRyaWNQcmVjaXNpb24iIHRleHQtcmVuZGVyaW5nPSJnZW9tZXRyaWNQcmVjaXNpb24iPgo8cGF0aCBmaWxsPSIjMDAwMDAwIiBmaWxsLXJ1bGU9Im5vbnplcm8iIGQ9Ik0xMjgxMDAwIDIxODAwMGwwIC00MDAwMCAyMjAwMCAtMjMwMDAgNDMwMDAgMCAyMjAwMCAyMzAwMCAwIDQwMDAwIC0yMjAwMCAyMzAwMCAtNDMwMDAgMCAtMjIwMDAgLTIzMDAwem01OTAwMCAxMDAwMGwxNDAwMCAtMTQwMDAgMCAtMzIwMDAgLTE0MDAwIC0xNDAwMCAtMzEwMDAgMCAtMTQwMDAgMTQwMDAgMCAzMjAwMCAxNDAwMCAxNDAwMCAzMTAwMCAwem0tMzMwMDAgLTUyMDAwbDI4MDAwIDAgODAwMCA4MDAwIDAgMTMwMDAgLTUwMDAgNTAwMCA2MDAwIDYwMDAgMCAxMDAwMCAtMTIwMDAgMCAwIC03MDAwIC00MDAwIC01MDAwIC05MDAwIDAgMCAxMjAwMCAtMTIwMDAgMCAwIC00MjAwMHptMjIwMDAgMjAwMDBsMzAwMCAtMjAwMCAwIC01MDAwIC0zMDAwIC0zMDAwIC0xMDAwMCAwIDAgMTAwMDAgMTAwMDAgMHoiLz4KPHBhdGggZmlsbD0iIzAwMDAwMCIgZmlsbC1ydWxlPSJub256ZXJvIiBkPSJNMCAyMDIwMDBsMCAtMTA4MDAwIDM2MDAwIC0zNjAwMCA5NzAwMCAwIDM3MDAwIDM2MDAwIDAgNjcwMDAgLTEyOTAwMCAwIDAgMjkwMDAgMTMwMDAgMTQwMDAgNjIwMDAgMCAxMzAwMCAtMTMwMDAgMCAtMTEwMDAgNDAwMDAgMCAwIDIzMDAwIC0zNTAwMCAzNTAwMCAtOTkwMDAgMCAtMzUwMDAgLTM2MDAwem0xMjkwMDAgLTcwMDAwbDAgLTI1MDAwIC0xNDAwMCAtMTUwMDAgLTYwMDAwIDAgLTE0MDAwIDE1MDAwIDAgMjUwMDAgODgwMDAgMHptMTgwMDAwIDEwNjAwMGwtNDMwMDAgLTYwMDAwIC00NDAwMCA2MDAwMCAtNDUwMDAgMCA2NjAwMCAtOTEwMDAgLTY1MDAwIC04OTAwMCA0NjAwMCAwIDQyMDAwIDU4MDAwIDQxMDAwIC01ODAwMCA0NjAwMCAwIC02NDAwMCA4OTAwMCA2NjAwMCA5MTAwMCAtNDYwMDAgMHptNTEwMDAgLTMyMDAwbDAgLTQzMDAwIDMyMDAwIC0zMTAwMCA5MzAwMCAwIDAgLTI3MDAwIC0xNDAwMCAtMTMwMDAgLTU2MDAwIDAgLTE0MDAwIDEzMDAwIDAgMTEwMDAgLTQwMDAwIDAgMCAtMjAwMDAgMzcwMDAgLTM4MDAwIDkwMDAwIDAgMzcwMDAgMzgwMDAgMCAxNDIwMDAgLTM3MDAwIDAgMCAtMjgwMDAgLTI5MDAwIDI4MDAwIC02NzAwMCAwIC0zMjAwMCAtMzIwMDB6bTk1MDAwIDBsMzAwMDAgLTI5MDAwIDAgLTE1MDAwIC03NDAwMCAwIC0xMTAwMCAxMTAwMCAwIDIyMDAwIDExMDAwIDExMDAwIDQ0MDAwIDB6bTEwMjAwMCAtNDAwMGwwIC0xMDgwMDAgMzUwMDAgLTM2MDAwIDk1MDAwIDAgMzUwMDAgMzYwMDAgMCAzMDAwMCAtNDAwMDAgMCAwIC0xNzAwMCAtMTUwMDAgLTE0MDAwIC01NTAwMCAwIC0xNTAwMCAxNDAwMCAwIDgyMDAwIDE1MDAwIDE0MDAwIDU1MDAwIDAgMTUwMDAgLTE0MDAwIDAgLTE3MDAwIDQwMDAwIDAgMCAzMDAwMCAtMzUwMDAgMzYwMDAgLTk1MDAwIDAgLTM1MDAwIC0zNjAwMHptMTg4MDAwIDBsMCAtMTA4MDAwIDM2MDAwIC0zNjAwMCAxMDAwMDAgMCAzNjAwMCAzNjAwMCAwIDEwODAwMCAtMzYwMDAgMzYwMDAgLTEwMDAwMCAwIC0zNjAwMCAtMzYwMDB6bTExNjAwMCAyMDAwbDE1MDAwIC0xNTAwMCAwIC04MjAwMCAtMTUwMDAgLTE0MDAwIC02MDAwMCAwIC0xNTAwMCAxNDAwMCAwIDgyMDAwIDE1MDAwIDE1MDAwIDYwMDAwIDB6bTg0MDAwIDIwMDBsMCAtNDMwMDAgMzIwMDAgLTMxMDAwIDkzMDAwIDAgMCAtMjcwMDAgLTE0MDAwIC0xMzAwMCAtNTYwMDAgMCAtMTQwMDAgMTMwMDAgMCAxMTAwMCAtNDAwMDAgMCAwIC0yMDAwMCAzNzAwMCAtMzgwMDAgOTAwMDAgMCAzNzAwMCAzODAwMCAwIDE0MjAwMCAtMzcwMDAgMCAwIC0yODAwMCAtMjkwMDAgMjgwMDAgLTY3MDAwIDAgLTMyMDAwIC0zMjAwMHptOTUwMDAgMGwzMDAwMCAtMjkwMDAgMCAtMTUwMDAgLTczMDAwIDAgLTEyMDAwIDExMDAwIDAgMjIwMDAgMTEwMDAgMTEwMDAgNDQwMDAgMHptMTE4MDAwIC00MDAwbDAgLTEwOTAwMCAtMzMwMDAgMCAwIC0zNTAwMCAzNDAwMCAwIDAgLTU4MDAwIDQwMDAwIDAgMCA1ODAwMCA1NTAwMCAwIDAgMzUwMDAgLTU1MDAwIDAgMCA5NjAwMCAxNDAwMCAxNDAwMCA0MTAwMCAwIDAgMzUwMDAgLTYwMDAwIDAgLTM2MDAwIC0zNjAwMHoiLz4KPC9zdmc+" alt="EXACOAT" style="height: 19px; max-width: 140px; object-fit: contain; display: block;" />
+            </div>
+            <div style="text-align: right; display: flex; align-items: center; gap: 6px;">
+              
+              <span style="font-size: 13.5px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">
+                JNE - REG
+              </span>
+            </div>
+          </div>
+
+          <div class="recipient-box">
+            <div style="font-size: 8px; font-weight: 800; color: #555; text-transform: uppercase; letter-spacing: 0.5px;">
+              SHIP TO / DELIVER TO:
+            </div>
+            <div class="recipient-name">Ayu Lestari</div>
+            <div class="recipient-phone">Tel: 081234567890</div>
+            <div class="recipient-address">Jl. Melati No. 5<br />RT 02 RW 03<br />Bandung, Jawa Barat, 40115<br />Indonesia</div>
+          </div>
+        </div>
+
+        <div class="inline-from-barcode-row">
+          <div class="from-subcol">
+            <div class="tag-label">FROM:</div>
+            <div class="from-brand">EXACOAT</div>
+            <div class="from-contact">
+              Tel: 628975556000<br />
+              support@exacoat.com
+            </div>
+          </div>
+
+          <div class="barcode-subcol">
+            
+              <div class="barcode-track">
+                <span>TRACKING:</span> <strong>012345678901234</strong>
+              </div>
+            
+            <div class="barcode-ref">ORDER REF #542887</div>
+            <div class="barcode-svg-wrap">
+              <svg width="100%" height="32" viewBox="0 0 702 36" preserveAspectRatio="none" style="display: block; width: 100%;">
+                <rect x="0" y="0" width="6" height="36" fill="#000" /><rect x="10" y="0" width="6" height="36" fill="#000" /><rect x="20" y="0" width="6" height="36" fill="#000" /><rect x="30" y="0" width="4" height="36" fill="#000" /><rect x="36" y="0" width="4" height="36" fill="#000" /><rect x="46" y="0" width="2" height="36" fill="#000" /><rect x="52" y="0" width="8" height="36" fill="#000" /><rect x="64" y="0" width="6" height="36" fill="#000" /><rect x="76" y="0" width="4" height="36" fill="#000" /><rect x="84" y="0" width="2" height="36" fill="#000" /><rect x="88" y="0" width="4" height="36" fill="#000" /><rect x="96" y="0" width="2" height="36" fill="#000" /><rect x="102" y="0" width="10" height="36" fill="#000" /><rect x="118" y="0" width="8" height="36" fill="#000" /><rect x="132" y="0" width="6" height="36" fill="#000" /><rect x="140" y="0" width="4" height="36" fill="#000" /><rect x="146" y="0" width="10" height="36" fill="#000" /><rect x="160" y="0" width="8" height="36" fill="#000" /><rect x="174" y="0" width="4" height="36" fill="#000" /><rect x="184" y="0" width="2" height="36" fill="#000" /><rect x="190" y="0" width="6" height="36" fill="#000" /><rect x="198" y="0" width="4" height="36" fill="#000" /><rect x="204" y="0" width="4" height="36" fill="#000" /><rect x="212" y="0" width="2" height="36" fill="#000" /><rect x="220" y="0" width="8" height="36" fill="#000" /><rect x="234" y="0" width="6" height="36" fill="#000" /><rect x="244" y="0" width="10" height="36" fill="#000" /><rect x="256" y="0" width="8" height="36" fill="#000" /><rect x="266" y="0" width="6" height="36" fill="#000" /><rect x="276" y="0" width="4" height="36" fill="#000" /><rect x="286" y="0" width="8" height="36" fill="#000" /><rect x="300" y="0" width="6" height="36" fill="#000" /><rect x="310" y="0" width="10" height="36" fill="#000" /><rect x="322" y="0" width="8" height="36" fill="#000" /><rect x="332" y="0" width="8" height="36" fill="#000" /><rect x="344" y="0" width="6" height="36" fill="#000" /><rect x="356" y="0" width="4" height="36" fill="#000" /><rect x="366" y="0" width="2" height="36" fill="#000" /><rect x="372" y="0" width="6" height="36" fill="#000" /><rect x="380" y="0" width="4" height="36" fill="#000" /><rect x="386" y="0" width="10" height="36" fill="#000" /><rect x="400" y="0" width="8" height="36" fill="#000" /><rect x="414" y="0" width="4" height="36" fill="#000" /><rect x="424" y="0" width="2" height="36" fill="#000" /><rect x="430" y="0" width="6" height="36" fill="#000" /><rect x="438" y="0" width="4" height="36" fill="#000" /><rect x="444" y="0" width="4" height="36" fill="#000" /><rect x="452" y="0" width="2" height="36" fill="#000" /><rect x="460" y="0" width="8" height="36" fill="#000" /><rect x="474" y="0" width="6" height="36" fill="#000" /><rect x="484" y="0" width="10" height="36" fill="#000" /><rect x="496" y="0" width="8" height="36" fill="#000" /><rect x="506" y="0" width="6" height="36" fill="#000" /><rect x="516" y="0" width="4" height="36" fill="#000" /><rect x="526" y="0" width="8" height="36" fill="#000" /><rect x="540" y="0" width="6" height="36" fill="#000" /><rect x="550" y="0" width="10" height="36" fill="#000" /><rect x="562" y="0" width="8" height="36" fill="#000" /><rect x="572" y="0" width="8" height="36" fill="#000" /><rect x="584" y="0" width="6" height="36" fill="#000" /><rect x="596" y="0" width="4" height="36" fill="#000" /><rect x="606" y="0" width="2" height="36" fill="#000" /><rect x="612" y="0" width="6" height="36" fill="#000" /><rect x="620" y="0" width="4" height="36" fill="#000" /><rect x="626" y="0" width="10" height="36" fill="#000" /><rect x="640" y="0" width="8" height="36" fill="#000" /><rect x="654" y="0" width="4" height="36" fill="#000" /><rect x="664" y="0" width="2" height="36" fill="#000" /><rect x="670" y="0" width="6" height="36" fill="#000" /><rect x="678" y="0" width="4" height="36" fill="#000" /><rect x="684" y="0" width="6" height="36" fill="#000" /><rect x="694" y="0" width="8" height="36" fill="#000" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin: 2px 0; flex: 1;">
+          <div style="display: flex; justify-content: space-between; font-size: 8px; font-weight: 900; text-transform: uppercase; border-bottom: 1.5px solid #000; padding-bottom: 2px;">
+            <span>MANIFEST DECLARATION (3 PCS)</span>
+            <span>PREMIUM DEVICE SKINS</span>
+          </div>
+          <table class="manifest-table">
+            <tbody>
+              
+        <tr style="border-bottom: 1px solid #e5e7eb;">
+          <td style="padding: 3px 5px; font-weight: 900; width: 26px; text-align: center; font-size: 11px; vertical-align: top; font-variant-numeric: tabular-nums;">
+            1x
+          </td>
+          <td style="padding: 3px 5px; vertical-align: top;">
+            <div style="font-size: 10.5px; font-weight: 900; color: #000; line-height: 1.15; letter-spacing: -0.15px; margin: 0 0 1px 0;">iPhone 16 Pro Skins</div>
+            
+          <div style="margin-top: 2px;">
+            
+              <div style="font-size: 9.5px; line-height: 1.25; color: #111;">
+                <span style="font-weight: 700; color: #333;">Back Skin:</span> <span style="font-weight: 900; color: #000;">Swarm</span>
+              </div>
+            
+              <div style="font-size: 9.5px; line-height: 1.25; color: #111;">
+                <span style="font-weight: 700; color: #333;">Camera:</span> <span style="font-weight: 900; color: #000;">Matte Black</span>
+              </div>
+            
+          </div>
+        
+            
+          </td>
+          <td style="padding: 3px 5px; font-size: 9px; text-align: right; color: #333; font-weight: 800; vertical-align: top; white-space: nowrap; font-variant-numeric: tabular-nums;">IP16P</td>
+        </tr>
+      
+        <tr style="border-bottom: 1px solid #e5e7eb;">
+          <td style="padding: 3px 5px; font-weight: 900; width: 26px; text-align: center; font-size: 11px; vertical-align: top; font-variant-numeric: tabular-nums;">
+            <u style="text-decoration: underline; text-underline-offset: 2px;">2x</u>
+          </td>
+          <td style="padding: 3px 5px; vertical-align: top;">
+            <div style="font-size: 10.5px; font-weight: 900; color: #000; line-height: 1.15; letter-spacing: -0.15px; margin: 0 0 1px 0;">Galaxy S25 Skins</div>
+            
+          <div style="margin-top: 2px;">
+            
+              <div style="font-size: 9.5px; line-height: 1.25; color: #111;">
+                <span style="font-weight: 700; color: #333;">Back Skin:</span> <span style="font-weight: 900; color: #000;">Black Camo</span>
+              </div>
+            
+          </div>
+        
+            
+          </td>
+          <td style="padding: 3px 5px; font-size: 9px; text-align: right; color: #333; font-weight: 800; vertical-align: top; white-space: nowrap; font-variant-numeric: tabular-nums;">SKU200</td>
+        </tr>
+      
+            </tbody>
+          </table>
+        </div>
+
+        <div>
+          <div class="caution-bar">
+            &#9650; FRAGILE • DO NOT BEND • KEEP DRY &#9650;
+          </div>
+        </div>
+      </div>
+    
+  
+    <script>
+      function executePrint() {
+        window.print();
+        setTimeout(function() {
+          window.close();
+        }, 600);
+      }
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function() {
+          setTimeout(executePrint, 60);
+        });
+      } else {
+        window.onload = function() {
+          setTimeout(executePrint, 60);
+        };
+      }
+    </script>
+  
+</body>
+</html>"
+`;

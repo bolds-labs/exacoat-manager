@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Modal } from '../ui/Modal';
+import { Modal } from '../ds/Modal';
+import { Button } from '../ds/Button';
+import { Select } from '../ds/Select';
 import { useToast } from '../../context/ToastContext';
 import {
   fetchProductsDirect,
@@ -151,6 +153,8 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+
+const DESTINATION_COUNTRY_OPTIONS = [{ value: 'ID', label: 'Indonesia (Domestic - Biteship)' }, { value: 'US', label: 'United States (Goorita / POS)' }, { value: 'SG', label: 'Singapore' }, { value: 'MY', label: 'Malaysia' }, { value: 'AU', label: 'Australia' }, { value: 'GB', label: 'United Kingdom' }, { value: 'CA', label: 'Canada' }, { value: 'DE', label: 'Germany' }, { value: 'NL', label: 'Netherlands' }, { value: 'FR', label: 'France' }, { value: 'JP', label: 'Japan' }, { value: 'KR', label: 'South Korea' }, { value: 'PH', label: 'Philippines' }, { value: 'TH', label: 'Thailand' }, { value: 'VN', label: 'Vietnam' }, { value: 'AE', label: 'United Arab Emirates' }, { value: 'OTHER', label: 'Other International (WooCommerce Zone)' }];
 
 interface ManualWarrantyModalProps {
   isOpen: boolean;
@@ -1000,97 +1004,56 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
 
   return (
     <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      maxWidth="4xl"
+      open={isOpen}
+      onOpenChange={(o) => {
+        if (!o && !isSubmitting) onClose();
+      }}
       title={
-        <div className="flex items-center gap-2.5 font-sans">
-          <div
-            className={clsx(
-              'w-8 h-8 rounded-xl border flex items-center justify-center shrink-0',
-              claimType === 'Redeem'
-                ? 'bg-amber-500/15 border-amber-500/30 text-amber-400'
-                : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
-            )}
-          >
-            {claimType === 'Redeem' ? <RotateCcw className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
-          </div>
-          <div>
-            <span className="text-base font-bold text-white tracking-tight">
-              {isExisting
-                ? claimType === 'Redeem'
-                  ? `Redeem Claim (Order #${existingOrder?.order_number || existingOrder?.id})`
-                  : `Installation Warranty Claim (Order #${existingOrder?.order_number || existingOrder?.id})`
-                : claimType === 'Redeem'
-                ? 'Create Marketplace Redeem Order'
-                : 'Create Marketplace Warranty Claim'}
-            </span>
-          </div>
-        </div>
+        isExisting
+          ? claimType === 'Redeem' ? 'Redeem claim' : 'Installation warranty claim'
+          : claimType === 'Redeem' ? 'Create marketplace redeem order' : 'Create marketplace warranty claim'
       }
-      subtitle={
+      reference={isExisting ? `#${String(existingOrder?.order_number || existingOrder?.id || '').replace(/^#+/, '')}` : undefined}
+      description={
         claimType === 'Redeem'
-          ? 'Generate a replacement order with free shipping (borne by Exacoat) due to factory defect, wrong finish, or damaged item.'
+          ? 'Replacement order with free shipping (paid by Exacoat) for a factory defect, wrong finish or damaged item.'
           : isExisting
-          ? 'Select line items and courier to generate an installation warranty replacement order for this customer.'
-          : 'Generate an approved warranty replacement order for Shopee, Tokopedia, TikTok Shop, or WhatsApp orders.'
+          ? 'Pick line items and a courier to create an installation warranty replacement order.'
+          : 'Create an approved warranty replacement order for Shopee, Tokopedia, TikTok Shop or WhatsApp orders.'
       }
+      width={896}
       footer={
-        <div className="flex items-center justify-between w-full flex-wrap gap-3">
-          <div className="text-xs font-mono text-neutral-400">
-            <span>Customer shipping: </span>
-            <span className={clsx('font-bold', isFreeShipping ? 'text-amber-400' : 'text-white')}>
-              {isFreeShipping
-                ? 'Rp 0 (Free)'
-                : formatCurrency(selectedCourierPrice, 'IDR')}
+        <>
+          <span className="mr-auto text-[12.5px] text-muted">
+            Customer shipping:{' '}
+            <span className="font-mono font-medium text-fg">
+              {isFreeShipping ? 'Rp 0 (free)' : formatCurrency(selectedCourierPrice, 'IDR')}
             </span>
             {isFreeShipping && (
-              <span className="text-[11px] text-neutral-400 ml-2">
-                (Courier rate: <span className="text-emerald-400 font-bold">{formatCurrency(selectedCourierPrice, 'IDR')}</span>)
+              <span className="ml-2 text-[12px] text-faint">
+                (courier rate <span className="font-mono">{formatCurrency(selectedCourierPrice, 'IDR')}</span>)
               </span>
             )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs font-semibold text-neutral-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={
-                isSubmitting ||
-                (isParentAlreadyClaimed && !allowDuplicateOverride) ||
-                (!isExisting && invoiceStatus?.checked && !invoiceStatus.available && !allowDuplicateOverride)
-              }
-              className={clsx(
-                'px-5 py-2 rounded-xl text-xs font-bold text-neutral-950 disabled:opacity-50 transition-all shadow-sm flex items-center gap-2 cursor-pointer',
-                claimType === 'Redeem'
-                  ? 'bg-amber-400 hover:bg-amber-300'
-                  : 'bg-emerald-500 hover:bg-emerald-400'
-              )}
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Creating {claimType}...</span>
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>Create {claimType} Order</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
+          </span>
+          <Button variant="ghost" onClick={onClose} disabled={isSubmitting}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            icon={isSubmitting ? Loader2 : CheckCircle2}
+            onClick={handleSubmit}
+            disabled={
+              isSubmitting ||
+              (isParentAlreadyClaimed && !allowDuplicateOverride) ||
+              (!isExisting && invoiceStatus?.checked && !invoiceStatus.available && !allowDuplicateOverride)
+            }
+          >
+            {isSubmitting ? `Creating ${claimType}...` : `Create ${claimType} order`}
+          </Button>
+        </>
       }
     >
-      <div className="space-y-6 max-h-[72vh] overflow-y-auto pr-1 custom-scrollbar font-sans text-sm">
+      <div className="space-y-6 font-sans text-sm">
         {/* Claim Type Selector: Warranty vs Redeem */}
         <div className="p-1 rounded-2xl bg-neutral-900 border border-white/[0.08] grid grid-cols-2 gap-1">
           <button
@@ -2144,36 +2107,18 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
             </div>
             <div>
               <label className="text-xs text-neutral-400 mb-1 block">Destination Country *</label>
-              <select
+              <Select
+                aria-label="Destination country"
                 value={country}
-                onChange={(e) => {
-                  const newCountry = e.target.value;
+                options={DESTINATION_COUNTRY_OPTIONS.some((o) => o.value === country) || !country ? DESTINATION_COUNTRY_OPTIONS : [...DESTINATION_COUNTRY_OPTIONS, { value: country, label: country }]}
+                onChange={(newCountry) => {
                   setCountry(newCountry);
                   setShippingRates([]);
                   if (postcode.trim() || newCountry !== 'ID') {
                     handleCalculateShipping(postcode, newCountry);
                   }
                 }}
-                className="w-full px-3 py-2 rounded-xl bg-[#141414] border border-white/[0.08] text-white text-xs focus:outline-none focus:border-emerald-500 cursor-pointer"
-              >
-                <option value="ID">Indonesia (Domestic - Biteship)</option>
-                <option value="US">United States (Goorita / POS)</option>
-                <option value="SG">Singapore</option>
-                <option value="MY">Malaysia</option>
-                <option value="AU">Australia</option>
-                <option value="GB">United Kingdom</option>
-                <option value="CA">Canada</option>
-                <option value="DE">Germany</option>
-                <option value="NL">Netherlands</option>
-                <option value="FR">France</option>
-                <option value="JP">Japan</option>
-                <option value="KR">South Korea</option>
-                <option value="PH">Philippines</option>
-                <option value="TH">Thailand</option>
-                <option value="VN">Vietnam</option>
-                <option value="AE">United Arab Emirates</option>
-                <option value="OTHER">Other International (WooCommerce Zone)</option>
-              </select>
+              />
             </div>
           </div>
         </div>

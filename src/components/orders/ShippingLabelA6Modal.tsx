@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Modal } from '../ui/Modal';
+import { Modal } from '../ds/Modal';
+import { Button } from '../ds/Button';
 import { Order } from '../../types';
 import { 
   Printer, 
@@ -838,65 +839,35 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
 
   return (
     <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      maxWidth="3xl"
-      title={
-        <div className="flex items-center gap-2.5">
-          <Truck className="w-5 h-5 text-[#f3aa18]" />
-          <span className="text-base font-bold text-white font-sans">
-            {activeOrdersList.length > 1
-              ? `Bulk Shipping Labels (${activeOrdersList.length} Orders)`
-              : `Shipping Label • Order #${cleanOrderNum}`}
-          </span>
-          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#f3aa18]/10 text-[#f3aa18] border border-[#f3aa18]/20">
-            4&times;6" Thermal
-          </span>
-          {hasActiveGooritaAwb && (
-            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20 flex items-center gap-1">
-              <Plane className="w-3 h-3" />
-              2-Page (USPS AWB + Internal Slip)
-            </span>
-          )}
-        </div>
-      }
-      subtitle={
+      open={isOpen}
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+      title={activeOrdersList.length > 1 ? `Shipping labels (${activeOrdersList.length} orders)` : 'Shipping label'}
+      reference={activeOrdersList.length > 1 ? undefined : `#${cleanOrderNum}`}
+      description={
         activeOrdersList.length > 1
           ? `Batch printing ${activeOrdersList.length} shipping labels formatted for 4×6" thermal printers.`
           : hasActiveGooritaAwb
-          ? 'Goorita international shipment: Prints Sheet 1 (USPS Airwaybill) and Sheet 2 (Exacoat Manifest).'
+          ? 'Goorita international shipment, 2 pages: Sheet 1 is the USPS airwaybill and Sheet 2 the Exacoat manifest.'
           : 'Courier dispatch label formatted for 4×6 inch thermal printers or A6 sheet printers.'
       }
+      width={768}
       footer={
-        <div className="flex items-center justify-between w-full font-sans">
-          <div className="flex items-center gap-2 text-xs text-neutral-400">
-            <ShieldAlert className="w-4 h-4 text-amber-400" />
-            <span>Barcode strictly encodes internal Order Ref #{cleanOrderNum}.</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-neutral-300 hover:text-white text-xs font-semibold border border-white/[0.08] transition-all cursor-pointer"
-            >
-              Close
-            </button>
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="px-5 py-2 rounded-xl bg-[#f3aa18] hover:bg-[#d9940c] text-[#0a0a0a] text-xs font-bold font-sans flex items-center gap-2 shadow-lg shadow-[#f3aa18]/10 transition-all active:scale-95 cursor-pointer"
-            >
-              <Printer className="w-4 h-4" />
-              <span>
-                {activeOrdersList.length > 1
-                  ? `Print All (${activeOrdersList.length}) Labels`
-                  : hasActiveGooritaAwb
-                  ? 'Print 2-Page Thermal Label'
-                  : 'Print 4×6 Label'}
-              </span>
-            </button>
-          </div>
-        </div>
+        <>
+          <span className="mr-auto flex items-center gap-2 text-[12px] text-faint">
+            <ShieldAlert className="h-4 w-4" strokeWidth={1.8} aria-hidden />
+            <span>Barcode encodes internal Order Ref #{cleanOrderNum}.</span>
+          </span>
+          <Button variant="ghost" onClick={onClose}>Close</Button>
+          <Button variant="primary" icon={Printer} onClick={handlePrint}>
+            {activeOrdersList.length > 1
+              ? `Print all (${activeOrdersList.length}) labels`
+              : hasActiveGooritaAwb
+              ? 'Print 2-page thermal label'
+              : 'Print 4×6 label'}
+          </Button>
+        </>
       }
     >
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">

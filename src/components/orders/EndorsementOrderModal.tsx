@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Modal } from '../ui/Modal';
+import { Modal } from '../ds/Modal';
+import { Button } from '../ds/Button';
+import { Select } from '../ds/Select';
 import { useToast } from '../../context/ToastContext';
 import {
   fetchProductsDirect,
@@ -13,7 +15,7 @@ import {
 } from '../../lib/wordpressBridge';
 import { formatCurrency } from '../../lib/formatters';
 import {
-  Sparkles,
+  Megaphone,
   Plus,
   Trash2,
   Search,
@@ -33,6 +35,14 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+
+const COVERAGE_OPTIONS = [
+  { value: 'Back Only', label: 'Back Only' },
+  { value: 'Full Coverage (Sides/Frame)', label: 'Full Coverage (Sides/Frame)' },
+  { value: 'Top Skin', label: 'Top Skin (Laptop / Tablet)' },
+  { value: 'Top + Bottom Skin', label: 'Top + Bottom Skin' },
+  { value: 'Complete Full Body Set', label: 'Complete Full Body Set' },
+];
 
 interface EndorsementOrderModalProps {
   isOpen: boolean;
@@ -314,30 +324,26 @@ export const EndorsementOrderModal: React.FC<EndorsementOrderModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} maxWidth="3xl">
-      <div className="flex flex-col max-h-[85vh] bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden font-sans text-neutral-100">
-        {/* Header */}
-        <div className="px-6 py-5 border-b border-neutral-800/80 bg-neutral-950/60 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.15)]">
-              <Sparkles className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-white tracking-tight">Create Endorsement Order</h2>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                  VIP / Influencer PR
-                </span>
-              </div>
-              <p className="text-xs text-neutral-400 mt-0.5">
-                Dispatch complimentary custom skin PR packages to content creators (100% free with waived courier shipping).
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Scrollable Content Body */}
-        <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
+    <Modal
+      open={isOpen}
+      onOpenChange={(o) => {
+        if (!o && !isSubmitting) onClose();
+      }}
+      title="Create endorsement order"
+      description="Complimentary PR package for a content creator: free items and waived courier shipping."
+      width={768}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={isSubmitting}>
+            Cancel
+          </Button>
+          <Button variant="primary" icon={isSubmitting ? Loader2 : Megaphone} onClick={handleSubmit} disabled={isSubmitting}>
+            {isSubmitting ? 'Dispatching order...' : 'Dispatch endorsement order (Rp 0)'}
+          </Button>
+        </>
+      }
+    >
+        <div className="space-y-6 font-sans">
           {/* Section 1: Influencer / Creator Details */}
           <div className="p-4 rounded-xl bg-neutral-950/40 border border-neutral-800/80 space-y-4">
             <div className="flex items-center gap-2 text-xs font-bold text-purple-400 uppercase tracking-wider">
@@ -606,17 +612,12 @@ export const EndorsementOrderModal: React.FC<EndorsementOrderModalProps> = ({
                         <label className="block text-[11px] font-mono font-semibold text-neutral-400 uppercase tracking-wider mb-1">
                           Coverage Part
                         </label>
-                        <select
+                        <Select
+                          aria-label="Coverage part"
                           value={item.coverage}
-                          onChange={(e) => handleUpdateItem(item.id, { coverage: e.target.value })}
-                          className="w-full px-3 py-2 bg-neutral-950 border border-neutral-800 rounded-lg text-xs text-white focus:outline-none focus:border-amber-500/50 cursor-pointer"
-                        >
-                          <option value="Back Only">Back Only</option>
-                          <option value="Full Coverage (Sides/Frame)">Full Coverage (Sides/Frame)</option>
-                          <option value="Top Skin">Top Skin (Laptop / Tablet)</option>
-                          <option value="Top + Bottom Skin">Top + Bottom Skin</option>
-                          <option value="Complete Full Body Set">Complete Full Body Set</option>
-                        </select>
+                          options={COVERAGE_OPTIONS}
+                          onChange={(v) => handleUpdateItem(item.id, { coverage: v })}
+                        />
                       </div>
 
                       <div>
@@ -806,37 +807,6 @@ export const EndorsementOrderModal: React.FC<EndorsementOrderModalProps> = ({
           </div>
         </div>
 
-        {/* Footer Actions */}
-        <div className="px-6 py-4 border-t border-neutral-800/80 bg-neutral-950/80 flex items-center justify-between shrink-0">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isSubmitting}
-            className="px-4 py-2 rounded-xl text-xs font-semibold text-neutral-400 hover:text-white transition-colors cursor-pointer"
-          >
-            Cancel
-          </button>
-
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={isSubmitting}
-            className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-semibold text-xs flex items-center gap-2 shadow-[0_0_20px_rgba(168,85,247,0.3)] transition-all cursor-pointer"
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Dispatching Order...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4" />
-                <span>Dispatch Endorsement Order (Rp 0)</span>
-              </>
-            )}
-          </button>
-        </div>
-      </div>
     </Modal>
   );
 };

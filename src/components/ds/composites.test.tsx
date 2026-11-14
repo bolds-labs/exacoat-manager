@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { Package, Trash2, Pencil } from 'lucide-react';
 import { Button, Card, Drawer, KpiCard, Menu, Modal, StatusChip, Tabs, WarrantyChip } from './index';
+import { isToastTarget } from './Modal';
 
 afterEach(cleanup);
 
@@ -84,6 +85,19 @@ describe('Modal', () => {
     expect(screen.getByRole('button', { name: 'Confirm' })).toBeTruthy();
     fireEvent.click(screen.getByLabelText('Close'));
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+  it('renders an optional description under the title', () => {
+    render(<Modal open onOpenChange={() => {}} title="Packing slip" description="Warehouse picking checklist.">x</Modal>);
+    expect(screen.getByText('Warehouse picking checklist.')).toBeTruthy();
+  });
+  it('treats clicks inside the toaster as non-dismissing', () => {
+    const toaster = document.createElement('section');
+    toaster.setAttribute('data-sonner-toaster', '');
+    const btn = document.createElement('button');
+    toaster.append(btn);
+    expect(isToastTarget(btn)).toBe(true);
+    expect(isToastTarget(document.createElement('div'))).toBe(false);
+    expect(isToastTarget(null)).toBe(false);
   });
   it('renders nothing when closed', () => {
     render(<Modal open={false} onOpenChange={() => {}} title="Hidden">x</Modal>);

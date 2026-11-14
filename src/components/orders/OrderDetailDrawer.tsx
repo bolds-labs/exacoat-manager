@@ -8,14 +8,16 @@ import { ShippingCard, type GooritaUsInfo } from './panel/ShippingCard';
 import { ActivityCard } from './panel/ActivityCard';
 import { SummaryCard } from './panel/SummaryCard';
 import { RefundCard } from './panel/RefundCard';
+import { RefundModal } from './panel/RefundModal';
+import { ConfirmModal, ConfirmText, textareaClass } from './panel/ConfirmModal';
+import { Modal as KitModal } from '../ds/Modal';
+import { Button as KitButton } from '../ds/Button';
 import { CouponsCard } from './panel/CouponsCard';
 import { ReviewCard } from './panel/ReviewCard';
 import { ResendEmailCard } from './panel/ResendEmailCard';
 import { AdminActionsCard } from './panel/AdminActionsCard';
 import { lockBodyScroll } from '../../lib/bodyScrollLock';
 import { Badge } from '../ui/Badge';
-import { Modal } from '../ui/Modal';
-import { ConfirmationModal } from '../ui/ConfirmationModal';
 import { Order, OrderItem, OrderStatus, OrderNote, OrderReview, OrderReviewMedia, getOrderRma, getOrderGuarantee } from '../../types';
 import { formatCurrency, formatDateTime, formatDate, formatFeeLabel, getOrderStatusInfo } from '../../lib/formatters';
 import { 
@@ -45,9 +47,6 @@ import {
   Plus,
   RotateCcw,
   HelpCircle,
-  Wallet,
-  CreditCard,
-  X,
   Printer,
   Sparkles,
   Star,
@@ -1367,246 +1366,28 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
         </div>
       </div>
 
-      {/* Refund Modal Overlay */}
-      {isRefundModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn cursor-pointer"
-          onClick={() => setIsRefundModalOpen(false)}
-        >
-          <div
-            className="w-full max-w-md bg-[#111111] border border-white/[0.1] rounded-2xl p-6 shadow-2xl space-y-5 cursor-default"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2 font-sans">
-                <RotateCcw className="w-4 h-4 text-rose-400" />
-                Issue Refund for Order #{cleanOrderNum}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setIsRefundModalOpen(false)}
-                className="text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-white/[0.06]"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-2 bg-[#141414] p-3.5 rounded-xl border border-white/[0.04] text-xs">
-              <div className="flex items-center justify-between text-neutral-400">
-                <span>Amount already refunded:</span>
-                <span className="font-mono text-rose-400 font-bold">
-                  -{formatCurrency(totalRefunded, order.currency)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-neutral-300">
-                <span>Total available to refund:</span>
-                <span className="font-mono text-[#f3aa18] font-bold">
-                  {formatCurrency(remainingAvailableRefund, order.currency)}
-                </span>
-              </div>
-            </div>
-
-            <form onSubmit={handleProcessRefund} className="space-y-4">
-              {/* Refund Destination Selector */}
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block mb-1.5 font-sans">
-                  Refund Method
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRefundMethod('original');
-                      if (shippingDiscount > 0 && Number(refundAmount) === Math.max(0, remainingAvailableRefund - shippingDiscount)) {
-                        setRefundAmount(String(remainingAvailableRefund));
-                      }
-                    }}
-                    className={clsx(
-                      'p-3 rounded-xl border text-left transition-all',
-                      refundMethod === 'original'
-                        ? 'bg-white/[0.08] border-white/20 text-white font-medium shadow-sm'
-                        : 'bg-[#141414] border-white/[0.06] text-neutral-400 hover:text-neutral-200'
-                    )}
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      <CreditCard className="w-4 h-4 text-rose-400" />
-                      <span className="text-xs font-sans font-semibold">Payment Method</span>
-                    </div>
-                    <p className="text-[10px] text-neutral-500 font-sans">Refund to original payment</p>
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={!order.customer_id}
-                    onClick={() => {
-                      setRefundMethod('store_credit');
-                      if (shippingDiscount > 0 && Number(refundAmount) === remainingAvailableRefund) {
-                        setRefundAmount(String(Math.max(0, remainingAvailableRefund - shippingDiscount)));
-                      }
-                    }}
-                    className={clsx(
-                      'p-3 rounded-xl border text-left transition-all',
-                      refundMethod === 'store_credit'
-                        ? 'bg-amber-500/10 border-amber-500/30 text-amber-200 font-medium shadow-sm'
-                        : 'bg-[#141414] border-white/[0.06] text-neutral-400 hover:text-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed'
-                    )}
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      <Wallet className="w-4 h-4 text-amber-400" />
-                      <span className="text-xs font-sans font-semibold">Store Credit</span>
-                    </div>
-                    <p className="text-[10px] text-neutral-500 font-sans">
-                      {order.customer_id ? 'Advanced Coupons balance' : 'Guest order (no account)'}
-                    </p>
-                  </button>
-                </div>
-
-                {refundMethod === 'store_credit' && (
-                  <div className="mt-2 space-y-2">
-                    <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] font-sans flex items-center justify-between">
-                      <span>Customer account store credit</span>
-                      {order.customer_store_credit_balance !== undefined && (
-                        <span className="font-mono font-bold">
-                          Balance: {formatCurrency(order.customer_store_credit_balance, order.currency)}
-                        </span>
-                      )}
-                    </div>
-
-                    {shippingDiscount > 0 && (
-                      <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] font-sans space-y-1.5">
-                        <div className="flex items-center justify-between text-amber-300">
-                          <span>Shipping subsidy deduction:</span>
-                          <span className="font-mono font-bold">
-                            -{formatCurrency(shippingDiscount, order.currency)}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between text-neutral-300">
-                          <span>Suggested net refund:</span>
-                          <span className="font-mono font-bold text-amber-200">
-                            {formatCurrency(Math.max(0, remainingAvailableRefund - shippingDiscount), order.currency)}
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setRefundAmount(String(Math.max(0, remainingAvailableRefund - shippingDiscount)))}
-                          className="w-full mt-1 py-1 px-2 text-[10px] font-medium bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 rounded-md transition-colors text-center"
-                        >
-                          Apply Subsidized Net ({formatCurrency(Math.max(0, remainingAvailableRefund - shippingDiscount), order.currency)})
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block mb-1.5 font-sans">
-                  Refund Amount ({order.currency})
-                </label>
-                <input
-                  type="number"
-                  step="any"
-                  max={remainingAvailableRefund}
-                  min="1"
-                  required
-                  value={refundAmount}
-                  onChange={e => setRefundAmount(e.target.value)}
-                  placeholder="0.00"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#141414] border border-white/[0.08] text-sm font-mono text-white placeholder-neutral-600 focus:outline-none focus:border-rose-400 transition-colors"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block mb-1.5 font-sans">
-                  Reason (optional)
-                </label>
-                <input
-                  type="text"
-                  value={refundReason}
-                  onChange={e => setRefundReason(e.target.value)}
-                  placeholder="e.g. Customer request / Exchange"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#141414] border border-white/[0.08] text-xs font-sans text-white placeholder-neutral-600 focus:outline-none focus:border-rose-400 transition-colors"
-                />
-              </div>
-
-              <label className="flex items-center gap-2 cursor-pointer text-xs text-neutral-300">
-                <input
-                  type="checkbox"
-                  checked={restockRefundedItems}
-                  onChange={e => setRestockRefundedItems(e.target.checked)}
-                  className="rounded border-white/20 bg-[#141414] text-rose-500 focus:ring-0"
-                />
-                <span>Restock items</span>
-              </label>
-
-              {/* Order Status Update Control */}
-              <div className="pt-0.5">
-                {Number(refundAmount) >= remainingAvailableRefund && remainingAvailableRefund > 0 ? (
-                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs">
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-1.5 font-medium text-rose-300">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Order status will update to Refunded</span>
-                      </div>
-                      <p className="text-[10px] text-neutral-400 font-sans">Full refund will automatically mark this order as refunded</p>
-                    </div>
-                    <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-rose-500/20 text-rose-300 uppercase tracking-wider font-mono">
-                      Automatic
-                    </span>
-                  </div>
-                ) : (
-                  <label className="flex items-start gap-2.5 p-2.5 rounded-xl bg-[#141414] border border-white/[0.06] hover:border-white/10 cursor-pointer transition-all">
-                    <input
-                      type="checkbox"
-                      checked={markAsRefunded}
-                      onChange={e => setMarkAsRefunded(e.target.checked)}
-                      className="mt-0.5 rounded border-white/20 bg-black/40 text-rose-500 focus:ring-0"
-                    />
-                    <div className="space-y-0.5 flex-1">
-                      <div className="text-xs font-medium text-white flex items-center justify-between font-sans">
-                        <span>Update status to Refunded</span>
-                        <span className="text-[10px] font-normal text-neutral-400">
-                          Current: <span className="capitalize text-neutral-200">{order.status.replace(/[-_]/g, ' ')}</span>
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-neutral-400 font-sans">
-                        Mark order settled as refunded, or keep current status for ongoing fulfillment
-                      </p>
-                    </div>
-                  </label>
-                )}
-              </div>
-
-              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-white/[0.08]">
-                <button
-                  type="button"
-                  onClick={() => setIsRefundModalOpen(false)}
-                  disabled={isProcessingRefund}
-                  className="px-4 py-2 rounded-xl bg-[#141414] hover:bg-white/[0.06] text-neutral-300 hover:text-white text-xs font-medium border border-white/[0.08] transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isProcessingRefund || !refundAmount || Number(refundAmount) <= 0 || Number(refundAmount) > remainingAvailableRefund}
-                  className={clsx(
-                    "px-4 py-2 rounded-xl disabled:opacity-50 text-white text-xs font-bold font-sans flex items-center gap-2 shadow-sm transition-all",
-                    refundMethod === 'store_credit'
-                      ? "bg-amber-600 hover:bg-amber-500 text-white"
-                      : "bg-rose-500 hover:bg-rose-600 text-white"
-                  )}
-                >
-                  {refundMethod === 'store_credit' ? <Wallet className="w-3.5 h-3.5" /> : <RotateCcw className="w-3.5 h-3.5" />}
-                  {isProcessingRefund 
-                    ? (refundMethod === 'store_credit' ? 'Crediting...' : 'Refunding...') 
-                    : (refundMethod === 'store_credit' ? 'Refund to Store Credit' : 'Issue Refund')}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
+      {/* Refund pop-up */}
+      <RefundModal
+        open={isRefundModalOpen}
+        onOpenChange={setIsRefundModalOpen}
+        order={order}
+        orderRef={`#${cleanOrderNum}`}
+        totalRefunded={totalRefunded}
+        remainingAvailableRefund={remainingAvailableRefund}
+        shippingDiscount={shippingDiscount}
+        amount={refundAmount}
+        onAmountChange={setRefundAmount}
+        reason={refundReason}
+        onReasonChange={setRefundReason}
+        method={refundMethod}
+        onMethodChange={setRefundMethod}
+        restock={restockRefundedItems}
+        onRestockChange={setRestockRefundedItems}
+        markAsRefunded={markAsRefunded}
+        onMarkAsRefundedChange={setMarkAsRefunded}
+        isProcessing={isProcessingRefund}
+        onSubmit={handleProcessRefund}
+      />
 
       {/* 48-Hour Installation Warranty Review Modal */}
       {order && (
@@ -1641,196 +1422,170 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
       )}
 
       {/* Custom Skin Preview Lightbox Modal */}
-      {previewCustomItem && (
-        <Modal
-          isOpen={!!previewCustomItem}
-          onClose={() => setPreviewCustomItem(null)}
-          title={
-            <div className="flex items-center gap-2 font-sans">
-              <span className="text-[#f3aa18] font-bold">✦</span>
-              <span>{previewCustomItem.name}</span>
-            </div>
-          }
-          maxWidth="lg"
-        >
-          <div className="space-y-4 font-sans">
-            <div className="relative aspect-[1/1.4] max-h-[60vh] w-full rounded-2xl bg-black border border-white/10 overflow-hidden flex items-center justify-center p-3 shadow-2xl select-none">
-              {previewCustomItem.image_url ? (
-                <img
-                  src={previewCustomItem.image_url}
-                  alt={previewCustomItem.name}
-                  className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
-                />
-              ) : (
-                <span className="text-neutral-500 font-mono text-xs">No image preview</span>
-              )}
-            </div>
-
-            <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] text-xs font-mono">
-              <div className="flex items-center gap-2">
-                <span className="text-neutral-400">Orientation:</span>
-                <span className="text-white font-bold uppercase">{previewCustomItem.orientation || 'portrait'}</span>
-                {(previewCustomItem.finish_type || (previewCustomItem as any).feelform_mode) && (
-                  <span className={clsx(
-                    "ml-2 px-2 py-0.5 rounded font-bold uppercase text-[10px]",
-                    (previewCustomItem.finish_type || (previewCustomItem as any).feelform_mode || '').toLowerCase().includes('flat')
-                      ? "bg-zinc-800 text-neutral-300 border border-white/10"
-                      : "bg-[#f3aa18]/10 text-[#f3aa18] border border-[#f3aa18]/30"
-                  )}>
-                    {(previewCustomItem.finish_type || (previewCustomItem as any).feelform_mode || '').toLowerCase().includes('flat') ? 'Finish: Flat' : `Finish: Matte/Textured`}
-                  </span>
+      {previewCustomItem && (() => {
+        const finishMode = String(previewCustomItem.finish_type || (previewCustomItem as any).feelform_mode || '');
+        return (
+          <KitModal
+            open={!!previewCustomItem}
+            onOpenChange={(o) => { if (!o) setPreviewCustomItem(null); }}
+            title={previewCustomItem.name || 'Custom design'}
+            width={560}
+            footer={
+              <>
+                <KitButton variant="ghost" onClick={() => setPreviewCustomItem(null)}>Close</KitButton>
+                {previewCustomItem.image_url && (
+                  <a
+                    href={previewCustomItem.image_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    download
+                    className="inline-flex h-9 items-center gap-2 rounded-[9px] bg-accent px-[13px] text-[13px] font-semibold text-accent-on hover:brightness-95"
+                  >
+                    <Download className="h-[15px] w-[15px]" strokeWidth={1.8} aria-hidden />
+                    Download high-res
+                  </a>
                 )}
-              </div>
-
-              {previewCustomItem.image_url && (
-                <a
-                  href={previewCustomItem.image_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  download
-                  className="px-3.5 py-1.5 rounded-lg bg-[#f3aa18] hover:bg-[#d9940c] text-neutral-950 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Download High-Res</span>
-                </a>
+              </>
+            }
+          >
+            <div className="flex aspect-[1/1.4] max-h-[60vh] w-full select-none items-center justify-center overflow-hidden rounded-[10px] border border-card-border bg-chip p-3">
+              {previewCustomItem.image_url ? (
+                <img src={previewCustomItem.image_url} alt={previewCustomItem.name} className="max-h-full max-w-full rounded-lg object-contain" />
+              ) : (
+                <span className="font-mono text-[12px] text-faint">No image preview</span>
               )}
             </div>
-          </div>
-        </Modal>
-      )}
+            <div className="flex flex-wrap items-center gap-2 text-[12.5px] text-muted">
+              <span>Orientation:</span>
+              <span className="font-medium capitalize text-fg">{previewCustomItem.orientation || 'portrait'}</span>
+              {finishMode && (
+                <span className="rounded-full bg-chip px-2 py-[2px] text-[11.5px] font-medium text-muted">
+                  {finishMode.toLowerCase().includes('flat') ? 'Finish: Flat' : 'Finish: Matte/Textured'}
+                </span>
+              )}
+            </div>
+          </KitModal>
+        );
+      })()}
 
       {/* Review Media Modal */}
       {previewReviewMedia && (
-        <Modal
-          isOpen={!!previewReviewMedia}
-          onClose={() => setPreviewReviewMedia(null)}
-          title={previewReviewMedia.type === 'video' ? 'Customer Video' : 'Customer Photo'}
-          maxWidth="lg"
-        >
-          <div className="p-4 space-y-4 font-sans">
-            <div className="flex items-center justify-center max-h-[70vh] bg-black rounded-xl overflow-hidden border border-white/[0.08]">
-              {previewReviewMedia.type === 'video' ? (
-                <video
-                  src={previewReviewMedia.url}
-                  poster={previewReviewMedia.poster_url}
-                  controls
-                  autoPlay
-                  className="max-w-full max-h-[70vh] rounded-lg shadow-2xl"
-                />
-              ) : (
-                <img
-                  src={previewReviewMedia.url}
-                  alt="Customer skin photo"
-                  className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-2xl"
-                />
-              )}
-            </div>
-
-            <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] text-xs font-mono">
-              <div className="flex items-center gap-2">
-                <span className="text-neutral-400">Type:</span>
-                <span className="text-white font-bold uppercase">{previewReviewMedia.type}</span>
-                {previewReviewMedia.r2_synced ? (
-                  <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-sky-500/10 text-sky-300 border border-sky-500/30">
-                    Cloudflare R2 Mirrored
-                  </span>
-                ) : null}
-              </div>
-
+        <KitModal
+          open={!!previewReviewMedia}
+          onOpenChange={(o) => { if (!o) setPreviewReviewMedia(null); }}
+          title={previewReviewMedia.type === 'video' ? 'Customer video' : 'Customer photo'}
+          reference={`#${cleanOrderNum}`}
+          width={640}
+          footer={
+            <>
+              <KitButton variant="ghost" onClick={() => setPreviewReviewMedia(null)}>Close</KitButton>
               <a
                 href={previewReviewMedia.url}
                 target="_blank"
                 rel="noreferrer"
                 download
-                className="px-3.5 py-1.5 rounded-lg bg-[#f3aa18] hover:bg-[#d9940c] text-neutral-950 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                className="inline-flex h-9 items-center gap-2 rounded-[9px] bg-accent px-[13px] text-[13px] font-semibold text-accent-on hover:brightness-95"
               >
-                <Download className="w-3.5 h-3.5" />
-                <span>Download Asset</span>
+                <Download className="h-[15px] w-[15px]" strokeWidth={1.8} aria-hidden />
+                Download asset
               </a>
-            </div>
+            </>
+          }
+        >
+          <div className="flex max-h-[70vh] items-center justify-center overflow-hidden rounded-[10px] border border-card-border bg-chip">
+            {previewReviewMedia.type === 'video' ? (
+              <video src={previewReviewMedia.url} poster={previewReviewMedia.poster_url} controls autoPlay className="max-h-[70vh] max-w-full rounded-lg" />
+            ) : (
+              <img src={previewReviewMedia.url} alt="Customer skin photo" className="max-h-[70vh] max-w-full rounded-lg object-contain" />
+            )}
           </div>
-        </Modal>
+          <div className="flex flex-wrap items-center gap-2 text-[12.5px] text-muted">
+            <span>Type:</span>
+            <span className="font-medium capitalize text-fg">{previewReviewMedia.type}</span>
+            {previewReviewMedia.r2_synced ? (
+              <span className="rounded-full bg-st-prog-bg px-2 py-[2px] text-[11.5px] font-medium text-st-prog-fg">Cloudflare R2 mirrored</span>
+            ) : null}
+          </div>
+        </KitModal>
       )}
 
       {/* 30-Day Guarantee Rejection Modal */}
-      {isGuaranteeRejectModalOpen && (
-        <Modal
-          isOpen={isGuaranteeRejectModalOpen}
-          onClose={() => setIsGuaranteeRejectModalOpen(false)}
-          title="Reject 30-Day Guarantee Return"
-        >
-          <div className="space-y-4 font-sans">
-            <p className="text-xs text-neutral-300">
-              Provide a reason for rejecting the guarantee claim for Order #{cleanOrderNum}. This note will be recorded on the order timeline.
-            </p>
-            <textarea
-              value={guaranteeRejectReason}
-              onChange={(e) => setGuaranteeRejectReason(e.target.value)}
-              placeholder="e.g. Missing original retail packaging or merchandise was damaged during customer application..."
-              rows={3}
-              className="w-full rounded-xl bg-neutral-900 border border-white/10 p-3 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-rose-500/50"
-            />
-            <div className="flex justify-end gap-2 pt-2 border-t border-white/[0.08]">
-              <button
-                type="button"
-                onClick={() => setIsGuaranteeRejectModalOpen(false)}
-                className="px-4 py-2 rounded-xl text-xs font-medium text-neutral-400 hover:text-white bg-neutral-800"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={isProcessingGuaranteeAction}
-                onClick={() => handleGuaranteeAction('reject', guaranteeRejectReason)}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 disabled:opacity-50"
-              >
-                {isProcessingGuaranteeAction ? 'Rejecting...' : 'Confirm Rejection'}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      <ConfirmModal
+        open={isGuaranteeRejectModalOpen}
+        onOpenChange={setIsGuaranteeRejectModalOpen}
+        title="Reject guarantee return"
+        reference={`#${cleanOrderNum}`}
+        tone="danger"
+        confirmLabel="Reject return"
+        busyLabel="Rejecting..."
+        isLoading={isProcessingGuaranteeAction}
+        onConfirm={() => handleGuaranteeAction('reject', guaranteeRejectReason)}
+      >
+        <ConfirmText>
+          Give a reason for rejecting the 30-day guarantee claim. The note is recorded on the order timeline.
+        </ConfirmText>
+        <textarea
+          data-ds=""
+          aria-label="Rejection reason"
+          value={guaranteeRejectReason}
+          onChange={(e) => setGuaranteeRejectReason(e.target.value)}
+          placeholder="e.g. Missing original retail packaging, or the skin was damaged during application"
+          rows={3}
+          className={textareaClass}
+        />
+      </ConfirmModal>
 
       {/* Manual Completed Override Confirmation Modal */}
-      <ConfirmationModal
-        isOpen={showManualCompletedModal}
-        onClose={() => setShowManualCompletedModal(false)}
+      <ConfirmModal
+        open={showManualCompletedModal}
+        onOpenChange={setShowManualCompletedModal}
+        title="Mark order as Completed"
+        reference={`#${cleanOrderNum}`}
+        confirmLabel="Override to Completed"
         onConfirm={() => {
           setShowManualCompletedModal(false);
           handleStatusChange('completed');
         }}
-        title="Manual Override: Mark Order as Completed"
-        description="Courier delivery status is normally updated automatically once the courier confirms delivery via tracking webhooks. Are you sure you want to manually mark this order as Completed?"
-        confirmText="Override to Completed"
-        cancelText="Cancel"
-        variant="warning"
-      />
+      >
+        <ConfirmText>
+          Courier delivery status normally updates automatically once the courier confirms delivery through tracking webhooks. Are you sure you want to mark this order as Completed by hand?
+        </ConfirmText>
+      </ConfirmModal>
 
       {/* Administrator Cancel Order Confirmation Modal */}
-      <ConfirmationModal
-        isOpen={showCancelModal}
-        onClose={() => setShowCancelModal(false)}
-        onConfirm={handleCancelOrder}
-        title={`Cancel Order #${cleanOrderNum}`}
-        description="Are you sure you want to cancel this order? This will mark the order status as cancelled in WooCommerce and record an administrative audit note."
-        confirmText="Cancel Order"
-        cancelText="Keep Order"
-        variant="warning"
+      <ConfirmModal
+        open={showCancelModal}
+        onOpenChange={setShowCancelModal}
+        title="Cancel order"
+        reference={`#${cleanOrderNum}`}
+        tone="danger"
+        confirmLabel="Cancel order"
+        busyLabel="Cancelling..."
+        cancelLabel="Keep order"
         isLoading={isCancellingOrder}
-      />
+        onConfirm={handleCancelOrder}
+      >
+        <ConfirmText>
+          Are you sure you want to cancel this order? This marks the order as cancelled in WooCommerce and records an admin audit note.
+        </ConfirmText>
+      </ConfirmModal>
 
       {/* Administrator Move to Trash Confirmation Modal */}
-      <ConfirmationModal
-        isOpen={showTrashModal}
-        onClose={() => setShowTrashModal(false)}
-        onConfirm={handleTrashOrder}
-        title={`Move Order #${cleanOrderNum} to Trash`}
-        description="Are you sure you want to move this order to trash? It will be removed from active order queues and moved to the WooCommerce trash."
-        confirmText="Move to Trash"
-        cancelText="Cancel"
-        variant="danger"
+      <ConfirmModal
+        open={showTrashModal}
+        onOpenChange={setShowTrashModal}
+        title="Move order to trash"
+        reference={`#${cleanOrderNum}`}
+        tone="danger"
+        confirmLabel="Move to trash"
+        busyLabel="Moving..."
         isLoading={isTrashingOrder}
-      />
+        onConfirm={handleTrashOrder}
+      >
+        <ConfirmText>
+          Are you sure you want to move this order to trash? It leaves the active order queues and goes to the WooCommerce trash.
+        </ConfirmText>
+      </ConfirmModal>
 
       {/* Internal A6 Thermal Label Modal */}
       <ShippingLabelA6Modal
@@ -1850,116 +1605,55 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
       />
 
       {/* Post-Print Advance to Preparing Order Confirmation Modal */}
-      {order && (
-        <Modal
-          isOpen={showPreparingPromptModal}
-          onClose={() => setShowPreparingPromptModal(false)}
-          maxWidth="md"
-          title={
-            <div className="flex items-center gap-2 text-white font-sans">
-              <Layers className="w-5 h-5 text-[#f3aa18]" />
-              <span className="text-base font-bold">Mark order as "Preparing order"?</span>
-            </div>
-          }
-          subtitle="Shipping label has been sent to print. Advance order status to begin fulfillment."
-          footer={
-            <div className="flex items-center justify-end gap-2.5 w-full font-sans">
-              <button
-                type="button"
-                disabled={isMarkingPreparingFromDrawer}
-                onClick={() => setShowPreparingPromptModal(false)}
-                className="px-4 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-zinc-300 hover:text-white text-xs font-semibold border border-white/10 transition-colors cursor-pointer disabled:opacity-50"
-              >
-                Keep as Confirmed
-              </button>
-              <button
-                type="button"
-                disabled={isMarkingPreparingFromDrawer}
-                onClick={async () => {
-                  setIsMarkingPreparingFromDrawer(true);
-                  await handleStatusChange('preparing-order');
-                  setIsMarkingPreparingFromDrawer(false);
-                  setShowPreparingPromptModal(false);
-                }}
-                className="px-4 py-2 rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-neutral-950 text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50 shadow-xs active:scale-95"
-              >
-                {isMarkingPreparingFromDrawer && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
-                <span>{isMarkingPreparingFromDrawer ? 'Updating...' : 'Mark as Preparing order'}</span>
-              </button>
-            </div>
-          }
-        >
-          <div className="space-y-3 font-sans text-xs">
-            <p className="text-zinc-400">
-              Do you want to update order{' '}
-              <strong className="text-white font-mono">
-                #{String(order.order_number || order.id).replace(/^#+/, '')}
-              </strong>{' '}
-              from <span className="text-emerald-400 font-semibold">Confirmed</span> to{' '}
-              <span className="text-cyan-400 font-semibold">Preparing order</span>?
-            </p>
-          </div>
-        </Modal>
-      )}
+      <ConfirmModal
+        open={showPreparingPromptModal}
+        onOpenChange={setShowPreparingPromptModal}
+        title="Mark as Preparing order?"
+        reference={`#${cleanOrderNum}`}
+        icon={Layers}
+        confirmLabel="Mark as Preparing order"
+        busyLabel="Updating..."
+        cancelLabel="Keep as Confirmed"
+        isLoading={isMarkingPreparingFromDrawer}
+        onConfirm={async () => {
+          setIsMarkingPreparingFromDrawer(true);
+          await handleStatusChange('preparing-order');
+          setIsMarkingPreparingFromDrawer(false);
+          setShowPreparingPromptModal(false);
+        }}
+      >
+        <ConfirmText>
+          The shipping label was sent to print. Move this order from <b className="font-medium text-fg">Confirmed</b> to{' '}
+          <b className="font-medium text-fg">Preparing order</b> to start fulfillment?
+        </ConfirmText>
+      </ConfirmModal>
 
       {/* Post-Tracking Manual Entry Advance to Shipped Confirmation Modal */}
-      {order && (
-        <Modal
-          isOpen={showShippedPromptModal}
-          onClose={() => {
-            if (!isFulfilling) setShowShippedPromptModal(false);
-          }}
-          maxWidth="md"
-          title={
-            <div className="flex items-center gap-2 text-white font-sans">
-              <Truck className="w-5 h-5 text-[#f3aa18]" />
-              <span className="text-base font-bold">Mark order as "Shipped"?</span>
-            </div>
-          }
-          subtitle="Tracking number has been entered. Advance order status to begin delivery?"
-          footer={
-            <div className="flex items-center justify-end gap-2.5 w-full font-sans">
-              <button
-                type="button"
-                disabled={isFulfilling}
-                onClick={() => executeSaveTracking('none')}
-                className="px-4 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-zinc-300 hover:text-white text-xs font-semibold border border-white/10 transition-colors cursor-pointer disabled:opacity-50"
-              >
-                Keep as {getOrderStatusInfo(order.status).label}
-              </button>
-              <button
-                type="button"
-                disabled={isFulfilling}
-                onClick={() => executeSaveTracking('shipped')}
-                className="px-4 py-2 rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-neutral-950 text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50 shadow-xs active:scale-95"
-              >
-                {isFulfilling && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
-                <span>{isFulfilling ? 'Updating...' : 'Mark as Shipped'}</span>
-              </button>
-            </div>
-          }
-        >
-          <div className="space-y-3 font-sans text-xs">
-            <p className="text-zinc-400">
-              Do you want to update order{' '}
-              <strong className="text-white font-mono">
-                #{String(order.order_number || order.id).replace(/^#+/, '')}
-              </strong>{' '}
-              from{' '}
-              <span className={clsx("font-semibold", getOrderStatusInfo(order.status).color)}>
-                {getOrderStatusInfo(order.status).label}
-              </span>{' '}
-              to <span className="text-indigo-400 font-semibold">Shipped</span>?
-            </p>
-            <div className="p-3 rounded-xl bg-zinc-900 border border-white/[0.08] flex items-center justify-between text-xs font-mono">
-              <span className="text-neutral-400 font-sans">
-                {courier === 'custom' ? (customCourierName.trim() || 'Custom Courier') : (COURIER_PRESETS.find(p => p.value === courier)?.label || courier)}
-              </span>
-              <span className="font-bold text-white tracking-wider">{trackingNumber.trim()}</span>
-            </div>
-          </div>
-        </Modal>
-      )}
+      <ConfirmModal
+        open={showShippedPromptModal}
+        onOpenChange={setShowShippedPromptModal}
+        title="Mark as Shipped?"
+        reference={`#${cleanOrderNum}`}
+        icon={Truck}
+        confirmLabel="Mark as Shipped"
+        busyLabel="Updating..."
+        cancelLabel={`Keep as ${getOrderStatusInfo(order.status).label}`}
+        isLoading={isFulfilling}
+        onCancel={() => executeSaveTracking('none')}
+        onConfirm={() => executeSaveTracking('shipped')}
+      >
+        <ConfirmText>
+          The tracking number was entered. Move this order from{' '}
+          <b className="font-medium text-fg">{getOrderStatusInfo(order.status).label}</b> to{' '}
+          <b className="font-medium text-fg">Shipped</b>?
+        </ConfirmText>
+        <div className="flex items-center justify-between rounded-[10px] bg-chip px-3.5 py-3 text-[13px]">
+          <span className="text-muted">
+            {courier === 'custom' ? (customCourierName.trim() || 'Custom Courier') : (COURIER_PRESETS.find(p => p.value === courier)?.label || courier)}
+          </span>
+          <span className="font-mono font-medium text-fg">{trackingNumber.trim()}</span>
+        </div>
+      </ConfirmModal>
 
       {/* Official Customer Tax Invoice Modal */}
       <CustomerInvoiceModal
@@ -1983,208 +1677,165 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
 
       {/* Shipment Tracking Timeline Popup Modal */}
       {order && (
-        <Modal
-          isOpen={isTrackOrderModalOpen}
-          onClose={() => setIsTrackOrderModalOpen(false)}
-          title={
-            <div className="flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-[#f3aa18]" />
-              <span>Shipment Tracking • Order #{String(order.order_number || order.id).replace(/^#+/, '')}</span>
-            </div>
-          }
-          subtitle="Real-time carrier checkpoints and delivery timeline"
-          maxWidth="lg"
-          headerActions={
-            <button
-              type="button"
-              disabled={isSyncingTracking}
-              onClick={handleSyncTracking}
-              className="px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-xs text-neutral-300 hover:text-white flex items-center gap-1.5 border border-white/[0.08] transition-colors disabled:opacity-50 cursor-pointer"
-              title="Sync latest live tracking"
-            >
-              <RefreshCw className={clsx("w-3.5 h-3.5", isSyncingTracking && "animate-spin text-[#f3aa18]")} />
-              <span>{isSyncingTracking ? 'Syncing...' : 'Refresh'}</span>
-            </button>
+        <KitModal
+          open={isTrackOrderModalOpen}
+          onOpenChange={setIsTrackOrderModalOpen}
+          title="Shipment tracking"
+          reference={`#${cleanOrderNum}`}
+          description="Live carrier checkpoints and delivery timeline"
+          width={640}
+          footer={
+            <>
+              <KitButton variant="ghost" onClick={() => setIsTrackOrderModalOpen(false)}>Close</KitButton>
+              <KitButton icon={RefreshCw} disabled={isSyncingTracking} onClick={handleSyncTracking}>
+                {isSyncingTracking ? 'Syncing...' : 'Refresh'}
+              </KitButton>
+            </>
           }
         >
-          <div className="space-y-4">
-            {/* Courier & Tracking Resi Summary Card */}
-            <div className="p-3.5 rounded-xl bg-neutral-900/80 border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] uppercase font-mono tracking-wider text-neutral-400">Courier</span>
-                  <span className="text-xs font-semibold text-white uppercase">
-                    {(() => {
-                      const courierDisplay = getOrderCourierDisplay(order);
-                      if (courierDisplay && courierDisplay !== 'Courier') {
-                        return courierDisplay;
-                      }
-                      return cleanCourierDisplay(COURIER_PRESETS.find((p) => p.value === courier)?.label || order.tracking?.courier || courier);
-                    })()}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-sm font-mono font-bold text-[#f3aa18]">
-                    {order.tracking?.tracking_number}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (order.tracking?.tracking_number) {
-                        navigator.clipboard.writeText(order.tracking.tracking_number);
-                        setCopiedField('modal_resi');
-                        showToast('success', 'Copied', 'Tracking number copied to clipboard');
-                        setTimeout(() => setCopiedField(null), 2000);
-                      }
-                    }}
-                    className="p-1 rounded hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer"
-                    title="Copy tracking number"
-                  >
-                    {copiedField === 'modal_resi' ? (
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                    ) : (
-                      <Copy className="w-3.5 h-3.5" />
-                    )}
-                  </button>
-                </div>
-              </div>
-
+          <div className="flex flex-col justify-between gap-3 rounded-[10px] bg-chip px-3.5 py-3 sm:flex-row sm:items-center">
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
-                {order.tracking?.latest_status && (
-                  <span className={clsx(
-                    "text-[10px] font-mono font-bold px-2.5 py-1 rounded-full border uppercase tracking-wider",
-                    order.tracking.latest_status === 'delivered'
-                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                      : "bg-[#f3aa18]/10 text-[#f3aa18] border-[#f3aa18]/30"
-                  )}>
-                    {order.tracking.latest_status === 'delivered' ? '✓ Delivered' : order.tracking.latest_status.replace('_', ' ')}
-                  </span>
-                )}
-                {order.tracking?.tracking_number && (
-                  <div className="flex items-center gap-1.5">
-                    <a
-                      href={getExacoatTrackingUrl(order)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-2.5 py-1 rounded-lg bg-[#f3aa18]/15 hover:bg-[#f3aa18]/25 text-xs text-[#f3aa18] font-sans flex items-center gap-1.5 border border-[#f3aa18]/30 transition-all cursor-pointer font-medium"
-                      title="Customer Live Tracking Page on Exacoat"
-                    >
-                      <ExternalLink className="w-3 h-3" />
-                      <span>Track on Exacoat</span>
-                    </a>
-                    <a
-                      href={getPublicTrackingUrl(
-                        order.tracking.courier || courier,
-                        order.tracking.tracking_number,
-                        order.tracking.tracking_url
-                      )}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-2 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-[11px] text-neutral-400 font-sans flex items-center gap-1 border border-white/[0.06] transition-all cursor-pointer"
-                      title="Direct Carrier Portal"
-                    >
-                      <ExternalLink className="w-2.5 h-2.5" />
-                      <span>Carrier</span>
-                    </a>
-                  </div>
-                )}
+                <span className="text-[12px] text-faint">Courier</span>
+                <span className="text-[13px] font-medium text-fg">
+                  {(() => {
+                    const courierDisplay = getOrderCourierDisplay(order);
+                    if (courierDisplay && courierDisplay !== 'Courier') {
+                      return courierDisplay;
+                    }
+                    return cleanCourierDisplay(COURIER_PRESETS.find((p) => p.value === courier)?.label || order.tracking?.courier || courier);
+                  })()}
+                </span>
+              </div>
+              <div className="mt-1 flex items-center gap-1.5">
+                <span className="font-mono text-[14px] font-medium text-fg">{order.tracking?.tracking_number}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (order.tracking?.tracking_number) {
+                      navigator.clipboard.writeText(order.tracking.tracking_number);
+                      setCopiedField('modal_resi');
+                      showToast('success', 'Copied', 'Tracking number copied to clipboard');
+                      setTimeout(() => setCopiedField(null), 2000);
+                    }
+                  }}
+                  className="grid h-7 w-7 place-items-center rounded-[7px] text-faint hover:bg-pop hover:text-fg"
+                  aria-label="Copy tracking number"
+                  title="Copy tracking number"
+                >
+                  {copiedField === 'modal_resi' ? (
+                    <Check className="h-3.5 w-3.5 text-st-done-fg" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" />
+                  )}
+                </button>
               </div>
             </div>
 
-            {/* Delivered Banner if Delivered */}
-            {order.tracking?.latest_status === 'delivered' && (
-              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex items-start gap-2.5 text-xs text-emerald-300">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-bold block">Package Delivered</span>
-                  <p className="text-[11px] text-emerald-400/90 mt-0.5 leading-relaxed">
-                    The package was confirmed delivered by the carrier. The 48-hour Installation Warranty claim window is active from this delivery date.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Checkpoints Timeline */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h5 className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5 font-sans">
-                  <Clock className="w-3.5 h-3.5 text-[#f3aa18]" />
-                  <span>Tracking Timeline ({order.tracking?.checkpoints?.length || 0} checkpoints)</span>
-                </h5>
-              </div>
-
-              {isSyncingTracking && (!order.tracking?.checkpoints || order.tracking.checkpoints.length === 0) ? (
-                <div className="py-8 flex flex-col items-center justify-center gap-2 text-xs text-neutral-400">
-                  <RefreshCw className="w-5 h-5 animate-spin text-[#f3aa18]" />
-                  <span>Pulling live checkpoints from courier...</span>
-                </div>
-              ) : !order.tracking?.checkpoints || order.tracking.checkpoints.length === 0 ? (
-                <div className="p-4 rounded-xl bg-neutral-900/40 border border-white/5 text-center text-xs text-neutral-400 space-y-2">
-                  <div className="flex items-center justify-center gap-2 text-amber-400 font-medium text-xs">
-                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                    <span>Waybill Registered with {order.tracking?.courier || 'Courier'}</span>
-                  </div>
-                  <p className="text-[11px] text-neutral-400 max-w-sm mx-auto leading-relaxed">
-                    The waybill has been registered in the carrier tracking system. Checkpoints will populate once the package is scanned at the carrier sorting hub.
-                  </p>
-                  {order.tracking?.tracking_number && (
-                    <p className="text-[10px] text-neutral-500 pt-0.5 font-mono">
-                      Tracking Number: {order.tracking.tracking_number}
-                    </p>
+            <div className="flex flex-wrap items-center gap-2">
+              {order.tracking?.latest_status && (
+                <span
+                  className={clsx(
+                    'rounded-full px-2 py-[2px] text-[11.5px] font-medium capitalize',
+                    order.tracking.latest_status === 'delivered' ? 'bg-st-done-bg text-st-done-fg' : 'bg-st-prog-bg text-st-prog-fg'
                   )}
-                </div>
-              ) : (
-                <div className="p-4 rounded-xl bg-neutral-900/60 border border-white/10 space-y-3 max-h-80 overflow-y-auto custom-scrollbar">
-                  {order.tracking.checkpoints.map((cp, idx) => {
-                    const isDeliveredCp = cp.stage === 'delivered' || cp.description.toLowerCase().includes('delivered') || cp.description.toLowerCase().includes('diterima');
-                    const isLatest = idx === 0;
-
-                    return (
-                      <div key={idx} className="relative pl-5 border-l border-white/10 pb-3 last:pb-0">
-                        <span
-                          className={clsx(
-                            'absolute -left-[5px] top-1 w-2.5 h-2.5 rounded-full ring-4 ring-neutral-950',
-                            isDeliveredCp
-                              ? 'bg-emerald-400'
-                              : isLatest
-                              ? 'bg-[#f3aa18]'
-                              : 'bg-neutral-600'
-                          )}
-                        />
-                        <div className="text-xs space-y-0.5">
-                          <p className={clsx('leading-snug', isLatest ? 'text-white font-semibold' : 'text-neutral-300')}>
-                            {cp.description}
-                          </p>
-                          <div className="flex flex-wrap items-center gap-2 text-[10px] text-neutral-400 font-mono">
-                            <span>{cp.time}</span>
-                            {cp.location && (
-                              <span>• {cp.location}</span>
-                            )}
-                            {cp.stage && (
-                              <span className="px-1.5 py-0.2 rounded bg-white/5 text-neutral-400 border border-white/5 uppercase text-[9px]">
-                                {cp.stage}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                >
+                  {order.tracking.latest_status === 'delivered' ? 'Delivered' : order.tracking.latest_status.replace('_', ' ')}
+                </span>
+              )}
+              {order.tracking?.tracking_number && (
+                <>
+                  <a
+                    href={getExacoatTrackingUrl(order)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-[30px] items-center gap-1.5 rounded-[8px] border border-field-border bg-field px-2.5 text-[12.5px] text-fg hover:bg-chip"
+                    title="Customer live tracking page on Exacoat"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5 text-muted" />
+                    Track on Exacoat
+                  </a>
+                  <a
+                    href={getPublicTrackingUrl(
+                      order.tracking.courier || courier,
+                      order.tracking.tracking_number,
+                      order.tracking.tracking_url
+                    )}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-[30px] items-center gap-1.5 rounded-[8px] px-2.5 text-[12.5px] text-muted hover:bg-chip hover:text-fg"
+                    title="Carrier portal"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Carrier
+                  </a>
+                </>
               )}
             </div>
-
-            <div className="flex items-center justify-end pt-2 border-t border-white/[0.08]">
-              <button
-                type="button"
-                onClick={() => setIsTrackOrderModalOpen(false)}
-                className="px-4 py-2 rounded-xl text-xs font-medium text-neutral-400 hover:text-white bg-neutral-800 transition-colors cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
           </div>
-        </Modal>
+
+          {order.tracking?.latest_status === 'delivered' && (
+            <div className="flex items-start gap-2.5 rounded-[10px] border border-st-done-border bg-st-done-bg px-3.5 py-3 text-[12.5px] text-st-done-fg">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <span className="block font-medium">Package delivered</span>
+                <p className="m-0 mt-0.5 leading-relaxed">
+                  The carrier confirmed delivery. The 48-hour installation warranty claim window runs from this delivery date.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2.5">
+            <span className="flex items-center gap-1.5 text-[12px] text-faint">
+              <Clock className="h-3.5 w-3.5" />
+              Tracking timeline ({order.tracking?.checkpoints?.length || 0} checkpoints)
+            </span>
+
+            {isSyncingTracking && (!order.tracking?.checkpoints || order.tracking.checkpoints.length === 0) ? (
+              <div className="flex flex-col items-center justify-center gap-2 py-8 text-[12.5px] text-muted">
+                <RefreshCw className="h-5 w-5 animate-spin text-accent-fg" />
+                <span>Pulling live checkpoints from the courier...</span>
+              </div>
+            ) : !order.tracking?.checkpoints || order.tracking.checkpoints.length === 0 ? (
+              <div className="flex flex-col gap-1.5 rounded-[10px] border border-card-border px-4 py-4 text-center text-[12.5px] text-muted">
+                <span className="font-medium text-st-wait-fg">Waybill registered with {order.tracking?.courier || 'courier'}</span>
+                <p className="m-0 mx-auto max-w-sm leading-relaxed">
+                  The waybill is registered in the carrier tracking system. Checkpoints appear once the package is scanned at the carrier sorting hub.
+                </p>
+                {order.tracking?.tracking_number && (
+                  <p className="m-0 font-mono text-[12px] text-faint">Tracking number: {order.tracking.tracking_number}</p>
+                )}
+              </div>
+            ) : (
+              <div className="custom-scrollbar flex max-h-80 flex-col gap-3 overflow-y-auto rounded-[10px] border border-card-border p-4">
+                {order.tracking.checkpoints.map((cp, idx) => {
+                  const isDeliveredCp = cp.stage === 'delivered' || cp.description.toLowerCase().includes('delivered') || cp.description.toLowerCase().includes('diterima');
+                  const isLatest = idx === 0;
+
+                  return (
+                    <div key={idx} className="relative border-l border-line pb-3 pl-5 last:pb-0">
+                      <span
+                        className={clsx(
+                          'absolute -left-[5px] top-1 h-2.5 w-2.5 rounded-full',
+                          isDeliveredCp ? 'bg-st-done-fg' : isLatest ? 'bg-accent' : 'bg-faint'
+                        )}
+                      />
+                      <div className="flex flex-col gap-0.5 text-[12.5px]">
+                        <p className={clsx('m-0 leading-snug', isLatest ? 'font-medium text-fg' : 'text-muted')}>{cp.description}</p>
+                        <div className="flex flex-wrap items-center gap-2 font-mono text-[11.5px] text-faint">
+                          <span>{cp.time}</span>
+                          {cp.location && <span>{cp.location}</span>}
+                          {cp.stage && <span className="rounded bg-chip px-1.5 text-[11px] uppercase">{cp.stage}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </KitModal>
       )}
 
       {/* Edit Address & Recipient Details Modal */}

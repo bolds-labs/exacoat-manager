@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Modal } from '../ui/Modal';
+import { Modal } from '../ds/Modal';
+import { Button } from '../ds/Button';
+import { TextField } from '../ds/TextField';
+import { Checkbox } from '../ds/Checkbox';
 import { Badge } from '../ui/Badge';
 import {
   ShieldCheck,
@@ -350,114 +353,70 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
 
   return (
     <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      maxWidth="3xl"
-      title={
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="h-5 w-5 text-[#f3aa18]" />
-          <span>Warranty Claim Review {formatOrderNumber(claim?.order_number || orderId)}</span>
-        </div>
-      }
-      subtitle="Verify customer skin cutting proof video and approve replacement"
+      open={isOpen}
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+      title="Review warranty claim"
+      reference={formatOrderNumber(claim?.order_number || orderId)}
+      description="Check the customer's proof video and approve the replacement"
+      width={768}
       footer={
-        <div className="flex w-full items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-neutral-700 bg-neutral-800 px-4 py-2 text-xs font-medium text-neutral-300 hover:bg-neutral-700 transition-colors"
-            >
-              Close
-            </button>
-            <button
-              type="button"
+        <div className="flex w-full flex-wrap items-center justify-end gap-2">
+          <div className="mr-auto flex flex-wrap items-center gap-2">
+            <Button
+              variant={commChannel === 'whatsapp' ? 'secondary' : 'ghost'}
+              aria-pressed={commChannel === 'whatsapp'}
+              icon={MessageSquare}
               onClick={handleToggleWhatsApp}
-              className={clsx(
-                "flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors cursor-pointer",
-                commChannel === 'whatsapp'
-                  ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-300"
-                  : "border-neutral-700 bg-neutral-800 text-emerald-400 hover:bg-neutral-700 hover:border-emerald-500/30"
-              )}
             >
-              <MessageSquare className="h-4 w-4" />
-              WhatsApp Customer
-            </button>
-            <button
-              type="button"
+              WhatsApp customer
+            </Button>
+            <Button
+              variant={commChannel === 'email' ? 'secondary' : 'ghost'}
+              aria-pressed={commChannel === 'email'}
+              icon={Mail}
               onClick={handleToggleEmail}
-              className={clsx(
-                "flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors cursor-pointer",
-                commChannel === 'email'
-                  ? "border-sky-500/50 bg-sky-500/20 text-sky-300"
-                  : "border-neutral-700 bg-neutral-800 text-sky-400 hover:bg-neutral-700 hover:border-sky-500/30"
-              )}
             >
-              <Mail className="h-4 w-4" />
-              Email Customer
-            </button>
+              Email customer
+            </Button>
           </div>
 
-          {claim?.rma_status === 'pending_review' && (
-            <div className="flex items-center gap-2 flex-wrap">
-              {!showRejectInput ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setShowRejectInput(true)}
-                    disabled={isProcessing}
-                    className="flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-medium text-red-400 hover:bg-red-500/20 transition-colors cursor-pointer"
-                  >
-                    <XCircle className="h-4 w-4" />
-                    Reject Claim
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleApprove}
-                    disabled={isProcessing}
-                    className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-500 transition-colors cursor-pointer shadow-sm"
-                  >
-                    {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                    Approve Claim
-                  </button>
-                </>
-              ) : (
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                  <input
-                    type="text"
-                    value={rejectionReason}
-                    onChange={(e) => setRejectionReason(e.target.value)}
-                    placeholder="Reason for rejection (e.g. skin not cut / wrong material)..."
-                    className="h-9 w-60 rounded-lg border border-neutral-700 bg-neutral-900 px-3 text-xs text-white placeholder:text-neutral-500 focus:border-red-500 focus:outline-none"
+          {claim?.rma_status === 'pending_review' ? (
+            !showRejectInput ? (
+              <>
+                <Button variant="ghost" onClick={onClose}>Close</Button>
+                <Button variant="danger" icon={XCircle} onClick={() => setShowRejectInput(true)} disabled={isProcessing}>
+                  Reject claim
+                </Button>
+                <Button variant="primary" icon={isProcessing ? Loader2 : CheckCircle2} onClick={handleApprove} disabled={isProcessing}>
+                  Approve claim
+                </Button>
+              </>
+            ) : (
+              <>
+                <TextField
+                  aria-label="Rejection reason"
+                  className="w-64"
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  placeholder="Reason, e.g. skin not cut or wrong material"
+                />
+                <span title="Unlock the invoice so the customer can apply again on the website">
+                  <Checkbox
+                    label="Unlock web re-submit"
+                    checked={allowResubmit}
+                    onChange={(e) => setAllowResubmit(e.target.checked)}
                   />
-                  <label className="flex items-center gap-1.5 text-[11px] text-neutral-300 select-none cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={allowResubmit}
-                      onChange={(e) => setAllowResubmit(e.target.checked)}
-                      className="rounded border-neutral-700 bg-neutral-900 text-red-500 focus:ring-0"
-                    />
-                    <span title="Unlock invoice so customer can re-apply on website">Unlock web re-submit</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleReject}
-                    disabled={isProcessing || !rejectionReason.trim()}
-                    className="rounded-lg bg-red-600 px-3 py-2 text-xs font-medium text-white hover:bg-red-500 transition-colors cursor-pointer whitespace-nowrap"
-                  >
-                    Confirm Rejection
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowRejectInput(false)}
-                    className="text-xs text-neutral-400 hover:text-white px-1 cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              )}
-            </div>
+                </span>
+                <Button variant="ghost" onClick={() => setShowRejectInput(false)}>Cancel</Button>
+                <Button variant="danger" onClick={handleReject} disabled={isProcessing || !rejectionReason.trim()}>
+                  Confirm rejection
+                </Button>
+              </>
+            )
+          ) : (
+            <Button variant="ghost" onClick={onClose}>Close</Button>
           )}
         </div>
       }

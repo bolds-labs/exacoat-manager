@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Modal } from '../ui/Modal';
+import { Modal } from '../ds/Modal';
+import { Button as KitButton } from '../ds/Button';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
-import { ConfirmationModal } from '../ui/ConfirmationModal';
+import { ConfirmModal, ConfirmText } from './panel/ConfirmModal';
 import { Order, OrderItem, DeviceConfiguratorProfile, ConfiguratorVariant, DeviceFamily } from '../../types';
 import {
   fetchProductsDirect,
@@ -1155,62 +1156,33 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
   return (
     <>
       <Modal
-        isOpen={isOpen}
-        onClose={onClose}
-        maxWidth="4xl"
-        title={
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-[#f3aa18]/15 border border-[#f3aa18]/30 flex items-center justify-center text-[#f3aa18]">
-              <Layers className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-zinc-900 dark:text-white font-sans tracking-tight">
-                {isEditing ? 'Edit Item Configuration' : 'Add Item to Order'}
-              </h3>
-              <p className="text-[11px] font-mono text-zinc-500 dark:text-neutral-400">
-                Order {order.order_number || `#${order.id}`} {item ? `• Item #${item.id}` : ''}
-              </p>
-            </div>
-          </div>
-        }
+        open={isOpen}
+        onOpenChange={(o) => {
+          if (!o && !isSaving && !isDeleting && !showDeleteConfirm) onClose();
+        }}
+        title={isEditing ? 'Edit item' : 'Add item'}
+        reference={`#${String(order.order_number || order.id).replace(/^#+/, '')}${item ? ` · item ${item.id}` : ''}`}
+        width={896}
         footer={
-          <div className="flex items-center justify-between w-full">
-            <div>
-              {isEditing && (
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setShowDeleteConfirm(true)}
-                  disabled={isSaving || isDeleting}
-                  leftIcon={<Trash2 className="w-3.5 h-3.5" />}
-                >
-                  Remove Item
-                </Button>
-              )}
-            </div>
-            <div className="flex items-center gap-2.5">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={onClose}
+          <>
+            {isEditing && (
+              <KitButton
+                variant="danger"
+                icon={Trash2}
+                className="mr-auto"
+                onClick={() => setShowDeleteConfirm(true)}
                 disabled={isSaving || isDeleting}
               >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                variant="primary"
-                size="sm"
-                onClick={handleSubmit}
-                isLoading={isSaving}
-                leftIcon={<Check className="w-3.5 h-3.5" />}
-              >
-                {isEditing ? 'Save Configuration' : 'Add Item to Order'}
-              </Button>
-            </div>
-          </div>
+                Remove item
+              </KitButton>
+            )}
+            <KitButton variant="ghost" onClick={onClose} disabled={isSaving || isDeleting}>
+              Cancel
+            </KitButton>
+            <KitButton variant="primary" icon={Check} onClick={handleSubmit} disabled={isSaving}>
+              {isSaving ? 'Saving...' : isEditing ? 'Save item' : 'Add item to order'}
+            </KitButton>
+          </>
         }
       >
         <div className="space-y-4 py-1">
@@ -2277,20 +2249,22 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
       </Modal>
 
       {/* Confirmation modal for removing line item */}
-      {showDeleteConfirm && (
-        <ConfirmationModal
-          isOpen={showDeleteConfirm}
-          onClose={() => setShowDeleteConfirm(false)}
-          onConfirm={handleDeleteItem}
-          title="Remove Item from Order"
-          description={`Are you sure you want to remove "${productName}" from Order ${
-            order.order_number || `#${order.id}`
-          }? Order total will automatically be recalculated.`}
-          confirmText="Remove Item"
-          cancelText="Keep Item"
-          variant="danger"
-        />
-      )}
+      <ConfirmModal
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        title="Remove item"
+        reference={`#${String(order.order_number || order.id).replace(/^#+/, '')}`}
+        tone="danger"
+        confirmLabel="Remove item"
+        busyLabel="Removing..."
+        cancelLabel="Keep item"
+        isLoading={isDeleting}
+        onConfirm={handleDeleteItem}
+      >
+        <ConfirmText>
+          Remove "{productName}" from this order? The order total is recalculated automatically.
+        </ConfirmText>
+      </ConfirmModal>
     </>
   );
 };
