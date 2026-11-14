@@ -13,6 +13,10 @@ describe('tabNeedsOrderList', () => {
     }
   });
 
+  it('does not load it for the design system page', () => {
+    expect(tabNeedsOrderList('design_system', false)).toBe(false);
+  });
+
   it('never loads it for shop managers, who cannot open those screens', () => {
     expect(tabNeedsOrderList('dashboard', true)).toBe(false);
     expect(tabNeedsOrderList('skin_performance', true)).toBe(false);

@@ -55,7 +55,8 @@ export type NavItemKey =
   | 'testing'
   | 'health'
   | 'audit'
-  | 'settings';
+  | 'settings'
+  | 'design_system';
 
 export const getTabHref = (key: NavItemKey): string => {
   if (typeof window === 'undefined') return `#${key}`;

@@ -23,6 +23,7 @@ const TeamRolesManager = React.lazy(() => import('./components/settings/TeamRole
 const TestingSandboxPage = React.lazy(() => import('./pages/TestingSandboxPage').then(m => ({ default: m.TestingSandboxPage })));
 const SystemHealthPage = React.lazy(() => import('./pages/SystemHealthPage').then(m => ({ default: m.SystemHealthPage })));
 const AuditLogsPage = React.lazy(() => import('./pages/AuditLogsPage').then(m => ({ default: m.AuditLogsPage })));
+const DesignSystemPage = React.lazy(() => import('./pages/DesignSystemPage').then(m => ({ default: m.DesignSystemPage })));
 const SettingsPage = React.lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
 const RmaClaimsPage = React.lazy(() => import('./pages/RmaClaimsPage').then(m => ({ default: m.RmaClaimsPage })));
 const CustomLabelPage = React.lazy(() => import('./pages/CustomLabelPage').then(m => ({ default: m.CustomLabelPage })));
@@ -70,6 +71,8 @@ const getTabFromUrl = (): NavItemKey => {
 
   const urlMap: Record<string, NavItemKey> = {
     '': 'dashboard',
+    'design-system': 'design_system',
+    'design_system': 'design_system',
     'dashboard': 'dashboard',
     'affiliates': 'affiliates',
     'affiliate': 'affiliates',
@@ -395,6 +398,15 @@ export const App: React.FC = () => {
       }
       return <OrdersView initialStatus="all" onNavigateToCustomer={undefined} />;
     }
+    const fallbackDashboard = (
+      <DashboardPage
+        orders={orders}
+        onNavigate={handleTabChange}
+        onSelectOrder={handleSelectOrder}
+        onRefresh={() => loadWorkspaceData(true)}
+        isLoading={isLoading}
+      />
+    );
     switch (currentTab) {
       case 'dashboard':
         return (
@@ -473,16 +485,10 @@ export const App: React.FC = () => {
         return <AuditLogsPage />;
       case 'settings':
         return <SettingsPage />;
+      case 'design_system':
+        return user?.role === 'super_admin' ? <DesignSystemPage /> : fallbackDashboard;
       default:
-        return (
-          <DashboardPage
-            orders={orders}
-            onNavigate={handleTabChange}
-            onSelectOrder={handleSelectOrder}
-            onRefresh={() => loadWorkspaceData(true)}
-            isLoading={isLoading}
-          />
-        );
+        return fallbackDashboard;
     }
   };
 

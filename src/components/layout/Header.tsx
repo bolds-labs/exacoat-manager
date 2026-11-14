@@ -34,6 +34,7 @@ const pageTitles: Record<NavItemKey, string> = {
   health: 'Health',
   audit: 'Audit Logs',
   settings: 'Settings',
+  design_system: 'Design System',
 };
 
 
