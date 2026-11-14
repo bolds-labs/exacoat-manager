@@ -131,12 +131,12 @@ const WORKSPACE_PAGES: WorkspaceAction[] = [
   },
   { 
     id: 'materials', 
-    label: 'Materials & Stock', 
+    label: 'Finishes & Stock', 
     category: 'Workspace',
-    description: 'Vinyl roll inventory, surface finishes, textures, and stock tracking', 
+    description: 'Skin finishes, stock, textures, finish groups and price tiers', 
     tab: 'materials', 
     icon: Layers,
-    keywords: ['vinyl', 'stock', 'finishes', 'textures', 'rolls', 'inventory', 'raw material'] 
+    keywords: ['vinyl', 'stock', 'finishes', 'textures', 'rolls', 'inventory', 'raw material', 'materials', 'master textures', 'groups', 'surcharge'] 
   },
   { 
     id: 'reviews', 

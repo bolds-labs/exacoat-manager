@@ -17,7 +17,7 @@ const pageTitles: Record<NavItemKey, string> = {
   export: 'Export Shipments',
   tracking_pool: 'Tracking Pool',
   configurator: 'Configurator Studio',
-  materials: 'Materials & Stock',
+  materials: 'Finishes & Stock',
   reviews: 'Reviews',
   reports: 'Reports',
   skin_performance: 'Skin Performance',

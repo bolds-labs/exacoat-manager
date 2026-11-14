@@ -72,7 +72,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { key: 'products', label: 'Products', icon: Package },
       { key: 'configurator', label: 'Configurator Studio', icon: Sliders },
-      { key: 'materials', label: 'Materials & Stock', icon: Layers },
+      { key: 'materials', label: 'Finishes & Stock', icon: Layers },
     ],
   },
   {

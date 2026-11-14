@@ -1,982 +1,492 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { PageHeroHeader } from '../components/ui/PageHeroHeader';
-import { GlassCard } from '../components/ui/GlassCard';
-import { useToast } from '../context/ToastContext';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Coins, FolderTree, Plus, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import {
-  fetchGlobalFinishesDirect,
-  toggleFinishStockDirect,
-  toggleFinishActiveDirect,
-  saveGlobalFinishDirect,
-  GlobalFinish,
-  DEFAULT_GLOBAL_FINISHES,
-  FinishSurchargeTier,
   DEFAULT_FINISH_SURCHARGE_TIERS,
+  deleteGlobalFinishDirect,
+  fetchGlobalFinishesDirect,
+  renameFinishGroupDirect,
+  reorderFinishGroupsDirect,
+  saveAllGlobalFinishesDirect,
+  saveFinishGroupSettingsDirect,
+  saveGlobalFinishDirect,
+  toggleFinishActiveDirect,
+  toggleFinishStockDirect,
+  type FinishGroupSetting,
+  type FinishSurchargeTier,
+  type GlobalFinish,
 } from '../lib/wordpressBridge';
 import {
-  Layers,
-  Search,
-  CheckCircle2,
-  AlertTriangle,
-  Plus,
-  RefreshCw,
-  Sparkles,
-  Package,
-  ExternalLink,
-  Filter,
-  Check,
-  X,
-  Edit3,
-  Coins,
-} from 'lucide-react';
-import { clsx } from 'clsx';
+  buildFinishSavePayload,
+  buildNewFinishPayload,
+  canDeleteGroup,
+  filterFinishes,
+  finishCounts,
+  groupFinishes,
+  moveFinishInGroup,
+  moveGroup,
+  orderedGroups,
+  type FinishDraft,
+  type FinishStatus,
+  type FinishStatusFilter,
+} from '../lib/finishesEditor';
+import { onWorkspaceRefresh } from '../lib/workspaceRefresh';
+import { Button } from '../components/ds/Button';
+import { IconButton } from '../components/ds/IconButton';
+import { Card } from '../components/ds/Card';
+import { Tabs } from '../components/ds/Tabs';
+import { Select } from '../components/ds/Select';
+import { SearchField } from '../components/ds/SearchField';
+import { Modal } from '../components/ds/Modal';
+import { toast } from '../components/ds/toast';
+import { FinishRow } from '../components/finishes/FinishRow';
+import { FinishEditPanel, type MediaRole } from '../components/finishes/FinishEditPanel';
+import { FinishGroupsModal, describeGroupSetting } from '../components/finishes/FinishGroupsModal';
 import { FinishSurchargeTiersModal } from '../components/modals/FinishSurchargeTiersModal';
+import { MediaLibraryModal } from '../components/modals/MediaLibraryModal';
 
+type PanelState = { mode: 'edit'; id: string } | { mode: 'create' } | null;
+
+const MEDIA_TITLES: Record<MediaRole, { title: string; size: string }> = {
+  thumbnail: { title: 'Swatch thumbnail', size: 'Square swatch (150x150 or 500x500)' },
+  texture_url: { title: 'Master texture', size: 'Tileable texture (2000x3000)' },
+  texture_big_url: { title: 'Big master texture', size: 'Large texture for laptops and tablets (3000x2000)' },
+};
+
+const STATUS_TABS: { key: FinishStatusFilter; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'active', label: 'Active' },
+  { key: 'inactive', label: 'Inactive' },
+  { key: 'out_of_stock', label: 'Out of stock' },
+  { key: 'coming_soon', label: 'Coming soon' },
+];
+
+const errorText = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
+
+/** Finishes & Stock: the one editor for global finishes, finish groups and price tiers. */
 export const MaterialsStockPage: React.FC = () => {
-  const { showToast } = useToast();
-  const [finishes, setFinishes] = useState<GlobalFinish[]>(DEFAULT_GLOBAL_FINISHES);
-  const [surchargeTiers, setSurchargeTiers] = useState<FinishSurchargeTier[]>(DEFAULT_FINISH_SURCHARGE_TIERS);
-  const [showSurchargeTiersModal, setShowSurchargeTiersModal] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedGroup, setSelectedGroup] = useState<string>('all');
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [finishes, setFinishes] = useState<GlobalFinish[]>([]);
+  const [storedGroups, setStoredGroups] = useState<string[]>([]);
+  const [groupSettings, setGroupSettings] = useState<Record<string, FinishGroupSetting>>({});
+  const [tiers, setTiers] = useState<FinishSurchargeTier[]>(DEFAULT_FINISH_SURCHARGE_TIERS);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // New Material Modal State
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [newFinish, setNewFinish] = useState<{
-    name: string;
-    group: string;
-    slug: string;
-    thumbnail: string;
-    texture_url: string;
-    extra_price: number;
-    accent_extra_price: number;
-    status: 'in_stock' | 'out_of_stock' | 'coming_soon';
-    in_stock: boolean;
-  }>({
-    name: '',
-    group: 'Signature skins',
-    slug: '',
-    thumbnail: '',
-    texture_url: '',
-    extra_price: 0,
-    accent_extra_price: 0,
-    status: 'in_stock',
-    in_stock: true,
-  });
+  const [status, setStatus] = useState<FinishStatusFilter>('all');
+  const [query, setQuery] = useState('');
+  const [groupFilter, setGroupFilter] = useState('all');
 
-  // Edit Material Modal State
-  const [editingFinish, setEditingFinish] = useState<GlobalFinish | null>(null);
+  const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
+  const [reordering, setReordering] = useState(false);
+  const [groupsBusy, setGroupsBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const loadFinishes = async (quiet = false) => {
+  const [panel, setPanel] = useState<PanelState>(null);
+  const [deleting, setDeleting] = useState<GlobalFinish | null>(null);
+  const [groupsOpen, setGroupsOpen] = useState(false);
+  const [groupsFocus, setGroupsFocus] = useState<string | null>(null);
+  const [tiersOpen, setTiersOpen] = useState(false);
+  const [media, setMedia] = useState<{ role: MediaRole; current: string; apply: (url: string) => void } | null>(null);
+
+  const load = useCallback(async (quiet: boolean) => {
+    if (quiet) setRefreshing(true);
+    else setLoading(true);
     try {
-      if (!quiet) setIsLoading(true);
-      else setIsRefreshing(true);
-
       const res = await fetchGlobalFinishesDirect();
-      if (res.finishes && Array.isArray(res.finishes) && res.finishes.length > 0) {
-        setFinishes(res.finishes);
-      }
-      if (res.surcharge_tiers && Array.isArray(res.surcharge_tiers) && res.surcharge_tiers.length > 0) {
-        setSurchargeTiers(res.surcharge_tiers);
-      }
-    } catch (err: any) {
-      console.warn('Materials inventory load warning:', err);
+      if (Array.isArray(res.finishes)) setFinishes(res.finishes);
+      if (Array.isArray(res.groups) && res.groups.length > 0) setStoredGroups(res.groups);
+      else if (Array.isArray(res.finishes)) setStoredGroups(orderedGroups([], res.finishes));
+      if (res.group_settings) setGroupSettings(res.group_settings);
+      if (Array.isArray(res.surcharge_tiers) && res.surcharge_tiers.length > 0) setTiers(res.surcharge_tiers);
+    } catch (err) {
+      toast.error('Could not load finishes', errorText(err, 'Try Refresh.'));
     } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
+      setLoading(false);
+      setRefreshing(false);
     }
-  };
-
-  useEffect(() => {
-    loadFinishes();
   }, []);
 
-  const handleToggleStock = async (finish: GlobalFinish) => {
-    const currentStatus: 'in_stock' | 'out_of_stock' | 'coming_soon' =
-      finish.status || (finish.is_coming_soon ? 'coming_soon' : finish.in_stock !== false ? 'in_stock' : 'out_of_stock');
-    const nextStatus: 'in_stock' | 'out_of_stock' | 'coming_soon' =
-      currentStatus === 'in_stock'
-        ? 'out_of_stock'
-        : currentStatus === 'out_of_stock'
-        ? 'coming_soon'
-        : 'in_stock';
-    const nextInStock = nextStatus === 'in_stock';
-    const nextComingSoon = nextStatus === 'coming_soon';
-
-    setUpdatingId(finish.id);
-
-    // Optimistic update
-    setFinishes((prev) =>
-      prev.map((f) =>
-        f.id === finish.id
-          ? { ...f, status: nextStatus, in_stock: nextInStock, is_coming_soon: nextComingSoon }
-          : f
-      )
-    );
-
-    try {
-      const res = await toggleFinishStockDirect(finish.id, nextStatus);
-      if (res.success) {
-        showToast(
-          'success',
-          'Stock Status Updated',
-          `${finish.name} status updated to ${nextStatus === 'in_stock' ? 'IN STOCK' : nextStatus === 'out_of_stock' ? 'DEPLETED' : 'COMING SOON'}. Propagated across all device configurators.`
-        );
-      } else {
-        // Revert on failure
-        setFinishes((prev) =>
-          prev.map((f) => (f.id === finish.id ? finish : f))
-        );
-        showToast('error', 'Update Failed', res.error || 'Failed updating stock status');
-      }
-    } catch (err: any) {
-      setFinishes((prev) =>
-        prev.map((f) => (f.id === finish.id ? finish : f))
-      );
-      showToast('error', 'Store Error', err.message || 'Communication error with store');
-    } finally {
-      setUpdatingId(null);
+  const firstLoad = useRef(true);
+  useEffect(() => {
+    if (firstLoad.current) {
+      firstLoad.current = false;
+      void load(false);
     }
-  };
+  }, [load]);
+  useEffect(() => onWorkspaceRefresh(() => void load(true)), [load]);
 
-  const handleToggleActive = async (finish: GlobalFinish) => {
-    const nextActive = finish.is_active === false ? true : false;
-    setUpdatingId(finish.id);
-
-    // Optimistic update
-    setFinishes((prev) =>
-      prev.map((f) => (f.id === finish.id ? { ...f, is_active: nextActive } : f))
-    );
-
-    try {
-      const res = await toggleFinishActiveDirect(finish.id, nextActive);
-      if (res.success) {
-        showToast(
-          'success',
-          nextActive ? 'Finish Activated' : 'Finish Deactivated',
-          `${finish.name} marked as ${nextActive ? 'Active (Visible on store)' : 'Inactive (Hidden from storefront)'}.`
-        );
-      } else {
-        // Revert on failure
-        setFinishes((prev) =>
-          prev.map((f) => (f.id === finish.id ? { ...f, is_active: finish.is_active } : f))
-        );
-        showToast('error', 'Update Failed', res.error || 'Failed updating active status');
-      }
-    } catch (err: any) {
-      setFinishes((prev) =>
-        prev.map((f) => (f.id === finish.id ? { ...f, is_active: finish.is_active } : f))
-      );
-      showToast('error', 'Store Error', err.message || 'Communication error with store');
-    } finally {
-      setUpdatingId(null);
-    }
-  };
-
-  const handleCreateFinish = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newFinish.name.trim()) {
-      showToast('error', 'Validation Error', 'Finish name is required');
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      const slug =
-        newFinish.slug.trim() ||
-        newFinish.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-
-      const res = await saveGlobalFinishDirect({
-        name: newFinish.name.trim(),
-        slug,
-        group: newFinish.group,
-        class_name: `cfg-${slug}`,
-        thumbnail: newFinish.thumbnail.trim(),
-        texture_url: newFinish.texture_url.trim() || newFinish.thumbnail.trim(),
-        extra_price: Number(newFinish.extra_price) || 0,
-        accent_extra_price: Number(newFinish.accent_extra_price) || 0,
-        status: newFinish.status,
-        in_stock: newFinish.status === 'in_stock',
-        is_coming_soon: newFinish.status === 'coming_soon',
-      });
-
-      if (res.success) {
-        showToast('success', 'Material Registered', `Material finish "${newFinish.name}" registered successfully.`);
-        setIsModalOpen(false);
-        setNewFinish({
-          name: '',
-          group: 'Signature skins',
-          slug: '',
-          thumbnail: '',
-          texture_url: '',
-          extra_price: 0,
-          accent_extra_price: 0,
-          status: 'in_stock',
-          in_stock: true,
-        });
-        loadFinishes(true);
-      } else {
-        showToast('error', 'Registration Failed', res.error || 'Failed registering finish');
-      }
-    } catch (err: any) {
-      showToast('error', 'Save Error', err.message || 'Error saving finish');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleUpdateFinish = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingFinish || !editingFinish.name.trim()) {
-      showToast('error', 'Validation Error', 'Finish name is required');
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      const st =
-        editingFinish.status ||
-        (editingFinish.is_coming_soon
-          ? 'coming_soon'
-          : editingFinish.in_stock !== false
-          ? 'in_stock'
-          : 'out_of_stock');
-
-      const res = await saveGlobalFinishDirect({
-        id: editingFinish.id,
-        name: editingFinish.name.trim(),
-        slug: editingFinish.slug,
-        group: editingFinish.group,
-        class_name: editingFinish.class_name,
-        thumbnail: editingFinish.thumbnail.trim(),
-        texture_url: (editingFinish.texture_url || '').trim(),
-        extra_price: Number(editingFinish.extra_price) || 0,
-        accent_extra_price: Number(editingFinish.accent_extra_price) || 0,
-        status: st,
-        in_stock: st === 'in_stock',
-        is_coming_soon: st === 'coming_soon',
-        shadow_opacity: editingFinish.shadow_opacity,
-        highlight_opacity: editingFinish.highlight_opacity,
-      });
-
-      if (res.success) {
-        showToast('success', 'Material Updated', `Finish "${editingFinish.name}" updated successfully.`);
-        setEditingFinish(null);
-        loadFinishes(true);
-      } else {
-        showToast('error', 'Update Failed', res.error || 'Failed updating finish');
-      }
-    } catch (err: any) {
-      showToast('error', 'Save Error', err.message || 'Error saving finish');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  // Unique groups
-  const groups = useMemo(() => {
-    const list = Array.from(new Set(finishes.map((f) => f.group))).filter(Boolean);
-    return ['all', ...list];
-  }, [finishes]);
-
-  // Filtered finishes
-  const filteredFinishes = useMemo(() => {
-    return finishes.filter((f) => {
-      const matchesSearch =
-        f.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        f.slug.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        f.group.toLowerCase().includes(searchQuery.toLowerCase());
-
-      const matchesGroup = selectedGroup === 'all' || f.group === selectedGroup;
-
-      return matchesSearch && matchesGroup;
+  const groups = useMemo(() => orderedGroups(storedGroups, finishes), [storedGroups, finishes]);
+  const counts = useMemo(() => finishCounts(finishes), [finishes]);
+  const groupCounts = useMemo(() => {
+    const out: Record<string, number> = {};
+    finishes.forEach((f) => {
+      out[f.group] = (out[f.group] || 0) + 1;
     });
-  }, [finishes, searchQuery, selectedGroup]);
-
-  // Inventory stats
-  const stats = useMemo(() => {
-    const total = finishes.length;
-    const comingSoon = finishes.filter(
-      (f) => f.status === 'coming_soon' || f.is_coming_soon
-    ).length;
-    const inStock = finishes.filter(
-      (f) =>
-        f.status === 'in_stock' ||
-        (f.in_stock !== false && f.status !== 'coming_soon' && !f.is_coming_soon)
-    ).length;
-    const outOfStock = finishes.filter(
-      (f) =>
-        f.status === 'out_of_stock' ||
-        (!f.in_stock && f.status !== 'coming_soon' && !f.is_coming_soon)
-    ).length;
-    return { total, inStock, comingSoon, outOfStock };
+    return out;
   }, [finishes]);
+  const visible = useMemo(() => filterFinishes(finishes, { status, query, group: groupFilter }), [finishes, status, query, groupFilter]);
+  const sections = useMemo(() => {
+    const visibleIds = new Set(visible.map((f) => f.id));
+    const filtering = status !== 'all' || query.trim() !== '' || groupFilter !== 'all';
+    return groupFinishes(storedGroups, finishes)
+      .map((s) => ({ ...s, all: s.finishes, finishes: s.finishes.filter((f) => visibleIds.has(f.id)) }))
+      .filter((s) => (filtering ? s.finishes.length > 0 && (groupFilter === 'all' || s.group === groupFilter) : true));
+  }, [storedGroups, finishes, visible, status, query, groupFilter]);
+
+  const panelFinish = panel?.mode === 'edit' ? finishes.find((f) => f.id === panel.id) ?? null : null;
+
+  const markBusy = (id: string, on: boolean) =>
+    setBusyIds((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+
+  const patchFinish = (id: string, patch: Partial<GlobalFinish>) =>
+    setFinishes((prev) => prev.map((f) => (f.id === id ? { ...f, ...patch } : f)));
+
+  const handleStock = async (finish: GlobalFinish, next: FinishStatus) => {
+    const before = { status: finish.status, in_stock: finish.in_stock, is_coming_soon: finish.is_coming_soon };
+    markBusy(finish.id, true);
+    patchFinish(finish.id, { status: next, in_stock: next === 'in_stock', is_coming_soon: next === 'coming_soon' });
+    try {
+      const res = await toggleFinishStockDirect(finish.id, next);
+      if (!res.success) throw new Error(res.error || 'The store did not accept the change.');
+      toast.success('Stock updated', `${finish.name}: ${next === 'in_stock' ? 'in stock' : next === 'out_of_stock' ? 'out of stock' : 'coming soon'}.`);
+    } catch (err) {
+      patchFinish(finish.id, before);
+      toast.error('Stock not updated', errorText(err, 'Could not reach the store.'));
+    } finally {
+      markBusy(finish.id, false);
+    }
+  };
+
+  const handleActive = async (finish: GlobalFinish, next: boolean) => {
+    const before = finish.is_active;
+    markBusy(finish.id, true);
+    patchFinish(finish.id, { is_active: next });
+    try {
+      const res = await toggleFinishActiveDirect(finish.id, next);
+      if (!res.success) throw new Error(res.error || 'The store did not accept the change.');
+      toast.success(next ? 'Finish shown' : 'Finish hidden', `${finish.name} is ${next ? 'now on' : 'hidden from'} the storefront.`);
+    } catch (err) {
+      patchFinish(finish.id, { is_active: before });
+      toast.error('Not updated', errorText(err, 'Could not reach the store.'));
+    } finally {
+      markBusy(finish.id, false);
+    }
+  };
+
+  const handleMove = async (finish: GlobalFinish, direction: 'up' | 'down') => {
+    const next = moveFinishInGroup(finishes, finish.id, direction);
+    if (!next) return;
+    const before = finishes;
+    setFinishes(next);
+    setReordering(true);
+    try {
+      const res = await saveAllGlobalFinishesDirect(next, storedGroups);
+      if (!res.success) throw new Error(res.error || 'The store did not accept the new order.');
+      if (Array.isArray(res.finishes)) setFinishes(res.finishes);
+    } catch (err) {
+      setFinishes(before);
+      toast.error('Order not saved', errorText(err, 'Could not reach the store.'));
+    } finally {
+      setReordering(false);
+    }
+  };
+
+  const handleSave = async (draft: FinishDraft) => {
+    setSaving(true);
+    try {
+      const payload = panelFinish ? buildFinishSavePayload(panelFinish, draft) : buildNewFinishPayload(draft, finishes.length);
+      const res = await saveGlobalFinishDirect(payload);
+      if (!res.success) throw new Error(res.error || 'The store did not accept the finish.');
+      if (Array.isArray(res.finishes)) setFinishes(res.finishes);
+      else setFinishes((prev) => (panelFinish ? prev.map((f) => (f.id === payload.id ? payload : f)) : [...prev, payload]));
+      if (Array.isArray(res.groups)) setStoredGroups(res.groups);
+      toast.success(panelFinish ? 'Finish saved' : 'Finish added', `${payload.name} is updated on every configurator.`);
+      setPanel(null);
+    } catch (err) {
+      toast.error('Not saved', errorText(err, 'Could not reach the store.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleting) return;
+    const target = deleting;
+    setSaving(true);
+    try {
+      const res = await deleteGlobalFinishDirect(target.id);
+      if (!res.success) throw new Error(res.error || 'The store did not delete the finish.');
+      if (Array.isArray(res.finishes)) setFinishes(res.finishes);
+      else setFinishes((prev) => prev.filter((f) => f.id !== target.id));
+      if (Array.isArray(res.groups)) setStoredGroups(res.groups);
+      toast.success('Finish deleted', `${target.name} is no longer offered.`);
+      setDeleting(null);
+      setPanel(null);
+    } catch (err) {
+      toast.error('Not deleted', errorText(err, 'Could not reach the store.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveGroupOrder = async (next: string[], success: string): Promise<boolean> => {
+    const before = storedGroups;
+    setStoredGroups(next);
+    setGroupsBusy(true);
+    try {
+      const res = await reorderFinishGroupsDirect(next);
+      if (!res.success) throw new Error(res.error || 'The store did not accept the groups.');
+      if (Array.isArray(res.groups)) setStoredGroups(res.groups);
+      toast.success(success);
+      return true;
+    } catch (err) {
+      setStoredGroups(before);
+      toast.error('Groups not saved', errorText(err, 'Could not reach the store.'));
+      return false;
+    } finally {
+      setGroupsBusy(false);
+    }
+  };
+
+  const handleGroupMove = (group: string, direction: 'up' | 'down') => {
+    const next = moveGroup(groups, group, direction);
+    if (next) void saveGroupOrder(next, `${group} moved ${direction}`);
+  };
+
+  const handleGroupAdd = (name: string) => saveGroupOrder([...groups, name], `Group ${name} added`);
+
+  const handleGroupDelete = (group: string) => {
+    if (!canDeleteGroup(group, finishes)) {
+      toast.error('Group not empty', `Move the finishes in ${group} to another group first.`);
+      return;
+    }
+    if (groupFilter === group) setGroupFilter('all');
+    void saveGroupOrder(
+      groups.filter((g) => g !== group),
+      `Group ${group} deleted`,
+    );
+  };
+
+  const handleGroupRename = async (oldName: string, newName: string): Promise<boolean> => {
+    setGroupsBusy(true);
+    try {
+      const res = await renameFinishGroupDirect(oldName, newName);
+      if (!res.success) throw new Error(res.error || 'The store did not rename the group.');
+      setStoredGroups(Array.isArray(res.groups) ? res.groups : (prev) => prev.map((g) => (g === oldName ? newName : g)));
+      if (Array.isArray(res.finishes)) setFinishes(res.finishes);
+      else setFinishes((prev) => prev.map((f) => (f.group === oldName ? { ...f, group: newName } : f)));
+      if (groupFilter === oldName) setGroupFilter(newName);
+      toast.success('Group renamed', `${oldName} is now ${newName}; ${res.updated_count ?? 0} finishes moved with it.`);
+      return true;
+    } catch (err) {
+      toast.error('Not renamed', errorText(err, 'Could not reach the store.'));
+      return false;
+    } finally {
+      setGroupsBusy(false);
+    }
+  };
+
+  const handleGroupSetting = async (group: string, setting: FinishGroupSetting): Promise<boolean> => {
+    const next = { ...groupSettings, [group]: setting };
+    setGroupsBusy(true);
+    try {
+      const res = await saveFinishGroupSettingsDirect(next);
+      if (!res.success) throw new Error(res.error || 'The store did not save the display settings.');
+      setGroupSettings(res.group_settings || next);
+      toast.success('Display saved', `${group}: ${describeGroupSetting(setting)}.`);
+      return true;
+    } catch (err) {
+      toast.error('Display not saved', errorText(err, 'Could not reach the store.'));
+      return false;
+    } finally {
+      setGroupsBusy(false);
+    }
+  };
+
+  const openGroups = (focus: string | null) => {
+    setGroupsFocus(focus);
+    setGroupsOpen(true);
+  };
+
+  const groupOptions = [{ value: 'all', label: 'All groups' }, ...groups.map((g) => ({ value: g, label: g }))];
 
   return (
-    <div className="space-y-6">
-      {/* Top Banner */}
-      <PageHeroHeader
-        title="Materials & Finishes Inventory"
-        subtitle="Workshop vinyl rolls and texture availability. Toggling a finish out of stock updates all phone, laptop, and console configurators storewide immediately."
-        actions={
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => loadFinishes(true)}
-              disabled={isRefreshing}
-              className="px-3.5 py-2 text-xs font-mono font-medium rounded-xl border border-white/10 hover:bg-white/[0.04] text-zinc-300 transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
-            >
-              <RefreshCw className={clsx('w-3.5 h-3.5', isRefreshing && 'animate-spin text-[#f3aa18]')} />
-              Refresh
-            </button>
-            <button
-              onClick={() => setShowSurchargeTiersModal(true)}
-              className="px-3.5 py-2 text-xs font-mono font-medium rounded-xl border border-amber-500/30 hover:bg-amber-500/10 text-amber-300 transition-colors flex items-center gap-2 cursor-pointer"
-              title="Manage global finish surcharge brackets by part base price"
-            >
-              <Coins className="w-3.5 h-3.5 text-amber-400" />
-              <span>Surcharge Tiers ({surchargeTiers.length})</span>
-            </button>
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="px-4 py-2 text-xs font-mono font-bold rounded-xl bg-[#f3aa18] hover:bg-[#ffb72b] text-black transition-colors flex items-center gap-2 shadow-sm cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Add Finish
-            </button>
-          </div>
-        }
-      />
-
-      {/* Metrics Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <GlassCard className="p-4 flex items-center gap-4">
-          <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-[#f3aa18] shrink-0">
-            <Layers className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Total Finishes</p>
-            <p className="text-2xl font-mono font-bold text-zinc-900 dark:text-white mt-0.5">{stats.total}</p>
-          </div>
-        </GlassCard>
-
-        <GlassCard className="p-4 flex items-center gap-4">
-          <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
-            <CheckCircle2 className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">In Stock</p>
-            <p className="text-2xl font-mono font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">{stats.inStock}</p>
-          </div>
-        </GlassCard>
-
-        <GlassCard className="p-4 flex items-center gap-4">
-          <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 shrink-0">
-            <Sparkles className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Coming Soon</p>
-            <p className="text-2xl font-mono font-bold text-amber-500 mt-0.5">{stats.comingSoon}</p>
-          </div>
-        </GlassCard>
-
-        <GlassCard className="p-4 flex items-center gap-4">
-          <div className="w-11 h-11 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-600 dark:text-rose-400 shrink-0">
-            <AlertTriangle className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Depleted Finishes</p>
-            <p className="text-2xl font-mono font-bold text-rose-600 dark:text-rose-400 mt-0.5">{stats.outOfStock}</p>
-          </div>
-        </GlassCard>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
+        <div className="min-w-0">
+          <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.025em] text-fg">Finishes &amp; Stock</h1>
+          <p className="mt-0.5 text-[14px] text-muted">
+            Every skin finish, its stock and its storefront group. Changes reach all configurators.
+          </p>
+        </div>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <IconButton
+            icon={RefreshCw}
+            label="Refresh"
+            onClick={() => void load(true)}
+            disabled={refreshing || loading}
+            className={refreshing ? '[&>svg]:animate-spin' : ''}
+          />
+          <Button icon={FolderTree} onClick={() => openGroups(null)}>
+            Groups
+          </Button>
+          <Button icon={Coins} onClick={() => setTiersOpen(true)}>
+            Price tiers
+          </Button>
+          <Button variant="primary" icon={Plus} onClick={() => setPanel({ mode: 'create' })} disabled={loading}>
+            Add finish
+          </Button>
+        </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        {/* Search */}
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Search material by name or group..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 text-xs rounded-xl bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-white/10 text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/50"
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5">
+        <div className="max-w-full overflow-x-auto [&_button]:whitespace-nowrap">
+          <Tabs
+            items={STATUS_TABS.map((t) => ({ key: t.key, label: t.label, count: counts[t.key], hot: t.key === 'out_of_stock' && counts.out_of_stock > 0 }))}
+            value={status}
+            onChange={(k) => setStatus(k as FinishStatusFilter)}
           />
         </div>
-
-        {/* Group Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-          {groups.map((grp) => (
-            <button
-              key={grp}
-              onClick={() => setSelectedGroup(grp)}
-              className={clsx(
-                'px-3 py-1.5 text-xs font-mono rounded-lg transition-colors capitalize whitespace-nowrap cursor-pointer',
-                selectedGroup === grp
-                  ? 'bg-zinc-900 text-white dark:bg-white/10 dark:text-white font-bold border border-zinc-900 dark:border-white/20'
-                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/[0.04]'
-              )}
-            >
-              {grp === 'all' ? 'All Finishes' : grp}
-            </button>
-          ))}
+        <div className="ml-auto flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <Select aria-label="Group" className="w-full sm:w-[190px]" value={groupFilter} options={groupOptions} onChange={setGroupFilter} />
+          <SearchField
+            className="w-full sm:w-[260px]"
+            placeholder="Search finishes"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
         </div>
       </div>
 
-      {/* Grid of Materials */}
-      {isLoading ? (
-        <div className="h-64 flex flex-col items-center justify-center gap-3">
-          <RefreshCw className="w-6 h-6 animate-spin text-[#f3aa18]" />
-          <p className="text-xs font-mono text-zinc-500">Loading materials database...</p>
-        </div>
-      ) : filteredFinishes.length === 0 ? (
-        <GlassCard className="p-12 text-center">
-          <Package className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
-          <p className="text-sm font-medium text-zinc-300">No materials matched your search</p>
-          <p className="text-xs text-zinc-500 mt-1">Try searching for a different name or switch filter category.</p>
-        </GlassCard>
+      {loading ? (
+        <Card>
+          <p className="py-10 text-center text-[13.5px] text-muted">Loading finishes...</p>
+        </Card>
+      ) : sections.length === 0 ? (
+        <Card>
+          <div className="py-10 text-center">
+            <p className="text-[14px] font-medium text-fg">No finishes match</p>
+            <p className="mt-1 text-[13px] text-muted">Clear the search or pick another filter.</p>
+            <Button
+              className="mt-3"
+              onClick={() => {
+                setQuery('');
+                setStatus('all');
+                setGroupFilter('all');
+              }}
+            >
+              Clear filters
+            </Button>
+          </div>
+        </Card>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredFinishes.map((finish) => {
-            const isUpdating = updatingId === finish.id;
-            const finishStatus: 'in_stock' | 'out_of_stock' | 'coming_soon' =
-              finish.status ||
-              (finish.is_coming_soon
-                ? 'coming_soon'
-                : finish.in_stock !== false
-                ? 'in_stock'
-                : 'out_of_stock');
-
-            return (
-              <GlassCard
-                key={finish.id}
-                className={clsx(
-                  'p-4 transition-all duration-200 flex flex-col justify-between border',
-                  finishStatus === 'in_stock' &&
-                    'border-zinc-200 dark:border-white/10 hover:border-zinc-300 dark:hover:border-white/20',
-                  finishStatus === 'out_of_stock' &&
-                    'border-rose-500/30 bg-rose-50/50 dark:bg-rose-950/10',
-                  finishStatus === 'coming_soon' &&
-                    'border-amber-500/30 bg-amber-50/40 dark:bg-amber-950/10'
-                )}
-              >
-                <div>
-                  {/* Top Row: Thumbnail + Category + Stock Status Badge */}
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl overflow-hidden bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 shrink-0 flex items-center justify-center">
-                        {finish.thumbnail ? (
-                          <img
-                            src={finish.thumbnail}
-                            alt={finish.name}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                            onError={(e) => {
-                              (e.target as HTMLElement).style.display = 'none';
-                            }}
-                          />
-                        ) : (
-                          <Sparkles className="w-5 h-5 text-zinc-400 dark:text-zinc-600" />
-                        )}
-                      </div>
-
-                      <div className="min-w-0">
-                        <h4 className="text-sm font-bold text-zinc-900 dark:text-white truncate">{finish.name}</h4>
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-white/[0.06] text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-white/10 inline-block mt-1">
-                          {finish.group}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Status Pills */}
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {finish.is_active === false && (
-                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700">
-                          Inactive
-                        </span>
-                      )}
-                      <span
-                        className={clsx(
-                          'text-[10px] font-mono font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border',
-                          finishStatus === 'in_stock' &&
-                            'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30',
-                          finishStatus === 'out_of_stock' &&
-                            'bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/40',
-                          finishStatus === 'coming_soon' &&
-                            'bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/40'
-                        )}
-                      >
-                        {finishStatus === 'in_stock'
-                          ? 'In Stock'
-                          : finishStatus === 'out_of_stock'
-                          ? 'Depleted'
-                          : 'Coming Soon'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Pricing / Meta info */}
-                  <div className="mt-4 pt-3 border-t border-zinc-200/80 dark:border-white/[0.06] flex items-center justify-between text-[11px] font-mono">
-                    <span className="text-zinc-500">Main Skin Extra:</span>
-                    <span className="text-zinc-800 dark:text-zinc-300 font-bold">
-                      {(finish.extra_price ?? 0) > 0
-                        ? `+IDR ${(finish.extra_price ?? 0).toLocaleString('id-ID')}`
-                        : 'Standard (IDR 0)'}
-                    </span>
-                  </div>
-
-                  <div className="mt-1 flex items-center justify-between text-[11px] font-mono">
-                    <span className="text-zinc-500">Accent Extra:</span>
-                    <span className="text-amber-600 dark:text-amber-400 font-bold">
-                      {(finish.accent_extra_price ?? 0) > 0
-                        ? `+IDR ${(finish.accent_extra_price ?? 0).toLocaleString('id-ID')}`
-                        : (finish.extra_price ?? 0) > 0
-                        ? 'Dynamic Tier (e.g. +5k)'
-                        : 'IDR 0'}
-                    </span>
-                  </div>
-
-                  <div className="mt-1 flex items-center justify-between text-[11px] font-mono">
-                    <span className="text-zinc-500">CSS Class:</span>
-                    <span className="text-zinc-600 dark:text-zinc-400 truncate max-w-[140px]">{finish.class_name || finish.slug}</span>
-                  </div>
-
-                  {/* v2 Master Texture Info */}
-                  <div className="mt-2 pt-2 border-t border-zinc-200/80 dark:border-white/[0.06] flex items-center justify-between text-[11px] font-mono">
-                    <span className="text-zinc-500">v2 Texture:</span>
-                    <span
-                      className={clsx(
-                        'text-[10px] px-1.5 py-0.5 rounded-full font-bold',
-                        finish.texture_url && finish.texture_url !== finish.thumbnail
-                          ? 'text-sky-700 dark:text-sky-300 bg-sky-500/15'
-                          : 'text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-white/5'
-                      )}
-                    >
-                      {finish.texture_url && finish.texture_url !== finish.thumbnail ? 'Master Ready' : 'Using Swatch'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Stock & Active Toggle Action */}
-                <div className="mt-4 pt-3 border-t border-zinc-200/80 dark:border-white/[0.06] flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setEditingFinish({ ...finish })}
-                      className="px-2.5 py-1 text-xs font-sans rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-white/5 dark:hover:bg-white/10 text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white border border-zinc-200 dark:border-white/10 flex items-center gap-1.5 transition-colors cursor-pointer"
-                      title="Edit material details and v2 master texture"
-                    >
-                      <Edit3 className="w-3 h-3 text-[#f3aa18]" />
-                      <span>Edit</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleToggleActive(finish)}
-                      disabled={isUpdating}
-                      className={clsx(
-                        'px-2 py-1 text-[11px] font-mono rounded-lg border transition-colors cursor-pointer disabled:opacity-50',
-                        finish.is_active !== false
-                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20'
-                          : 'bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-200'
-                      )}
-                      title={finish.is_active !== false ? 'Active (Visible on store) - Click to deactivate' : 'Inactive (Hidden from store) - Click to activate'}
-                    >
-                      {finish.is_active !== false ? 'Active' : 'Inactive'}
-                    </button>
-                  </div>
-
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => handleToggleStock(finish)}
-                      disabled={isUpdating}
-                      className={clsx(
-                        'flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-mono transition-all cursor-pointer disabled:opacity-50 select-none shadow-xs',
-                        finishStatus === 'in_stock' &&
-                          'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20',
-                        finishStatus === 'out_of_stock' &&
-                          'bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-400 hover:bg-rose-500/20',
-                        finishStatus === 'coming_soon' &&
-                          'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20'
-                      )}
-                      title={`Status: ${finishStatus === 'in_stock' ? 'In Stock' : finishStatus === 'out_of_stock' ? 'Depleted' : 'Coming Soon'} (Click to cycle)`}
-                    >
-                      <span
-                        className={clsx(
-                          'w-1.5 h-1.5 rounded-full',
-                          finishStatus === 'in_stock' && 'bg-emerald-500',
-                          finishStatus === 'out_of_stock' && 'bg-rose-500',
-                          finishStatus === 'coming_soon' && 'bg-amber-500 animate-pulse'
-                        )}
-                      />
-                      <span className="font-semibold">
-                        {finishStatus === 'in_stock'
-                          ? 'In Stock'
-                          : finishStatus === 'out_of_stock'
-                          ? 'Depleted'
-                          : 'Coming Soon'}
-                      </span>
-                    </button>
-                  </div>
-                </div>
-              </GlassCard>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Add Finish Modal */}
-      {isModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm cursor-pointer"
-          onClick={() => setIsModalOpen(false)}
-        >
-          <div
-            className="w-full max-w-md rounded-2xl bg-zinc-950 border border-white/10 p-6 shadow-2xl relative cursor-default"
-            onClick={e => e.stopPropagation()}
+        sections.map((section) => (
+          <Card
+            key={section.group}
+            title={section.group}
+            count={section.all.length}
+            actions={
+              <Button size="sm" variant="ghost" icon={SlidersHorizontal} onClick={() => openGroups(section.group)}>
+                {describeGroupSetting(groupSettings[section.group])}
+              </Button>
+            }
           >
-            <div className="flex items-center justify-between pb-4 border-b border-white/10">
-              <div className="flex items-center gap-2">
-                <Layers className="w-4 h-4 text-[#f3aa18]" />
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">
-                  Register New Material Finish
-                </h3>
-              </div>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateFinish} className="mt-4 space-y-4">
-              <div>
-                <label className="block text-xs font-mono text-zinc-400 mb-1">Finish Name *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Swarm, Patina, Titanium Black"
-                  value={newFinish.name}
-                  onChange={(e) => setNewFinish({ ...newFinish, name: e.target.value })}
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-mono text-zinc-400 mb-1">Category Group</label>
-                <select
-                  value={newFinish.group}
-                  onChange={(e) => setNewFinish({ ...newFinish, group: e.target.value })}
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
-                >
-                  <option value="Signature skins">Signature skins</option>
-                  <option value="Colors">Colors</option>
-                  <option value="Natural">Natural</option>
-                  <option value="Custom Edition">Custom Edition</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-mono text-zinc-400 mb-1">Swatch Thumbnail URL</label>
-                <input
-                  type="url"
-                  placeholder="https://exacoat.com/wp-content/uploads/..."
-                  value={newFinish.thumbnail}
-                  onChange={(e) => setNewFinish({ ...newFinish, thumbnail: e.target.value })}
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-mono text-zinc-400 mb-1">
-                  Master Texture Image URL (v2 Engine)
-                </label>
-                <input
-                  type="url"
-                  placeholder="https://exacoat.com/wp-content/uploads/textures/master.png"
-                  value={newFinish.texture_url}
-                  onChange={(e) => setNewFinish({ ...newFinish, texture_url: e.target.value })}
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
-                />
-                <p className="text-[10px] text-zinc-500 mt-1">
-                  Full-bleed high-res texture inherited by all v2 Modern phone models.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-mono text-zinc-400 mb-1">Main Skin Extra (IDR)</label>
-                  <input
-                    type="number"
-                    placeholder="0"
-                    value={newFinish.extra_price}
-                    onChange={(e) => setNewFinish({ ...newFinish, extra_price: Number(e.target.value) })}
-                    className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
-                  />
-                  <p className="text-[10px] text-zinc-500 mt-1">e.g. 30,000 for Swarm, 0 for Matte Black.</p>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-mono text-zinc-400 mb-1">Accent Extra Override (IDR)</label>
-                  <input
-                    type="number"
-                    placeholder="0"
-                    value={newFinish.accent_extra_price}
-                    onChange={(e) => setNewFinish({ ...newFinish, accent_extra_price: Number(e.target.value) })}
-                    className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
-                  />
-                  <p className="text-[10px] text-zinc-500 mt-1">Leave 0 to auto-scale via dynamic surcharge tiers (e.g. +5k).</p>
-                </div>
-              </div>
-
-              <div className="p-3 rounded-xl bg-zinc-900/60 border border-white/5 space-y-2">
-                <div>
-                  <p className="text-xs font-bold text-white">Initial Stock Availability</p>
-                  <p className="text-[11px] text-zinc-500">Live availability across product configurators</p>
-                </div>
-                <div className="grid grid-cols-3 gap-2 pt-1">
-                  {(['in_stock', 'out_of_stock', 'coming_soon'] as const).map((st) => (
-                    <button
-                      key={st}
-                      type="button"
-                      onClick={() =>
-                        setNewFinish({
-                          ...newFinish,
-                          status: st,
-                          in_stock: st === 'in_stock',
-                        })
-                      }
-                      className={clsx(
-                        'py-1.5 px-2 rounded-lg text-xs font-mono font-medium border text-center transition-all cursor-pointer',
-                        newFinish.status === st
-                          ? st === 'in_stock'
-                            ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 font-bold'
-                            : st === 'out_of_stock'
-                            ? 'bg-rose-500/20 border-rose-500/40 text-rose-400 font-bold'
-                            : 'bg-amber-500/20 border-amber-500/40 text-amber-400 font-bold'
-                          : 'bg-zinc-800/50 border-white/5 text-zinc-400 hover:text-zinc-200'
-                      )}
-                    >
-                      {st === 'in_stock' ? 'In Stock' : st === 'out_of_stock' ? 'Depleted' : 'Coming Soon'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="pt-2 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-xs font-mono rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSaving}
-                  className="px-4 py-2 text-xs font-mono font-bold rounded-xl bg-[#f3aa18] hover:bg-[#ffb72b] text-black transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  {isSaving ? 'Saving...' : 'Register Material'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            {section.finishes.length === 0 ? (
+              <p className="text-[13px] text-faint">No finishes in this group yet. Pick it as the group when you edit or add a finish.</p>
+            ) : (
+              <ul className="-my-3 divide-y divide-line">
+                {section.finishes.map((f) => {
+                  const pos = section.all.findIndex((x) => x.id === f.id);
+                  return (
+                    <FinishRow
+                      key={f.id}
+                      finish={f}
+                      position={pos + 1}
+                      isFirst={pos === 0}
+                      isLast={pos === section.all.length - 1}
+                      busy={busyIds.has(f.id)}
+                      reorderDisabled={reordering}
+                      onStock={(s) => void handleStock(f, s)}
+                      onActive={(a) => void handleActive(f, a)}
+                      onMove={(d) => void handleMove(f, d)}
+                      onEdit={() => setPanel({ mode: 'edit', id: f.id })}
+                    />
+                  );
+                })}
+              </ul>
+            )}
+          </Card>
+        ))
       )}
 
-      {/* Edit Material Modal */}
-      {editingFinish && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in cursor-pointer"
-          onClick={() => setEditingFinish(null)}
-        >
-          <div
-            className="w-full max-w-md bg-[#121215] border border-white/10 rounded-2xl p-6 shadow-2xl space-y-4 cursor-default"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-white/5 pb-4">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-[#f3aa18]/15 border border-[#f3aa18]/30 flex items-center justify-center text-[#f3aa18]">
-                  <Edit3 className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-white">Edit Material Finish</h3>
-                  <p className="text-xs text-zinc-400">Configure swatch and v2 master texture</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setEditingFinish(null)}
-                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+      <FinishEditPanel
+        open={panel !== null && (panel.mode === 'create' || panelFinish !== null)}
+        finish={panelFinish}
+        groups={groups}
+        defaultGroup={groupFilter !== 'all' ? groupFilter : groups[0] || 'Signature skins'}
+        existingSlugs={finishes.flatMap((f) => [f.slug, f.id])}
+        saving={saving}
+        blockClose={media !== null}
+        onClose={() => setPanel(null)}
+        onSave={(d) => void handleSave(d)}
+        onDelete={(f) => setDeleting(f)}
+        onBrowseMedia={(role, current, apply) => setMedia({ role, current, apply })}
+      />
 
-            <form onSubmit={handleUpdateFinish} className="space-y-4">
-              <div>
-                <label className="block text-xs font-mono text-zinc-400 mb-1">Finish Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={editingFinish.name}
-                  onChange={(e) => setEditingFinish({ ...editingFinish, name: e.target.value })}
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
-                />
-              </div>
+      <Modal
+        open={deleting !== null}
+        onOpenChange={(o) => {
+          if (!o) setDeleting(null);
+        }}
+        title={`Delete ${deleting?.name ?? 'finish'}?`}
+        width={440}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setDeleting(null)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={() => void handleDelete()} disabled={saving}>
+              {saving ? 'Deleting...' : 'Delete finish'}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-[13.5px] text-muted">
+          It disappears from every configurator. Past orders keep their finish name. To hide it for now, switch Active off instead.
+        </p>
+      </Modal>
 
-              <div>
-                <label className="block text-xs font-mono text-zinc-400 mb-1">Category Group</label>
-                <select
-                  value={editingFinish.group}
-                  onChange={(e) => setEditingFinish({ ...editingFinish, group: e.target.value })}
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
-                >
-                  <option value="Signature skins">Signature skins</option>
-                  <option value="Colors">Colors</option>
-                  <option value="Natural">Natural</option>
-                  <option value="Custom Edition">Custom Edition</option>
-                </select>
-              </div>
+      <FinishGroupsModal
+        open={groupsOpen}
+        onOpenChange={setGroupsOpen}
+        groups={groups}
+        counts={groupCounts}
+        settings={groupSettings}
+        focusGroup={groupsFocus}
+        busy={groupsBusy}
+        onMove={handleGroupMove}
+        onAdd={handleGroupAdd}
+        onDelete={handleGroupDelete}
+        onRename={handleGroupRename}
+        onSaveSetting={handleGroupSetting}
+      />
 
-              <div>
-                <label className="block text-xs font-mono text-zinc-400 mb-1">Swatch Thumbnail URL</label>
-                <input
-                  type="url"
-                  value={editingFinish.thumbnail}
-                  onChange={(e) => setEditingFinish({ ...editingFinish, thumbnail: e.target.value })}
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
-                />
-              </div>
+      <FinishSurchargeTiersModal isOpen={tiersOpen} onClose={() => setTiersOpen(false)} tiers={tiers} onTiersUpdated={setTiers} />
 
-              <div>
-                <label className="block text-xs font-mono text-zinc-400 mb-1 flex items-center justify-between">
-                  <span>Master Texture Image URL (v2 Engine)</span>
-                  {editingFinish.texture_url && (
-                    <a
-                      href={editingFinish.texture_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-[10px] text-sky-400 hover:underline flex items-center gap-1"
-                    >
-                      <span>Preview</span>
-                      <ExternalLink className="w-2.5 h-2.5" />
-                    </a>
-                  )}
-                </label>
-                <input
-                  type="url"
-                  placeholder="https://exacoat.com/uploads/textures/master-texture.png"
-                  value={editingFinish.texture_url || ''}
-                  onChange={(e) => setEditingFinish({ ...editingFinish, texture_url: e.target.value })}
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
-                />
-                <p className="text-[10px] text-zinc-500 mt-1">
-                  High-res texture inherited by all v2 configurators. Clipped automatically by device masks.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-mono text-zinc-400 mb-1">Main Skin Extra (IDR)</label>
-                  <input
-                    type="number"
-                    value={editingFinish.extra_price ?? 0}
-                    onChange={(e) => setEditingFinish({ ...editingFinish, extra_price: Number(e.target.value) })}
-                    className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
-                  />
-                  <p className="text-[10px] text-zinc-500 mt-1">e.g. 30,000 for Swarm, 0 for Matte Black.</p>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-mono text-zinc-400 mb-1">Accent Extra Override (IDR)</label>
-                  <input
-                    type="number"
-                    placeholder="0"
-                    value={editingFinish.accent_extra_price ?? 0}
-                    onChange={(e) => setEditingFinish({ ...editingFinish, accent_extra_price: Number(e.target.value) })}
-                    className="w-full px-3 py-2 text-xs rounded-xl bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#f3aa18]"
-                  />
-                  <p className="text-[10px] text-zinc-500 mt-1">Leave 0 to auto-scale via dynamic surcharge tiers (e.g. +5k).</p>
-                </div>
-              </div>
-
-              <div className="p-3 rounded-xl bg-zinc-900/60 border border-white/5 space-y-2">
-                <div>
-                  <p className="text-xs font-bold text-white">Stock & Availability Status</p>
-                  <p className="text-[11px] text-zinc-500">Live availability across product configurators</p>
-                </div>
-                <div className="grid grid-cols-3 gap-2 pt-1">
-                  {(['in_stock', 'out_of_stock', 'coming_soon'] as const).map((st) => {
-                    const currentStatus =
-                      editingFinish.status ||
-                      (editingFinish.is_coming_soon
-                        ? 'coming_soon'
-                        : editingFinish.in_stock !== false
-                        ? 'in_stock'
-                        : 'out_of_stock');
-                    return (
-                      <button
-                        key={st}
-                        type="button"
-                        onClick={() =>
-                          setEditingFinish({
-                            ...editingFinish,
-                            status: st,
-                            in_stock: st === 'in_stock',
-                            is_coming_soon: st === 'coming_soon',
-                          })
-                        }
-                        className={clsx(
-                          'py-1.5 px-2 rounded-lg text-xs font-mono font-medium border text-center transition-all cursor-pointer',
-                          currentStatus === st
-                            ? st === 'in_stock'
-                              ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 font-bold'
-                              : st === 'out_of_stock'
-                              ? 'bg-rose-500/20 border-rose-500/40 text-rose-400 font-bold'
-                              : 'bg-amber-500/20 border-amber-500/40 text-amber-400 font-bold'
-                            : 'bg-zinc-800/50 border-white/5 text-zinc-400 hover:text-zinc-200'
-                        )}
-                      >
-                        {st === 'in_stock' ? 'In Stock' : st === 'out_of_stock' ? 'Depleted' : 'Coming Soon'}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="pt-2 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setEditingFinish(null)}
-                  className="px-4 py-2 text-xs font-mono rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSaving}
-                  className="px-4 py-2 text-xs font-mono font-bold rounded-xl bg-[#f3aa18] hover:bg-[#ffb72b] text-black transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  {isSaving ? 'Saving...' : 'Save Changes'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Dynamic Finish Surcharge Tiers Modal */}
-      <FinishSurchargeTiersModal
-        isOpen={showSurchargeTiersModal}
-        onClose={() => setShowSurchargeTiersModal(false)}
-        tiers={surchargeTiers}
-        onTiersUpdated={(newTiers) => setSurchargeTiers(newTiers)}
+      <MediaLibraryModal
+        isOpen={media !== null}
+        onClose={() => setMedia(null)}
+        onSelectImage={(url) => {
+          media?.apply(url);
+          setMedia(null);
+        }}
+        title={media ? `Select ${MEDIA_TITLES[media.role].title.toLowerCase()}` : undefined}
+        recommendedDimensions={media ? MEDIA_TITLES[media.role].size : undefined}
+        currentUrl={media?.current}
       />
     </div>
   );

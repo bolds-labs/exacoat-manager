@@ -81,7 +81,7 @@ describe('filterFinishes and finishCounts', () => {
 
 describe('moveFinishInGroup', () => {
   it('swaps with the neighbour and renumbers the group from 0', () => {
-    const out = moveFinishInGroup(all, 'swarm', 'up');
+    const out = moveFinishInGroup(all, 'swarm', 'up')!;
     const sig = groupFinishes(['Signature skins'], out)[0].finishes;
     expect(sig.map((x) => [x.slug, x.order])).toEqual([['swarm', 0], ['black-camo', 1], ['patina', 2]]);
     expect(out.find((x) => x.slug === 'matte-black')).toBe(black);
