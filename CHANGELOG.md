@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Product prices**: the Products screen showed US dollar amounts as rupiah (for example Rp 15) because the currency switcher converted prices for the manager. Product requests now always ask for rupiah.
 - Printed labels, packing slips and invoices are unchanged.
 
+### Staff dashboard
+- **New screen**: Staff dashboard for administrators and shop managers, with Payment confirmed, Warranty to review, Reviews to approve and Overdue international counts, quick links, and reviews waiting for approval that can be approved or rejected in place (with a confirmation).
+- **Shop managers** now land on the Staff dashboard after sign-in instead of Orders. Administrators still land on the Dashboard.
+- **Team notes**: shared notes for the whole team with pin, done and delete (author or administrator). Stored in WordPress, so every PC sees the same notes.
+- **Overdue international orders**: orders outside Indonesia still Waiting for Courier Pickup more than 2 days after the courier booking, oldest first, each with Open order.
+- **Plugin**: new team notes and overdue international endpoints. Until the new plugin zip is installed, those two cards show "Install the latest plugin".
+
 ### Design: Dashboard and Sales & Reports
 - **Dashboard**: now a one-screen summary of Sales, Orders, Avg order value, Payout after fees and Items sold for Today, 7 days, 30 days or This month, each compared with the period before (or "Not enough history" when older orders are not loaded). Adds a sales trend against the previous period, sales by channel, top products, Needs attention and quick links. The recent orders list and the status ring are gone.
 - **Same numbers everywhere**: the Dashboard now counts Shopee and TikTok Shop orders too and uses the same rules as Sales & Reports, so both pages show the same totals for the same period.

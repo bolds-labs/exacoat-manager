@@ -9,8 +9,8 @@
   "requires_php": "7.4",
   "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.228.zip?v=0.1.228",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-11-14T09:49:19.903Z",
+  "last_updated": "2026-11-14T12:14:27.591Z",
   "sections": {
-    "changelog": "### Version 0.1.228\n- Orders redesign: new orders screen with store-wide counts, rebuilt order panel, kit pop-ups and styled dropdowns, restyled Shopee and TikTok views, read-only order counts endpoint, WooCommerce status names, staff name on automatic order notes"
+    "changelog": "### Version 0.1.228\n- Orders redesign: new orders screen with store-wide counts, rebuilt order panel, kit pop-ups and styled dropdowns, restyled Shopee and TikTok views, read-only order counts endpoint, WooCommerce status names, staff name on automatic order notes\n- Staff dashboard: team notes endpoints (/staff/notes, stored in exacoat_staff_notes) and the overdue international orders endpoint (/staff/overdue-international)"
   }
 }
