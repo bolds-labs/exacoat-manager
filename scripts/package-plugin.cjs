@@ -115,7 +115,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Performance: order lists can skip order notes (exclude=notes); the order drawer loads notes on demand`,
+      changelog: `### Version ${version}\n- Design: manager design system foundation (tokens, Geist, shared kit, new app shell)`,
     },
   };
 

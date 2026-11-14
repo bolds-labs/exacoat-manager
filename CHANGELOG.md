@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.227] - 2026-11-14
+
+### Design: Manager Design System Foundation
+- **Tokens and type**: light and dark colour tokens in `src/index.css`, mapped in Tailwind; Geist and Geist Mono replace Chakra Petch in the manager.
+- **Status map**: one source for order and warranty statuses (`src/lib/orderStatus.ts`) in five families.
+- **Shared kit**: new components in `src/components/ds`, plus a hidden design system page at `#design-system` for super admins.
+- **New app shell**: redesigned sidebar and header; existing `ui` components restyled to tokens with unchanged APIs.
+- **Toned-down glass**: backdrop blur removed; floating surfaces use an opaque `pop` fill.
+- Printed documents (labels, packing slips, invoices) are unchanged.
+
+---
+
 ## [0.1.226] - 2026-11-14
 
 ### Performance: Faster Manager Load on Low-End Laptops

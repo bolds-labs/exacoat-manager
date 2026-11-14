@@ -1288,13 +1288,10 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 
 ## 36. Primary Brand Typography (Chakra Petch), Non-Distracting Preset Badges & Configuration Tooltips
 
-- **Primary Brand Typography Hierarchy Invariant (`Chakra Petch`)**:
-  - The primary brand typography for Exacoat is `Chakra Petch`.
-  - In Storefront (`exacoat-web`):
+- **Primary Brand Typography Hierarchy Invariant (`Chakra Petch` on the storefront, Geist in the manager)**:
+  - In Storefront (`exacoat-web`), the brand typography is `Chakra Petch`:
     - Product title in configurator (`{cleanProductName} SKINS`), floating "Shop the Look" button on canvas, eyebrow triggers, modal titles, and each layer accordion title (`{layer.name}`) strictly utilize `Chakra Petch` in normal weight (`font-['Chakra_Petch'] font-normal`, not bold).
-  - In Manager Studio (`exacoat-manager`):
-    - Imported via Google Fonts in `index.html` and configured as `font-heading` / `font-chakra` in `tailwind.config.js`.
-    - Page titles (`PageHeroHeader`), catalog device names, fullscreen editor top bar titles, inspector stage tabs, and modal titles strictly use `font-heading font-normal` (not bold).
+  - In Manager (`exacoat-manager`), Geist is the UI typography for all text including titles (Geist Mono for numbers and codes). Chakra Petch is no longer required in the manager; do not add new `font-heading` / `font-chakra` usages. See the Design System Invariants section.
 
 - **Shop the Look Modal Design & Clean Image Canvas**:
   - Presets Modal (`presets-modal.tsx`) features a dedicated subtitle under "Shop the Look" explaining its purpose ("Curated finish combinations designed for this device").
@@ -1871,3 +1868,19 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 - **Big lists load where they are used**: the app-wide 500-order list loads only for tabs where `tabNeedsOrderList()` is true (dashboard, skin performance). Counts use count-only requests (`per_page=1`, read `total_orders`).
 - **Lists skip heavy fields**: order lists request `exclude=notes`; detail views load notes on demand. Do not add per-order queries to list formatting.
 - **No animated or large blur filters** on always-visible layout (background glows, sticky header, bottom bar). They repaint on every frame or scroll on integrated GPUs. Use static gradients and solid fills.
+
+---
+
+## 62. Design System Invariants (Manager)
+
+- **Tokens**: colours are CSS variables in the first `:root` (light) and first `.dark` blocks of `src/index.css`, mapped in `tailwind.config.js` and listed in `src/lib/designTokens.ts` (`TOKEN_NAMES`). Names: `bg`, `panel`, `card`, `card-border`, `field`, `field-border`, `fg`, `muted`, `faint`, `line`, `chip`, `accent`, `accent-soft`, `accent-fg`, `accent-border`, `accent-on`, `pop`, and `st-{act,wait,prog,done,stop}-{fg,bg,border}`.
+  - Colour only via these token classes. Never use `/NN` opacity modifiers on token colours (they generate no CSS). Never use legacy palette classes such as `bg-zinc-900` or `text-white` in new UI: the `html:not(.dark)` `!important` block rewrites them in light mode.
+  - `pop` is the opaque fill for floating surfaces (modals, popovers, menus, toasts). Dark `card`, `field`, `chip` and `st-*-bg` are translucent and backdrop blur is removed, so floating layers must use `bg-pop`.
+  - Documented exceptions to tokens-only: modal and drawer scrims use `bg-black` with an opacity; shadows use raw rgba.
+- **Status map**: `src/lib/orderStatus.ts` (`getOrderStatusMeta`, `getWarrantyClaimMeta`, `getStatusSteps`, `getCurrentStepIndex`, which returns -1 for statuses outside the flow). It is context-aware via `isStorePickupOrder`. Five families: act, wait, prog, done, stop.
+- **Kit**: build new UI from `src/components/ds` (Button, IconButton, CountPill, TextField, Select, SearchField, Checkbox, Switch, RadioCard, Card, KpiCard, Tabs, StatusChip, WarrantyChip, Menu, Modal, Drawer, toast). Controls are 36px (sm 30px) with 9px radius; cards use 14px radius. Type is Geist and Geist Mono; page title 26/600, card title 14/600.
+- **Legacy ui components** (`src/components/ui`) are restyled to tokens with unchanged APIs. `GlassCard`, `ModalCard` and `StatCard` strip legacy palette surface colour classes from caller `className` via `stripLegacySurfaceClasses` (`src/lib/surfaceClasses.ts`), because the old `.glass-panel` rule used to cancel them. Remove such caller overrides when a screen is redesigned.
+- **Toned-down glass**: no backdrop blur, and no large or animated blur filters on always-visible layout.
+- **Hidden design system page**: `#design-system`, super_admin only, not in the sidebar, listed in `SELF_LOADING_TABS`. Navigation config lives in `src/components/layout/sidebarNav.ts` (`NAV_GROUPS`, `navForRole`, `SHOP_MANAGER_ALLOWED_TABS`).
+- **Printed documents invariant (owner instruction)**: `PackingSlipModal`, `ShippingLabelA6Modal`, `CustomLabelPage`, `CustomerInvoiceModal` and any print or PDF output keep their content, layout and pinned fonts. Only the surrounding on-screen chrome may change.
+- **Dev note**: restart the Vite dev server after `tailwind.config.js` changes; a stale server silently omits new token classes.
