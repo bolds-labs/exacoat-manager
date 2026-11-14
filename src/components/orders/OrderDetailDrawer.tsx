@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SlideDrawer } from '../ui/SlideDrawer';
+import { Drawer, type MenuItem } from '../ds';
+import { PanelHeader, ClaimBanner } from './panel/PanelHeader';
+import { StatusNavigator } from './panel/StatusNavigator';
+import { lockBodyScroll } from '../../lib/bodyScrollLock';
 import { Badge } from '../ui/Badge';
 import { Tooltip } from '../ui/Tooltip';
 import { Modal } from '../ui/Modal';
@@ -53,7 +56,7 @@ import {
   ChevronUp,
   Plane,
   Store,
-  ClipboardCheck,
+  Megaphone,
   Edit2,
   Trash2,
   XCircle,
@@ -566,6 +569,12 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
     setIsLoadingNotes(false);
   };
 
+  // Today's slide-over locked page scroll while open; the kit Drawer is non-modal, so keep the lock here.
+  useEffect(() => {
+    if (!isOpen) return;
+    return lockBodyScroll();
+  }, [isOpen]);
+
   if (!order) return null;
 
   const copyToClipboard = (text: string, fieldId: string) => {
@@ -1014,68 +1023,119 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
       ? parseFloat(String(rawShippingPriceStr))
       : (shippingDiscount > 0 ? parseFloat(String(order.shipping_total || 0)) + shippingDiscount : parseFloat(String(order.shipping_total || 0)));
 
+    const isClaimOrder = rmaDetails?.order_type === 'Warranty' || rmaDetails?.order_type === 'Redeem';
+    const headerMoreItems: MenuItem[] = isClaimOrder
+      ? []
+      : [
+          ...(!isStorePickup
+            ? [{
+                icon: ShieldCheck,
+                title: 'Warranty',
+                description: 'Claim installation warranty manually for this order',
+                onSelect: () => {
+                  setManualClaimType('Warranty');
+                  setIsManualWarrantyModalOpen(true);
+                },
+              }]
+            : []),
+          {
+            icon: RotateCcw,
+            title: 'Redeem',
+            description: 'Issue a free redeem replacement order',
+            onSelect: () => {
+              setManualClaimType('Redeem');
+              setIsManualWarrantyModalOpen(true);
+            },
+          },
+        ];
+
     return (
-      <SlideDrawer
-        isOpen={isOpen}
-        onClose={onClose}
-        width="2xl"
-        title={
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <span className="text-lg font-semibold text-zinc-950 dark:text-white font-sans tracking-tight">Order #{cleanOrderNum}</span>
-            <button
-              type="button"
-              onClick={() => copyToClipboard(cleanOrderNum, 'order_number')}
-              className="p-1 rounded-md hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer"
-              title={`Copy Order #${cleanOrderNum}`}
-            >
-              {copiedField === 'order_number' ? (
-                <Check className="w-4 h-4 text-emerald-400" />
-              ) : (
-                <Copy className="w-4 h-4" />
-              )}
-            </button>
-            {isEndorsement && (
-              <span className="inline-flex h-6 items-center whitespace-nowrap text-[11px] leading-none font-mono font-bold text-purple-400 bg-purple-500/20 px-2.5 rounded-full border border-purple-500/40 shadow-xs">
-                <Sparkles className="w-3.5 h-3.5 mr-1 text-purple-400" />
-                ENDORSEMENT
-              </span>
-            )}
-            {rmaDetails?.order_type === 'Redeem' && (
-              <span className="inline-flex h-6 items-center whitespace-nowrap text-[11px] leading-none font-mono font-bold text-amber-400 bg-amber-500/20 px-2.5 rounded-full border border-amber-500/40 shadow-xs">
-                <RotateCcw className="w-3.5 h-3.5 mr-1 text-amber-400" />
-                REDEEM
-              </span>
-            )}
-            {rmaDetails?.order_type === 'Warranty' && (
-              <span className="inline-flex h-6 items-center whitespace-nowrap text-[11px] leading-none font-mono font-bold text-sky-400 bg-sky-500/20 px-2.5 rounded-full border border-sky-500/40 shadow-xs">
-                <ShieldCheck className="w-3.5 h-3.5 mr-1 text-sky-400" />
-                WARRANTY REPLACEMENT
-              </span>
-            )}
-            {guaranteeDetails && (
-              <span className={clsx(
-                "inline-flex h-6 items-center whitespace-nowrap text-[11px] leading-none font-mono font-bold px-2.5 rounded-full border shadow-xs",
-                guaranteeDetails.status === 'refunded'
-                  ? "text-emerald-400 bg-emerald-500/20 border-emerald-500/40"
-                  : guaranteeDetails.status === 'package_received'
-                  ? "text-sky-400 bg-sky-500/20 border-sky-500/40"
-                  : guaranteeDetails.status === 'rejected'
-                  ? "text-rose-400 bg-rose-500/20 border-rose-500/40"
-                  : "text-purple-400 bg-purple-500/20 border-purple-500/40"
-              )}>
-                <RotateCcw className="w-3.5 h-3.5 mr-1" />
-                30D GUARANTEE {guaranteeDetails.status === 'refunded' ? 'REFUNDED' : guaranteeDetails.status === 'package_received' ? 'PACKAGE RECEIVED' : guaranteeDetails.status === 'rejected' ? 'REJECTED' : 'CLAIM'}
-              </span>
-            )}
-            {isStorePickup && (
-              <span className="inline-flex h-6 items-center whitespace-nowrap text-[11px] leading-none font-mono font-semibold text-[#f3aa18] bg-[#f3aa18]/15 px-2.5 rounded-full border border-[#f3aa18]/30">
-                Store Pickup (Bekasi)
-              </span>
-            )}
-          </div>
+      <>
+      <Drawer
+        open={isOpen}
+        onOpenChange={(next) => {
+          if (!next) onClose();
+        }}
+        label={`Order #${cleanOrderNum}`}
+        header={
+          <PanelHeader
+            order={order}
+            onClose={onClose}
+            onPrintLabel={() => setIsLabelModalOpen(true)}
+            onInvoice={() => setIsInvoiceModalOpen(true)}
+            onPackingSlip={() => setIsPackingSlipModalOpen(true)}
+            moreItems={headerMoreItems}
+            isStorePickup={isStorePickup}
+            isPrinted={isPrinted}
+            onCopyId={(num) => copyToClipboard(num, 'order_number')}
+            extraChips={
+              <>
+                {isEndorsement && (
+                  <span className="inline-flex items-center gap-[5px] rounded-full bg-chip px-2.5 py-[2px] text-[12px] font-medium text-muted">
+                    <Megaphone className="h-[13px] w-[13px]" strokeWidth={1.8} aria-hidden />
+                    Endorsement
+                  </span>
+                )}
+                {guaranteeDetails && (
+                  <span
+                    className={clsx(
+                      'inline-flex items-center gap-[5px] rounded-full px-2.5 py-[2px] text-[12px] font-medium',
+                      guaranteeDetails.status === 'refunded'
+                        ? 'bg-st-done-bg text-st-done-fg'
+                        : guaranteeDetails.status === 'package_received'
+                        ? 'bg-st-prog-bg text-st-prog-fg'
+                        : guaranteeDetails.status === 'rejected'
+                        ? 'bg-st-stop-bg text-st-stop-fg'
+                        : 'bg-st-wait-bg text-st-wait-fg'
+                    )}
+                  >
+                    <RotateCcw className="h-[13px] w-[13px]" strokeWidth={1.8} aria-hidden />
+                    30-day guarantee{' '}
+                    {guaranteeDetails.status === 'refunded'
+                      ? 'refunded'
+                      : guaranteeDetails.status === 'package_received'
+                      ? 'package received'
+                      : guaranteeDetails.status === 'rejected'
+                      ? 'rejected'
+                      : 'claim'}
+                  </span>
+                )}
+              </>
+            }
+            banner={
+              (rmaDetails?.order_type === 'Warranty' || rmaDetails?.order_type === 'Redeem') ? (
+                <ClaimBanner
+                  icon={rmaDetails.order_type === 'Redeem' ? RotateCcw : ShieldCheck}
+                  title={rmaDetails.order_type === 'Redeem' ? 'Redeem replacement order' : '48-hour installation warranty replacement'}
+                  reference={rmaDetails.original_invoice || rmaDetails.original_order_id ? String(rmaDetails.original_invoice || rmaDetails.original_order_id) : undefined}
+                  onOpenReference={
+                    rmaDetails.original_order_id && onSelectOrderById
+                      ? () => onSelectOrderById(Number(rmaDetails.original_order_id))
+                      : undefined
+                  }
+                  channel={findOrderMeta('_rma_marketplace_channel') ? String(findOrderMeta('_rma_marketplace_channel')) : undefined}
+                  reason={rmaDetails.claim_reason}
+                  note={rmaDetails.video_deleted ? 'Proof video auto-deleted on review.' : undefined}
+                  onReview={rmaDetails.video_proof_url ? () => setIsWarrantyReviewModalOpen(true) : undefined}
+                />
+              ) : undefined
+            }
+          >
+            <StatusNavigator
+              order={{ ...order, is_store_pickup: isStorePickup }}
+              disabled={isUpdatingStatus}
+              onChangeStatus={(status) => {
+                if (!isStorePickup && status === 'completed') {
+                  setShowManualCompletedModal(true);
+                } else {
+                  handleStatusChange(status);
+                }
+              }}
+            />
+          </PanelHeader>
         }
-      subtitle={`Created on ${formatDateTime(order.created_at)} • via ${order.payment_method_title || order.payment_method || 'Direct Payment'}${order.customer_ip ? ` • IP: ${order.customer_ip}` : ''}`}
-    >
+      >
+      <div className="record-detail p-4 sm:p-5 md:p-6">
       <div className="space-y-6">
 
         {/* Influencer Endorsement PR Card */}
@@ -1114,89 +1174,6 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
                   )}
                 </div>
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* RMA Installation Warranty or Redeem Replacement Card */}
-        {(rmaDetails?.order_type === 'Warranty' || rmaDetails?.order_type === 'Redeem') && (
-          <div className={clsx(
-            "p-4 rounded-2xl border shadow-lg",
-            rmaDetails.order_type === 'Redeem'
-              ? "border-amber-500/30 bg-amber-950/20 shadow-[0_0_20px_rgba(245,158,11,0.08)]"
-              : "border-emerald-500/30 bg-emerald-950/20 shadow-[0_0_20px_rgba(16,185,129,0.08)]"
-          )}>
-            <div className="flex items-start justify-between gap-3 flex-wrap">
-              <div className="flex items-start gap-3 min-w-0">
-                <div className={clsx(
-                  "w-10 h-10 rounded-xl border flex items-center justify-center shrink-0",
-                  rmaDetails.order_type === 'Redeem'
-                    ? "bg-amber-500/15 border-amber-500/30 text-amber-400"
-                    : "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
-                )}>
-                  {rmaDetails.order_type === 'Redeem' ? <RotateCcw className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-bold text-white font-sans">
-                      {rmaDetails.order_type === 'Redeem'
-                        ? 'Redeem Replacement Order'
-                        : '48-Hour Installation Warranty Replacement'}
-                    </span>
-                    <span className={clsx(
-                      "px-2 py-0.5 rounded-md text-[10px] font-mono font-bold uppercase tracking-wider border",
-                      rmaDetails.status === 'approved'
-                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
-                        : rmaDetails.status === 'rejected'
-                        ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
-                        : "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                    )}>
-                      {rmaDetails.status === 'approved' ? 'Approved' : rmaDetails.status === 'rejected' ? 'Rejected' : 'Pending Review'}
-                    </span>
-                  </div>
-                  <p className="text-xs text-neutral-300 font-sans mt-1">
-                    Original Reference:{' '}
-                    {rmaDetails.original_order_id && onSelectOrderById ? (
-                      <button
-                        type="button"
-                        onClick={() => onSelectOrderById(Number(rmaDetails.original_order_id))}
-                        className={clsx(
-                          "font-mono font-bold underline underline-offset-2 cursor-pointer",
-                          rmaDetails.order_type === 'Redeem' ? "text-amber-400 hover:text-amber-300" : "text-emerald-400 hover:text-emerald-300"
-                        )}
-                      >
-                        #{rmaDetails.original_invoice || rmaDetails.original_order_id}
-                      </button>
-                    ) : (
-                      <span className="font-mono font-bold text-white">
-                        #{rmaDetails.original_invoice || rmaDetails.original_order_id || 'N/A'}
-                      </span>
-                    )}
-                    {rmaDetails.claim_reason && (
-                      <span className="text-neutral-400"> • Reason: <span className="italic text-neutral-200">{rmaDetails.claim_reason}</span></span>
-                    )}
-                  </p>
-                  {rmaDetails.video_deleted && (
-                    <p className="text-[11px] text-zinc-400 font-mono mt-0.5">
-                      Proof video auto-deleted on review.
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {rmaDetails.video_proof_url && (
-                <button
-                  type="button"
-                  onClick={() => setIsWarrantyReviewModalOpen(true)}
-                  className={clsx(
-                    "px-3.5 py-2 rounded-xl text-xs font-bold font-sans flex items-center gap-2 transition-all shadow-sm active:scale-95 text-white cursor-pointer shrink-0",
-                    rmaDetails.order_type === 'Redeem' ? "bg-amber-600 hover:bg-amber-500" : "bg-emerald-600 hover:bg-emerald-500"
-                  )}
-                >
-                  <Video className="w-4 h-4" />
-                  <span>Review Claim Proof</span>
-                </button>
-              )}
             </div>
           </div>
         )}
@@ -1405,135 +1382,6 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
           </div>
         )}
         
-        {/* Quick Lifecycle Stage Transition Pipeline */}
-        <div className="p-4 rounded-2xl border border-white/[0.06] bg-[#111111]">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Order Progress Timeline</span>
-              {isUpdatingStatus && (
-                <div className="w-3 h-3 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-              )}
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <button
-                type="button"
-                onClick={() => setIsLabelModalOpen(true)}
-                className={clsx(
-                  "p-2 rounded-xl text-xs font-bold font-sans flex items-center justify-center transition-all shadow-sm active:scale-95 cursor-pointer relative",
-                  !isPrinted
-                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30"
-                    : "bg-white/[0.06] hover:bg-white/[0.1] text-zinc-400 border border-white/[0.08]"
-                )}
-                title={!isPrinted ? (isStorePickup ? "Print Workshop Label (Not printed yet)" : "Print 4x6 Label (Not printed yet)") : (isStorePickup ? "Print Workshop Label (Already printed)" : "Print 4x6 Label (Already printed)")}
-              >
-                <Printer className="w-3.5 h-3.5" />
-                {!isPrinted && (
-                  <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-amber-500 ring-1 ring-neutral-900" />
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setIsInvoiceModalOpen(true)}
-                className="px-2.5 py-1 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm active:scale-95 bg-white/[0.06] hover:bg-white/[0.1] text-white border border-white/[0.08] cursor-pointer"
-                title="View, download, and print official customer tax invoice"
-              >
-                <FileText className="w-3.5 h-3.5 text-[#f3aa18]" />
-                <span>Invoice</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setIsPackingSlipModalOpen(true)}
-                className="px-2.5 py-1 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm active:scale-95 bg-white/[0.06] hover:bg-white/[0.1] text-white border border-white/[0.08] cursor-pointer"
-                title="View and print official warehouse packing slip & picking manifest"
-              >
-                <ClipboardCheck className="w-3.5 h-3.5 text-sky-400" />
-                <span>Packing Slip</span>
-              </button>
-              {rmaDetails?.order_type !== 'Warranty' && rmaDetails?.order_type !== 'Redeem' && (
-                <>
-                  {!isStorePickup && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setManualClaimType('Warranty');
-                        setIsManualWarrantyModalOpen(true);
-                      }}
-                      className="px-2.5 py-1 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm active:scale-95 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 cursor-pointer"
-                      title="Claim installation warranty manually for this order"
-                    >
-                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Warranty</span>
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setManualClaimType('Redeem');
-                      setIsManualWarrantyModalOpen(true);
-                    }}
-                    className="px-2.5 py-1 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm active:scale-95 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 cursor-pointer"
-                    title="Issue free redeem replacement order (Exacoat factory defect / error)"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Redeem</span>
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className={clsx("grid gap-2", isStorePickup ? "grid-cols-2 sm:grid-cols-5" : "grid-cols-2 sm:grid-cols-6")}>
-            {(isStorePickup
-              ? [
-                  { key: 'on-hold', label: 'Waiting for Payment', icon: Clock },
-                  { key: 'processing', label: 'Payment confirmed', icon: Clock },
-                  { key: 'preparing-order', label: 'Preparing order', icon: Layers },
-                  { key: 'smb-ready', label: 'Ready for Pickup', icon: Package },
-                  { key: 'completed', label: 'Picked Up', icon: CheckCircle2 },
-                ]
-              : [
-                  { key: 'on-hold', label: 'Waiting for Payment', icon: Clock },
-                  { key: 'processing', label: 'Payment confirmed', icon: Clock },
-                  { key: 'preparing-order', label: 'Preparing order', icon: Layers },
-                  { key: 'ready-to-ship', label: 'Waiting for Courier Pickup', icon: Package },
-                  { key: 'shipped', label: 'Shipped', icon: Truck },
-                  { key: 'completed', label: 'Completed', icon: CheckCircle2 },
-                ]
-            ).map(stage => {
-              const isActive = (currentStatusClean === stage.key) || 
-                (stage.key === 'completed' && (currentStatusClean === 'delivered' || currentStatusClean === 'completed' || (isStorePickup && currentStatusClean === 'smb-picked'))) || 
-                (stage.key === 'ready-to-ship' && (currentStatusClean === 'awaiting-pickup' || currentStatusClean === 'awaiting_pickup' || currentStatusClean === 'ready-to-ship' || currentStatusClean === 'ready_to_ship')) ||
-                (stage.key === 'smb-ready' && (currentStatusClean === 'smb-ready' || currentStatusClean === 'ready-to-ship' || currentStatusClean === 'awaiting-pickup')) ||
-                (stage.key === 'preparing-order' && (currentStatusClean === 'in-production' || currentStatusClean === 'in_production' || currentStatusClean === 'preparing-order' || currentStatusClean === 'preparing_order'));
-              const Icon = stage.icon;
-              return (
-                <button
-                  key={stage.key}
-                  disabled={isUpdatingStatus}
-                  onClick={() => {
-                    if (!isStorePickup && stage.key === 'completed') {
-                      setShowManualCompletedModal(true);
-                    } else {
-                      handleStatusChange(stage.key);
-                    }
-                  }}
-                  className={clsx(
-                    'flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all duration-200',
-                    isActive 
-                      ? 'bg-[#f3aa18]/10 border-[#f3aa18]/30 text-[#f3aa18] shadow-[0_0_15px_rgba(243,170,24,0.15)] font-bold' 
-                      : 'bg-[#141414] border-white/[0.06] text-neutral-400 hover:text-white hover:bg-white/[0.04] hover:border-white/[0.1]'
-                  )}
-                >
-                  <Icon className={clsx('w-4 h-4 mb-1.5', isActive ? 'text-[#f3aa18]' : 'text-neutral-500')} />
-                  <span className="text-[11px] font-sans tracking-tight line-clamp-1">{stage.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
         {/* Section 1: Customer & Delivery Address Card */}
         <div className="p-5 rounded-2xl border border-white/[0.06] bg-[#111111] space-y-4">
           <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 gap-3">
@@ -4016,6 +3864,8 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
           }}
         />
       )}
-    </SlideDrawer>
+      </div>
+    </Drawer>
+    </>
   );
 };
