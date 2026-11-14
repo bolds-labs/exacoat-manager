@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Copy } from 'lucide-react';
-import { duplicateProductDirect } from '../../lib/wordpressBridge';
+import { duplicateProductDirect, type Product } from '../../lib/wordpressBridge';
 import { parsePriceInput } from '../../lib/productList';
 import { slugify } from '../../lib/finishesEditor';
 import { Modal } from '../ds/Modal';
@@ -17,6 +17,14 @@ export interface DuplicateSource {
   price: number;
   categoryName?: string;
 }
+
+export const duplicateSourceOf = (p: Product): DuplicateSource => ({
+  id: p.id,
+  name: p.name,
+  slug: p.slug,
+  price: Number(p.regular_price || p.price) || 0,
+  categoryName: p.categories?.[0]?.name,
+});
 
 export interface DuplicateProductModalProps {
   source: DuplicateSource | null;

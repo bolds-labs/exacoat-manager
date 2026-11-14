@@ -228,48 +228,58 @@ export function ProductList({
   const to = (page - 1) * PAGE_SIZE + rows.length;
   const configSummaryFailed = !summariesLoading && summaries === null;
 
+  const refreshButton = (
+    <IconButton
+      icon={RefreshCw}
+      label="Refresh list"
+      onClick={() => {
+        setRefreshTick((t) => t + 1);
+        if (configSummaryFailed) onReloadSummaries();
+      }}
+      disabled={loading}
+      className={loading ? '[&>svg]:animate-spin' : ''}
+    />
+  );
+
   return (
     <section className="overflow-hidden rounded-[14px] border border-card-border bg-card font-sans text-[14px]">
-      <div className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2.5">
-        {!studio && (
+      {!studio && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2.5">
           <div className="flex min-w-0 items-center overflow-x-auto [&_button]:whitespace-nowrap">
             <Tabs items={channelTabs} value={channel} onChange={(k) => setChannel(k as ProductChannel)} />
           </div>
-        )}
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          {toolbarActions?.(channel, rows, total ?? 0)}
-          <IconButton
-            icon={RefreshCw}
-            label="Refresh list"
-            onClick={() => {
-              setRefreshTick((t) => t + 1);
-              if (configSummaryFailed) onReloadSummaries();
-            }}
-            disabled={loading}
-            className={loading ? '[&>svg]:animate-spin' : ''}
-          />
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {toolbarActions?.(channel, rows, total ?? 0)}
+            {refreshButton}
+          </div>
         </div>
-      </div>
+      )}
 
       {channel === 'webstore' ? (
         <>
           <div className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2.5">
             <SearchField
-              className="w-full sm:w-[260px]"
+              className="w-full sm:w-[220px]"
               placeholder={studio ? 'Search devices, slug or id' : 'Search products or id'}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
-            <Select aria-label="Category" className="w-full sm:w-[190px]" value={category} options={categoryOptions} onChange={setCategory} disabled={!categories} />
-            <Select aria-label="Status" className="w-full sm:w-[150px]" value={status} options={WEBSTORE_STATUS_FILTERS} onChange={setStatus} />
+            <Select aria-label="Category" className="w-full sm:w-[170px]" value={category} options={categoryOptions} onChange={setCategory} disabled={!categories} />
+            <Select aria-label="Status" className="w-full sm:w-[145px]" value={status} options={WEBSTORE_STATUS_FILTERS} onChange={setStatus} />
             <Select
               aria-label="Configurator"
-              className="w-full sm:w-[200px]"
+              className="w-full sm:w-[195px]"
               value={configurator}
               options={configuratorOptions}
               onChange={handleConfigurator}
             />
-            <Select aria-label="Sort" className="w-full sm:w-[170px]" value={sort} options={SORT_OPTIONS} onChange={(v) => setSort(v as SortOption)} />
+            <Select aria-label="Sort" className="w-full sm:w-[150px]" value={sort} options={SORT_OPTIONS} onChange={(v) => setSort(v as SortOption)} />
+            {studio && (
+              <div className="ml-auto flex items-center gap-2">
+                {toolbarActions?.(channel, rows, total ?? 0)}
+                {refreshButton}
+              </div>
+            )}
           </div>
 
           {configSummaryFailed && (
@@ -343,7 +353,7 @@ export function ProductList({
                             {studio && (
                               <td className={`${td} text-[12.5px] text-muted`}>
                                 {summary ? (
-                                  <span className="font-mono tabular-nums">
+                                  <span className="tabular-nums">
                                     {summary.views_count} {summary.views_count === 1 ? 'view' : 'views'}, {summary.layers_count}{' '}
                                     {summary.layers_count === 1 ? 'layer' : 'layers'}
                                     {(summary.presets_count || 0) > 0 ? `, ${summary.presets_count} looks` : ''}
@@ -418,8 +428,20 @@ export function ProductList({
                         <div className="flex flex-wrap items-center gap-2">
                           <WpStatusChip status={p.status} />
                           <ConfiguratorChip summary={summary} unknown={configSummaryFailed} loading={summariesLoading && !summaries} onIssuesClick={onIssuesClick ? () => onIssuesClick(p.id) : undefined} />
-                          <span className="ml-auto">
+                          <span className="ml-auto flex flex-col items-end gap-0.5">
                             <PriceCell product={p} />
+                            {onEditPrice && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onEditPrice(p.id);
+                                }}
+                                className="rounded text-[12px] text-accent-fg hover:underline"
+                              >
+                                Edit price
+                              </button>
+                            )}
                           </span>
                         </div>
                       </div>

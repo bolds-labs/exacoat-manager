@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { PageHeroHeader } from '../components/ui/PageHeroHeader';
-import { GlassCard } from '../components/ui/GlassCard';
 import { useToast } from '../context/ToastContext';
 import { lockBodyScroll } from '../lib/bodyScrollLock';
 import {
@@ -26,7 +24,16 @@ import {
   DEFAULT_FINISH_SURCHARGE_TIERS,
   fetchFinishSurchargeTiersDirect,
   saveFinishSurchargeTiersDirect,
+  syncDeviceFamiliesDirect,
+  updateProductDirect,
+  type Product,
 } from '../lib/wordpressBridge';
+import { configuratorStatus, needsAllSummaries, parseProductIdFromHash } from '../lib/productList';
+import { ProductList } from '../components/products/ProductList';
+import { DuplicateProductModal, duplicateSourceOf, type DuplicateSource } from '../components/products/DuplicateProductModal';
+import { ConfirmModal, ConfirmText } from '../components/orders/panel/ConfirmModal';
+import { Button as DsButton } from '../components/ds/Button';
+import { Menu as DsMenu, type MenuItem } from '../components/ds/Menu';
 import {
   DeviceConfiguratorProfile,
   ConfiguratorProfileSummary,
@@ -94,6 +101,7 @@ import {
   FileJson,
   FileText,
   Loader2,
+  PanelRightOpen,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { MediaLibraryModal } from '../components/modals/MediaLibraryModal';
@@ -711,10 +719,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [finishes, setFinishes] = useState<GlobalFinish[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [filterConfigured, setFilterConfigured] = useState<'all' | 'configured' | 'pending'>('all');
-  const [filterAudit, setFilterAudit] = useState<'all' | 'audited' | 'unaudited' | 'issues'>('all');
   const [globalAuditMode, setGlobalAuditMode] = useState<'all' | 'unaudited'>('all');
   const [showAllProducts, setShowAllProducts] = useState(false);
   const [togglingConfiguratorId, setTogglingConfiguratorId] = useState<number | null>(null);
@@ -727,28 +731,16 @@ export const ConfiguratorStudioPage: React.FC = () => {
     total_scanned?: number;
   } | null>(null);
 
-  // Quick Price Edit Dialog state (Catalog)
-  const [priceEditModal, setPriceEditModal] = useState<{
-    productId: number;
-    name: string;
-    currentPrice: number;
-  } | null>(null);
-  const [tempPrice, setTempPrice] = useState<number>(0);
-  const [isSavingPrice, setIsSavingPrice] = useState(false);
-
-  // Duplicate Product Dialog state (Catalog)
-  const [duplicateModal, setDuplicateModal] = useState<{
-    productId: number;
-    name: string;
-    slug: string;
-    price: number;
-    family: string;
-  } | null>(null);
-  const [duplicateName, setDuplicateName] = useState('');
-  const [duplicateSlug, setDuplicateSlug] = useState('');
-  const [duplicatePrice, setDuplicatePrice] = useState(0);
-  const [duplicateCopyConfig, setDuplicateCopyConfig] = useState(true);
-  const [isDuplicating, setIsDuplicating] = useState(false);
+  const [profilesError, setProfilesError] = useState<string | null>(null);
+  const [catalogConfirm, setCatalogConfirm] = useState<null | 'revalidate' | 'families' | 'migrate'>(null);
+  const [rowConfirm, setRowConfirm] = useState<
+    null | { kind: 'status'; product: Product; next: 'publish' | 'draft' } | { kind: 'configurator'; product: Product; next: boolean }
+  >(null);
+  const [rowBusy, setRowBusy] = useState(false);
+  const [isSyncingFamilies, setIsSyncingFamilies] = useState(false);
+  const [catalogReloadToken, setCatalogReloadToken] = useState(0);
+  const [catalogOverrides, setCatalogOverrides] = useState<Record<number, Product>>({});
+  const [duplicateSource, setDuplicateSource] = useState<DuplicateSource | null>(null);
 
   // Editor Modal / Fullscreen Workspace state
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
@@ -815,9 +807,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [tempTextureScale, setTempTextureScale] = useState<number>(100);
 
   // Category combobox dropdown state
-  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
-  const [categorySearch, setCategorySearch] = useState('');
-  const categoryDropdownRef = useRef<HTMLDivElement>(null);
 
   // Marketplace Image Generator Modal state (1500x1500px)
   const [showMarketplaceModal, setShowMarketplaceModal] = useState(false);
@@ -874,17 +863,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
     copyFamilySettings: true,
     copyVariants: true,
   });
-
-  // Close category dropdown on click outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(e.target as Node)) {
-        setCategoryDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   // Live Simulator test state
   const [selectedSimLayers, setSelectedSimLayers] = useState<Record<string, boolean>>({});
@@ -1047,6 +1025,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
       if (profilesRes.success && Array.isArray(profilesRes.profiles)) {
         setProfiles(profilesRes.profiles);
+        setProfilesError(null);
+      } else {
+        setProfilesError(profilesRes.error || 'The configurator list did not load.');
       }
       if (finishesRes.success && Array.isArray(finishesRes.finishes)) {
         setFinishes(finishesRes.finishes);
@@ -1064,12 +1045,23 @@ export const ConfiguratorStudioPage: React.FC = () => {
         }
       }
     } catch (err: any) {
-      console.warn('Configurator studio load warning:', err);
+      setProfilesError(err?.message || 'The configurator list did not load.');
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
   };
+
+  // `#configurator?product=123` (from the Products panel) opens that device once the list has loaded.
+  const hashOpenDone = useRef(false);
+  useEffect(() => {
+    if (isLoading || hashOpenDone.current) return;
+    hashOpenDone.current = true;
+    const id = parseProductIdFromHash(window.location.hash);
+    if (id) void handleOpenEditor(id);
+    // handleOpenEditor is recreated every render; this runs once after the first load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading]);
 
   useEffect(() => {
     loadData();
@@ -1103,9 +1095,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (categoryDropdownOpen) {
-          setCategoryDropdownOpen(false);
-        } else if (mediaPickerConfig.isOpen) {
+        if (mediaPickerConfig.isOpen) {
           setMediaPickerConfig((prev) => ({ ...prev, isOpen: false }));
         } else if (showGlobalAuditModal) {
           setShowGlobalAuditModal(false);
@@ -1115,10 +1105,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
           setShowAssetAuditModal(false);
         } else if (editingTextureModal) {
           setEditingTextureModal(null);
-        } else if (duplicateModal) {
-          setDuplicateModal(null);
-        } else if (priceEditModal) {
-          setPriceEditModal(null);
         } else if (selectedProductId !== null) {
           handleCloseEditor();
         }
@@ -1128,7 +1114,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [categoryDropdownOpen, mediaPickerConfig.isOpen, showGlobalAuditModal, showTransferModal, showAssetAuditModal, editingTextureModal, duplicateModal, priceEditModal, selectedProductId]);
+  }, [mediaPickerConfig.isOpen, showGlobalAuditModal, showTransferModal, showAssetAuditModal, editingTextureModal, selectedProductId]);
 
   useEffect(() => {
     if (selectedProductId !== null) {
@@ -1419,6 +1405,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
     setSelectedProductId(null);
     setEditingProfile(null);
     setSelectedLayerId('');
+    if (parseProductIdFromHash(window.location.hash) !== null) {
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#configurator`);
+    }
   };
 
   const handleConvertToV2 = () => {
@@ -1850,86 +1839,79 @@ export const ConfiguratorStudioPage: React.FC = () => {
     }
   };
 
-  // Quick Price Edit in Catalog
-  const handleOpenPriceModal = (product: ConfiguratorProfileSummary) => {
-    setPriceEditModal({
-      productId: product.product_id,
-      name: product.name,
-      currentPrice: product.price,
-    });
-    setTempPrice(product.price);
-  };
-
-  const handleSaveQuickPrice = async () => {
-    if (!priceEditModal) return;
-    setIsSavingPrice(true);
-    try {
-      const res = await setProductPriceDirect(priceEditModal.productId, tempPrice);
-      if (res.success) {
-        showToast('success', 'Price Updated', `${priceEditModal.name} price set to IDR ${tempPrice.toLocaleString('id-ID')}.`);
-        setProfiles((prev) =>
-          prev.map((p) => (p.product_id === priceEditModal.productId ? { ...p, price: tempPrice } : p))
-        );
-        if (editingProfile && editingProfile.product_id === priceEditModal.productId) {
-          setEditingProfile((prev) => prev ? { ...prev, base_price: tempPrice } : prev);
-        }
-        setPriceEditModal(null);
-      } else {
-        showToast('error', 'Update Failed', res.error || 'Failed setting product price');
-      }
-    } catch (err: any) {
-      showToast('error', 'Error', err.message);
-    } finally {
-      setIsSavingPrice(false);
+  // Prices are edited only in Products. From an open device the panel opens in a new tab so device edits stay here.
+  const openProductsPanel = (productId: number) => {
+    const target = `#products?product=${productId}`;
+    if (selectedProductId !== null) {
+      window.open(`${window.location.pathname}${window.location.search}${target}`, '_blank', 'noopener');
+    } else {
+      window.location.hash = target;
     }
   };
 
-  // Duplicate Product in Catalog
-  const handleOpenDuplicateModal = (product: ConfiguratorProfileSummary) => {
-    setDuplicateModal({
-      productId: product.product_id,
-      name: product.name,
-      slug: product.slug,
-      price: product.price,
-      family: product.family,
-    });
-    setDuplicateName(`${product.name} (Copy)`);
-    setDuplicateSlug(`${product.slug}-copy`);
-    setDuplicatePrice(product.price);
-    setDuplicateCopyConfig(true);
+  const handleSyncFamilies = async () => {
+    setIsSyncingFamilies(true);
+    try {
+      const res = await syncDeviceFamiliesDirect();
+      if (!res.success) throw new Error(res.error || 'The store did not sync the families.');
+      showToast('success', 'Device families synced', res.message || 'Families and multipliers were updated.');
+      await loadData(true);
+    } catch (err: any) {
+      showToast('error', 'Families not synced', err.message || 'Could not reach the store.');
+    } finally {
+      setIsSyncingFamilies(false);
+    }
   };
 
-  const handleExecuteDuplicate = async () => {
-    if (!duplicateModal || !duplicateName.trim()) return;
-    setIsDuplicating(true);
+  const handleRowConfirm = async () => {
+    if (!rowConfirm) return;
+    setRowBusy(true);
     try {
-      const res = await duplicateProductDirect({
-        source_product_id: duplicateModal.productId,
-        new_name: duplicateName.trim(),
-        new_slug: duplicateSlug.trim(),
-        new_price: duplicatePrice,
-        copy_configurator: duplicateCopyConfig,
-      });
-
-      if (res.success && res.productId) {
-        showToast(
-          'success',
-          'Product Duplicated',
-          `Created "${res.name}" with ID #${res.productId}. Opening in Studio...`
-        );
-        const newPid = res.productId;
-        setDuplicateModal(null);
-        await loadData(true);
-        // Automatically open the duplicated product in the studio for immediate editing!
-        handleOpenEditor(newPid);
+      if (rowConfirm.kind === 'status') {
+        const res = await updateProductDirect(rowConfirm.product.id, { status: rowConfirm.next });
+        if (!res.success || !res.product) throw new Error(res.error || 'The store did not change the status.');
+        const updated = res.product;
+        setCatalogOverrides((prev) => ({ ...prev, [updated.id]: updated }));
+        setProfiles((prev) => prev.map((p) => (p.product_id === updated.id ? { ...p, status: updated.status } : p)));
+        showToast('success', rowConfirm.next === 'publish' ? 'Published' : 'Moved to draft', updated.name);
       } else {
-        showToast('error', 'Duplication Failed', res.error || 'Failed duplicating product');
+        await handleToggleConfiguratorStatus(rowConfirm.product.id, !rowConfirm.next);
       }
+      setRowConfirm(null);
     } catch (err: any) {
-      showToast('error', 'Duplication Error', err.message);
+      showToast('error', 'Not changed', err.message || 'Could not reach the store.');
     } finally {
-      setIsDuplicating(false);
+      setRowBusy(false);
     }
+  };
+
+  const studioRowMenu = (p: Product, summary?: ConfiguratorProfileSummary): MenuItem[] => {
+    const state = configuratorStatus(summary).state;
+    const isConfigurator = state === 'clean' || state === 'issues' || state === 'unaudited';
+    const items: MenuItem[] = [
+      { icon: Layers, title: 'Open in Studio', onSelect: () => void handleOpenEditor(p.id) },
+      { icon: PanelRightOpen, title: 'Product details', description: 'Price, images and SEO in Products', onSelect: () => openProductsPanel(p.id) },
+    ];
+    if (isConfigurator) {
+      items.push(
+        { icon: ShieldCheck, title: 'Check assets', description: 'Probe images, masks and angles', onSelect: () => void handleOpenAssetAuditForProduct(p.id) },
+        { icon: ImageIcon, title: 'Marketplace images', description: '1500x1500 listing images', onSelect: () => void handleOpenMarketplaceForProduct(p.id) },
+      );
+    }
+    items.push({ icon: Copy, title: 'Duplicate', description: 'Draft copy with its configurator', onSelect: () => setDuplicateSource(duplicateSourceOf(p)) }, 'separator');
+    items.push(
+      p.status === 'publish'
+        ? { icon: EyeOff, title: 'Move to draft', onSelect: () => setRowConfirm({ kind: 'status', product: p, next: 'draft' }) }
+        : { icon: Globe, title: 'Publish', onSelect: () => setRowConfirm({ kind: 'status', product: p, next: 'publish' }) },
+    );
+    if (summary && summary.is_configurable) {
+      items.push(
+        summary.is_configurator === false
+          ? { icon: CheckCircle2, title: 'Include as configurator', onSelect: () => setRowConfirm({ kind: 'configurator', product: p, next: true }) }
+          : { icon: AlertCircle, title: 'Exclude from configurators', onSelect: () => setRowConfirm({ kind: 'configurator', product: p, next: false }) },
+      );
+    }
+    return items;
   };
 
   // Transfer Setup & Portable JSON Handlers
@@ -3786,35 +3768,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
     setEditingTextureModal(null);
   };
 
-  // Categories list
-  const categories = useMemo(() => {
-    const list = new Set<string>();
-    profiles.forEach((p) => {
-      (p.categories || []).forEach((c) => list.add(c));
-    });
-    return ['all', ...Array.from(list).sort()];
-  }, [profiles]);
-
-  // Category device counts for combobox display
-  const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: profiles.length };
-    profiles.forEach((p) => {
-      (p.categories || []).forEach((c) => {
-        counts[c] = (counts[c] || 0) + 1;
-      });
-    });
-    return counts;
-  }, [profiles]);
-
-  // Filtered categories for combobox search
-  const filteredCategories = useMemo(() => {
-    const q = categorySearch.toLowerCase().trim();
-    if (!q) return categories;
-    return categories.filter((c) =>
-      c === 'all' ? 'all categories'.includes(q) : c.toLowerCase().includes(q)
-    );
-  }, [categories, categorySearch]);
-
   // Save or create a bespoke configurator preset
   const handleSavePreset = async (preset: ConfiguratorPreset) => {
     const cleanId = preset.id || preset.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -3867,38 +3820,6 @@ export const ConfiguratorStudioPage: React.FC = () => {
       setIsSavingPresets(false);
     }
   };
-
-  // Filtered profiles for catalog grid
-  const filteredProfiles = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
-    return profiles.filter((p) => {
-      const matchesSearch =
-        !q ||
-        p.name.toLowerCase().includes(q) ||
-        p.slug.toLowerCase().includes(q) ||
-        String(p.product_id).includes(q);
-
-      const matchesCat = selectedCategory === 'all' || p.categories.includes(selectedCategory);
-
-      const matchesStatus =
-        filterConfigured === 'all'
-          ? true
-          : filterConfigured === 'configured'
-          ? p.is_configurable && p.is_configurator !== false
-          : !p.is_configurable || p.is_configurator === false;
-
-      const matchesAudit =
-        filterAudit === 'all'
-          ? true
-          : filterAudit === 'audited'
-          ? Boolean(p.last_audited_at) && p.audit_status !== 'issues'
-          : filterAudit === 'unaudited'
-          ? !p.last_audited_at || p.audit_status === 'unaudited'
-          : p.audit_status === 'issues' || Boolean(p.audit_issues && p.audit_issues > 0);
-
-      return matchesSearch && matchesCat && matchesStatus && matchesAudit;
-    });
-  }, [profiles, searchQuery, selectedCategory, filterConfigured, filterAudit]);
 
   // Live Price Calculation in Simulator
   const simulatedTotalPrice = useMemo(() => {
@@ -3993,685 +3914,89 @@ export const ConfiguratorStudioPage: React.FC = () => {
     return { total, configured, multiAngle, audited, unaudited, issues };
   }, [profiles]);
 
-  const getFamilyIcon = (family: DeviceFamily) => {
-    switch (family) {
-      case 'laptop':
-        return <Laptop className="w-4 h-4 text-sky-400" />;
-      case 'tablet':
-        return <Tablet className="w-4 h-4 text-emerald-400" />;
-      case 'keyboard':
-        return <KeyboardIcon className="w-4 h-4 text-amber-400" />;
-      default:
-        return <Smartphone className="w-4 h-4 text-[#f3aa18]" />;
-    }
-  };
-
   return (
-    <div className="space-y-6">
-      {/* Top Banner */}
-      <PageHeroHeader
-        title="Product Configurator Studio"
-        titleClassName="font-heading font-normal tracking-wide text-2xl sm:text-3xl"
-        subtitle="Manage device viewing angles, customizable skin parts, and transparent Photoshop texture maps."
-        actions={
-          <div className="flex items-center gap-2.5">
-            <button
-              onClick={() => loadData(true)}
-              disabled={isRefreshing}
-              className="px-4 py-2 text-xs font-sans font-medium rounded-xl border border-white/10 hover:bg-white/[0.06] text-zinc-300 transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
-            >
-              <RefreshCw className={clsx('w-3.5 h-3.5', isRefreshing && 'animate-spin text-[#f3aa18]')} />
-              Refresh Catalog
-            </button>
-            <button
-              type="button"
-              onClick={openFinishesScreen}
-              className="px-4 py-2 text-xs font-sans font-medium rounded-xl border border-sky-500/30 hover:bg-sky-500/10 text-sky-300 transition-colors flex items-center gap-2 cursor-pointer"
-              title="Edit global finishes, master textures, stock and finish groups on the Finishes & Stock screen"
-            >
-              <Palette className="w-3.5 h-3.5 text-sky-400" />
-              <span>Finishes</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowSurchargeTiersModal(true)}
-              className="px-4 py-2 text-xs font-sans font-medium rounded-xl border border-amber-500/30 hover:bg-amber-500/10 text-amber-300 transition-colors flex items-center gap-2 cursor-pointer"
-              title="Manage global finish surcharge brackets by part base price"
-            >
-              <Coins className="w-3.5 h-3.5 text-amber-400" />
-              <span>Surcharge Tiers ({surchargeTiers.length})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleRevalidateStorefront({ purgeAll: true })}
-              disabled={isRevalidatingWeb}
-              className="px-4 py-2 text-xs font-sans font-medium rounded-xl border border-indigo-500/30 hover:bg-indigo-500/10 text-indigo-300 transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
-              title="Purge Next.js ISR catalog cache and Cloudflare edge cache for web.exacoat.com"
-            >
-              <Globe className={clsx('w-3.5 h-3.5 text-indigo-400', isRevalidatingWeb && 'animate-spin')} />
-              <span>{isRevalidatingWeb ? 'Revalidating Web...' : 'Revalidate Web'}</span>
-            </button>
-            {stats.unaudited > 0 ? (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
+        <div className="min-w-0">
+          <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.025em] text-fg">Configurator Studio</h1>
+          <p className="mt-0.5 text-[14px] text-muted">
+            Devices with a skin configurator. Open one to edit its views, skin parts, cutouts and looks. Prices are edited in Products.
+          </p>
+        </div>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <DsButton icon={Palette} onClick={openFinishesScreen}>
+            Finishes
+          </DsButton>
+          <DsButton icon={Coins} onClick={() => setShowSurchargeTiersModal(true)}>
+            Price tiers
+          </DsButton>
+          <DsButton
+            variant={stats.unaudited > 0 ? 'primary' : 'secondary'}
+            icon={ShieldCheck}
+            onClick={() => handleStartGlobalCatalogAudit('unaudited')}
+            disabled={isAuditingGlobal || profiles.length === 0 || stats.unaudited === 0}
+          >
+            {isAuditingGlobal && globalAuditMode === 'unaudited' ? 'Checking...' : `Check unaudited (${stats.unaudited})`}
+          </DsButton>
+          <DsMenu
+            items={[
+              {
+                icon: ShieldCheck,
+                title: `Check all devices (${stats.total})`,
+                description: 'Probe every image, mask and angle for broken links',
+                onSelect: () => void handleStartGlobalCatalogAudit('all'),
+              },
+              {
+                icon: Globe,
+                title: 'Revalidate webstore',
+                description: 'Clear the webstore and Cloudflare caches for all products',
+                onSelect: () => setCatalogConfirm('revalidate'),
+              },
+              {
+                icon: Cpu,
+                title: 'Sync device families',
+                description: 'Set family and surcharge multiplier from each product name',
+                onSelect: () => setCatalogConfirm('families'),
+              },
+              {
+                icon: FolderSync,
+                title: 'Auto-migrate all products',
+                description: 'Convert legacy configurators to the composable format',
+                onSelect: () => setCatalogConfirm('migrate'),
+              },
+            ]}
+            trigger={
               <button
                 type="button"
-                onClick={() => handleStartGlobalCatalogAudit('unaudited')}
-                disabled={isAuditingGlobal || profiles.length === 0}
-                className="px-4 py-2 text-xs font-sans font-bold uppercase tracking-wider rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 transition-all flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
-                title="Scan only devices that have not been audited yet"
+                className="inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-[9px] border border-field-border bg-field px-[13px] text-[13px] font-[450] text-fg hover:bg-chip focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+                disabled={isRevalidatingWeb || isMigrating || isSyncingFamilies || isAuditingGlobal}
               >
-                {isAuditingGlobal && globalAuditMode === 'unaudited' ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-400" />
-                    <span>Auditing Unaudited ({stats.unaudited})...</span>
-                  </>
-                ) : (
-                  <>
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Audit Unaudited ({stats.unaudited})</span>
-                  </>
-                )}
+                {isRevalidatingWeb || isMigrating || isSyncingFamilies ? 'Working...' : 'Catalog tools'}
+                <ChevronDown className="h-[15px] w-[15px] text-muted" strokeWidth={1.8} aria-hidden />
               </button>
-            ) : null}
-
-            <button
-              type="button"
-              onClick={() => handleStartGlobalCatalogAudit('all')}
-              disabled={isAuditingGlobal || profiles.length === 0}
-              className={clsx(
-                'px-4 py-2 text-xs font-sans font-bold uppercase tracking-wider rounded-xl transition-all flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-50',
-                stats.unaudited === 0
-                  ? 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30'
-                  : 'border border-white/10 hover:bg-white/[0.06] text-zinc-300 font-medium'
-              )}
-              title="Audit all devices across the catalog for 404 images, broken textures, and ghost angles"
-            >
-              {isAuditingGlobal && globalAuditMode === 'all' ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#f3aa18]" />
-                  <span>Auditing All Devices...</span>
-                </>
-              ) : (
-                <>
-                  <ShieldCheck className="w-3.5 h-3.5 text-zinc-400" />
-                  <span>Audit All ({stats.total})</span>
-                </>
-              )}
-            </button>
-            <button
-              onClick={handleBatchMigrate}
-              disabled={isMigrating}
-              className="px-4 py-2 text-xs font-sans font-bold uppercase tracking-wider rounded-xl bg-[#f3aa18] hover:bg-[#ffb72b] text-black transition-all flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
-            >
-              <FolderSync className={clsx('w-3.5 h-3.5', isMigrating && 'animate-spin')} />
-              {isMigrating ? 'Migrating Catalog...' : 'Auto-Migrate All Products'}
-            </button>
-          </div>
-        }
-      />
-
-      {/* Migration Result Banner */}
-      {migrationResult && (
-        <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between text-xs font-sans text-emerald-300">
-          <div className="flex items-center gap-2.5">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>
-              Catalog migration verified: <strong>{migrationResult.migrated_count}</strong> products converted to the composable schema.
-            </span>
-          </div>
-          <button
-            onClick={() => setMigrationResult(null)}
-            className="p-1 rounded text-zinc-400 hover:text-white cursor-pointer"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
-
-      {/* Metrics Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <GlassCard className="p-4 flex items-center gap-4">
-          <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-[#f3aa18] shrink-0">
-            <Layers className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-[11px] font-sans font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Catalog Devices</p>
-            <p className="text-2xl font-mono font-bold text-zinc-900 dark:text-white mt-0.5">{stats.total}</p>
-          </div>
-        </GlassCard>
-
-        <GlassCard className="p-4 flex items-center gap-4">
-          <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
-            <ShieldCheck className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-[11px] font-sans font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Audited Clean</p>
-            <p className="text-2xl font-mono font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">{Math.max(0, stats.audited - stats.issues)}</p>
-          </div>
-        </GlassCard>
-
-        <GlassCard className="p-4 flex items-center gap-4">
-          <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
-            <ShieldAlert className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-[11px] font-sans font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Unaudited Devices</p>
-            <p className="text-2xl font-mono font-bold text-amber-600 dark:text-amber-400 mt-0.5">{stats.unaudited}</p>
-          </div>
-        </GlassCard>
-
-        <GlassCard className="p-4 flex items-center gap-4">
-          <div className="w-11 h-11 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-600 dark:text-sky-400 shrink-0">
-            <Eye className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-[11px] font-sans font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Multi-Angle Setups</p>
-            <p className="text-2xl font-mono font-bold text-sky-600 dark:text-sky-400 mt-0.5">{stats.multiAngle}</p>
-          </div>
-        </GlassCard>
-      </div>
-
-      {/* Filter and Search Bar */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Search device name, model, SKU, or category..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 text-xs rounded-xl bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-white/10 text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/50 font-sans"
+            }
           />
         </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Scope Selector: Configurators Only vs All Store Products */}
-          <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900/60 p-1 rounded-xl border border-zinc-200 dark:border-white/10 shrink-0">
-            <button
-              type="button"
-              onClick={() => handleToggleShowAllProducts(false)}
-              className={clsx(
-                'px-2.5 py-1 text-xs font-sans rounded-lg transition-colors cursor-pointer flex items-center gap-1.5',
-                !showAllProducts
-                  ? 'bg-[#f3aa18]/20 text-[#f3aa18] font-bold border border-[#f3aa18]/30'
-                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
-              )}
-              title="Display only products configured as interactive device skins"
-            >
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Configurators</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleToggleShowAllProducts(true)}
-              className={clsx(
-                'px-2.5 py-1 text-xs font-sans rounded-lg transition-colors cursor-pointer flex items-center gap-1.5',
-                showAllProducts
-                  ? 'bg-zinc-900 text-white dark:bg-white/15 dark:text-white font-bold'
-                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
-              )}
-              title="Display all store products including merchandise, drops, and kits"
-            >
-              <span>All Products</span>
-            </button>
-          </div>
-
-          <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900/60 p-1 rounded-xl border border-zinc-200 dark:border-white/10 shrink-0">
-            <button
-              onClick={() => setFilterConfigured('all')}
-              className={clsx(
-                'px-2.5 py-1 text-xs font-sans rounded-lg transition-colors cursor-pointer',
-                filterConfigured === 'all' ? 'bg-zinc-900 text-white dark:bg-white/15 dark:text-white font-bold' : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
-              )}
-            >
-              All
-            </button>
-            <button
-              onClick={() => setFilterConfigured('configured')}
-              className={clsx(
-                'px-2.5 py-1 text-xs font-sans rounded-lg transition-colors cursor-pointer',
-                filterConfigured === 'configured' ? 'bg-zinc-900 text-white dark:bg-white/15 dark:text-white font-bold' : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
-              )}
-            >
-              Active
-            </button>
-          </div>
-
-          {/* Audit Status Filter Selector */}
-          <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900/60 p-1 rounded-xl border border-zinc-200 dark:border-white/10 shrink-0">
-            <button
-              type="button"
-              onClick={() => setFilterAudit('all')}
-              className={clsx(
-                'px-2.5 py-1 text-xs font-sans rounded-lg transition-colors cursor-pointer',
-                filterAudit === 'all' ? 'bg-zinc-900 text-white dark:bg-white/15 dark:text-white font-bold' : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
-              )}
-            >
-              All Audit
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterAudit('audited')}
-              className={clsx(
-                'px-2.5 py-1 text-xs font-sans rounded-lg transition-colors cursor-pointer flex items-center gap-1.5',
-                filterAudit === 'audited'
-                  ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-500/40'
-                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
-              )}
-              title="Show devices that have been audited and verified clean"
-            >
-              <ShieldCheck className="w-3 h-3 text-emerald-500" />
-              <span>Audited ({Math.max(0, stats.audited - stats.issues)})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterAudit('unaudited')}
-              className={clsx(
-                'px-2.5 py-1 text-xs font-sans rounded-lg transition-colors cursor-pointer flex items-center gap-1.5',
-                filterAudit === 'unaudited'
-                  ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold border border-amber-500/40'
-                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
-              )}
-              title="Show devices that need auditing"
-            >
-              <ShieldAlert className="w-3 h-3 text-amber-500" />
-              <span>Unaudited ({stats.unaudited})</span>
-            </button>
-            {stats.issues > 0 && (
-              <button
-                type="button"
-                onClick={() => setFilterAudit('issues')}
-                className={clsx(
-                  'px-2.5 py-1 text-xs font-sans rounded-lg transition-colors cursor-pointer flex items-center gap-1.5',
-                  filterAudit === 'issues'
-                    ? 'bg-rose-500/20 text-rose-700 dark:text-rose-300 font-bold border border-rose-500/40'
-                    : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
-                )}
-                title="Show devices with broken textures or ghost angles"
-              >
-                <AlertTriangle className="w-3 h-3 text-rose-500" />
-                <span>Issues ({stats.issues})</span>
-              </button>
-            )}
-          </div>
-
-          {/* Category Combobox Dropdown */}
-          <div className="relative shrink-0 z-[60]" ref={categoryDropdownRef}>
-            <button
-              type="button"
-              onClick={() => setCategoryDropdownOpen(!categoryDropdownOpen)}
-              className={clsx(
-                'px-3 py-1.5 text-xs font-sans rounded-xl transition-all cursor-pointer flex items-center gap-2 border shadow-xs',
-                selectedCategory !== 'all'
-                  ? 'bg-[#f3aa18]/15 text-[#f3aa18] border-[#f3aa18]/40 font-semibold'
-                  : 'bg-white dark:bg-zinc-900/80 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-white/10 hover:border-zinc-300 dark:hover:border-white/20 hover:text-zinc-900 dark:hover:text-white'
-              )}
-              title="Filter catalog by device category / brand"
-            >
-              <Folder className={clsx('w-3.5 h-3.5', selectedCategory !== 'all' ? 'text-[#f3aa18]' : 'text-zinc-400')} />
-              <span className="capitalize">
-                {selectedCategory === 'all' ? 'All Categories' : selectedCategory}
-              </span>
-              <span
-                className={clsx(
-                  'text-[10px] font-mono px-1.5 py-0.5 rounded-full font-bold',
-                  selectedCategory !== 'all'
-                    ? 'bg-[#f3aa18]/25 text-[#f3aa18]'
-                    : 'bg-zinc-100 dark:bg-white/10 text-zinc-600 dark:text-zinc-400'
-                )}
-              >
-                {categoryCounts[selectedCategory] ?? profiles.length}
-              </span>
-              <ChevronDown
-                className={clsx(
-                  'w-3.5 h-3.5 text-zinc-400 transition-transform duration-200',
-                  categoryDropdownOpen && 'rotate-180 text-zinc-900 dark:text-white'
-                )}
-              />
-            </button>
-
-            {/* Floating Popover Dropdown */}
-            {categoryDropdownOpen && (
-              <div className="absolute left-0 lg:right-0 lg:left-auto top-full mt-1.5 z-[60] w-72 rounded-2xl bg-white dark:bg-[#121215]/95 backdrop-blur-xl border border-zinc-200 dark:border-white/10 shadow-2xl p-2 animate-in fade-in zoom-in-95 duration-150">
-                {/* Search Header */}
-                <div className="relative mb-2">
-                  <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    placeholder="Search categories..."
-                    value={categorySearch}
-                    onChange={(e) => setCategorySearch(e.target.value)}
-                    autoFocus
-                    className="w-full pl-8 pr-7 py-1.5 text-xs font-sans rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-[#f3aa18]/50"
-                  />
-                  {categorySearch && (
-                    <button
-                      type="button"
-                      onClick={() => setCategorySearch('')}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-900 dark:hover:text-white p-0.5 cursor-pointer"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-
-                {/* Reset to All Categories Quick Action */}
-                {selectedCategory !== 'all' && (
-                  <div className="pb-1.5 mb-1.5 border-b border-zinc-100 dark:border-white/5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedCategory('all');
-                        setCategoryDropdownOpen(false);
-                      }}
-                      className="w-full px-2.5 py-1.5 rounded-xl text-xs font-sans text-left transition-colors flex items-center justify-between text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 cursor-pointer"
-                    >
-                      <span className="flex items-center gap-1.5">
-                        <RefreshCw className="w-3 h-3 text-zinc-400 dark:text-zinc-500" />
-                        <span>Reset to All Categories</span>
-                      </span>
-                      <span className="text-[10px] font-mono text-zinc-500">{profiles.length}</span>
-                    </button>
-                  </div>
-                )}
-
-                {/* Categories Options List */}
-                <div className="max-h-64 overflow-y-auto space-y-0.5 pr-1">
-                  {filteredCategories.length === 0 ? (
-                    <div className="py-4 text-center text-xs text-zinc-400 dark:text-zinc-500">No categories match search</div>
-                  ) : (
-                    filteredCategories.map((cat) => {
-                      const isSelected = selectedCategory === cat;
-                      const count = categoryCounts[cat] || 0;
-                      return (
-                        <button
-                          key={cat}
-                          type="button"
-                          onClick={() => {
-                            setSelectedCategory(cat);
-                            setCategoryDropdownOpen(false);
-                          }}
-                          className={clsx(
-                            'w-full px-2.5 py-1.5 rounded-xl text-xs font-sans text-left transition-colors flex items-center justify-between group cursor-pointer',
-                            isSelected
-                              ? 'bg-[#f3aa18]/15 text-[#f3aa18] font-semibold'
-                              : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5 hover:text-zinc-900 dark:hover:text-white'
-                          )}
-                        >
-                          <div className="flex items-center gap-2 truncate">
-                            <span
-                              className={clsx(
-                                'w-1.5 h-1.5 rounded-full shrink-0',
-                                isSelected ? 'bg-[#f3aa18]' : 'bg-zinc-400 dark:bg-zinc-600 group-hover:bg-zinc-600 dark:group-hover:bg-zinc-400'
-                              )}
-                            />
-                            <span className="capitalize truncate">
-                              {cat === 'all' ? 'All Categories' : cat}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-400">
-                              {count}
-                            </span>
-                            {isSelected && <Check className="w-3.5 h-3.5 text-[#f3aa18]" />}
-                          </div>
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
       </div>
 
-      {/* Catalog Grid */}
-      {isLoading ? (
-        <div className="h-64 flex flex-col items-center justify-center gap-3">
-          <RefreshCw className="w-6 h-6 animate-spin text-[#f3aa18]" />
-          <p className="text-xs font-sans text-zinc-500">Scanning catalog configurators...</p>
-        </div>
-      ) : filteredProfiles.length === 0 ? (
-        <GlassCard className="p-12 text-center">
-          <Layers className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
-          <p className="text-sm font-medium text-zinc-300">No products match your filter criteria</p>
-          <p className="text-xs text-zinc-500 mt-1">Try broadening your search query or selecting a different category.</p>
-        </GlassCard>
-      ) : (
-        <div className="rounded-2xl border border-zinc-200 dark:border-white/10 overflow-hidden bg-white dark:bg-zinc-950/60 shadow-xs dark:shadow-xl">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs font-sans border-collapse">
-              <thead>
-                <tr className="border-b border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-zinc-900/60 text-[11px] uppercase tracking-wider font-semibold text-zinc-600 dark:text-zinc-400">
-                  <th className="py-3 px-3 min-w-[95px] text-center">Status</th>
-                  <th className="py-3 px-4 min-w-[220px]">Device / Model</th>
-                  <th className="py-3 px-4 min-w-[150px]">Category</th>
-                  <th className="py-3 px-3 text-center">Configurator</th>
-                  <th className="py-3 px-4 text-center">Setup</th>
-                  <th className="py-3 px-3 text-center">Scale</th>
-                  <th className="py-3 px-3 text-center">Presets</th>
-                  <th className="py-3 px-4 text-right">Price</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-200 dark:divide-white/5">
-                {filteredProfiles.map((p) => {
-                  const isAuditedClean =
-                    p.last_audited_at &&
-                    p.audit_status !== 'issues' &&
-                    !(p.audit_issues && p.audit_issues > 0);
-                  const isAuditedIssues =
-                    p.last_audited_at &&
-                    (p.audit_status === 'issues' || Boolean(p.audit_issues && p.audit_issues > 0));
-
-                  return (
-                    <tr
-                      key={p.product_id}
-                      onClick={() => handleOpenEditor(p.product_id)}
-                      className="hover:bg-zinc-50 dark:hover:bg-white/[0.03] transition-colors cursor-pointer group"
-                    >
-                      {/* Status / Issues Badge */}
-                      <td
-                        className="py-3 px-3 text-center relative group/issue"
-                        onClick={(e) => {
-                          if (isAuditedIssues) {
-                            e.stopPropagation();
-                            handleOpenAssetAuditForProduct(p.product_id);
-                          }
-                        }}
-                      >
-                        {isAuditedClean ? (
-                          <span
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 text-[10px] font-medium"
-                            title={p.last_audited_at ? `Audited clean on ${new Date(p.last_audited_at).toLocaleDateString()}` : 'Audited clean'}
-                          >
-                            <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500" />
-                            <span>Clean</span>
-                          </span>
-                        ) : isAuditedIssues ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenAssetAuditForProduct(p.product_id);
-                              }}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-700 dark:text-rose-300 hover:bg-rose-500/25 hover:border-rose-500/40 text-[10px] font-semibold cursor-pointer transition-all shadow-[0_0_8px_rgba(251,113,133,0.15)]"
-                              title="Click to inspect and fix issues in Asset Integrity Audit"
-                            >
-                              <AlertTriangle className="w-2.5 h-2.5 text-rose-500" />
-                              <span>{p.audit_issues || 1} {p.audit_issues === 1 ? 'issue' : 'issues'}</span>
-                            </button>
-
-                            {/* Rich Hover Popover showing exact issues */}
-                            <div className="hidden group-hover/issue:block absolute left-2 top-full mt-1.5 z-50 w-80 max-w-[calc(100vw-3rem)] p-2.5 rounded-xl bg-white dark:bg-zinc-950/95 border border-rose-500/30 shadow-2xl backdrop-blur-md text-left pointer-events-none animate-in fade-in duration-150">
-                              <div className="flex items-center justify-between gap-2 pb-1.5 mb-1.5 border-b border-zinc-100 dark:border-white/10">
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-300 flex items-center gap-1">
-                                  <AlertTriangle className="w-3 h-3 text-rose-500" />
-                                  <span>{p.audit_issues || 1} Detected {p.audit_issues === 1 ? 'Issue' : 'Issues'}</span>
-                                </span>
-                                <span className="text-[9px] font-mono text-zinc-500 dark:text-zinc-400">Click to fix</span>
-                              </div>
-                              {p.audit_details && p.audit_details.length > 0 ? (
-                                <ul className="space-y-1 text-[11px] text-zinc-700 dark:text-zinc-300 max-h-48 overflow-y-auto pr-1">
-                                  {p.audit_details.map((detail, idx) => (
-                                    <li key={idx} className="flex items-start gap-1.5 text-left leading-tight break-all">
-                                      <span className="text-rose-500 shrink-0">•</span>
-                                      <span className="text-zinc-700 dark:text-zinc-300 font-sans">{detail}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              ) : (
-                                <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-snug">
-                                  Click to run real-time asset probe and view broken URLs and ghost angles.
-                                </p>
-                              )}
-                            </div>
-                          </>
-                        ) : (
-                          <span
-                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-500 border border-zinc-200 dark:border-zinc-700/50 text-[10px]"
-                            title="Unaudited device"
-                          >
-                            <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500" />
-                            <span>Unaudited</span>
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Device Name & SKU */}
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <span className="font-heading font-normal tracking-wide text-zinc-900 dark:text-white group-hover:text-[#f3aa18] transition-colors">
-                            {p.name}
-                          </span>
-                          <span className="text-[10px] font-mono text-zinc-600 dark:text-zinc-500 bg-zinc-100 dark:bg-white/5 px-1.5 py-0.5 rounded">
-                            #{p.product_id}
-                          </span>
-                          {p.status === 'draft' && (
-                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
-                              Draft
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Category */}
-                      <td className="py-3 px-4 text-zinc-600 dark:text-zinc-400 truncate max-w-[180px]">
-                        {p.categories.join(', ') || 'Uncategorized'}
-                      </td>
-
-                      {/* Configurator Toggle */}
-                      <td
-                        className="py-3 px-3 text-center"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <button
-                          type="button"
-                          disabled={togglingConfiguratorId === p.product_id}
-                          onClick={() => handleToggleConfiguratorStatus(p.product_id, p.is_configurator !== false)}
-                          className={clsx(
-                            'text-[10px] font-sans px-2.5 py-1 rounded-full border font-semibold inline-flex items-center gap-1 transition-all cursor-pointer',
-                            p.is_configurator !== false
-                              ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
-                              : 'bg-zinc-100 text-zinc-600 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-white'
-                          )}
-                          title={
-                            p.is_configurator !== false
-                              ? 'Active Configurator. Click to exclude.'
-                              : 'Excluded. Click to enable.'
-                          }
-                        >
-                          {togglingConfiguratorId === p.product_id ? (
-                            <RefreshCw className="w-2.5 h-2.5 animate-spin" />
-                          ) : p.is_configurator !== false ? (
-                            <CheckCircle2 className="w-2.5 h-2.5" />
-                          ) : (
-                            <AlertCircle className="w-2.5 h-2.5 text-zinc-400 dark:text-zinc-500" />
-                          )}
-                          <span>{p.is_configurator !== false ? 'Active' : 'Excluded'}</span>
-                        </button>
-                      </td>
-
-                      {/* Setup Specs */}
-                      <td className="py-3 px-4 text-center font-mono text-[11px] text-zinc-600 dark:text-zinc-400">
-                        <span>{p.views_count}v</span>
-                        <span className="mx-1 text-zinc-300 dark:text-zinc-600">•</span>
-                        <span>{p.layers_count}L</span>
-                      </td>
-
-                      {/* Scale */}
-                      <td className="py-3 px-3 text-center font-mono text-[11px] text-zinc-700 dark:text-zinc-300">
-                        {Math.round((((p as any).views?.[0]?.texture_scale ?? p.texture_scale ?? 0.75)) * 100)}%
-                      </td>
-
-                      {/* Presets Count */}
-                      <td className="py-3 px-3 text-center">
-                        <span
-                          className={clsx(
-                            'text-[10px] font-mono px-2 py-0.5 rounded-md border font-medium',
-                            (p.presets_count || 0) > 0
-                              ? 'bg-[#f3aa18]/15 text-[#f3aa18] border-[#f3aa18]/30 font-semibold'
-                              : 'bg-zinc-100 dark:bg-zinc-900/80 text-zinc-600 dark:text-zinc-500 border-zinc-200 dark:border-white/5'
-                          )}
-                        >
-                          {(p.presets_count || 0) > 0 ? `${p.presets_count} Looks` : '0'}
-                        </span>
-                      </td>
-
-                      {/* Price */}
-                      <td
-                        className="py-3 px-4 text-right"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleOpenPriceModal(p);
-                        }}
-                      >
-                        <span className="font-mono font-medium text-zinc-900 dark:text-white hover:text-[#f3aa18] transition-colors inline-flex items-center gap-1 cursor-pointer">
-                          IDR {p.price.toLocaleString('id-ID')}
-                          <Edit3 className="w-2.5 h-2.5 text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </span>
-                      </td>
-
-                      {/* Actions */}
-                      <td
-                        className="py-3 px-4 text-right"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenMarketplaceForProduct(p.product_id)}
-                            className="p-1.5 rounded-lg border border-zinc-200 dark:border-white/10 hover:bg-[#f3aa18]/20 hover:border-[#f3aa18]/40 text-zinc-500 dark:text-zinc-400 hover:text-[#f3aa18] transition-colors cursor-pointer"
-                            title="Generate 1500x1500px marketplace images"
-                          >
-                            <ImageIcon className="w-3 h-3" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenDuplicateModal(p)}
-                            className="p-1.5 rounded-lg border border-zinc-200 dark:border-white/10 hover:bg-zinc-100 dark:hover:bg-white/10 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
-                            title="Duplicate product & profile"
-                          >
-                            <Copy className="w-3 h-3" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEditor(p.product_id)}
-                            className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-zinc-100 hover:bg-[#f3aa18] hover:text-black dark:bg-white/10 dark:hover:bg-[#f3aa18] dark:hover:text-black text-zinc-900 dark:text-white border border-zinc-200 dark:border-transparent transition-colors cursor-pointer"
-                          >
-                            Open
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      <ProductList
+        mode="studio"
+        summaries={profilesError ? null : profiles}
+        summariesLoading={isLoading || isRefreshing}
+        summariesError={profilesError}
+        onReloadSummaries={() => void loadData(true)}
+        initialConfigurator="has"
+        onConfiguratorFilterChange={(filter) => {
+          const wantAll = needsAllSummaries(filter);
+          if (wantAll !== showAllProducts) handleToggleShowAllProducts(wantAll);
+        }}
+        onOpenProduct={(p) => void handleOpenEditor(p.id)}
+        onIssuesClick={(id) => void handleOpenAssetAuditForProduct(id)}
+        onEditPrice={openProductsPanel}
+        rowMenuItems={studioRowMenu}
+        reloadToken={catalogReloadToken}
+        overrides={catalogOverrides}
+      />
 
       {/* Global Catalog Asset Audit Dialog */}
       {showGlobalAuditModal &&
@@ -5083,198 +4408,78 @@ export const ConfiguratorStudioPage: React.FC = () => {
           document.body
         )}
 
-      {/* Quick Price Edit Dialog */}
-      {priceEditModal &&
-        createPortal(
-          <div
-            className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
-            onClick={() => setPriceEditModal(null)}
-          >
-            <div
-              className="w-full max-w-md rounded-2xl bg-zinc-950 border border-white/15 p-6 shadow-2xl space-y-5 cursor-default"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-bold text-white">Set Product Price</h3>
-                  <p className="text-xs text-zinc-400 mt-0.5 truncate max-w-xs">{priceEditModal.name}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setPriceEditModal(null)}
-                  className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
+      <DuplicateProductModal
+        source={duplicateSource}
+        onClose={() => setDuplicateSource(null)}
+        onDuplicated={(newId) => {
+          setCatalogReloadToken((t) => t + 1);
+          void loadData(true).then(() => handleOpenEditor(newId));
+        }}
+      />
 
-              <div className="space-y-2">
-                <label className="block text-xs font-bold text-zinc-300">
-                  Storefront Regular Price (IDR)
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-mono text-zinc-500">IDR</span>
-                  <input
-                    type="number"
-                    step="5000"
-                    value={tempPrice}
-                    onChange={(e) => setTempPrice(Number(e.target.value) || 0)}
-                    autoFocus
-                    className="w-full pl-12 pr-4 py-2.5 text-xs font-mono rounded-xl bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
-                  />
-                </div>
-                <p className="text-[11px] text-zinc-500 leading-relaxed">
-                  Updates both WooCommerce regular price and configurator base price simultaneously.
-                </p>
-              </div>
+      <ConfirmModal
+        open={catalogConfirm !== null}
+        onOpenChange={(o) => {
+          if (!o) setCatalogConfirm(null);
+        }}
+        title={
+          catalogConfirm === 'revalidate'
+            ? 'Revalidate the webstore?'
+            : catalogConfirm === 'families'
+            ? 'Sync device families?'
+            : 'Auto-migrate all products?'
+        }
+        confirmLabel={catalogConfirm === 'revalidate' ? 'Revalidate' : catalogConfirm === 'families' ? 'Sync families' : 'Migrate'}
+        onConfirm={() => {
+          const action = catalogConfirm;
+          setCatalogConfirm(null);
+          if (action === 'revalidate') void handleRevalidateStorefront({ purgeAll: true });
+          else if (action === 'families') void handleSyncFamilies();
+          else if (action === 'migrate') void handleBatchMigrate();
+        }}
+      >
+        <ConfirmText>
+          {catalogConfirm === 'revalidate'
+            ? 'The webstore and Cloudflare caches are cleared for every product. Pages load a little slower until they are cached again.'
+            : catalogConfirm === 'families'
+            ? 'Every product gets its device family and finish surcharge multiplier from its name, slug and categories. Multipliers set by hand are replaced.'
+            : 'Products still on the legacy configurator format are converted to the composable format. Products already converted are skipped.'}
+        </ConfirmText>
+      </ConfirmModal>
 
-              <div className="pt-3 border-t border-white/10 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setPriceEditModal(null)}
-                  className="px-4 py-2 text-xs font-sans rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveQuickPrice}
-                  disabled={isSavingPrice}
-                  className="px-5 py-2 text-xs font-sans font-bold uppercase tracking-wider rounded-xl bg-[#f3aa18] hover:bg-[#ffb72b] text-black transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-2"
-                >
-                  {isSavingPrice ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      <span>Updating...</span>
-                    </>
-                  ) : (
-                    <span>Save Price</span>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
-
-      {/* Duplicate Product Dialog */}
-      {duplicateModal &&
-        createPortal(
-          <div
-            className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
-            onClick={() => setDuplicateModal(null)}
-          >
-            <div
-              className="w-full max-w-lg rounded-2xl bg-zinc-950 border border-white/15 p-6 shadow-2xl space-y-5 cursor-default"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400 shrink-0">
-                    <Copy className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-heading font-normal tracking-wider uppercase text-white">Duplicate Product & Configurator</h3>
-                    <p className="text-xs text-zinc-400 mt-0.5 truncate max-w-xs">Source: {duplicateModal.name}</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setDuplicateModal(null)}
-                  className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-zinc-300 mb-1.5">New Product Name</label>
-                  <input
-                    type="text"
-                    value={duplicateName}
-                    onChange={(e) => {
-                      setDuplicateName(e.target.value);
-                      setDuplicateSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
-                    }}
-                    autoFocus
-                    className="w-full px-3.5 py-2.5 text-xs font-sans rounded-xl bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-zinc-300 mb-1.5">New Product Slug</label>
-                    <input
-                      type="text"
-                      value={duplicateSlug}
-                      onChange={(e) => setDuplicateSlug(e.target.value)}
-                      className="w-full px-3.5 py-2 text-xs font-mono rounded-xl bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-zinc-300 mb-1.5">Base Price (IDR)</label>
-                    <input
-                      type="number"
-                      step="5000"
-                      value={duplicatePrice}
-                      onChange={(e) => setDuplicatePrice(Number(e.target.value) || 0)}
-                      className="w-full px-3.5 py-2 text-xs font-mono rounded-xl bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
-                    />
-                  </div>
-                </div>
-
-                <label className="flex items-start gap-3 p-3 rounded-xl bg-zinc-900/60 border border-white/5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={duplicateCopyConfig}
-                    onChange={(e) => setDuplicateCopyConfig(e.target.checked)}
-                    className="w-4 h-4 rounded text-[#f3aa18] focus:ring-0 focus:outline-none accent-[#f3aa18] mt-0.5 cursor-pointer"
-                  />
-                  <div>
-                    <span className="text-xs font-bold text-zinc-200 block">Copy Full Configurator Setup</span>
-                    <span className="text-[11px] text-zinc-400 leading-snug block mt-0.5">
-                      Copies all viewing angles, composable skin layers, finish restrictions, and texture image mappings.
-                    </span>
-                  </div>
-                </label>
-
-                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-start gap-2.5">
-                  <span className="text-[11px] font-sans text-amber-200 leading-relaxed">
-                    <strong className="text-amber-300 font-semibold">Status: Draft</strong>. Duplicated product will be created in Draft status. Featured image, gallery, descriptions, menu order, categories, and tags are preserved.
-                  </span>
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-white/10 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setDuplicateModal(null)}
-                  className="px-4 py-2 text-xs font-sans rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleExecuteDuplicate}
-                  disabled={isDuplicating || !duplicateName.trim()}
-                  className="px-5 py-2 text-xs font-sans font-bold uppercase tracking-wider rounded-xl bg-[#f3aa18] hover:bg-[#ffb72b] text-black transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-2"
-                >
-                  {isDuplicating ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      <span>Duplicating...</span>
-                    </>
-                  ) : (
-                    <span>Duplicate & Open Studio</span>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
+      <ConfirmModal
+        open={rowConfirm !== null}
+        onOpenChange={(o) => {
+          if (!o && !rowBusy) setRowConfirm(null);
+        }}
+        title={
+          rowConfirm?.kind === 'status'
+            ? rowConfirm.next === 'publish'
+              ? 'Publish product?'
+              : 'Move product to draft?'
+            : rowConfirm?.next
+            ? 'Include as configurator?'
+            : 'Exclude from configurators?'
+        }
+        reference={rowConfirm ? `#${rowConfirm.product.id}` : undefined}
+        confirmLabel={
+          rowConfirm?.kind === 'status' ? (rowConfirm.next === 'publish' ? 'Publish' : 'Move to draft') : rowConfirm?.next ? 'Include' : 'Exclude'
+        }
+        busyLabel="Working..."
+        isLoading={rowBusy}
+        onConfirm={() => void handleRowConfirm()}
+      >
+        <ConfirmText>
+          <span className="font-medium text-fg">{rowConfirm?.product.name}</span>.{' '}
+          {rowConfirm?.kind === 'status'
+            ? rowConfirm.next === 'publish'
+              ? 'It appears on the webstore right away.'
+              : 'It leaves the webstore until it is published again.'
+            : rowConfirm?.next
+            ? 'The webstore offers its configurator again and it is included in checks.'
+            : 'The webstore stops offering its configurator and checks skip it. The setup is kept.'}
+        </ConfirmText>
+      </ConfirmModal>
 
       {/* Fullscreen Apple/Figma-Grade Device Configurator Studio */}
       {selectedProductId &&
@@ -9723,16 +8928,18 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 <div>
                                   <div className="flex items-center gap-1 mb-1 text-[11px]">
                                     <span className="text-zinc-400 font-medium">Base Price (IDR)</span>
-                                    <InfoTooltip text="Base device price synchronized directly with WooCommerce regular price." />
+                                    <InfoTooltip text="The product's regular price. Prices are edited only in Products; saving here never changes it." />
                                   </div>
-                                  <input
-                                    type="number"
-                                    value={editingProfile.base_price}
-                                    onChange={(e) =>
-                                      setEditingProfile({ ...editingProfile, base_price: Number(e.target.value) || 0 })
-                                    }
-                                    className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-zinc-950 border border-white/10 text-white font-mono focus:outline-none focus:border-[#f3aa18]"
-                                  />
+                                  <div className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-zinc-950 border border-white/10 flex items-center justify-between gap-2">
+                                    <span className="text-white font-mono">{(editingProfile.base_price || 0).toLocaleString('id-ID')}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => openProductsPanel(Number(editingProfile.product_id) || selectedProductId || 0)}
+                                      className="text-[11px] text-[#f3aa18] hover:underline cursor-pointer"
+                                    >
+                                      Edit in Products
+                                    </button>
+                                  </div>
                                 </div>
 
                                 <div>

@@ -16,7 +16,7 @@ import type { MenuItem } from '../components/ds/Menu';
 import { ConfirmModal, ConfirmText } from '../components/orders/panel/ConfirmModal';
 import { ProductList } from '../components/products/ProductList';
 import { ProductPanel } from '../components/products/ProductPanel';
-import { DuplicateProductModal, type DuplicateSource } from '../components/products/DuplicateProductModal';
+import { DuplicateProductModal, duplicateSourceOf, type DuplicateSource } from '../components/products/DuplicateProductModal';
 
 const BatchSeoModal = lazy(() => import('../components/products/BatchSeoModal').then((m) => ({ default: m.BatchSeoModal })));
 
@@ -24,14 +24,6 @@ const setHashProduct = (id: number | null) => {
   const hash = id ? `#products?product=${id}` : '#products';
   if (window.location.hash !== hash) window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${hash}`);
 };
-
-export const duplicateSourceOf = (p: Product): DuplicateSource => ({
-  id: p.id,
-  name: p.name,
-  slug: p.slug,
-  price: Number(p.regular_price || p.price) || 0,
-  categoryName: p.categories?.[0]?.name,
-});
 
 /** Products: webstore, Shopee and TikTok listings in one list, with the product panel for webstore products. */
 export const ProductsPage: React.FC = () => {
