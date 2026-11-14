@@ -1,5 +1,6 @@
 import React from 'react';
 import { clsx } from 'clsx';
+import { stripLegacySurfaceClasses } from '../../lib/surfaceClasses';
 
 interface ModalCardProps {
   title?: React.ReactNode;
@@ -28,7 +29,7 @@ export const ModalCard: React.FC<ModalCardProps> = ({
       className={clsx(
         'p-4 sm:p-5 rounded-[14px] bg-card border border-card-border space-y-4 transition-colors font-sans text-fg',
         onClick && 'cursor-pointer hover:bg-chip',
-        className
+        stripLegacySurfaceClasses(className)
       )}
     >
       {(title || Icon || badge || headerAction) && (

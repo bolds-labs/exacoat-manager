@@ -21,7 +21,7 @@ export function Modal({ open, onOpenChange, title, reference, children, footer, 
         <Dialog.Content
           aria-describedby={undefined}
           style={{ width }}
-          className="fixed left-1/2 top-1/2 z-[210] flex max-h-[calc(100vh-48px)] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-card-border bg-card text-fg shadow-[0_24px_60px_rgba(0,0,0,0.45)] focus:outline-none"
+          className="fixed left-1/2 top-1/2 z-[210] flex max-h-[calc(100vh-48px)] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-card-border bg-pop text-fg shadow-[0_24px_60px_rgba(0,0,0,0.45)] focus:outline-none"
         >
           <header className="flex items-center justify-between border-b border-line px-5 py-[18px]">
             <div className="flex items-baseline">
@@ -33,7 +33,7 @@ export function Modal({ open, onOpenChange, title, reference, children, footer, 
             </Dialog.Close>
           </header>
           <div className="flex flex-col gap-3.5 overflow-y-auto p-5">{children}</div>
-          {footer && <footer className="flex justify-end gap-2 border-t border-line bg-chip px-5 py-3.5">{footer}</footer>}
+          {footer && <footer className="flex justify-end gap-2 border-t border-line bg-pop px-5 py-3.5">{footer}</footer>}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

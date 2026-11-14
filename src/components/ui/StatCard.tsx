@@ -3,6 +3,7 @@ import { GlassCard } from './GlassCard';
 import { CardEyebrow } from './CardEyebrow';
 import { ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { clsx } from 'clsx';
+import { stripLegacySurfaceClasses } from '../../lib/surfaceClasses';
 
 interface StatCardProps {
   title: string;
@@ -38,7 +39,7 @@ export const StatCard: React.FC<StatCardProps> = ({
       className={clsx(
         'p-4 sm:p-5 flex flex-col justify-between font-sans group transition-all min-h-[132px]',
         onClick && 'cursor-pointer',
-        className
+        stripLegacySurfaceClasses(className)
       )}
     >
       {/* Top Header: Title & Minimalist Badge */}

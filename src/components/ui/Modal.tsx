@@ -104,7 +104,7 @@ export const Modal: React.FC<ModalProps> = ({
           transitionTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)',
         }}
         className={clsx(
-          'relative w-full rounded-2xl border border-card-border bg-card text-fg shadow-[0_24px_60px_rgba(0,0,0,0.45)] z-10 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh] transition-all duration-280 transform overscroll-contain cursor-default',
+          'relative w-full rounded-2xl border border-card-border bg-pop text-fg shadow-[0_24px_60px_rgba(0,0,0,0.45)] z-10 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh] transition-all duration-280 transform overscroll-contain cursor-default',
           isVisible ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-3',
           maxWidthStyles[maxWidth],
           className
@@ -146,7 +146,7 @@ export const Modal: React.FC<ModalProps> = ({
 
         {/* Modal Footer with Standard Responsive Spacing */}
         {footer && (
-          <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-t border-line bg-chip flex flex-wrap items-center justify-between gap-3 shrink-0">
+          <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-t border-line bg-pop flex flex-wrap items-center justify-between gap-3 shrink-0">
             {footer}
           </div>
         )}

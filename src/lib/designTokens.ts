@@ -11,6 +11,7 @@ export const TOKEN_NAMES: readonly string[] = [
   'faint',
   'line',
   'chip',
+  'pop',
   'accent',
   'accent-soft',
   'accent-fg',

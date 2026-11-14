@@ -20,7 +20,7 @@ export function Menu({ trigger, items, align = 'end' }: MenuProps) {
         <DropdownMenu.Content
           align={align}
           sideOffset={6}
-          className="z-[300] w-[300px] rounded-xl border border-card-border bg-card p-1.5 shadow-[0_16px_40px_rgba(0,0,0,0.35)]"
+          className="z-[300] w-[300px] rounded-xl border border-card-border bg-pop p-1.5 shadow-[0_16px_40px_rgba(0,0,0,0.35)]"
         >
           {items.map((item, index) => {
             if (item === 'separator') {

@@ -54,10 +54,10 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         closeButton
         toastOptions={{
           classNames: {
-            toast: '!rounded-xl !border !border-card-border !bg-card !text-fg !font-sans !shadow-[0_12px_30px_rgba(0,0,0,0.3)] !px-3.5 !py-3 data-[type=success]:!bg-st-done-bg data-[type=success]:!border-st-done-border data-[type=success]:!text-st-done-fg data-[type=error]:!bg-st-stop-bg data-[type=error]:!border-st-stop-border data-[type=error]:!text-st-stop-fg data-[type=warning]:!bg-st-wait-bg data-[type=warning]:!border-st-wait-border data-[type=warning]:!text-st-wait-fg data-[type=info]:!bg-st-prog-bg data-[type=info]:!border-st-prog-border data-[type=info]:!text-st-prog-fg',
+            toast: '!rounded-xl !border !border-card-border !bg-pop !text-fg !font-sans !shadow-[0_12px_30px_rgba(0,0,0,0.3)] !px-3.5 !py-3 data-[type=success]:![background-image:linear-gradient(var(--st-done-bg),var(--st-done-bg))] data-[type=success]:!border-st-done-border data-[type=success]:!text-st-done-fg data-[type=error]:![background-image:linear-gradient(var(--st-stop-bg),var(--st-stop-bg))] data-[type=error]:!border-st-stop-border data-[type=error]:!text-st-stop-fg data-[type=warning]:![background-image:linear-gradient(var(--st-wait-bg),var(--st-wait-bg))] data-[type=warning]:!border-st-wait-border data-[type=warning]:!text-st-wait-fg data-[type=info]:![background-image:linear-gradient(var(--st-prog-bg),var(--st-prog-bg))] data-[type=info]:!border-st-prog-border data-[type=info]:!text-st-prog-fg',
             title: '!text-[13.5px] !font-medium',
             description: '!text-[12.5px] !text-faint',
-            closeButton: '!bg-card !border-card-border !text-muted',
+            closeButton: '!bg-pop !border-card-border !text-muted',
           },
         }}
       />

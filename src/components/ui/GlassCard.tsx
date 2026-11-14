@@ -1,6 +1,7 @@
 import React from 'react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { stripLegacySurfaceClasses } from '../../lib/surfaceClasses';
 
 interface GlassCardProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
@@ -14,6 +15,7 @@ export const GlassCard: React.FC<GlassCardProps> = ({
   hoverEffect = false,
   ...props
 }) => {
+  className = stripLegacySurfaceClasses(className);
   const isOverflowSpecified = className.includes('overflow-');
 
   return (

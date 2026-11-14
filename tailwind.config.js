@@ -19,6 +19,7 @@ export default {
         'faint': 'var(--faint)',
         'line': 'var(--line)',
         'chip': 'var(--chip)',
+        'pop': 'var(--pop)',
         'accent': 'var(--accent)',
         'accent-soft': 'var(--accent-soft)',
         'accent-fg': 'var(--accent-fg)',
