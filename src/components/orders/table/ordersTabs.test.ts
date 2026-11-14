@@ -33,9 +33,9 @@ describe('ORDER_TABS', () => {
     expect(primary.map((t) => t.label)).toEqual([
       'All',
       'Awaiting payment',
-      'To prepare',
-      'Preparing',
-      'Waiting for courier',
+      'Payment confirmed',
+      'Preparing order',
+      'Waiting for Courier Pickup',
       'Ready for pickup',
       'Shipped',
       'Completed',
@@ -46,14 +46,14 @@ describe('ORDER_TABS', () => {
   });
 
   it('maps Waiting for courier to the old Waiting for Pickup key and Ready for pickup to store pickup ready', () => {
-    expect(ORDER_TABS.find((t) => t.label === 'Waiting for courier')?.key).toBe('ready-to-ship');
+    expect(ORDER_TABS.find((t) => t.label === 'Waiting for Courier Pickup')?.key).toBe('ready-to-ship');
     expect(ORDER_TABS.find((t) => t.label === 'Ready for pickup')?.key).toBe('store-pickup-ready');
   });
 
-  it('marks exactly Awaiting payment, To prepare and Warranty claims as hot', () => {
+  it('marks exactly Awaiting payment, Payment confirmed and Warranty claims as hot', () => {
     expect(ORDER_TABS.filter((t) => t.hot).map((t) => t.label)).toEqual([
       'Awaiting payment',
-      'To prepare',
+      'Payment confirmed',
       'Warranty claims',
     ]);
   });

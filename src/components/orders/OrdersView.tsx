@@ -378,7 +378,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
         <>
           {/* Store-wide KPIs (blank until the counts endpoint answers) */}
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <KpiCard icon={Package} value={countOrBlank(orderCounts?.webstore.to_prepare)} label="To prepare" highlight />
+            <KpiCard icon={Package} value={countOrBlank(orderCounts?.webstore.to_prepare)} label="Payment confirmed" highlight />
             <KpiCard icon={Clock} value={countOrBlank(orderCounts?.webstore.awaiting_payment)} label="Awaiting payment" />
             <KpiCard icon={Store} value={countOrBlank(orderCounts?.webstore.ready_for_pickup)} label="Ready for pickup" />
             <KpiCard icon={Truck} value={countOrBlank(orderCounts?.shipped_last_7_days)} label="Shipped, last 7 days" />

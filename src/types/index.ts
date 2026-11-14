@@ -864,4 +864,6 @@ export interface OrderCounts {
   webstore: Record<OrderCountKey, number>;
   shipped_last_7_days: number;
   channels: { webstore: number; shopee: number; tiktok: number };
+  /** WooCommerce order status names keyed by slug without wc- (plugin 0.1.228+). */
+  status_labels?: Record<string, string>;
 }

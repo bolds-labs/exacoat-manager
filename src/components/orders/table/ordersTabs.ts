@@ -12,10 +12,10 @@ export interface OrderTabDef {
 export const ORDER_TABS: OrderTabDef[] = [
   { key: 'all', label: 'All', countKey: 'all' },
   { key: 'on-hold', label: 'Awaiting payment', countKey: 'awaiting_payment', hot: true },
-  { key: 'processing', label: 'To prepare', countKey: 'to_prepare', hot: true },
-  { key: 'preparing-order', label: 'Preparing', countKey: 'preparing' },
+  { key: 'processing', label: 'Payment confirmed', countKey: 'to_prepare', hot: true },
+  { key: 'preparing-order', label: 'Preparing order', countKey: 'preparing' },
   // Today's "Waiting for Pickup" tab (courier orders only)
-  { key: 'ready-to-ship', label: 'Waiting for courier', countKey: 'waiting_for_courier' },
+  { key: 'ready-to-ship', label: 'Waiting for Courier Pickup', countKey: 'waiting_for_courier' },
   // Pickup-only, today's "Store Pickup: Ready" filter
   { key: 'store-pickup-ready', label: 'Ready for pickup', countKey: 'ready_for_pickup' },
   { key: 'shipped', label: 'Shipped', countKey: 'shipped' },

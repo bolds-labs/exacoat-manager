@@ -17,10 +17,10 @@ function nextButton() {
 describe('StatusNavigator', () => {
   it('shows previous, current and next steps for a processing order', () => {
     render(<StatusNavigator order={{ status: 'processing' } as any} onChangeStatus={() => {}} />);
-    expect(prevButton().textContent).toContain('Awaiting payment');
-    expect(screen.getByTestId('status-current').textContent).toContain('To prepare');
+    expect(prevButton().textContent).toContain('Waiting for Payment');
+    expect(screen.getByTestId('status-current').textContent).toContain('Payment confirmed');
     expect(screen.getByText('Step 2 of 6')).toBeTruthy();
-    expect(nextButton().textContent).toContain('Preparing');
+    expect(nextButton().textContent).toContain('Preparing order');
   });
 
   it('moves to the next step on click', () => {
@@ -61,7 +61,7 @@ describe('StatusNavigator', () => {
     expect(screen.getByTestId('status-track').querySelectorAll('[data-state="current"]')).toHaveLength(0);
 
     fireEvent.pointerDown(screen.getByRole('button', { name: /All steps/ }), { button: 0, ctrlKey: false });
-    for (const label of ['Awaiting payment', 'To prepare', 'Preparing', 'Waiting for courier', 'Shipped', 'Completed']) {
+    for (const label of ['Waiting for Payment', 'Payment confirmed', 'Preparing order', 'Waiting for Courier Pickup', 'Shipped', 'Completed']) {
       expect(screen.getByRole('menuitem', { name: label })).toBeTruthy();
     }
     fireEvent.click(screen.getByRole('menuitem', { name: 'Shipped' }));
@@ -71,8 +71,8 @@ describe('StatusNavigator', () => {
   it('shows Step 4 of 5 for a pickup order in smb-ready', () => {
     render(<StatusNavigator order={{ status: 'smb-ready', meta_data: pickupMeta } as any} onChangeStatus={() => {}} />);
     expect(screen.getByText('Step 4 of 5')).toBeTruthy();
-    expect(screen.getByTestId('status-current').textContent).toContain('Ready for pickup');
-    expect(nextButton().textContent).toContain('Picked up');
+    expect(screen.getByTestId('status-current').textContent).toContain('SMB Ready (Store Pickup)');
+    expect(nextButton().textContent).toContain('Completed');
   });
 
   it('disables every control while disabled', () => {
@@ -96,7 +96,7 @@ describe('StatusNavigator', () => {
     const onChangeStatus = vi.fn();
     render(<StatusNavigator order={{ status: 'processing' } as any} onChangeStatus={onChangeStatus} />);
     fireEvent.pointerDown(screen.getByRole('button', { name: /All steps/ }), { button: 0, ctrlKey: false });
-    fireEvent.click(screen.getByRole('menuitem', { name: /^To prepare/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /^Payment confirmed/ }));
     expect(onChangeStatus).toHaveBeenCalledWith('processing');
   });
 

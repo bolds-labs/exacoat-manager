@@ -9,8 +9,8 @@
   "requires_php": "7.4",
   "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.228.zip?v=0.1.228",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-11-14T09:04:20.764Z",
+  "last_updated": "2026-11-14T09:49:19.903Z",
   "sections": {
-    "changelog": "### Version 0.1.228\n- Orders redesign: new orders screen with store-wide counts, rebuilt order panel, kit pop-ups and styled dropdowns, restyled Shopee and TikTok views, read-only order counts endpoint"
+    "changelog": "### Version 0.1.228\n- Orders redesign: new orders screen with store-wide counts, rebuilt order panel, kit pop-ups and styled dropdowns, restyled Shopee and TikTok views, read-only order counts endpoint, WooCommerce status names, staff name on automatic order notes"
   }
 }

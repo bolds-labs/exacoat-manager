@@ -6,7 +6,7 @@ import { CouponsCard } from './CouponsCard';
 import { addressLines, cleanCustomerNote, CustomerDeliveryCard } from './CustomerDeliveryCard';
 import { ItemsCard } from './ItemsCard';
 import { ShippingCard, type ShippingCardProps } from './ShippingCard';
-import { ActivityCard, filterNotes } from './ActivityCard';
+import { ActivityCard, filterNotes, noteAuthor, noteRoleBadge } from './ActivityCard';
 import { paymentState, SummaryCard } from './SummaryCard';
 import { RefundCard, shouldShowRefundCard } from './RefundCard';
 import { ReviewCard } from './ReviewCard';
@@ -322,5 +322,23 @@ describe('Resend email templates', () => {
     expect(emailTemplateOptions(false).map((o) => o.value)).not.toContain('customer_order_store_pickup_ready');
     expect(emailTemplateOptions(true).map((o) => o.value)).toContain('customer_order_store_pickup_ready');
     expect(emailTemplateOptions(false)).toHaveLength(7);
+  });
+});
+
+describe('note author line', () => {
+  it('shows System once, without a duplicate System badge', () => {
+    const note = { id: 1, content: 'Order status changed', author_name: 'System', author_role: 'System' } as any;
+    expect(noteAuthor(note)).toBe('System');
+    expect(noteRoleBadge(note)).toBeNull();
+  });
+
+  it('shows the staff name with their role', () => {
+    const note = { id: 2, content: 'x', author_name: 'Shandy', author_role: 'Administrator' } as any;
+    expect(noteAuthor(note)).toBe('Shandy');
+    expect(noteRoleBadge(note)).toBe('Administrator');
+  });
+
+  it('falls back to System when no author is recorded', () => {
+    expect(noteAuthor({ id: 3, content: 'x' } as any)).toBe('System');
   });
 });

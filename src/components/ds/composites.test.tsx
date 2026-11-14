@@ -10,13 +10,13 @@ afterEach(cleanup);
 const warrantyOrder = { status: 'processing', meta_data: [{ key: '_is_warranty', value: 'yes' }] } as any;
 
 describe('StatusChip', () => {
-  it('shows To prepare with the act family token for processing', () => {
+  it('shows Payment confirmed with the act family token for processing', () => {
     render(<StatusChip order={{ status: 'processing' } as any} />);
-    expect(screen.getByText('To prepare').className).toContain('text-st-act-fg');
+    expect(screen.getByText('Payment confirmed').className).toContain('text-st-act-fg');
   });
-  it('shows Ready for pickup for a pickup order in smb-ready', () => {
+  it('shows SMB Ready (Store Pickup) for a pickup order in smb-ready', () => {
     render(<StatusChip order={{ status: 'smb-ready', meta_data: [{ key: '_is_store_pickup', value: 'yes' }] } as any} />);
-    expect(screen.getByText('Ready for pickup')).toBeTruthy();
+    expect(screen.getByText('SMB Ready (Store Pickup)')).toBeTruthy();
   });
   it('lets order win over meta', () => {
     render(<StatusChip order={{ status: 'completed' } as any} meta={{ key: 'x', label: 'Other', family: 'stop', icon: Package }} />);

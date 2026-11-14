@@ -20,6 +20,9 @@ class Exacoat_Order_Manager {
 		add_filter( 'woocommerce_reports_order_statuses', [ __CLASS__, 'add_reports_order_statuses' ] );
 		add_filter( 'woocommerce_order_is_paid_statuses', [ __CLASS__, 'add_paid_order_statuses' ] );
 
+		// 1b. Attribute automatic order notes (status changes, tracking saves) to the staff member who caused them
+		add_filter( 'woocommerce_new_order_note_data', [ __CLASS__, 'attribute_note_to_staff' ], 10, 2 );
+
 		// 2. Order Status Transition Webhooks & Custom ZeptoMail Notifications
 		add_action( 'woocommerce_order_status_changed', [ __CLASS__, 'handle_order_status_changed' ], 10, 4 );
 		add_action( 'woocommerce_payment_complete', [ __CLASS__, 'handle_payment_complete' ], 20, 1 );
@@ -610,8 +613,27 @@ class Exacoat_Order_Manager {
 				'shopee'   => $shopee_open,
 				'tiktok'   => $tiktok_open,
 			],
+			// Order status names as WooCommerce shows them (wc-processing => Payment confirmed), so the
+			// manager uses the store's own wording, including renames made by other plugins.
+			'status_labels'       => self::order_status_labels(),
 			'generated_at'        => wp_date( 'c' ),
 		] );
+	}
+
+	/**
+	 * Map of order status slug (without wc-) to its WooCommerce label, plain text only.
+	 *
+	 * @return array<string,string>
+	 */
+	public static function order_status_labels(): array {
+		$labels = [];
+		if ( function_exists( 'wc_get_order_statuses' ) ) {
+			foreach ( wc_get_order_statuses() as $slug => $label ) {
+				$key = 0 === strpos( (string) $slug, 'wc-' ) ? substr( (string) $slug, 3 ) : (string) $slug;
+				$labels[ sanitize_key( $key ) ] = wp_strip_all_tags( (string) $label );
+			}
+		}
+		return $labels;
 	}
 
 	/**
@@ -3352,6 +3374,33 @@ class Exacoat_Order_Manager {
 			}
 		}
 		return $notes_data;
+	}
+
+	/**
+	 * WooCommerce writes automatic notes (for example "Order status changed from X to Y") with the
+	 * author "WooCommerce", which the manager shows as System. When a signed-in staff member caused the
+	 * note (a REST call from Exacoat Manager or a wp-admin action), store their login instead so the
+	 * Activity card can show who made the change. Cron jobs, webhooks and customers keep the default.
+	 *
+	 * @param array $data Comment data for the new note.
+	 * @param array $args Note context: order_id, is_customer_note.
+	 * @return array
+	 */
+	public static function attribute_note_to_staff( $data, $args ) {
+		if ( ! is_array( $data ) || ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() ) ) {
+			return $data;
+		}
+		$author = isset( $data['comment_author'] ) ? (string) $data['comment_author'] : '';
+		if ( '' !== $author && __( 'WooCommerce', 'woocommerce' ) !== $author && 'WooCommerce' !== $author ) {
+			return $data;
+		}
+		$user = wp_get_current_user();
+		if ( ! $user || ! $user->exists() || ! user_can( $user, 'edit_shop_orders' ) ) {
+			return $data;
+		}
+		$data['comment_author']       = $user->user_login;
+		$data['comment_author_email'] = $user->user_email;
+		return $data;
 	}
 
 	/**

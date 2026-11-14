@@ -25,6 +25,19 @@ export function filterNotes(notes: OrderNote[], filter: Filter): OrderNote[] {
   return filter === 'customer' ? notes.filter((n) => n.customer_note) : notes;
 }
 
+/** Who wrote the note: the staff member's name when known, otherwise "System". */
+export function noteAuthor(note: OrderNote): string {
+  const name = String(note.author_name || note.added_by || '').trim();
+  return !name || name.toLowerCase() === 'system' ? 'System' : name;
+}
+
+/** Role badge beside the author, omitted when it would only repeat the name (System notes). */
+export function noteRoleBadge(note: OrderNote): string | null {
+  const role = String(note.author_role || '').trim();
+  if (!role || role.toLowerCase() === 'system' || role.toLowerCase() === noteAuthor(note).toLowerCase()) return null;
+  return role;
+}
+
 function roleTone(role: string) {
   if (role === 'Operations Manager' || role === 'Manager') return 'act' as const;
   if (role === 'Administrator' || role === 'Shop Manager') return 'wait' as const;
@@ -136,8 +149,8 @@ export function ActivityCard({
                   {renderContent(note.content)}
                 </div>
                 <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[12px] text-faint">
-                  <span className="text-muted">{note.author_name || note.added_by || 'System'}</span>
-                  {note.author_role && <Pill tone={roleTone(note.author_role)}>{note.author_role}</Pill>}
+                  <span className="text-muted">{noteAuthor(note)}</span>
+                  {noteRoleBadge(note) && <Pill tone={roleTone(noteRoleBadge(note)!)}>{noteRoleBadge(note)}</Pill>}
                   <span aria-hidden>·</span>
                   <span>{note.date_created ? formatDateTime(note.date_created) : '-'}</span>
                   {note.customer_note && <Pill tone="act">Customer</Pill>}

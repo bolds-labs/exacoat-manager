@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchOrderCountsDirect } from '../lib/wordpressBridge';
+import { setStatusLabelOverrides } from '../lib/orderStatus';
 import type { OrderCounts } from '../types';
 
 // Concurrent callers (StrictMode double effects, several mounts, refresh during load) share one request
@@ -10,7 +11,9 @@ function loadCountsOnce(): Promise<OrderCounts | null> {
     inFlight = (async () => {
       try {
         const res = await fetchOrderCountsDirect();
-        return res.success && res.counts ? res.counts : null;
+        if (!res.success || !res.counts) return null;
+        if (res.counts.status_labels) setStatusLabelOverrides(res.counts.status_labels);
+        return res.counts;
       } catch {
         return null;
       }

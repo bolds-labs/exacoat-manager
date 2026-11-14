@@ -721,9 +721,9 @@ export const OrderTable: React.FC<OrderTableProps> = ({
               value={bulkStatusTarget}
               onChange={setBulkStatusTarget}
               options={[
-                { value: 'processing', label: 'To prepare' },
-                { value: 'preparing-order', label: 'Preparing' },
-                { value: 'ready-to-ship', label: 'Waiting for courier' },
+                { value: 'processing', label: 'Payment confirmed' },
+                { value: 'preparing-order', label: 'Preparing order' },
+                { value: 'ready-to-ship', label: 'Waiting for Courier Pickup' },
                 { value: 'shipped', label: 'Shipped' },
                 { value: 'completed', label: 'Completed' },
               ]}
@@ -994,7 +994,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
         footer={
           <div className="flex w-full items-center justify-end gap-2.5">
             <Button variant="ghost" disabled={isMarkingPreparing} onClick={handleCancelMarkPreparing}>
-              Keep as To prepare
+              Keep as Payment confirmed
             </Button>
             <Button
               variant="primary"
@@ -1022,7 +1022,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
               </>
             ) : (
               <>
-                Update <strong className="font-medium text-fg">{ordersToMarkPreparing.length} orders</strong> from To prepare
+                Update <strong className="font-medium text-fg">{ordersToMarkPreparing.length} orders</strong> from Payment confirmed
                 to Preparing?
               </>
             )}
