@@ -48,8 +48,10 @@ const EMPTY_PRELOADED_IMAGES: Array<{ file?: File; base64?: string; name: string
 export const ShopeeProductDuplicatorModal: React.FC<ShopeeProductDuplicatorModalProps> = ({
   isOpen,
   onClose,
-  initialUrlOrId = DEFAULT_SAMPLE_URL,
-  initialTargetDevice = 'iPhone 18 Pro Max',
+  // No pre-filled source or target: opening without a source used to load a sample listing and target
+  // an unreleased device. The sample stays one click away (Use iPhone 17 Pro Max Sample).
+  initialUrlOrId = '',
+  initialTargetDevice = '',
   preloadedImages = EMPTY_PRELOADED_IMAGES,
 }) => {
   const { showToast } = useToast();
@@ -57,7 +59,7 @@ export const ShopeeProductDuplicatorModal: React.FC<ShopeeProductDuplicatorModal
 
   // Form State
   const [sourceInput, setSourceInput] = useState<string>(initialUrlOrId);
-  const [sourceDevice, setSourceDevice] = useState<string>('iPhone 17 Pro Max');
+  const [sourceDevice, setSourceDevice] = useState<string>('');
   const [targetDevice, setTargetDevice] = useState<string>(initialTargetDevice);
   const [customTitle, setCustomTitle] = useState<string>('');
   const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
@@ -144,7 +146,7 @@ export const ShopeeProductDuplicatorModal: React.FC<ShopeeProductDuplicatorModal
       return;
     }
 
-    const initial = (initialUrlOrId || DEFAULT_SAMPLE_URL).trim();
+    const initial = (initialUrlOrId || '').trim();
     const isFirstOpen = !prevOpenRef.current;
     prevOpenRef.current = true;
 
@@ -533,7 +535,7 @@ export const ShopeeProductDuplicatorModal: React.FC<ShopeeProductDuplicatorModal
                   {preview.item_name}
                 </h3>
                 <div className="text-[11px] text-zinc-400 flex items-center gap-2">
-                  <span>Price: {formatCurrency(preview.models?.[0]?.original_price || 149000)}</span>
+                  <span>Price: {preview.models?.[0]?.original_price ? formatCurrency(preview.models[0].original_price) : 'No price'}</span>
                   <span>Weight: {preview.weight || 0.05}kg</span>
                   <span>Category ID: {preview.category_id}</span>
                 </div>

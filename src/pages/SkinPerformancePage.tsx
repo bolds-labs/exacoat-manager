@@ -11,7 +11,7 @@ import { SkinMetricsOverview } from '../components/analytics/SkinMetricsOverview
 import { SkinVolumeTrendChart } from '../components/analytics/SkinVolumeTrendChart';
 import { SkinDistributionChart } from '../components/analytics/SkinDistributionChart';
 import { SkinPerformanceTable } from '../components/analytics/SkinPerformanceTable';
-import { fetchOrdersDirect } from '../lib/wordpressBridge';
+import { fetchGlobalFinishesDirect, fetchOrdersDirect, type GlobalFinish } from '../lib/wordpressBridge';
 import {
   RefreshCw,
   Download,
@@ -46,6 +46,18 @@ export const SkinPerformancePage: React.FC<SkinPerformancePageProps> = ({
   // Local orders cache to allow deep loading if needed
   const [localOrders, setLocalOrders] = useState<Order[]>(propOrders);
   const [isFetchingFresh, setIsFetchingFresh] = useState(false);
+  // Finishes come from WordPress; without them the report cannot name skins, so it shows an error.
+  const [finishes, setFinishes] = useState<GlobalFinish[] | null>(null);
+  const [finishesError, setFinishesError] = useState<string | null>(null);
+  const loadFinishes = useCallback(async () => {
+    setFinishesError(null);
+    const res = await fetchGlobalFinishesDirect();
+    if (res.success && res.finishes.length > 0) setFinishes(res.finishes);
+    else setFinishesError(res.error || 'Finishes did not load.');
+  }, []);
+  useEffect(() => {
+    void loadFinishes();
+  }, [loadFinishes]);
 
   // Keep localOrders synced with propOrders when updated from parent workspace
   useEffect(() => {
@@ -82,8 +94,8 @@ export const SkinPerformancePage: React.FC<SkinPerformancePageProps> = ({
   const report = useMemo(() => {
     const preset = isCustomActive ? 'custom' : horizonPreset;
     const { startMs, endMs } = filterOrdersByHorizon(localOrders, preset, customStart, customEnd);
-    return aggregateSkinPerformance(horizonOrders, startMs, endMs);
-  }, [horizonOrders, localOrders, horizonPreset, isCustomActive, customStart, customEnd]);
+    return aggregateSkinPerformance(horizonOrders, startMs, endMs, finishes || []);
+  }, [horizonOrders, localOrders, horizonPreset, isCustomActive, customStart, customEnd, finishes]);
 
   const handleExportCsv = () => {
     exportSkinReportToCsv(report, horizonLabel);
@@ -183,6 +195,22 @@ export const SkinPerformancePage: React.FC<SkinPerformancePageProps> = ({
           </div>
         }
       />
+
+      {finishesError && (
+        <div role="status" className="flex flex-wrap items-center gap-3 rounded-[12px] border border-st-stop-border bg-st-stop-bg px-4 py-3">
+          <p className="min-w-0 flex-1 text-[13.5px] text-st-stop-fg">
+            Finishes did not load, so skins cannot be named and this report is empty. {finishesError}
+          </p>
+          <button
+            type="button"
+            onClick={() => void loadFinishes()}
+            className="inline-flex h-[30px] items-center gap-2 rounded-[8px] border border-field-border bg-field px-2.5 text-[12.5px] text-fg hover:bg-chip"
+          >
+            <RefreshCw className="h-[15px] w-[15px] text-muted" aria-hidden />
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Custom Date Range Modal / Popover */}
       {isCustomPickerOpen && (

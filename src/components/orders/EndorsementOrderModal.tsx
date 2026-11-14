@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Modal } from '../ds/Modal';
 import { Button } from '../ds/Button';
 import { Select } from '../ds/Select';
+import { FinishesLoadError } from '../finishes/FinishesLoadError';
 import { useToast } from '../../context/ToastContext';
 import {
   fetchProductsDirect,
@@ -9,7 +10,6 @@ import {
   fetchShippingRatesDirect,
   createEndorsementOrderDirect,
   GlobalFinish,
-  DEFAULT_GLOBAL_FINISHES,
   ShippingRateOption,
   Product,
 } from '../../lib/wordpressBridge';
@@ -126,7 +126,8 @@ export const EndorsementOrderModal: React.FC<EndorsementOrderModalProps> = ({
   ]);
 
   // Global finishes from API
-  const [finishes, setFinishes] = useState<GlobalFinish[]>(DEFAULT_GLOBAL_FINISHES);
+  const [finishes, setFinishes] = useState<GlobalFinish[]>([]);
+  const [finishesError, setFinishesError] = useState<string | null>(null);
 
   // Couriers
   const [courierOptions, setCourierOptions] = useState<ShippingRateOption[]>(DEFAULT_COURIER_OPTIONS);
@@ -138,16 +139,17 @@ export const EndorsementOrderModal: React.FC<EndorsementOrderModalProps> = ({
   const [adminNotes, setAdminNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Fetch finishes once
-  useEffect(() => {
+  // Finishes come from WordPress only; when they fail the modal says so (no built-in list).
+  const loadFinishes = () => {
+    setFinishesError(null);
     fetchGlobalFinishesDirect()
       .then((res) => {
-        if (res.success && res.finishes && res.finishes.length > 0) {
-          setFinishes(res.finishes);
-        }
+        if (res.success && res.finishes && res.finishes.length > 0) setFinishes(res.finishes);
+        else setFinishesError(res.error || '');
       })
-      .catch(() => {});
-  }, []);
+      .catch((err) => setFinishesError(err?.message || ''));
+  };
+  useEffect(loadFinishes, []);
 
   // Fetch live shipping rates when postcode changes
   useEffect(() => {
@@ -344,6 +346,7 @@ export const EndorsementOrderModal: React.FC<EndorsementOrderModalProps> = ({
       }
     >
         <div className="space-y-6 font-sans">
+          {finishesError !== null && <FinishesLoadError message={finishesError} onRetry={loadFinishes} />}
           {/* Section 1: Influencer / Creator Details */}
           <div className="p-4 rounded-xl bg-neutral-950/40 border border-neutral-800/80 space-y-4">
             <div className="flex items-center gap-2 text-xs font-bold text-purple-400 uppercase tracking-wider">

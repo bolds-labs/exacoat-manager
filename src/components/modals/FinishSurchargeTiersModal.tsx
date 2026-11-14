@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Modal } from '../ui/Modal';
-import { Coins, Plus, Trash2, Edit3, RotateCcw, Check, HelpCircle, ArrowRight, Layers, AlertCircle } from 'lucide-react';
+import { Coins, Plus, Trash2, Edit3, Check, HelpCircle, ArrowRight, Layers, AlertCircle } from 'lucide-react';
 import { clsx } from 'clsx';
 import {
   FinishSurchargeTier,
-  DEFAULT_FINISH_SURCHARGE_TIERS,
   saveFinishSurchargeTiersDirect,
 } from '../../lib/wordpressBridge';
 import { useToast } from '../../context/ToastContext';
@@ -34,11 +33,8 @@ export const FinishSurchargeTiersModal: React.FC<FinishSurchargeTiersModalProps>
   // Synchronize with incoming tiers
   useEffect(() => {
     if (isOpen) {
-      if (Array.isArray(tiers) && tiers.length > 0) {
-        setLocalTiers(tiers);
-      } else {
-        setLocalTiers(DEFAULT_FINISH_SURCHARGE_TIERS);
-      }
+      // Tiers come from WordPress (which has its own defaults); there is no built-in copy here.
+      setLocalTiers(Array.isArray(tiers) ? tiers : []);
       setEditingTier(null);
       setIsAddingNew(false);
     }
@@ -107,16 +103,12 @@ export const FinishSurchargeTiersModal: React.FC<FinishSurchargeTiersModalProps>
     setLocalTiers(localTiers.filter((t) => t.id !== id));
   };
 
-  // Handle reset to defaults
-  const handleResetDefaults = () => {
-    setLocalTiers(DEFAULT_FINISH_SURCHARGE_TIERS);
-    setEditingTier(null);
-    setIsAddingNew(false);
-    showToast('info', 'Reset to Defaults', 'Surcharge tiers restored to factory defaults. Click "Save Changes" to apply.');
-  };
-
   // Persist all tiers to WordPress database
   const handleSaveAllTiers = async () => {
+    if (localTiers.length === 0) {
+      showToast('warning', 'No tiers to save', 'Add at least one price tier first.');
+      return;
+    }
     try {
       setIsSaving(true);
       const res = await saveFinishSurchargeTiersDirect(localTiers);
@@ -166,14 +158,7 @@ export const FinishSurchargeTiersModal: React.FC<FinishSurchargeTiersModalProps>
       }
       footer={
         <div className="flex items-center justify-between w-full">
-          <button
-            type="button"
-            onClick={handleResetDefaults}
-            className="px-3 py-1.5 text-xs text-zinc-400 hover:text-white rounded-xl hover:bg-white/5 transition-colors flex items-center gap-1.5 cursor-pointer"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>Reset Defaults</span>
-          </button>
+          <span />
           <div className="flex items-center gap-2">
             <button
               type="button"

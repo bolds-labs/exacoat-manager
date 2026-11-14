@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Coins, FolderTree, Plus, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import {
-  DEFAULT_FINISH_SURCHARGE_TIERS,
   deleteGlobalFinishDirect,
   fetchGlobalFinishesDirect,
   renameFinishGroupDirect,
@@ -70,10 +69,10 @@ export const MaterialsStockPage: React.FC = () => {
   const [finishes, setFinishes] = useState<GlobalFinish[]>([]);
   const [storedGroups, setStoredGroups] = useState<string[]>([]);
   const [groupSettings, setGroupSettings] = useState<Record<string, FinishGroupSetting>>({});
-  const [tiers, setTiers] = useState<FinishSurchargeTier[]>(DEFAULT_FINISH_SURCHARGE_TIERS);
+  const [tiers, setTiers] = useState<FinishSurchargeTier[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  // 'fallback' means the list on screen is not WordPress's (storefront list, old per-PC copy or defaults): writes are off.
+  // 'fallback' means the list on screen is not WordPress's (the webstore's copy) or nothing loaded: writes are off.
   const [source, setSource] = useState<'live' | 'fallback' | null>(null);
   const sourceRef = useRef<'live' | 'fallback' | null>(null);
 
@@ -387,7 +386,11 @@ export const MaterialsStockPage: React.FC = () => {
 
       {source === 'fallback' && !loading && (
         <div role="status" className="flex flex-wrap items-center gap-3 rounded-[12px] border border-st-wait-border bg-st-wait-bg px-4 py-3">
-          <p className="min-w-0 flex-1 text-[13.5px] text-st-wait-fg">Showing a saved copy, edits are off until finishes load.</p>
+          <p className="min-w-0 flex-1 text-[13.5px] text-st-wait-fg">
+            {finishes.length > 0
+              ? "Showing the webstore's copy, edits are off until WordPress answers."
+              : 'Finishes did not load. Edits are off until they load.'}
+          </p>
           <Button size="sm" icon={RefreshCw} onClick={() => void load(true)} disabled={refreshing}>
             Retry
           </Button>
@@ -417,7 +420,7 @@ export const MaterialsStockPage: React.FC = () => {
         <Card>
           <p className="py-10 text-center text-[13.5px] text-muted">Loading finishes...</p>
         </Card>
-      ) : sections.length === 0 ? (
+      ) : readOnly && finishes.length === 0 ? null : sections.length === 0 ? (
         <Card>
           <div className="py-10 text-center">
             <p className="text-[14px] font-medium text-fg">No finishes match</p>

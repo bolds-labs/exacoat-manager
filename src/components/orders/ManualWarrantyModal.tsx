@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { FinishesLoadError } from '../finishes/FinishesLoadError';
 import { Modal } from '../ds/Modal';
 import { Button } from '../ds/Button';
 import { Select } from '../ds/Select';
@@ -11,7 +12,6 @@ import {
   checkMarketplaceInvoiceDirect,
   fetchProductConfiguratorProfileDirect,
   GlobalFinish,
-  DEFAULT_GLOBAL_FINISHES,
   ShippingRateOption,
   Product,
   ShopeeOrder,
@@ -254,7 +254,8 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
 
   // Configuration Dual Mode (Mode A: Visual Finishes vs Mode B: Quick Variant Text)
   const [configMode, setConfigMode] = useState<'modeA' | 'modeB'>('modeA');
-  const [finishes, setFinishes] = useState<GlobalFinish[]>(DEFAULT_GLOBAL_FINISHES);
+  const [finishes, setFinishes] = useState<GlobalFinish[]>([]);
+  const [finishesError, setFinishesError] = useState<string | null>(null);
   const [deviceLayers, setDeviceLayers] = useState<DynamicProductLayer[]>([]);
   const [isLoadingLayers, setIsLoadingLayers] = useState(false);
   const [layerFinishes, setLayerFinishes] = useState<Record<string, string>>({});
@@ -378,14 +379,17 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
     }
   }, [initialClaimType, isOpen]);
 
-  // Load global finishes on mount
-  useEffect(() => {
-    fetchGlobalFinishesDirect().then((res) => {
-      if (res.success && res.finishes?.length) {
-        setFinishes(res.finishes);
-      }
-    });
-  }, []);
+  // Finishes come from WordPress only; when they fail the modal says so (no built-in list).
+  const loadFinishes = () => {
+    setFinishesError(null);
+    fetchGlobalFinishesDirect()
+      .then((res) => {
+        if (res.success && res.finishes?.length) setFinishes(res.finishes);
+        else setFinishesError(res.error || '');
+      })
+      .catch((err) => setFinishesError(err?.message || ''));
+  };
+  useEffect(loadFinishes, []);
 
   // Prepopulate if opened from an existing order
   useEffect(() => {
@@ -1054,6 +1058,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
       }
     >
       <div className="space-y-6 font-sans text-sm">
+        {finishesError !== null && <FinishesLoadError message={finishesError} onRetry={loadFinishes} />}
         {/* Claim Type Selector: Warranty vs Redeem */}
         <div className="p-1 rounded-2xl bg-neutral-900 border border-white/[0.08] grid grid-cols-2 gap-1">
           <button

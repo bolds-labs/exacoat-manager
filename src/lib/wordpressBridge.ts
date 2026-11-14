@@ -596,65 +596,7 @@ export interface FinishSurchargeTier {
   description?: string;
 }
 
-export const DEFAULT_FINISH_SURCHARGE_TIERS: FinishSurchargeTier[] = [
-  {
-    id: 'tier_small',
-    label: 'Small Accents & Cutouts',
-    min_price: 10000,
-    max_price: 45000,
-    surcharge: 5000,
-  },
-  {
-    id: 'tier_medium',
-    label: 'Medium Parts & Accents',
-    min_price: 45001,
-    max_price: 95000,
-    surcharge: 15000,
-  },
-  {
-    id: 'tier_primary',
-    label: 'Full Skin & Main Body',
-    min_price: 95001,
-    max_price: 999999,
-    surcharge: 30000,
-  },
-];
 
-export const DEFAULT_GLOBAL_FINISHES: GlobalFinish[] = [
-  // Signature skins
-  { id: 'swarm', name: 'Swarm', group: 'Signature skins', slug: 'swarm', class_name: 'cfg-swarm', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Swarm-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Swarm.jpg', texture_big_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Big-Swarm.jpg', color_hex: '#1f2024', in_stock: true, extra_price: 30000 },
-  { id: 'black-camo', name: 'Black Camo', group: 'Signature skins', slug: 'black-camo', class_name: 'cfg-black-camo', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Black-Camo-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Black-Camo.jpg', texture_big_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Big-Black-Camo.jpg', color_hex: '#2a2b2e', in_stock: true, extra_price: 30000 },
-  { id: 'patina', name: 'Patina', group: 'Signature skins', slug: 'patina', class_name: 'cfg-patina', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Patina-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Patina.jpg', texture_big_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Big-Patina.jpg', color_hex: '#325c56', in_stock: false, status: 'out_of_stock', extra_price: 30000 },
-  { id: 'slate', name: 'Slate', group: 'Signature skins', slug: 'slate', class_name: 'cfg-slate', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Slate-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Slate.jpg', texture_big_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Big-Slate.jpg', color_hex: '#4a4d52', in_stock: true, extra_price: 30000 },
-  { id: 'dragon-black', name: 'Dragon Black', group: 'Signature skins', slug: 'dragon-black', class_name: 'cfg-dragon-black', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Dragon-Black-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Dragon-Black.jpg', texture_big_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Big-Dragon-Black.jpg', color_hex: '#1c1c1e', in_stock: true, extra_price: 0 },
-  { id: 'carbon-fiber-black', name: 'Carbon Fiber Black', group: 'Signature skins', slug: 'carbon-fiber-black', class_name: 'cfg-carbon-fiber-black', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Carbon-Fiber-Black-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Carbon-Fiber-Black.jpg', texture_big_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Big-Carbon-Fiber-Black.jpg', color_hex: '#202022', in_stock: true, extra_price: 0 },
-  { id: 'forged-carbon', name: 'Forged Carbon', group: 'Signature skins', slug: 'forged-carbon', class_name: 'cfg-forged-carbon', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Forged-Carbon-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Forged-Carbon.jpg', texture_big_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Big-Forged-Carbon.jpg', color_hex: '#2e2e33', in_stock: true, extra_price: 30000 },
-  { id: 'woven', name: 'Woven', group: 'Signature skins', slug: 'woven', class_name: 'cfg-woven', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Woven-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Woven.jpg', texture_big_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Big-Woven.jpg', color_hex: '#2b2d30', in_stock: true, extra_price: 30000 },
-
-  // Colors
-  { id: 'matte-black', name: 'Matte Black', group: 'Colors', slug: 'matte-black', class_name: 'cfg-matte-black', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Matte-Black-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Matte-Black.jpg', color_hex: '#18181b', in_stock: true, extra_price: 0 },
-  { id: 'matte-white', name: 'Matte White', group: 'Colors', slug: 'matte-white', class_name: 'cfg-matte-white', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Matte-White-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Matte-White.jpg', color_hex: '#f4f4f6', in_stock: true, extra_price: 0, surface_gradient_enabled: true, surface_gradient_opacity: 0.22 },
-  { id: 'arctic-blue', name: 'Arctic Blue', group: 'Colors', slug: 'arctic-blue', class_name: 'cfg-arctic-blue', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Arctic-Blue-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Arctic-Blue.jpg', color_hex: '#7ba7c2', in_stock: true, extra_price: 0 },
-  { id: 'glacial-green', name: 'Glacial Green', group: 'Colors', slug: 'glacial-green', class_name: 'cfg-glacial-green', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Glacial-Green-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Glacial-Green.jpg', color_hex: '#8db4a2', in_stock: true, extra_price: 0 },
-  { id: 'mellow-yellow', name: 'Mellow Yellow', group: 'Colors', slug: 'mellow-yellow', class_name: 'cfg-mellow-yellow', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Mellow-Yellow-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Mellow-Yellow.jpg', color_hex: '#e8ca65', in_stock: true, extra_price: 0 },
-  { id: 'petal-pink', name: 'Petal Pink', group: 'Colors', slug: 'petal-pink', class_name: 'cfg-petal-pink', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Petal-Pink-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Petal-Pink.jpg', color_hex: '#e5a5b5', in_stock: true, extra_price: 0 },
-  { id: 'blush-pink', name: 'Blush Pink', group: 'Colors', slug: 'blush-pink', class_name: 'cfg-blush-pink', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Blush-Pink-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Blush-Pink.jpg', color_hex: '#d98299', in_stock: true, extra_price: 0 },
-  { id: 'emerald-green', name: 'Emerald Green', group: 'Colors', slug: 'emerald-green', class_name: 'cfg-emerald-green', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Emerald-Green-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Emerald-Green.jpg', color_hex: '#1e5631', in_stock: true, extra_price: 0 },
-  { id: 'lust-red', name: 'Lust Red', group: 'Colors', slug: 'lust-red', class_name: 'cfg-lust-red', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Lust-Red-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Lust-Red.jpg', color_hex: '#b22222', in_stock: true, extra_price: 0 },
-  { id: 'lemon-yellow', name: 'Lemon Yellow', group: 'Colors', slug: 'lemon-yellow', class_name: 'cfg-lemon-yellow', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Lemon-Yellow-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Lemon-Yellow-Texture-Thumbnail.jpg', color_hex: '#f5d033', in_stock: true, extra_price: 0 },
-
-  // Natural
-  { id: 'marble-white', name: 'Marble White', group: 'Natural', slug: 'marble-white', class_name: 'cfg-marble-white', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Marble-White-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Marble-White.jpg', color_hex: '#e2e4e8', in_stock: true, extra_price: 0 },
-  { id: 'leather-black', name: 'Leather Black', group: 'Natural', slug: 'leather-black', class_name: 'cfg-leather-black', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Leather-Black-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Leather-Black.jpg', color_hex: '#1a1a1c', in_stock: true, extra_price: 0 },
-  { id: 'titanium-black', name: 'Titanium Black', group: 'Natural', slug: 'titanium-black', class_name: 'cfg-titanium-black', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Titanium-Black-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Titanium-Black.jpg', color_hex: '#262629', in_stock: true, extra_price: 0 },
-
-  // Limited / Special Editions
-  { id: 'titanium-plus', name: 'Titanium+', group: 'Limited', slug: 'titanium-plus', class_name: 'cfg-titanium-plus', thumbnail: 'https://cms.exacoat.com/wp-content/uploads/Titanium-Plus-Texture-Thumbnail.jpg', texture_url: 'https://cms.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Titanium-Plus.jpg', texture_big_url: 'https://cms.exacoat.com/wp-content/uploads/Exacoat-Texture-Big-Titanium-Plus.jpg', color_hex: '#2c2d30', in_stock: true, badge_text: 'POPULAR', badge_color: '#f3aa18', extra_price: 30000 },
-  { id: 'burgundy', name: 'Burgundy', group: 'Limited', slug: 'burgundy', class_name: 'cfg-burgundy', thumbnail: 'https://cms.exacoat.com/wp-content/uploads/Burgundy-Texture-Thumbnail.jpg', texture_url: 'https://cms.exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Burgundy-v4.jpg', texture_big_url: 'https://cms.exacoat.com/wp-content/uploads/Exacoat-Texture-Big-Burgundy-v4.jpg', color_hex: '#4a1525', in_stock: false, status: 'out_of_stock', badge_text: 'NEW', badge_color: '#f3aa18', extra_price: 30000 },
-  { id: 'everything', name: 'Everything', group: 'Limited', slug: 'everything', class_name: 'cfg-everything', thumbnail: 'https://media.exacoat.com/wp-content/uploads/Everything-Texture-Thumbnail.jpg', texture_url: 'https://media.exacoat.com/wp-content/uploads/Everything-Texture-Thumbnail.jpg', color_hex: '#333333', in_stock: true, is_custom_per_device: true, extra_price: 120000 },
-  { id: 'pumpkin-orange', name: 'Pumpkin Orange', group: 'Limited', slug: 'pumpkin-orange', class_name: 'cfg-pumpkin-orange', thumbnail: 'https://exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Pumpkin-Orange.jpg', texture_url: 'https://exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Pumpkin-Orange.jpg', color_hex: '#e65c00', in_stock: true, extra_price: 0 },
-  { id: 'concrete', name: 'Concrete', group: 'Limited', slug: 'concrete', class_name: 'cfg-concrete', thumbnail: 'https://exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Concrete.jpg', texture_url: 'https://exacoat.com/wp-content/uploads/Exacoat-Texture-Small-Concrete.jpg', color_hex: '#8a8d91', in_stock: true, extra_price: 0 },
-];
 
 // ==========================================
 // Authentication & Fetch Helpers
@@ -3864,7 +3806,6 @@ export async function updateReviewRewardSettingsDirect(settings: ReviewRewardSet
   }
 }
 
-const FINISHES_STORAGE_KEY = 'exacoat_finishes_inventory_cache';
 
 export interface FinishGroupSetting {
   display_style?: 'cards' | 'compact_dots';
@@ -3907,17 +3848,6 @@ async function fetchGlobalFinishesUncached(): Promise<{
   source: 'live' | 'fallback';
   error?: string;
 }> {
-  let localFinishes: GlobalFinish[] = DEFAULT_GLOBAL_FINISHES;
-  try {
-    const cached = typeof localStorage !== 'undefined' ? localStorage.getItem(FINISHES_STORAGE_KEY) : null;
-    if (cached) {
-      const parsed = JSON.parse(cached);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        localFinishes = normalizeGlobalFinishes(parsed);
-      }
-    }
-  } catch {}
-
   const base = getWordPressBaseUrl();
   const url = `${base}/wp-json/exacoat-core/v1/finishes?_t=${Date.now()}`;
 
@@ -3958,12 +3888,8 @@ async function fetchGlobalFinishesUncached(): Promise<{
     }
   } catch {}
 
-  return {
-    success: true,
-    source: 'fallback',
-    finishes: normalizeGlobalFinishes(localFinishes),
-    surcharge_tiers: DEFAULT_FINISH_SURCHARGE_TIERS,
-  };
+  // No built-in list and no per-PC copy: callers show an error with Retry instead of an old list.
+  return { success: false, source: 'fallback', finishes: [], error: 'Finishes did not load from WordPress or the webstore.' };
 }
 
 export async function fetchFinishSurchargeTiersDirect(): Promise<{
@@ -3983,14 +3909,11 @@ export async function fetchFinishSurchargeTiersDirect(): Promise<{
         tiers: data.tiers,
       };
     }
+    return { success: false, tiers: [], error: data?.message || data?.error || `HTTP ${res.status}` };
   } catch (err: any) {
-    console.error('Failed to fetch surcharge tiers:', err);
+    // No built-in tiers: a caller must not show (or save) a default copy as if it were the store's.
+    return { success: false, tiers: [], error: err?.message || 'Could not reach the store.' };
   }
-
-  return {
-    success: true,
-    tiers: DEFAULT_FINISH_SURCHARGE_TIERS,
-  };
 }
 
 export async function saveFinishSurchargeTiersDirect(tiers: FinishSurchargeTier[]): Promise<{
@@ -4823,33 +4746,6 @@ export async function fetchProductCategoriesDirect(): Promise<{ success: boolean
 // Composable Product Configurator Studio Bridge
 // ==========================================
 
-function parseMetaJsonString(val: any): any[] {
-  if (!val) return [];
-  if (Array.isArray(val)) return val;
-  if (typeof val === 'object' && val !== null) return [val];
-  if (typeof val === 'string') {
-    let cur = val.trim();
-    for (let i = 0; i < 3; i++) {
-      try {
-        const parsed = JSON.parse(cur);
-        if (typeof parsed === 'string') {
-          cur = parsed;
-          continue;
-        }
-        return Array.isArray(parsed) ? parsed : [parsed];
-      } catch {
-        try {
-          const unescaped = cur.replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-          const parsed2 = JSON.parse(unescaped);
-          return Array.isArray(parsed2) ? parsed2 : [parsed2];
-        } catch {
-          break;
-        }
-      }
-    }
-  }
-  return [];
-}
 
 export async function fetchConfiguratorProfilesDirect(params?: {
   search?: string;
@@ -4880,7 +4776,7 @@ export async function fetchConfiguratorProfilesDirect(params?: {
   try {
     const res = await authenticatedFetch(url.toString(), { headers: { Accept: 'application/json' } });
     const data = await res.json();
-    if (res.ok && data?.success && Array.isArray(data?.profiles) && data.profiles.length > 0) {
+    if (res.ok && data?.success && Array.isArray(data?.profiles)) {
       return {
         success: true,
         profiles: decodeDeep(data.profiles),
@@ -4888,58 +4784,11 @@ export async function fetchConfiguratorProfilesDirect(params?: {
         total_pages: data.total_pages || 1,
       };
     }
-  } catch {}
-
-  // Fallback: Fetch directly from WooCommerce Product API
-  try {
-    const wcRes = await fetchProductsDirect({ per_page: params?.per_page || 100, search: params?.search });
-    if (wcRes.success && Array.isArray(wcRes.products)) {
-      const fallbackProfiles: ConfiguratorProfileSummary[] = wcRes.products.map(p => {
-        const metas = p.meta_data || [];
-        const layers = parseMetaJsonString(metas.find((m: any) => m.key === '_mkl_product_configurator_layers')?.value);
-        const angles = parseMetaJsonString(metas.find((m: any) => m.key === '_mkl_product_configurator_angles')?.value);
-        const modernRaw = metas.find((m: any) => m.key === '_exacoat_configurator_profile')?.value;
-        const modern = modernRaw ? parseMetaJsonString(modernRaw)[0] : null;
-
-        const cat = (p.categories || [])[0]?.name || 'General';
-        const catLower = cat.toLowerCase();
-        let family: DeviceFamily = 'phone';
-        let size_multiplier = 1.0;
-        if (catLower.includes('macbook') || catLower.includes('laptop')) { family = 'laptop'; size_multiplier = 2.0; }
-        else if (catLower.includes('keyboard')) { family = 'keyboard'; size_multiplier = 2.0; }
-        else if (catLower.includes('pad') || catLower.includes('tablet')) { family = 'tablet'; size_multiplier = 2.0; }
-        else if (catLower.includes('fold') || catLower.includes('flip')) { family = 'foldable'; size_multiplier = 1.3; }
-
-        return {
-          product_id: p.id,
-          name: p.name,
-          slug: p.slug,
-          status: p.status || 'publish',
-          price: Number(p.price) || 0,
-          categories: (p.categories || []).map((c: any) => c.name),
-          is_migrated: Boolean(modernRaw),
-          configurator_version: modern?.configurator_version || 'v1',
-          is_configurable: Boolean(layers.length > 0 || modernRaw),
-          layers_count: modern?.layers?.length || layers.length || 0,
-          views_count: modern?.views?.length || angles.length || 1,
-          family,
-          size_multiplier,
-          texture_scale: modern?.views?.[0]?.texture_scale ?? modern?.texture_scale ?? 0.75,
-        };
-      });
-
-      return {
-        success: true,
-        profiles: fallbackProfiles,
-        total: wcRes.total_products || fallbackProfiles.length,
-        total_pages: wcRes.max_pages || 1,
-      };
-    }
+    return { success: false, profiles: [], total: 0, total_pages: 1, error: data?.message || data?.error || `HTTP ${res.status}` };
   } catch (err: any) {
-    return { success: false, profiles: [], total: 0, total_pages: 1, error: err.message };
+    // No WooCommerce fallback: it guessed device families and multipliers from category names.
+    return { success: false, profiles: [], total: 0, total_pages: 1, error: err?.message || 'Could not reach the store.' };
   }
-
-  return { success: false, profiles: [], total: 0, total_pages: 1, error: 'Failed to fetch configurator profiles' };
 }
 
 export async function toggleProductConfiguratorDirect(
@@ -5173,6 +5022,8 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
   success: boolean;
   profile?: DeviceConfiguratorProfile;
   finishes?: GlobalFinish[];
+  /** WordPress answered but the product has no configurator yet (Studio starts a new one). */
+  isNew?: boolean;
   error?: string;
 }> {
   const base = getWordPressBaseUrl();
@@ -5235,284 +5086,15 @@ export async function fetchProductConfiguratorProfileDirect(idOrSlug: number | s
         finishes: decodeDeep(data.finishes || []),
       };
     }
-  } catch {}
-
-  // Fallback: Fetch product directly from WC API and parse
-  try {
-    const wcUrl = new URL(`${base}/wp-json/wc/v3/products/${idOrSlug}`, window.location.origin);
-    const res = await authenticatedFetch(wcUrl.toString(), { headers: { Accept: 'application/json' } });
-    if (res.ok) {
-      const p = await res.json();
-      const metas = p.meta_data || [];
-      const modernRaw = metas.find((m: any) => m.key === '_exacoat_configurator_profile')?.value;
-      if (modernRaw) {
-        const parsedModern = typeof modernRaw === 'string' ? parseMetaJsonString(modernRaw)[0] : modernRaw;
-        if (parsedModern && (parsedModern.layers || parsedModern.views)) {
-          const cleanLayers = (parsedModern.layers || []).filter((l: any) => {
-            const lName = (l.name || '').toLowerCase();
-            return lName !== 'device' && !lName.includes('device-body');
-          });
-          const cleanVariants = (parsedModern.variants || []).filter((v: any) => {
-            const vId = (v.id || '').toLowerCase();
-            const vName = (v.name || '').toLowerCase();
-            return !vId.includes('logo') && !vName.includes('logo') && !vId.includes('cutout') && !vId.includes('coverage') && !vName.includes('coverage');
-          });
-          const finishesRes = await fetchGlobalFinishesDirect();
-          const resolvedFallback: DeviceConfiguratorProfile = {
-            ...parsedModern,
-            product_id: p.id,
-            device_name: p.name,
-            device_slug: p.slug,
-            category: (p.categories || [])[0]?.name || 'General',
-            base_price: Number(parsedModern.base_price) || Number(p.price) || 0,
-            currency: 'IDR',
-            layers: cleanLayers,
-            variants: cleanVariants,
-            configurator_version: parsedModern.configurator_version || 'v1',
-          };
-          const mergedMpSettings = getSavedMarketplaceDeviceSettings(resolvedFallback);
-          if (mergedMpSettings) {
-            resolvedFallback.marketplace_image_settings = mergedMpSettings;
-          }
-          return {
-            success: true,
-            profile: resolvedFallback,
-            finishes: finishesRes.finishes || []
-          };
-        }
-      }
-
-      const angles = parseMetaJsonString(metas.find((m: any) => m.key === '_mkl_product_configurator_angles')?.value);
-      const layers = parseMetaJsonString(metas.find((m: any) => m.key === '_mkl_product_configurator_layers')?.value);
-      const content = parseMetaJsonString(metas.find((m: any) => m.key === '_mkl_product_configurator_content')?.value);
-
-      const contentByLayer: Record<string, any[]> = {};
-      if (Array.isArray(content)) {
-        content.forEach((item: any) => {
-          if (item && item.layerId !== undefined) {
-            contentByLayer[item.layerId] = item.choices || [];
-          }
-        });
-      }
-
-      const cat = (p.categories || [])[0]?.name || 'General';
-      const catLower = cat.toLowerCase();
-      let family: DeviceFamily = 'phone';
-      let size_multiplier = 1.0;
-      if (catLower.includes('macbook') || catLower.includes('laptop')) { family = 'laptop'; size_multiplier = 2.0; }
-      else if (catLower.includes('keyboard')) { family = 'keyboard'; size_multiplier = 2.0; }
-      else if (catLower.includes('pad') || catLower.includes('tablet')) { family = 'tablet'; size_multiplier = 2.0; }
-      else if (catLower.includes('fold') || catLower.includes('flip')) { family = 'foldable'; size_multiplier = 1.3; }
-
-      const convertedViews = (angles.length > 0 ? angles : [{ _id: 1, name: 'Main View' }]).map((a: any, idx: number) => {
-        const slug = (a.name || `view_${idx + 1}`).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, '');
-        return {
-          id: slug || `view_${idx + 1}`,
-          legacy_id: a._id,
-          name: a.name || `View ${idx + 1}`,
-          is_default: idx === 0,
-          aspect_ratio: '1:1' as const,
-          canvas_dimensions: { width: 1000, height: 1000 },
-          background_url: '',
-          logo_cutout_mask_url: '',
-        };
-      });
-
-      // Extract device body image per view from "Device" layer
-      const deviceLayer = layers.find((l: any) => (l.name || '').toLowerCase() === 'device');
-      const deviceBodyByView: Record<string, string> = {};
-      if (deviceLayer) {
-        const devChoices = contentByLayer[deviceLayer._id] || [];
-        devChoices.forEach((ch: any) => {
-          (ch.images || []).forEach((im: any) => {
-            const url = im.image?.url;
-            if (!url) return;
-            const matchingView = convertedViews.find((v: any) => v.legacy_id === im.angleId || v.name === im.angle_name);
-            if (matchingView) {
-              deviceBodyByView[matchingView.id] = url;
-            } else {
-              convertedViews.forEach((v: any) => {
-                if (!deviceBodyByView[v.id]) deviceBodyByView[v.id] = url;
-              });
-            }
-          });
-        });
-      }
-
-      // Assign device body URL to view background_url
-      convertedViews.forEach((v: any) => {
-        if (deviceBodyByView[v.id]) {
-          v.background_url = deviceBodyByView[v.id];
-        }
-      });
-
-      // Extract Logo Cutout overlay image from MKL layers if present
-      const logoLayer = layers.find((l: any) => {
-        const n = (l.name || '').toLowerCase();
-        return n.includes('logo') || n.includes('cutout');
-      });
-      let logoOverlayUrl = '';
-      if (logoLayer) {
-        const logoChoices = contentByLayer[logoLayer._id] || [];
-        logoChoices.forEach((ch: any) => {
-          const chName = (ch.name || '').toLowerCase();
-          if (chName.includes('with') || chName.includes('logo') || (ch.images && ch.images.length > 0)) {
-            (ch.images || []).forEach((im: any) => {
-              const url = im.image?.url;
-              if (url) {
-                logoOverlayUrl = url;
-                const matchingView = convertedViews.find((v: any) => v.legacy_id === im.angleId || v.name === im.angle_name);
-                if (matchingView) {
-                  matchingView.logo_cutout_mask_url = url;
-                }
-              }
-            });
-          }
-        });
-      }
-
-      // Fallback logo URL to all views if matched
-      if (logoOverlayUrl) {
-        convertedViews.forEach((v: any) => {
-          if (!v.logo_cutout_mask_url) v.logo_cutout_mask_url = logoOverlayUrl;
-        });
-      }
-
-      // Production variants are strictly reserved for physical hardware models (e.g. Wi-Fi vs Cellular).
-      // Coverage and Logo Cutout are strictly handled by coverage_and_cutouts.
-      const convertedVariants: any[] = [];
-
-      let convertedLayers = layers
-        .filter((l: any) => {
-          const lName = (l.name || '').toLowerCase();
-          return lName !== 'device' && !lName.includes('device-body') && !lName.includes('model') && !lName.includes('coverage') && !lName.includes('360') && !lName.includes('series') && !lName.includes('logo') && !lName.includes('cutout');
-        })
-        .map((l: any, idx: number) => {
-        const rawChoices = contentByLayer[l._id] || [];
-        const assetsByView: Record<string, any> = {};
-
-        convertedViews.forEach((v: any) => {
-          assetsByView[v.id] = {
-            render_texture_map: {},
-            base_hardware_body_url: deviceBodyByView[v.id] || ''
-          };
-        });
-        assetsByView['main_view'] = {
-          render_texture_map: {},
-          base_hardware_body_url: Object.values(deviceBodyByView)[0] || ''
-        };
-
-        let layerExtraPrice = 0;
-
-        rawChoices.forEach((ch: any) => {
-          const chPrice = Number(ch.price || ch.extra_price) || 0;
-          if (chPrice > 0 && layerExtraPrice === 0) {
-            layerExtraPrice = chPrice;
-          }
-
-          if (!ch.is_group && ch.name && ch.images && ch.images.length > 0) {
-            const chSlug = ch.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-            ch.images.forEach((im: any) => {
-              const imgUrl = im.image?.url;
-              if (!imgUrl) return;
-
-              const targetView = convertedViews.find((v: any) => v.legacy_id === im.angleId || v.name === im.angle_name);
-              if (targetView) {
-                assetsByView[targetView.id].render_texture_map[chSlug] = imgUrl;
-              } else {
-                convertedViews.forEach((v: any) => {
-                  assetsByView[v.id].render_texture_map[chSlug] = imgUrl;
-                });
-              }
-              assetsByView['main_view'].render_texture_map[chSlug] = imgUrl;
-            });
-          }
-        });
-
-        const choiceSlugs = (rawChoices || [])
-          .filter((c: any) => !c.is_group && c.name)
-          .map((c: any) => (c.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
-        const allowedFinishSlugs = choiceSlugs.length > 0 && choiceSlugs.length < 15 ? choiceSlugs : [];
-
-        return {
-          id: (l.name || `layer-${idx + 1}`).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
-          name: l.name || `Layer ${idx + 1}`,
-          group: (l.name && ['Back', 'Top'].includes(l.name) ? 'primary' : 'accent') as any,
-          is_required: l.required === '1' || l.required === true,
-          is_optional: l.can_deselect === '1' || (l.class_name && l.class_name.includes('optional')),
-          default_selected: l.required === '1' || !l.can_deselect,
-          extra_price: layerExtraPrice,
-          z_index: idx + 1,
-          allowed_finish_groups: ['Signature skins', 'Colors', 'Natural'],
-          allowed_finish_slugs: allowedFinishSlugs,
-          assets_by_view: assetsByView,
-        };
-      });
-
-      // If product has no layers configured yet, initialize with standard primary layer
-      if (convertedLayers.length === 0) {
-        const defaultName = family === 'laptop' ? 'Top Lid' : family === 'keyboard' ? 'Main Body' : 'Back Skin';
-        const defaultId = defaultName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-        const defaultAssets: Record<string, any> = {
-          main_view: { render_texture_map: {}, base_hardware_body_url: '' }
-        };
-        convertedViews.forEach((v: any) => {
-          defaultAssets[v.id] = { render_texture_map: {}, base_hardware_body_url: '' };
-        });
-
-        convertedLayers = [
-          {
-            id: defaultId,
-            name: defaultName,
-            group: 'primary',
-            is_required: true,
-            is_optional: false,
-            default_selected: true,
-            extra_price: 0,
-            z_index: 1,
-            allowed_finish_groups: ['Signature skins', 'Colors', 'Natural'],
-            allowed_finish_slugs: [],
-            assets_by_view: defaultAssets,
-          }
-        ];
-      }
-
-      const finishesRes = await fetchGlobalFinishesDirect();
-
-      return {
-        success: true,
-        profile: {
-          product_id: p.id,
-          device_slug: p.slug,
-          device_name: p.name,
-          category: cat,
-          family,
-          base_price: Number(p.price) || 0,
-          currency: 'IDR',
-          size_multiplier,
-          texture_scale: 0.75,
-          is_configurable: true,
-          configurator_version: 'v1',
-          device_colors: [],
-          views: convertedViews.length > 0 ? convertedViews : [{ id: 'main_view', name: 'Main View', is_default: true, aspect_ratio: '1:1', canvas_dimensions: { width: 1000, height: 1000 } }],
-          layers: convertedLayers,
-          variants: convertedVariants,
-          coverage_and_cutouts: {
-            has_logo_cutout: Boolean(logoOverlayUrl || logoLayer || family === 'laptop'),
-            logo_cutout_mask_url: logoOverlayUrl,
-            has_pencil_cutout: false,
-            has_model_cut: false,
-            coverage_type: 'none',
-          },
-        },
-        finishes: finishesRes.finishes || []
-      };
+    if (res.ok && data?.success && !data?.profile) {
+      return { success: true, isNew: true, finishes: decodeDeep(data.finishes || []) };
     }
+    return { success: false, error: data?.message || data?.error || `HTTP ${res.status}` };
   } catch (err: any) {
-    return { success: false, error: err.message };
+    // No client-side conversion fallback: it invented families, scales and layers that a Studio save
+    // then wrote over the real profile.
+    return { success: false, error: err?.message || 'Could not reach the store.' };
   }
-
-  return { success: false, error: 'Failed to load configurator profile' };
 }
 
 

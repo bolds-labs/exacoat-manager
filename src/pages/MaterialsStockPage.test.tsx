@@ -168,7 +168,7 @@ describe('Finishes & Stock screen', () => {
   it('blocks every write while showing a fallback copy and offers Retry', async () => {
     bridge.fetchGlobalFinishesDirect.mockResolvedValueOnce({ success: true, source: 'fallback', finishes: structuredClone(finishes) });
     await loaded();
-    expect(screen.getByText('Showing a saved copy, edits are off until finishes load.')).toBeTruthy();
+    expect(screen.getByText("Showing the webstore's copy, edits are off until WordPress answers.")).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Add finish' }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole('button', { name: 'Groups' }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole('button', { name: 'Price tiers' }) as HTMLButtonElement).disabled).toBe(true);
@@ -177,7 +177,7 @@ describe('Finishes & Stock screen', () => {
     expect((within(row).getByRole('switch') as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole('button', { name: 'Move Swarm down' }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-    await waitFor(() => expect(screen.queryByText('Showing a saved copy, edits are off until finishes load.')).toBeNull());
+    await waitFor(() => expect(screen.queryByText("Showing the webstore's copy, edits are off until WordPress answers.")).toBeNull());
     expect((screen.getByRole('button', { name: 'Add finish' }) as HTMLButtonElement).disabled).toBe(false);
   });
 
@@ -187,7 +187,17 @@ describe('Finishes & Stock screen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     await waitFor(() => expect(bridge.fetchGlobalFinishesDirect).toHaveBeenCalledTimes(2));
     expect(screen.getByText('Swarm')).toBeTruthy();
-    expect(screen.queryByText('Showing a saved copy, edits are off until finishes load.')).toBeNull();
+    expect(screen.queryByText("Showing the webstore's copy, edits are off until WordPress answers.")).toBeNull();
+  });
+
+  it('shows an error with Retry and no list when nothing loaded', async () => {
+    bridge.fetchGlobalFinishesDirect.mockResolvedValueOnce({ success: false, source: 'fallback', finishes: [], error: 'offline' });
+    render(<MaterialsStockPage />);
+    expect(await screen.findByText('Finishes did not load. Edits are off until they load.')).toBeTruthy();
+    expect(screen.queryByText('No finishes match')).toBeNull();
+    expect((screen.getByRole('button', { name: 'Add finish' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(screen.getByText('Swarm')).toBeTruthy());
   });
 
   it('a failed Active toggle switches back', async () => {

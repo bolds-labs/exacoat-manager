@@ -3220,7 +3220,7 @@ export const MarketplaceImageGeneratorModal: React.FC<MarketplaceImageGeneratorM
       <ShopeeProductDuplicatorModal
         isOpen={isShopeeDuplicatorOpen}
         onClose={() => setIsShopeeDuplicatorOpen(false)}
-        initialTargetDevice={profile?.device_name || 'iPhone 18 Pro Max'}
+        initialTargetDevice={profile?.device_name || ''}
         preloadedImages={shopeePreloadedImages}
       />
     </div>,

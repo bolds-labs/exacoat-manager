@@ -21,7 +21,6 @@ import {
   fetchConfiguratorPresetsDirect,
   saveConfiguratorPresetsDirect,
   FinishSurchargeTier,
-  DEFAULT_FINISH_SURCHARGE_TIERS,
   fetchFinishSurchargeTiersDirect,
   saveFinishSurchargeTiersDirect,
   syncDeviceFamiliesDirect,
@@ -32,6 +31,7 @@ import { configuratorStatus, needsAllSummaries, parseProductIdFromHash } from '.
 import { ProductList } from '../components/products/ProductList';
 import { DuplicateProductModal, duplicateSourceOf, type DuplicateSource } from '../components/products/DuplicateProductModal';
 import { ConfirmModal, ConfirmText } from '../components/orders/panel/ConfirmModal';
+import { FinishesLoadError } from '../components/finishes/FinishesLoadError';
 import { Button as DsButton } from '../components/ds/Button';
 import { Menu as DsMenu, type MenuItem } from '../components/ds/Menu';
 import {
@@ -732,6 +732,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
   } | null>(null);
 
   const [profilesError, setProfilesError] = useState<string | null>(null);
+  const [finishesError, setFinishesError] = useState<string | null>(null);
   const [catalogConfirm, setCatalogConfirm] = useState<null | 'revalidate' | 'families' | 'migrate'>(null);
   const [rowConfirm, setRowConfirm] = useState<
     null | { kind: 'status'; product: Product; next: 'publish' | 'draft' } | { kind: 'configurator'; product: Product; next: boolean }
@@ -816,7 +817,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
   const [showPresetsManagerModal, setShowPresetsManagerModal] = useState(false);
   const [editingPreset, setEditingPreset] = useState<ConfiguratorPreset | null>(null);
   const [isSavingPresets, setIsSavingPresets] = useState(false);
-  const [surchargeTiers, setSurchargeTiers] = useState<FinishSurchargeTier[]>(DEFAULT_FINISH_SURCHARGE_TIERS);
+  const [surchargeTiers, setSurchargeTiers] = useState<FinishSurchargeTier[]>([]);
   const [showSurchargeTiersModal, setShowSurchargeTiersModal] = useState(false);
   const [isSavingSurchargeTiers, setIsSavingSurchargeTiers] = useState(false);
   const [editingTier, setEditingTier] = useState<FinishSurchargeTier | null>(null);
@@ -1029,6 +1030,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
       } else {
         setProfilesError(profilesRes.error || 'The configurator list did not load.');
       }
+      setFinishesError(finishesRes.success && finishesRes.finishes.length > 0 ? null : finishesRes.error || 'Finishes did not load.');
       if (finishesRes.success && Array.isArray(finishesRes.finishes)) {
         setFinishes(finishesRes.finishes);
         if (Array.isArray(finishesRes.groups) && finishesRes.groups.length > 0) {
@@ -1315,8 +1317,9 @@ export const ConfiguratorStudioPage: React.FC = () => {
         setFailedColorImages({});
         return profile;
       } else {
-        // Fallback profile from catalog item
-        const fallbackSummary = profiles.find((p) => p.product_id === productId);
+        // Only a product WordPress says has no configurator yet starts from a blank workspace. A failed
+        // load never does: saving a blank stand-in would overwrite the real profile.
+        const fallbackSummary = res.success && res.isNew ? profiles.find((p) => p.product_id === productId) : undefined;
         if (fallbackSummary) {
           const defaultLayerName =
             fallbackSummary.family === 'laptop'
@@ -1372,14 +1375,22 @@ export const ConfiguratorStudioPage: React.FC = () => {
           setSelectedLayerId(defaultLayerId);
           setSelectedSimLayers({ [defaultLayerId]: true });
           setActiveSimView('main_view');
-          showToast('info', 'Loaded Base Profile', 'Created studio workspace for this device.');
+          showToast('info', 'New configurator', 'This product has no configurator yet. Start with the base skin layer.');
           return fallbackProfile;
         } else {
-          showToast('error', 'Load Failed', res.error || 'Unable to load configurator profile');
+          showToast(
+            'error',
+            'Configurator did not load',
+            res.success ? 'Show all products in the Configurator filter, then open it again.' : res.error || 'Could not reach the store. Try again.'
+          );
+          setSelectedProductId(null);
+          setEditingProfile(null);
         }
       }
     } catch (err: any) {
       showToast('error', 'Communication Error', err.message);
+      setSelectedProductId(null);
+      setEditingProfile(null);
     } finally {
       setIsLoadingProfile(false);
     }
@@ -1923,6 +1934,11 @@ export const ConfiguratorStudioPage: React.FC = () => {
     setIsTransferringSetup(true);
     try {
       const res = await fetchProductConfiguratorProfileDirect(targetCopyProductId);
+      if (!res.success) {
+        // Never build the target from a blank stand-in when its real profile did not load.
+        showToast('error', 'Load Failed', res.error || 'The target profile could not be loaded, so nothing was copied.');
+        return;
+      }
       const targetProfile: Partial<DeviceConfiguratorProfile> = res.profile || {};
 
       const clonedViews = copyOptions.copyViews
@@ -3927,7 +3943,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
           <DsButton icon={Palette} onClick={openFinishesScreen}>
             Finishes
           </DsButton>
-          <DsButton icon={Coins} onClick={() => setShowSurchargeTiersModal(true)}>
+          <DsButton icon={Coins} onClick={() => setShowSurchargeTiersModal(true)} disabled={surchargeTiers.length === 0}>
             Price tiers
           </DsButton>
           <DsButton
@@ -3978,6 +3994,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
           />
         </div>
       </div>
+
+      {finishesError && <FinishesLoadError message={finishesError} onRetry={() => void loadData(true)} />}
 
       <ProductList
         mode="studio"

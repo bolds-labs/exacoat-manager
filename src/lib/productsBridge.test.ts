@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  fetchConfiguratorProfilesDirect,
+  fetchFinishSurchargeTiersDirect,
+  fetchProductConfiguratorProfileDirect,
   fetchProductByIdDirect,
   fetchProductCategoriesDirect,
   fetchProductsDirect,
@@ -77,5 +80,32 @@ describe('single price editor', () => {
     fetchMock.mockResolvedValue(json(500, { success: false, message: 'Boom' }));
     expect(await setProductPriceDirect(9, 139000)).toEqual({ success: false, error: 'Boom' });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('no invented configurator data', () => {
+  it('reports a failed profile load instead of converting WooCommerce meta', async () => {
+    fetchMock.mockResolvedValue(json(500, { success: false, message: 'Server error' }));
+    expect(await fetchProductConfiguratorProfileDirect(9)).toEqual({ success: false, error: 'Server error' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks a product without a configurator as new', async () => {
+    fetchMock.mockResolvedValue(json(200, { success: true, profile: null, finishes: [] }));
+    expect(await fetchProductConfiguratorProfileDirect(9)).toMatchObject({ success: true, isNew: true });
+  });
+
+  it('accepts an empty profile list and never guesses one from WooCommerce', async () => {
+    fetchMock.mockResolvedValueOnce(json(200, { success: true, profiles: [] }));
+    expect(await fetchConfiguratorProfilesDirect()).toMatchObject({ success: true, profiles: [] });
+    fetchMock.mockReset();
+    fetchMock.mockRejectedValue(new Error('offline'));
+    expect(await fetchConfiguratorProfilesDirect()).toMatchObject({ success: false, profiles: [], error: 'offline' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports failed price tiers instead of returning built-in ones', async () => {
+    fetchMock.mockRejectedValue(new Error('offline'));
+    expect(await fetchFinishSurchargeTiersDirect()).toEqual({ success: false, tiers: [], error: 'offline' });
   });
 });

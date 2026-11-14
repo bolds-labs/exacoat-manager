@@ -61,9 +61,12 @@ describe('fetchGlobalFinishesDirect source', () => {
     expect(localStorage.getItem(CACHE)).toBeNull();
   });
 
-  it('is fallback when WordPress and the storefront both fail', async () => {
+  it('fails with an empty list when WordPress and the storefront both fail (no built-in or per-PC copy)', async () => {
+    localStorage.setItem(CACHE, JSON.stringify(live));
     fetchMock.mockRejectedValue(new Error('offline'));
-    expect((await fetchGlobalFinishesDirect()).source).toBe('fallback');
+    const res = await fetchGlobalFinishesDirect();
+    expect(res).toMatchObject({ success: false, source: 'fallback', finishes: [] });
+    expect(res.error).toBeTruthy();
   });
 
   it('is fallback when only the storefront list answers', async () => {

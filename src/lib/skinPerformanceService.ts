@@ -1,6 +1,6 @@
 import { Order, OrderItem } from '../types';
 import { isBaseSkinLayer } from '../components/configurator/V2SkinCanvasLayer';
-import { DEFAULT_GLOBAL_FINISHES, GlobalFinish } from './wordpressBridge';
+import type { GlobalFinish } from './wordpressBridge';
 import { extractItemSpecs } from './orderItems';
 import {
   convertToIdr,
@@ -249,14 +249,14 @@ export function isWarrantyReplacementItem(item: any): boolean {
 }
 
 /**
- * Returns the definitive list of all master textures (defaults, limited, and Skin Studio inventory)
+ * Master textures for the report: the live finishes from WordPress, normalized. There is no built-in
+ * list and no per-PC copy (a finish missing from WordPress is not reported as a zero-sales row).
  */
-export function getMasterTexturesList(): GlobalFinish[] {
+export function getMasterTexturesList(finishes: GlobalFinish[]): GlobalFinish[] {
   const map = new Map<string, GlobalFinish>();
-
-  // 1. Ingest DEFAULT_GLOBAL_FINISHES
-  DEFAULT_GLOBAL_FINISHES.forEach((f) => {
+  finishes.forEach((f) => {
     const slug = normalizeSkinSlug(f.slug || f.id || f.name);
+    if (!slug || isInvalidFinishCandidate(f.name || f.slug)) return;
     map.set(slug, {
       ...f,
       slug: f.slug || slug,
@@ -264,88 +264,15 @@ export function getMasterTexturesList(): GlobalFinish[] {
       texture_big_url: normalizeThumbnailUrl(f.texture_big_url),
     });
   });
-
-  // 2. Add Burgundy
-  if (!map.has('burgundy')) {
-    map.set('burgundy', {
-      id: 'burgundy',
-      name: 'Burgundy',
-      slug: 'burgundy',
-      group: 'Limited',
-      color_hex: '#5B1E28',
-      in_stock: true,
-      extra_price: 35000,
-      thumbnail: 'https://media.exacoat.com/wp-content/uploads/Burgundy-Texture-Thumbnail.jpg',
-    });
-  }
-
-  // 3. Add Titanium+
-  if (!map.has('titaniumplus') && !map.has('titanium-plus')) {
-    map.set('titanium-plus', {
-      id: 'titanium-plus',
-      name: 'Titanium+',
-      slug: 'titanium-plus',
-      group: 'Limited',
-      color_hex: '#8E8D8A',
-      in_stock: true,
-      extra_price: 35000,
-      thumbnail: 'https://media.exacoat.com/wp-content/uploads/Titanium-Plus-Texture-Thumbnail.jpg',
-    });
-  }
-
-  // 4. Add Everything Skins (special / custom per-device master skin)
-  if (!map.has('everything') && !map.has('everythingskins') && !map.has('everythingskin')) {
-    map.set('everything', {
-      id: 'everything',
-      name: 'Everything',
-      slug: 'everything',
-      group: 'Special edition',
-      color_hex: '#2d2d30',
-      in_stock: true,
-      extra_price: 35000,
-      thumbnail: 'https://media.exacoat.com/wp-content/uploads/Everything-Texture-Thumbnail.jpg',
-    });
-  }
-
-  // 5. Ingest custom master textures from Skin Studio inventory cache
-  if (typeof localStorage !== 'undefined') {
-    const storageKeys = ['exacoat_finishes_inventory_cache', 'exacoat_finishes_inventory_v2'];
-    for (const key of storageKeys) {
-      try {
-        const raw = localStorage.getItem(key);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) {
-            parsed.forEach((f: GlobalFinish) => {
-              if (!f || typeof f !== 'object') return;
-              const slug = normalizeSkinSlug(f.slug || f.id || f.name);
-              if (!slug) return;
-              if (isInvalidFinishCandidate(f.name || f.slug)) return;
-
-              map.set(slug, {
-                ...f,
-                slug: f.slug || slug,
-                thumbnail: normalizeThumbnailUrl(f.thumbnail),
-                texture_big_url: normalizeThumbnailUrl(f.texture_big_url),
-              });
-            });
-          }
-        }
-      } catch {
-        // ignore
-      }
-    }
-  }
-
   return Array.from(map.values());
 }
 
 /**
  * Build index of all known finishes from defaults & cached custom finishes
  */
-export function buildKnownFinishesDictionary(): Map<string, GlobalFinish> {
+export function buildKnownFinishesDictionary(finishes: GlobalFinish[]): Map<string, GlobalFinish> {
   const dict = new Map<string, GlobalFinish>();
-  const masters = getMasterTexturesList();
+  const masters = getMasterTexturesList(finishes);
 
   masters.forEach((f) => {
     const slugKey = normalizeSkinSlug(f.slug);
@@ -730,10 +657,11 @@ export function filterOrdersByHorizon(
 export function aggregateSkinPerformance(
   orders: Order[],
   startMs: number,
-  endMs: number
+  endMs: number,
+  finishes: GlobalFinish[]
 ): SkinPerformanceReport {
-  const finishesDict = buildKnownFinishesDictionary();
-  const masterTextures = getMasterTexturesList();
+  const finishesDict = buildKnownFinishesDictionary(finishes);
+  const masterTextures = getMasterTexturesList(finishes);
 
   // Continuous date buckets for the timeline
   const continuousDays = generateContinuousDays(startMs, endMs);

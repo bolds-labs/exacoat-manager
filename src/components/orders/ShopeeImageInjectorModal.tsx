@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Modal } from '../ui/Modal';
 import { Select } from '../ds/Select';
+import { FinishesLoadError } from '../finishes/FinishesLoadError';
 import {
   ShopeeListingItem,
   TikTokListingItem,
@@ -17,7 +18,6 @@ import {
   fetchGlobalFinishesDirect,
   getSavedMarketplaceDeviceSettings,
   saveMarketplaceDeviceSettingsDirect,
-  DEFAULT_GLOBAL_FINISHES,
   GlobalFinish,
   ShopeeProductPreview,
 } from '../../lib/wordpressBridge';
@@ -130,7 +130,8 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
   const [isLoadingInitialData, setIsLoadingInitialData] = useState<boolean>(false);
   const [productPreview, setProductPreview] = useState<ShopeeProductPreview | null>(null);
   const [availableProfiles, setAvailableProfiles] = useState<ConfiguratorProfileSummary[]>([]);
-  const [allFinishes, setAllFinishes] = useState<GlobalFinish[]>(DEFAULT_GLOBAL_FINISHES);
+  const [allFinishes, setAllFinishes] = useState<GlobalFinish[]>([]);
+  const [finishesError, setFinishesError] = useState<string | null>(null);
 
   // Selected Configurator Profile & Full Specs
   const [selectedProfileId, setSelectedProfileId] = useState<number | string>('');
@@ -482,10 +483,9 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
 
         if (!isMounted) return;
 
-        const loadedFinishes =
-          finishesRes.success && finishesRes.finishes.length > 0
-            ? finishesRes.finishes
-            : DEFAULT_GLOBAL_FINISHES;
+        // No built-in finish list: without WordPress (or the webstore copy) the generator has nothing to render.
+        const loadedFinishes = finishesRes.success ? finishesRes.finishes : [];
+        setFinishesError(loadedFinishes.length > 0 ? null : finishesRes.error || 'Finishes did not load.');
         setAllFinishes(loadedFinishes);
 
         const loadedProfiles = profilesRes.success ? profilesRes.profiles : [];
@@ -533,7 +533,8 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
           const parsedDeviceName = extractDeviceNameFromTitle(
             effectivePreview.item_name || fallbackListingName
           );
-          setHeadlineText(formatDeviceHeadline(parsedDeviceName || 'iPhone 18 Pro Max'));
+          // No invented device: an unparsed title leaves the headline empty for staff to type.
+          setHeadlineText(parsedDeviceName ? formatDeviceHeadline(parsedDeviceName) : '');
 
           // Find closest configurator profile
           const matchedProfile = findMatchingProfile(parsedDeviceName, loadedProfiles);
@@ -1436,6 +1437,21 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
       }
     >
       <div className="space-y-6">
+        {finishesError && !isLoadingInitialData && (
+          <FinishesLoadError
+            message={finishesError}
+            onRetry={() => {
+              void fetchGlobalFinishesDirect().then((res) => {
+                if (res.success && res.finishes.length > 0) {
+                  setAllFinishes(res.finishes);
+                  setFinishesError(null);
+                } else {
+                  setFinishesError(res.error || 'Finishes did not load.');
+                }
+              });
+            }}
+          />
+        )}
         {/* Loading Initial Data State */}
         {isLoadingInitialData && (
           <div className="py-16 flex flex-col items-center justify-center gap-3 text-zinc-400">
