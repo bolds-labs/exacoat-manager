@@ -34,6 +34,7 @@ import { hasHistory, periodWindows, previousPeriodLabel, type ComparePreset } fr
 import { buildTrendSeries } from '../lib/trendSeries';
 import { formatCurrency, formatStoreDateFull } from '../lib/formatters';
 import { formatCompactMoney } from '../lib/compactMoney';
+import { joinList } from '../lib/listFormat';
 
 const PERIOD_KEY = 'exacoat_dashboard_period';
 const PERIODS: { key: ComparePreset; label: string }[] = [
@@ -84,8 +85,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, orderC
   const now = useMemo(() => (lastRefreshedAt ? lastRefreshedAt.getTime() : Date.now()), [lastRefreshedAt]);
   const windows = useMemo(() => periodWindows(period, now), [period, now]);
   const result = useMemo(
-    () => buildPeriodComparison(records, ALL_CHANNELS, windows.current, windows.previous, oldestByChannel),
-    [records, windows, oldestByChannel],
+    () => buildPeriodComparison(records, ALL_CHANNELS, windows.current, windows.previous, oldestByChannel, failedChannels),
+    [records, windows, oldestByChannel, failedChannels],
   );
   const trend = useMemo(
     () => buildTrendSeries(result.current, result.previous, windows, result.covered, now),
@@ -98,7 +99,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, orderC
   const money = (v: number) => formatCurrency(v, currency);
   const count = (v: number) => v.toLocaleString('en-US');
   const ready = !isLoading;
-  const missingHistory = ALL_CHANNELS.filter((ch) => !hasHistory(oldestByChannel[ch], windows.previous.startMs));
+  const missingHistory = ALL_CHANNELS.filter((ch) => !failedChannels.includes(ch) && !hasHistory(oldestByChannel[ch], windows.previous.startMs));
 
   const kpis: { key: ComparedMetricKey; label: string; value: number; format: (v: number) => string; display: string }[] = [
     { key: 'sales', label: 'Sales', value: s.totalGrossRevenue, format: money, display: formatCompactMoney(s.totalGrossRevenue, currency) },
@@ -166,7 +167,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, orderC
       {ready && failedChannels.length > 0 && (
         <div className="flex items-center gap-2.5 rounded-[12px] border border-st-wait-border bg-st-wait-bg px-4 py-2.5 text-[13px] text-st-wait-fg" role="status">
           <AlertTriangle className="h-4 w-4 flex-none" strokeWidth={1.8} aria-hidden />
-          {failedChannels.map((c) => CHANNEL_LABELS[c]).join(' and ')} could not be loaded. The numbers below leave {failedChannels.length > 1 ? 'them' : 'it'} out.
+          {joinList(failedChannels.map((c) => CHANNEL_LABELS[c]))} could not be loaded. The numbers below leave {failedChannels.length > 1 ? 'them' : 'it'} out.
         </div>
       )}
 
@@ -178,14 +179,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, orderC
               key={k.key}
               label={k.label}
               value={ready ? <span title={k.format(k.value)}>{k.display}</span> : <span className="text-faint">-</span>}
-              footer={ready ? <ChangeChip comparison={result.metrics[k.key]} periodLabel={prevLabel} formatValue={k.format} /> : undefined}
+              footer={ready && result.comparable ? <ChangeChip comparison={result.metrics[k.key]} periodLabel={prevLabel} formatValue={k.format} /> : undefined}
             />
           ))}
         </div>
         <p className="px-1 text-[12px] text-faint">
           {dateRange(windows.current.startMs, Math.min(now, windows.current.endMs))} compared with {period === 'today' ? 'yesterday' : `the ${prevLabel}`} ({dateRange(windows.previous.startMs, windows.previous.endMs)}), up to the same time.
           {ready && missingHistory.length > 0 &&
-            ` Loaded ${missingHistory.map((c) => CHANNEL_LABELS[c]).join(' and ')} orders do not reach back that far, so there is no comparison.`}
+            ` Loaded ${joinList(missingHistory.map((c) => CHANNEL_LABELS[c]))} orders do not reach back that far, so there is no comparison.`}
           {' '}Cancelled, refunded and unpaid orders are left out.
         </p>
       </section>

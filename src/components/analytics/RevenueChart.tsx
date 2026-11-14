@@ -10,6 +10,7 @@ import {
 import { formatCurrency } from '../../lib/formatters';
 import { formatAxisMoney } from '../../lib/compactMoney';
 import { useCssVars } from '../../hooks/useCssVars';
+import { MONTHLY_MIN_DAYS, resolveGranularity } from '../../lib/chartGranularity';
 import { Card } from '../ds/Card';
 import { Tabs } from '../ds/Tabs';
 import { CHANNEL_DOT } from '../dashboard/ChannelSalesList';
@@ -85,7 +86,9 @@ function RevenueTooltip({ active, payload, channels, labels, currency }: TipProp
 /** Gross sales over time, per channel, stacked, or gross against payout after fees. */
 export function RevenueChart({ timeline, selectedChannels, channelLabels, currency }: RevenueChartProps) {
   const [mode, setMode] = useState<ChartMode>('channels');
-  const [granularity, setGranularity] = useState<FinancialGranularity>('daily');
+  const [selectedGranularity, setGranularity] = useState<FinancialGranularity>('daily');
+  // Monthly disappears for short ranges; draw and highlight Daily then
+  const granularity = resolveGranularity(selectedGranularity, timeline.length);
   const c = useCssVars(VARS);
   const points = useMemo(() => aggregateTimelineByGranularity(timeline, granularity), [timeline, granularity]);
   const channels = (['webstore', 'shopee', 'tiktok'] as FinancialChannel[]).filter((ch) => selectedChannels.includes(ch));
@@ -93,7 +96,7 @@ export function RevenueChart({ timeline, selectedChannels, channelLabels, curren
   const granularityItems = [
     { key: 'daily', label: 'Daily' },
     { key: 'weekly', label: 'Weekly' },
-    ...(timeline.length >= 25 ? [{ key: 'monthly', label: 'Monthly' }] : []),
+    ...(timeline.length >= MONTHLY_MIN_DAYS ? [{ key: 'monthly', label: 'Monthly' }] : []),
   ];
   const modeItems = [
     { key: 'channels', label: 'By channel' },

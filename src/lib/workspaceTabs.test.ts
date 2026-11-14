@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { tabNeedsOrderList } from './workspaceTabs';
+import { refreshPlan, tabNeedsOrderList } from './workspaceTabs';
 
 describe('tabNeedsOrderList', () => {
   it('loads the order list only for skin performance', () => {
@@ -27,5 +27,19 @@ describe('tabNeedsOrderList', () => {
 
   it('does not load it for unknown tabs, which fall back to the dashboard', () => {
     expect(tabNeedsOrderList('something-else', false)).toBe(false);
+  });
+});
+
+describe('refreshPlan', () => {
+  it('reloads the order list only where the tab uses it', () => {
+    expect(refreshPlan('dashboard', false).orderList).toBe(false);
+    expect(refreshPlan('reports', false).orderList).toBe(false);
+    expect(refreshPlan('skin_performance', false).orderList).toBe(true);
+    expect(refreshPlan('skin_performance', true).orderList).toBe(false);
+  });
+  it('always refreshes counts and self-loading screens', () => {
+    const p = refreshPlan('dashboard', false);
+    expect(p.counts).toBe(true);
+    expect(p.screens).toBe(true);
   });
 });

@@ -7,7 +7,8 @@ import { SHOP_MANAGER_ALLOWED_TABS } from './components/layout/sidebarNav';
 import { LoginPage } from './pages/LoginPage';
 import { useOrderCounts } from './hooks/useOrderCounts';
 import { fetchOrdersDirect, handleShopeeCallbackDirect, handleTikTokCallbackDirect } from './lib/wordpressBridge';
-import { tabNeedsOrderList } from './lib/workspaceTabs';
+import { refreshPlan, tabNeedsOrderList } from './lib/workspaceTabs';
+import { emitWorkspaceRefresh } from './lib/workspaceRefresh';
 import { Order, AuditLog } from './types';
 import { Loader2 } from 'lucide-react';
 
@@ -325,10 +326,13 @@ export const App: React.FC = () => {
     }
   }, [user, isAffiliatePortal, showToast]);
 
+  // Header Refresh: counts and self-loading screens (Dashboard metrics) always; the large order list only where it is used
   const refreshAll = useCallback(() => {
-    void refreshOrderCounts();
-    return loadWorkspaceData(true);
-  }, [refreshOrderCounts, loadWorkspaceData]);
+    const plan = refreshPlan(currentTab, isShopManager);
+    if (plan.counts) void refreshOrderCounts();
+    if (plan.screens) emitWorkspaceRefresh();
+    return plan.orderList ? loadWorkspaceData(true) : Promise.resolve();
+  }, [currentTab, isShopManager, refreshOrderCounts, loadWorkspaceData]);
 
   useEffect(() => {
     if (user && !isAffiliatePortal && needsOrderList && !ordersLoaded) {

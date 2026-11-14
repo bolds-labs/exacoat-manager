@@ -19,6 +19,7 @@ import {
 } from '../lib/wordpressBridge';
 import { compareMetric, hasHistory, type MetricComparison, type TimeWindow } from '../lib/periodComparison';
 import type { Order } from '../types';
+import { onWorkspaceRefresh } from '../lib/workspaceRefresh';
 
 /** Webstore orders are read as the latest N; when the list is full, older orders are cut off. */
 export const WEBSTORE_ORDER_LIMIT = 500;
@@ -174,6 +175,9 @@ export function useFinancialMetrics({ horizonDays = 30, autoSyncEscrow = false }
     }
   }, [reload]);
 
+  // The header Refresh reloads these numbers quietly (no marketplace sync)
+  useEffect(() => onWorkspaceRefresh(() => void reload({ quiet: true })), [reload]);
+
   const { records, oldestByChannel } = useMemo(() => {
     const web = webOrders.map(normalizeWebstoreOrder);
     const shp = shopeeOrders.map(normalizeShopeeOrder);
@@ -196,8 +200,10 @@ export type ComparedMetricKey = 'sales' | 'orders' | 'aov' | 'payout' | 'units';
 export interface PeriodComparisonResult {
   current: FinancialAnalyticsSummary;
   previous: FinancialAnalyticsSummary | null;
-  /** True when every selected channel's loaded data reaches the start of the previous window. */
+  /** True when every selected channel loaded and its data reaches the start of the previous window. */
   covered: boolean;
+  /** False when every selected channel failed to load: show no change chips at all. */
+  comparable: boolean;
   metrics: Record<ComparedMetricKey, MetricComparison>;
   /** Per-channel gross sales change (same coverage rule, per channel). */
   channelSales: Record<FinancialChannel, MetricComparison>;
@@ -221,10 +227,14 @@ export function buildPeriodComparison(
   current: TimeWindow,
   previous: TimeWindow | null,
   oldestByChannel: Record<FinancialChannel, number | null>,
+  failedChannels: FinancialChannel[] = [],
 ): PeriodComparisonResult {
   const cur = aggregateFinancialMetrics(records, channels, current.startMs, current.endMs);
   const prev = previous ? aggregateFinancialMetrics(records, channels, previous.startMs, previous.endMs) : null;
-  const channelCovered = (ch: FinancialChannel) => previous !== null && hasHistory(oldestByChannel[ch], previous.startMs);
+  // A channel that failed to load counts as no history: its previous numbers are unknown
+  const channelCovered = (ch: FinancialChannel) =>
+    previous !== null && !failedChannels.includes(ch) && hasHistory(oldestByChannel[ch], previous.startMs);
+  const comparable = previous !== null && channels.some((ch) => !failedChannels.includes(ch));
   const covered = previous !== null && channels.every(channelCovered);
 
   const curVals = metricValues(cur);
@@ -243,5 +253,5 @@ export function buildPeriodComparison(
     );
   });
 
-  return { current: cur, previous: prev, covered, metrics, channelSales };
+  return { current: cur, previous: prev, covered, comparable, metrics, channelSales };
 }

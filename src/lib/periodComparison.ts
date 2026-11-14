@@ -66,11 +66,23 @@ export function periodWindows(preset: ComparePreset, now: number): PeriodWindows
 
 /**
  * Whether loaded data reaches back to `previousStartMs`. `oldestRecordMs` null means the source is
- * complete (nothing was cut off). A day of slack covers a quiet first day with no orders.
+ * complete (nothing was cut off). Otherwise the oldest loaded order must be at or before the start:
+ * marketplace syncs and the 500-order webstore list can begin part way through a day, and a partly
+ * covered previous window would inflate the change.
  */
-export function hasHistory(oldestRecordMs: number | null, previousStartMs: number, toleranceMs = DAY_MS): boolean {
+export function hasHistory(oldestRecordMs: number | null, previousStartMs: number): boolean {
   if (oldestRecordMs === null) return true;
-  return oldestRecordMs <= previousStartMs + toleranceMs;
+  return oldestRecordMs <= previousStartMs;
+}
+
+/**
+ * Days a marketplace sync must cover so both the selected range and its previous window are loaded:
+ * from the earlier of the two starts to now, plus a 2-day buffer, between 7 and 365 days.
+ */
+export function requiredSyncDays(currentStartMs: number, previousStartMs: number | null, now: number): number {
+  const from = previousStartMs === null ? currentStartMs : Math.min(currentStartMs, previousStartMs);
+  const days = Math.ceil(Math.max(0, now - from) / DAY_MS);
+  return Math.max(7, Math.min(365, days + 2));
 }
 
 export function compareMetric(value: number, previous: number, covered: boolean): MetricComparison {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { periodWindows, previousWindowFor, compareMetric, hasHistory } from './periodComparison';
+import { periodWindows, previousWindowFor, compareMetric, hasHistory, requiredSyncDays } from './periodComparison';
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
@@ -138,11 +138,46 @@ describe('hasHistory', () => {
     expect(hasHistory(prevStart - DAY, prevStart)).toBe(true);
   });
 
-  it('allows a day of slack for a quiet first day', () => {
-    expect(hasHistory(prevStart + 20 * HOUR, prevStart)).toBe(true);
+  it('is true when the oldest record is exactly at the previous start', () => {
+    expect(hasHistory(prevStart, prevStart)).toBe(true);
+  });
+
+  it('is false when the oldest record is 10 hours after the previous start (partly covered)', () => {
+    expect(hasHistory(prevStart + 10 * HOUR, prevStart)).toBe(false);
   });
 
   it('is false when the data starts well after the previous start', () => {
     expect(hasHistory(prevStart + 3 * DAY, prevStart)).toBe(false);
+  });
+
+  it('Today has no history when the oldest order is from yesterday afternoon', () => {
+    const w = periodWindows('today', NOW);
+    const yesterdayAfternoon = TODAY_START - DAY + 14 * HOUR;
+    expect(hasHistory(yesterdayAfternoon, w.previous.startMs)).toBe(false);
+    expect(compareMetric(120, 100, hasHistory(yesterdayAfternoon, w.previous.startMs)).state).toBe('no-history');
+  });
+
+  it('a covered previous window gives a real delta', () => {
+    const w = periodWindows('today', NOW);
+    const c = compareMetric(120, 100, hasHistory(w.previous.startMs - HOUR, w.previous.startMs));
+    expect(c.state).toBe('up');
+    expect(c.delta).toBeCloseTo(0.2, 5);
+  });
+});
+
+describe('requiredSyncDays', () => {
+  it('reaches back to the previous window start, plus a 2-day buffer', () => {
+    const w = periodWindows('30d', NOW);
+    // previous window starts 59 days before today; ceil(59 days + 10 h) = 60, plus 2
+    expect(requiredSyncDays(w.current.startMs, w.previous.startMs, NOW)).toBe(62);
+  });
+
+  it('uses the current start when there is no previous window', () => {
+    expect(requiredSyncDays(TODAY_START - 29 * DAY, null, NOW)).toBe(32);
+  });
+
+  it('stays between 7 and 365 days', () => {
+    expect(requiredSyncDays(TODAY_START, TODAY_START - DAY, NOW)).toBe(7);
+    expect(requiredSyncDays(TODAY_START - 900 * DAY, null, NOW)).toBe(365);
   });
 });

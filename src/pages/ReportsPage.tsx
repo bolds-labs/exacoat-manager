@@ -15,7 +15,8 @@ import { TopProductsList } from '../components/analytics/TopProductsList';
 import { FinancialLedgerTable } from '../components/analytics/FinancialLedgerTable';
 import { FinancialChannel, exportFinancialReportToCsv } from '../lib/financialAnalyticsService';
 import { ALL_CHANNELS, CHANNEL_LABELS, buildPeriodComparison, useFinancialMetrics } from '../hooks/useFinancialMetrics';
-import { periodWindows, previousPeriodLabel, previousWindowFor, type ComparePreset, type TimeWindow } from '../lib/periodComparison';
+import { periodWindows, previousPeriodLabel, previousWindowFor, requiredSyncDays, type ComparePreset, type TimeWindow } from '../lib/periodComparison';
+import { joinList } from '../lib/listFormat';
 import { formatCurrency, getStoreDateKey, getStoreDayStartMs, getStoreDayEndMs, formatStoreDateFull } from '../lib/formatters';
 
 interface ReportsPageProps {
@@ -123,9 +124,12 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
     return previousWindowFor({ startMs, endMs }, now);
   }, [datePreset, startMs, endMs, now]);
 
+  // Refresh and sync must also load the previous window, or comparisons can never appear
+  const syncDays = useMemo(() => requiredSyncDays(startMs, previousWindow ? previousWindow.startMs : null, Date.now()), [startMs, previousWindow]);
+
   const comparison = useMemo(
-    () => buildPeriodComparison(allRecords, selectedChannels, { startMs, endMs }, previousWindow, oldestByChannel),
-    [allRecords, selectedChannels, startMs, endMs, previousWindow, oldestByChannel],
+    () => buildPeriodComparison(allRecords, selectedChannels, { startMs, endMs }, previousWindow, oldestByChannel, failedChannels),
+    [allRecords, selectedChannels, startMs, endMs, previousWindow, oldestByChannel, failedChannels],
   );
   const summary = comparison.current;
   const currency = summary.primaryCurrency || 'IDR';
@@ -147,7 +151,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
   const busy = isLoading || isRefreshing;
   const caption = (text: string) => <span className="text-[12px] text-faint">{text}</span>;
   const chip = (key: 'sales' | 'orders' | 'aov' | 'payout') =>
-    previousWindow ? (
+    previousWindow && comparison.comparable ? (
       <ChangeChip comparison={comparison.metrics[key]} periodLabel={prevLabel} formatValue={key === 'orders' ? count : money} />
     ) : null;
   const moreValue = MORE_RANGES.some((r) => r.value === datePreset) ? datePreset : '';
@@ -174,12 +178,12 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
           )}
           <Button
             icon={RefreshCw}
-            onClick={() => loadFinancialData(true, true, requiredHorizonDays)}
+            onClick={() => loadFinancialData(true, true, syncDays)}
             disabled={busy}
             className={busy ? '[&>svg:first-child]:animate-spin' : ''}
-            title={`Pull Shopee and TikTok Shop orders and escrow for ${dateLabel} (${requiredHorizonDays} days)`}
+            title={`Pull Shopee and TikTok Shop orders and escrow for ${dateLabel} and the period before (${syncDays} days)`}
           >
-            {isRefreshing ? `Syncing ${requiredHorizonDays} days...` : 'Refresh and sync'}
+            {isRefreshing ? `Syncing ${syncDays} days...` : 'Refresh and sync'}
           </Button>
         </div>
       </div>
@@ -279,18 +283,18 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
           <Button
             variant="primary"
             icon={RefreshCw}
-            onClick={() => loadFinancialData(true, true, requiredHorizonDays)}
+            onClick={() => loadFinancialData(true, true, syncDays)}
             disabled={isRefreshing}
             className={isRefreshing ? '[&>svg:first-child]:animate-spin' : ''}
           >
-            {isRefreshing ? 'Syncing Shopee...' : `Sync ${requiredHorizonDays} days from Shopee`}
+            {isRefreshing ? 'Syncing Shopee...' : `Sync ${syncDays} days from Shopee`}
           </Button>
         </div>
       )}
       {!isLoading && !error && failedChannels.length > 0 && (
         <div className="flex items-center gap-2.5 rounded-[12px] border border-st-wait-border bg-st-wait-bg px-4 py-2.5 text-[13px] text-st-wait-fg" role="status">
           <AlertTriangle className="h-4 w-4 flex-none" strokeWidth={1.8} aria-hidden />
-          {failedChannels.map((c) => CHANNEL_LABELS[c]).join(' and ')} could not be loaded. The numbers below leave {failedChannels.length > 1 ? 'them' : 'it'} out.
+          {joinList(failedChannels.map((c) => CHANNEL_LABELS[c]))} could not be loaded. The numbers below leave {failedChannels.length > 1 ? 'them' : 'it'} out.
         </div>
       )}
 
@@ -410,7 +414,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
                 dotClass={CHANNEL_DOT[ch]}
                 metric={summary.channelBreakdown[ch]}
                 currency={currency}
-                change={previousWindow ? comparison.channelSales[ch] : undefined}
+                change={previousWindow && comparison.comparable ? comparison.channelSales[ch] : undefined}
                 periodLabel={prevLabel}
                 selected={selectedChannels.includes(ch)}
                 failed={failedChannels.includes(ch)}
