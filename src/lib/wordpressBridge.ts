@@ -4731,7 +4731,16 @@ export async function deleteWordPressStaffUserDirect(
   }
 }
 
-export async function fetchProductsDirect(params?: { search?: string; page?: number; per_page?: number; category?: string; status?: string }): Promise<{
+export async function fetchProductsDirect(params?: {
+  search?: string;
+  page?: number;
+  per_page?: number;
+  category?: string;
+  status?: string;
+  include?: number[];
+  orderby?: 'date' | 'title' | 'price' | 'id' | 'include';
+  order?: 'asc' | 'desc';
+}): Promise<{
   success: boolean;
   products: Product[];
   total_products: number;
@@ -4744,6 +4753,9 @@ export async function fetchProductsDirect(params?: { search?: string; page?: num
   if (params?.page) url.searchParams.set('page', String(params.page));
   if (params?.category) url.searchParams.set('category', params.category);
   if (params?.status) url.searchParams.set('status', params.status);
+  if (params?.include && params.include.length > 0) url.searchParams.set('include', params.include.join(','));
+  if (params?.orderby) url.searchParams.set('orderby', params.orderby);
+  if (params?.order) url.searchParams.set('order', params.order);
   url.searchParams.set('per_page', String(params?.per_page || 25));
   url.searchParams.set('_t', String(Date.now()));
 
@@ -4758,6 +4770,52 @@ export async function fetchProductsDirect(params?: { search?: string; page?: num
     return { success: true, products: Array.isArray(data) ? data : [], total_products: total, max_pages: pages };
   } catch (err: any) {
     return { success: false, products: [], total_products: 0, max_pages: 1, error: err.message };
+  }
+}
+
+/** One webstore product (rupiah prices: `prepareWordPressRequest` adds the currency to product requests). */
+export async function fetchProductByIdDirect(id: number): Promise<{ success: boolean; product?: Product; error?: string }> {
+  const base = getWordPressBaseUrl();
+  try {
+    const res = await authenticatedFetch(`${base}/wp-json/wc/v3/products/${id}`, { headers: { Accept: 'application/json' } });
+    const data = await res.json();
+    if (res.ok && data?.id) return { success: true, product: data as Product };
+    return { success: false, error: data?.message || `HTTP ${res.status}` };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export interface ProductCategory {
+  id: number;
+  name: string;
+  slug: string;
+  parent: number;
+  count: number;
+}
+
+/** Every WooCommerce product category (100 per page, up to 10 pages). */
+export async function fetchProductCategoriesDirect(): Promise<{ success: boolean; categories: ProductCategory[]; error?: string }> {
+  const base = getWordPressBaseUrl();
+  const out: ProductCategory[] = [];
+  try {
+    for (let page = 1; page <= 10; page++) {
+      const res = await authenticatedFetch(
+        `${base}/wp-json/wc/v3/products/categories?per_page=100&page=${page}&hide_empty=false&orderby=name`,
+        { headers: { Accept: 'application/json' } },
+      );
+      if (!res.ok) return { success: false, categories: [], error: `HTTP ${res.status}` };
+      const data = await res.json();
+      if (!Array.isArray(data)) return { success: false, categories: [], error: 'Unexpected answer' };
+      data.forEach((c: any) =>
+        out.push({ id: Number(c.id), name: decodeDeep(String(c.name || '')), slug: String(c.slug || ''), parent: Number(c.parent) || 0, count: Number(c.count) || 0 }),
+      );
+      const pages = parseInt(res.headers.get('x-wp-totalpages') || '1', 10);
+      if (page >= pages) break;
+    }
+    return { success: true, categories: out };
+  } catch (err: any) {
+    return { success: false, categories: [], error: err.message };
   }
 }
 
@@ -5492,8 +5550,13 @@ export async function saveProductConfiguratorProfileDirect(profile: Partial<Devi
       return { success: false, error: 'Valid product_id is required' };
     }
 
+    // Prices are edited only on the Products screen. /configurator/save writes any base_price it receives
+    // into the WooCommerce price, so Studio saves never send one; WordPress then keeps the profile's base
+    // price equal to the product price.
+    const { base_price: _ignoredBasePrice, ...profileWithoutPrice } = profile;
+    void _ignoredBasePrice;
     const payload = {
-      ...profile,
+      ...profileWithoutPrice,
       product_id: targetProductId,
       ...(cleanVariants !== undefined ? { variants: cleanVariants } : {}),
       ...(cleanPresets !== undefined ? { presets: cleanPresets } : {}),
@@ -5676,16 +5739,8 @@ export async function setProductPriceDirect(
         message: data.message,
       };
     }
-    // Fallback: WC v3 products endpoint
-    const wcUrl = `${base}/wp-json/wc/v3/products/${productId}`;
-    const wcRes = await authenticatedFetch(wcUrl, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ regular_price: String(price) }),
-    });
-    if (wcRes.ok) {
-      return { success: true, productId, price, message: `Price updated to IDR ${price.toLocaleString('id-ID')}` };
-    }
+    // No silent WooCommerce fallback: it changed the price without updating the configurator profile's
+    // base price (which the webstore configurator reads first) and still reported success.
     return { success: false, error: data?.message || `HTTP ${res.status}` };
   } catch (err: any) {
     return { success: false, error: err.message };
@@ -8586,6 +8641,7 @@ export async function updateProductDirect(
     short_description?: string;
     images?: Array<{ id?: number; src?: string; alt?: string; name?: string }>;
     meta_data?: Array<{ key: string; value: any }>;
+    categories?: Array<{ id: number }>;
   }
 ): Promise<{ success: boolean; product?: Product; error?: string }> {
   const base = getWordPressBaseUrl();

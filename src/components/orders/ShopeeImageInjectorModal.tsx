@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Modal } from '../ui/Modal';
+import { Select } from '../ds/Select';
 import {
   ShopeeListingItem,
   TikTokListingItem,
@@ -2017,17 +2018,12 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
                           <label className="text-[11px] font-medium text-zinc-400 block mb-1">
                             Cover Skin Texture
                           </label>
-                          <select
+                          <Select
+                            aria-label="Cover skin texture"
                             value={coverFinishId}
-                            onChange={(e) => setCoverFinishId(e.target.value)}
-                            className="w-full min-h-[44px] px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-700 text-xs text-zinc-200 focus:outline-none focus:border-[#f3aa18]"
-                          >
-                            {allFinishes.map((f) => (
-                              <option key={f.id} value={f.id}>
-                                {f.name} {f.group ? `(${f.group})` : ''}
-                              </option>
-                            ))}
-                          </select>
+                            onChange={setCoverFinishId}
+                            options={allFinishes.map((f) => ({ value: f.id, label: f.group ? `${f.name} (${f.group})` : f.name }))}
+                          />
                         </div>
 
                         <div>
@@ -2455,17 +2451,17 @@ export const ShopeeImageInjectorModal: React.FC<ShopeeImageInjectorModalProps> =
 
                           <div className="flex items-center gap-1.5">
                             <span className="text-[10px] text-zinc-400">Insert at:</span>
-                            <select
+                            <Select
+                              aria-label="Insert new variants at"
+                              className="w-[210px]"
                               value={insertPlacement}
-                              onChange={(e) =>
-                                setInsertPlacement(e.target.value as VariantInsertPlacement)
-                              }
-                              className="px-2 py-1 rounded-lg bg-zinc-900 border border-zinc-700 text-[11px] text-zinc-200 focus:outline-none focus:border-[#f3aa18]"
-                            >
-                              <option value="after_signature">After Signature skins</option>
-                              <option value="top">Top of variant list (#1)</option>
-                              <option value="bottom">Bottom of variant list</option>
-                            </select>
+                              onChange={(v) => setInsertPlacement(v as VariantInsertPlacement)}
+                              options={[
+                                { value: 'after_signature', label: 'After Signature skins' },
+                                { value: 'top', label: 'Top of variant list (#1)' },
+                                { value: 'bottom', label: 'Bottom of variant list' },
+                              ]}
+                            />
                           </div>
                         </div>
 

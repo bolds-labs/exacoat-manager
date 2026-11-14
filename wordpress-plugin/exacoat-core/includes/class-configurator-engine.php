@@ -3927,12 +3927,10 @@ class Exacoat_Configurator_Engine {
 			return new WP_REST_Response( [ 'success' => false, 'message' => 'Product not found' ], 404 );
 		}
 
+		// Only the regular price is set: WooCommerce works out the active price on save, so a running
+		// sale price is kept (forcing _price to the regular price used to end sales silently).
 		$product->set_regular_price( $price );
-		$product->set_price( $price );
 		$product->save();
-
-		update_post_meta( $product_id, '_regular_price', $price );
-		update_post_meta( $product_id, '_price', $price );
 
 		// Update base_price in profile metadata if present
 		$meta = get_post_meta( $product_id, self::PROFILE_META_KEY, true );
