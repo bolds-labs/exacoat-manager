@@ -55,6 +55,6 @@ Review fixes, commit `fix(products): stable configurator base price, sale-safe p
 4. **Texture scale** is back in Studio's Setup column.
 5. **Minors**: trash-hidden rows show under the Trash filter and are dropped from the hidden set when a fresh load returns them; saved overrides are replaced by fresh data (`onLoaded`, tested); Studio search placeholder no longer mentions slugs; `parsePriceInput` handles "129000.00" and rejects non-zero decimals; ConfiguratorSection clears the previous profile and ignores stale answers; MarketplacesSection ignores stale searches (request id) and resets the search term per product.
 
-Checks: `php -l` clean on both changed plugin files; `npx tsc --noEmit` clean; `npm test` and `npm run build` results below. Browser: read-only reload of Products and Studio after the change; nothing saved.
+Checks: `php -l` clean on both changed plugin files; `npx tsc --noEmit` clean; `npm test` 54 files, 554 tests passed (new: `ProductPanel.test.tsx` 4, `ProductList.test.tsx` 2, `DuplicateProductModal.test.tsx` 2, plus helper, bridge and request tests); `npm run build` passed with zips rebuilt at 0.1.228, initial JS 669,647 bytes. Browser: read-only reload of Products and Studio after the change; nothing saved.
 
 Still open (as documented): no marketplace column on list rows; exacoat-web fallbacks.
