@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Plugin**: new read-only order counts endpoint, so tab numbers are exact across all orders. Install the new plugin zip to see them; until then tabs show no number.
 - **Status names**: order statuses use the same names as WooCommerce (for example Payment confirmed, Preparing order, Waiting for Courier Pickup).
 - **Activity notes**: automatic notes such as status changes now show the staff member who made the change. System notes no longer repeat System twice.
+- **Edit configuration**: the item pop-up now offers exactly what exacoat.com offers for the product (layers, finishes in Studio group order, stock, coverage, logo and custom cutouts, variants) and recalculates the price the webstore way. Staff can still change the price; warranty, redeem and marketplace items keep theirs unless staff use the webstore price. Saved item details keep their wording.
 - Printed labels, packing slips and invoices are unchanged.
 
 ---
