@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import React, { useMemo, useState } from 'react';
 import { DateRangePicker, DatePreset } from '../components/ui/DateRangePicker';
 import { GlassCard } from '../components/ui/GlassCard';
 import { CardEyebrow } from '../components/ui/CardEyebrow';
@@ -9,22 +9,10 @@ import { TopFinancialProductsCard } from '../components/analytics/TopFinancialPr
 import { FinancialLedgerTable } from '../components/analytics/FinancialLedgerTable';
 import {
   FinancialChannel,
-  UnifiedFinancialRecord,
-  normalizeWebstoreOrder,
-  normalizeShopeeOrder,
-  normalizeTikTokOrder,
   aggregateFinancialMetrics,
   exportFinancialReportToCsv,
 } from '../lib/financialAnalyticsService';
-import {
-  fetchOrdersDirect,
-  fetchShopeeOrdersDirect,
-  fetchTikTokOrdersDirect,
-  syncShopeeOrdersDirect,
-  syncTikTokOrdersDirect,
-  ShopeeOrder,
-  TikTokOrder,
-} from '../lib/wordpressBridge';
+import { useFinancialMetrics } from '../hooks/useFinancialMetrics';
 import {
   formatCurrency,
   getStoreDateKey,
@@ -32,7 +20,6 @@ import {
   getStoreDayEndMs,
   formatStoreDateFull,
 } from '../lib/formatters';
-import { Order } from '../types';
 import {
   RefreshCw,
   DollarSign,
@@ -60,17 +47,6 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
     'shopee',
     'tiktok',
   ]);
-
-  const [webOrders, setWebOrders] = useState<Order[]>([]);
-  const [shopeeOrders, setShopeeOrders] = useState<ShopeeOrder[]>([]);
-  const [tiktokOrders, setTikTokOrders] = useState<TikTokOrder[]>([]);
-
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
-  const hasAutoSyncedEscrowRef = useRef(false);
-  const initialLoadRef = useRef(false);
 
   const { startMs, endMs, dateLabel } = useMemo(() => {
     const todayKey = getStoreDateKey(Date.now());
@@ -178,6 +154,19 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
     return Math.max(7, Math.min(365, days + 2));
   }, [startMs]);
 
+  const {
+    records: allRecords,
+    shopeeOrders,
+    isLoading,
+    isRefreshing,
+    error,
+    lastRefreshedAt,
+    reload,
+  } = useFinancialMetrics({ horizonDays: requiredHorizonDays, autoSyncEscrow: true });
+
+  const loadFinancialData = (quiet = false, syncChannels = false, days?: number) =>
+    reload({ quiet, syncChannels, days });
+
   // Evaluate Shopee order cache date coverage against active horizon
   const shopeeCoverage = useMemo(() => {
     if (shopeeOrders.length === 0) {
@@ -210,104 +199,6 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
       missingCoverage,
     };
   }, [shopeeOrders, startMs]);
-
-  const loadFinancialData = useCallback(async (quiet = false, syncChannels = false, customDays?: number) => {
-    if (!quiet) setIsLoading(true);
-    else setIsRefreshing(true);
-    setError(null);
-
-    const daysToSync = customDays || Math.max(30, requiredHorizonDays);
-    const limitToSync = Math.min(3000, Math.max(500, daysToSync * 15));
-
-    try {
-      const webPromise = fetchOrdersDirect({ per_page: 500 });
-
-      const shopeePromise = syncChannels
-        ? syncShopeeOrdersDirect(daysToSync, limitToSync)
-            .then(res => {
-              if (res.success && Array.isArray(res.orders)) return res;
-              return fetchShopeeOrdersDirect();
-            })
-            .catch(() => fetchShopeeOrdersDirect())
-        : fetchShopeeOrdersDirect();
-
-      const tiktokPromise = syncChannels
-        ? syncTikTokOrdersDirect(daysToSync, limitToSync)
-            .then(res => {
-              if (res.success && Array.isArray(res.orders)) return res;
-              return fetchTikTokOrdersDirect();
-            })
-            .catch(() => fetchTikTokOrdersDirect())
-        : fetchTikTokOrdersDirect();
-
-      const [webRes, shpRes, ttRes] = await Promise.allSettled([
-        webPromise,
-        shopeePromise,
-        tiktokPromise,
-      ]);
-
-      if (webRes.status === 'fulfilled' && webRes.value.success && Array.isArray(webRes.value.orders)) {
-        setWebOrders(webRes.value.orders);
-      } else {
-        setWebOrders([]);
-      }
-
-      let loadedShopee: ShopeeOrder[] = [];
-      if (shpRes.status === 'fulfilled' && shpRes.value.success && Array.isArray(shpRes.value.orders)) {
-        loadedShopee = shpRes.value.orders;
-        setShopeeOrders(loadedShopee);
-      } else {
-        setShopeeOrders([]);
-      }
-
-      let loadedTikTok: TikTokOrder[] = [];
-      if (ttRes.status === 'fulfilled' && ttRes.value.success && Array.isArray(ttRes.value.orders)) {
-        loadedTikTok = ttRes.value.orders;
-        setTikTokOrders(loadedTikTok);
-      } else {
-        setTikTokOrders([]);
-      }
-
-      setLastRefreshedAt(new Date());
-
-      // If cached marketplace orders do not yet have escrow fee details synced, trigger a background sync once
-      if (!syncChannels && !hasAutoSyncedEscrowRef.current) {
-        const needsShopeeEscrow = loadedShopee.some(
-          o => o.pay_time && o.order_status !== 'CANCELLED' && !o.escrow_synced
-        );
-        const needsTikTokEscrow = loadedTikTok.some(
-          o => o.pay_time && o.order_status !== 'CANCELLED' && !o.escrow_synced
-        );
-        if (needsShopeeEscrow || needsTikTokEscrow) {
-          hasAutoSyncedEscrowRef.current = true;
-          loadFinancialData(true, true, daysToSync);
-        }
-      }
-    } catch (err: any) {
-      console.warn('Failed to load multi-channel financial data:', err);
-      setError(err?.message || 'Could not synchronize financial data.');
-    } finally {
-      setIsLoading(false);
-      if (syncChannels || hasAutoSyncedEscrowRef.current === false) {
-        setIsRefreshing(false);
-      }
-    }
-  }, [requiredHorizonDays]);
-
-  useEffect(() => {
-    if (!initialLoadRef.current) {
-      initialLoadRef.current = true;
-      loadFinancialData();
-    }
-  }, [loadFinancialData]);
-
-  const allRecords = useMemo(() => {
-    const list: UnifiedFinancialRecord[] = [];
-    webOrders.forEach(o => list.push(normalizeWebstoreOrder(o)));
-    shopeeOrders.forEach(o => list.push(normalizeShopeeOrder(o)));
-    tiktokOrders.forEach(o => list.push(normalizeTikTokOrder(o)));
-    return list;
-  }, [webOrders, shopeeOrders, tiktokOrders]);
 
   const summary = useMemo(() => {
     return aggregateFinancialMetrics(allRecords, selectedChannels, startMs, endMs);
