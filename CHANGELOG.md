@@ -33,6 +33,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Same numbers everywhere**: the Dashboard now counts Shopee and TikTok Shop orders too and uses the same rules as Sales & Reports, so both pages show the same totals for the same period.
 - **Sales & Reports**: same content and controls on the new design: range tabs, channel toggles, KPI cards with change against the previous period, a cleaner sales chart, one card per channel with fee lines on demand, and the orders ledger in the Orders table style. CSV export and the Shopee history sync work as before.
 
+### Design: Finishes & Stock
+- **One place for finishes**: Materials & Stock is now Finishes & Stock and is the only editor for finishes. The Master Textures pop-up in Configurator Studio is gone; Studio's Finishes button opens this screen (in a new tab while a device is open, so device edits are kept).
+- **Screen**: finishes listed by storefront group with stock, Active and order controls on each row, filters (All, Active, Inactive, Out of stock, Coming soon), group filter and search. Edit opens a side panel with every field, the three image slots with the Media Library, shading tone, badge, custom per device and logo cutout. Groups (order, add, rename, delete when empty, display style) and price tiers have their own pop-ups.
+- **Fix**: saving a finish now keeps fields the form did not show. Before, an edit on Materials & Stock removed the badge and switched inactive finishes back on, and a Studio save reset the accent price override.
+- **Global looks**: the store-wide presets list moved to Studio's Presets tab.
+
 ---
 
 ## [0.1.227] - 2026-11-14

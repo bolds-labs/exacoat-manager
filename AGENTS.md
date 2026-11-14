@@ -472,8 +472,7 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   Viewport rendering and simulation evaluate textures in order:
   `customLayerTexUrl || activeFinish.texture_url || activeFinish.thumbnail || ''`.
 - **Global Master Textures Management**:
-  - Managed globally in **Materials & Finishes Inventory** (`MaterialsStockPage.tsx`) via dedicated Edit Material modal and "Master Texture URL (v2)" field.
-  - Directly accessible inside **Configurator Studio** (`ConfiguratorStudioPage.tsx`) via the "Master Textures (v2)" header button and layer inspector shortcut, enabling operators to inspect live previews and update master textures without leaving the studio.
+  - Managed only on the **Finishes & Stock** screen (`MaterialsStockPage.tsx`, tab key `materials`), the one editor for global finishes (see section 63). Configurator Studio has no finish editor: its "Finishes" top bar button and the layer inspector "Tone Settings" link open that screen.
 - **Category Combobox Dropdown**:
   Replaces overflowing horizontal category button strips with a compact, glassmorphic combobox dropdown featuring real-time brand search, live device counts per category, and 1-click reset to "All Categories".
 
@@ -528,7 +527,7 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   WordPress core's `update_metadata()` runs `$meta_value = wp_unslash( $meta_value )`. When saving JSON profiles containing escaped slashes in URLs or quotes, unslashing corrupts the JSON string. `update_post_meta( $id, $key, wp_slash( wp_json_encode( $profile ) ) )` is strictly mandatory.
 - **Modal Stacking & z-Index Hierarchy**:
   - Fullscreen Studio runs at `z-[100]`.
-  - In-studio dialogs (Master Textures modal, Shading Extractor modal) run at `z-[120]` to `z-[150]`.
+  - In-studio dialogs (Shading Extractor modal, global looks manager) run at `z-[120]` to `z-[160]`.
   - `MediaLibraryModal` accepts a configurable `zIndex` prop defaulting to `'z-50'`, and runs at `zIndex="z-[200]"` in Studio so it always renders cleanly on top of any active dialog.
 
 ---
@@ -540,7 +539,7 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 - **The Hybrid Architecture & Finish-Level Tone Invariant**:
   The optimal approach combines baked 3D raytraced precision with real-time dynamic slider control:
   1. **One-Time Extraction from Matte White 3D Render**: `POST /configurator/extract-shading` processes a neutral white CAD render (`iPhone-17-Pro-Skins-Matte-White.png`), extracting a transparent Multiply Shadow PNG (`mix-blend-mode: multiply`) and a Screen Highlight PNG (`mix-blend-mode: screen`).
-  2. **Finish-Level Shading & Highlight Tone**: Because different vinyl finishes reflect light differently (e.g. dark textured finishes like Black Camo benefit from stronger highlights, while bright white finishes require deeper multiply shadows), shadow multiply depth (`shadow_opacity`) and screen highlight intensity (`highlight_opacity`) are managed globally per finish on `GlobalFinish` in Master Textures (v2).
+  2. **Finish-Level Shading & Highlight Tone**: Because different vinyl finishes reflect light differently (e.g. dark textured finishes like Black Camo benefit from stronger highlights, while bright white finishes require deeper multiply shadows), shadow multiply depth (`shadow_opacity`) and screen highlight intensity (`highlight_opacity`) are managed globally per finish on `GlobalFinish` on the Finishes & Stock screen.
   3. **Single-Source Specular Highlight Fallback**: When viewing angles configure a single universal shading map (`shadow_png_url`), the storefront canvas (`stacked-layer-canvas.tsx`) and composite generator (`device-skin-configurator.tsx`) automatically fall back to `shadowSrc` for screen highlights (`currentView.highlight_png_url || shadowSrc`), guaranteeing highlights render whenever highlight opacity exceeds 0%.
   4. **High-Contrast Mask & Cutout Preview Slots**: In Configurator Studio, all mask and cutout thumbnail slots (Skin Part Alpha Mask, Model Coverage Perimeter Mask, Logo Cutout Mask, Stylus / Custom Cutout Mask, and 3D Shading Map) use bright white backgrounds (`bg-white border-white/20 shadow-sm`) so dark transparent PNG paths and vector shapes remain clearly visible to operators.
 
@@ -794,7 +793,7 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 
 - **Universal Finish Group Ordering & Storefront Tab Priority**:
   - Group sequence is persisted storewide in WordPress database option `exacoat_global_finish_groups` via REST endpoint `POST /wp-json/exacoat-core/v1/finishes/reorder-groups`.
-  - In Configurator Studio, the Master Textures modal provides a "Manage Groups" tray where operators can move groups left/right (up/down) and add new groups (e.g. placing "Limited" at index 0).
+  - The Finishes & Stock screen's Groups pop-up (`FinishGroupsModal.tsx`) moves groups up/down and adds new groups (e.g. placing "Limited" at index 0).
   - Storefront and Live Studio Dock (`parseV2ConfiguratorProfile` and `testPartGroups`): Sort group tabs strictly by `storedFinishGroups.indexOf(groupName)`. Placing "Limited" first immediately bubbles the Limited tab to the front of all v2 device configurators storewide.
 
 - **WordPress Media Library 2-Column List View (`MediaLibraryModal.tsx`)**:
@@ -934,7 +933,7 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 
 - **Out of Stock Inventory Flag for Master Finishes (`in_stock`)**:
   - Global finishes support `in_stock: boolean` (default `true`).
-  - Finishes marked out of stock (such as Patina) display out-of-stock indicators, are disabled from buyer selection, and can be toggled in real time in Configurator Studio's Master Textures modal.
+  - Finishes marked out of stock (such as Patina) display out-of-stock indicators, are disabled from buyer selection, and can be toggled in real time from the Stock control on each row of the Finishes & Stock screen.
 
 - **Studio Media Slot Previews (No Raw URL Inputs)**:
   - Raw text inputs for Alpha Masks, Hardware Chassis Renders, and Cutout Masks (Logo, Stylus, Model Cut) are replaced with clickable 56x56 square thumbnail previews opening the WordPress Media Library modal directly.
@@ -1009,7 +1008,7 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Different vinyl materials reflect light differently (e.g. dark textured finishes like Black Camo or Black Matte require stronger highlights, while bright white finishes require deeper multiply shadows).
   - Finishes support individual `shadow_opacity` and `highlight_opacity` values on `GlobalFinish`, saved to WordPress options via `saveGlobalFinishDirect` / `rest_save_finish`.
   - Storefront canvas (`stacked-layer-canvas.tsx`), composite generator (`device-skin-configurator.tsx`), and Studio viewport evaluate finish-level opacity before falling back to angle defaults.
-- **Master Textures (v2) Structured Card Architecture**:
+- **Finish Editing (superseded layout)**: the Studio Master Textures card list was replaced by the Finishes & Stock screen (section 63). The fields below still exist in its Edit panel:
   - Replaced unstructured horizontal form rows with clean, structured cards.
   - Header: Swatch thumbnail mini, Finish Name, Group dropdown, Slug, Stock toggle, Extra Price input, Delete, and Save button.
   - Media Grid: 3 dedicated slots for Swatch Thumbnail (150x150), Master Texture URL v2 (1000x1000), and Master Texture Big (2000x2000).
@@ -1023,16 +1022,16 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 
 - **Finish Reordering within Groups Invariant**:
   - Finishes within each group are ordered strictly by an explicit numeric `order` index (`(a.order ?? 0) - (b.order ?? 0)`).
-  - Studio Master Textures modal provides Move Up (`ChevronUp`) and Move Down (`ChevronDown`) controls on each finish card alongside a `#pos` badge.
+  - Each row on the Finishes & Stock screen has Move up and Move down buttons and its position number.
   - Moving a finish swaps position with adjacent items in the same group, normalizes group sequence (0, 1, 2, ...), and immediately persists the complete order to WordPress database options via `POST /wp-json/exacoat-core/v1/finishes/save-all`.
   - Storefront engine (`configurator-loader.ts`) sorts choices by `(a.order ?? 0) - (b.order ?? 0)`, ensuring customer-facing swatches display in the exact custom sequence configured in Studio.
 - **Global Finish Deactivation Invariant (`is_active`)**:
   - Difference from Stock Status:
     - "Out of Stock" (`in_stock: false`) keeps the swatch visible to customers with an unavailable state.
     - "Inactive" (`is_active: false`) completely removes and hides the swatch from the customer configurator across all devices.
-  - Admin Visibility: Deactivated finishes remain visible in Studio Master Textures with a distinct "Inactive: Hidden from Storefront" badge and dimmed card styling (`bg-zinc-950/60 border-dashed border-zinc-700/60`) so operators can re-activate or edit them at any time without data loss.
+  - Admin Visibility: Deactivated finishes stay listed on the Finishes & Stock screen with an Inactive chip and a dimmed row, so operators can re-activate or edit them at any time without data loss.
   - 1-Click Toggle: Operators can toggle active status with 1 click using the Active / Inactive button in the card header, synchronizing immediately via `POST /wp-json/exacoat-core/v1/finishes/toggle-active`.
-  - Status Filtering: Master Textures modal header includes live filter pills: All, Active, and Inactive with dynamic device counts.
+  - Status Filtering: the Finishes & Stock screen has filter tabs All, Active, Inactive, Out of stock and Coming soon with counts.
 
 ---
 
@@ -1091,10 +1090,10 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Store administrators frequently create finish groups (e.g. "Other", "Limited Drop", "Wood Series") before assigning finishes to them.
   - User-created finish groups must be permanently preserved in the database option `_exacoat_finish_groups` even if they currently contain 0 finishes.
   - `get_finish_groups()` in `class-configurator-engine.php` must NEVER prune non-empty or user-configured groups simply because they have 0 finishes. Pruning is strictly limited to obsolete legacy defaults (`Pastels & Colors`, `Special editions`).
-- **Group Management Tray & Lifecycle Sync**:
-  - Reordering or adding groups (`handleAddNewGroup`, `handleMoveGroup`) synchronizes `storedFinishGroups` with the backend response (`res.groups`).
-  - Studio displays live finish counts on each group chip (e.g. `Other (0)`).
-  - Admins can explicitly delete empty groups with 1 click via `handleDeleteGroup`, while deletion of non-empty groups is blocked with a descriptive notice prompting finish reassignment first.
+- **Group Management & Lifecycle Sync** (Finishes & Stock screen, Groups pop-up):
+  - Reordering, adding and deleting groups call `reorderFinishGroupsDirect` and adopt the backend response (`res.groups`); a failed call restores the previous order.
+  - Each group shows its live finish count, including 0.
+  - Delete is enabled only for empty groups (`canDeleteGroup`); non-empty groups say how many finishes to move first.
 
 ---
 
@@ -1122,7 +1121,7 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 ## 50. Finish Group Renaming Architecture & 0.22mm Physical Skin Micro-Shadow Invariant
 
 - **Finish Group Renaming Architecture & Atomic Migration**:
-  - Store administrators can rename finish groups directly within the Group Management Tray in Configurator Studio's Master Textures modal.
+  - Store administrators rename finish groups in the Groups pop-up of the Finishes & Stock screen.
   - Endpoint `POST /wp-json/exacoat-core/v1/finishes/rename-group` (`rest_rename_finish_group`) in `class-configurator-engine.php` atomically:
     1. Updates the group name in WordPress database option `_exacoat_finish_groups`, strictly preserving the existing tab sequence.
     2. Iterates across all finishes stored in `exacoat_global_finishes` and migrates any finish where `group === old_name` to `new_name`.
@@ -1506,8 +1505,8 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Never store surcharge tiers in browser `localStorage` (Rule 3).
 - **Cross-Surface Administration**:
   - Reusable modal `FinishSurchargeTiersModal.tsx` provides live bracket simulation, tier editing, adding/deleting brackets, and database saving.
-  - Accessible from both **Configurator Studio** (`ConfiguratorStudioPage.tsx` top bar and Pricing inspector tab) and **Materials & Finishes Inventory** (`MaterialsStockPage.tsx` hero actions).
-  - Materials stock page allows setting both `extra_price` (Main Skin) and `accent_extra_price` (Accent Override) with real-time feedback.
+  - Accessible from **Configurator Studio** (`ConfiguratorStudioPage.tsx` top bar and Pricing inspector tab) and the **Finishes & Stock** screen header ("Price tiers").
+  - The Finishes & Stock Edit panel sets both `extra_price` (Main skin extra) and `accent_extra_price` (Accent override).
 - **Headless Storefront Parity (`exacoat-web`)**:
   - `configurator-loader.ts` queries and caches global surcharge tiers alongside finishes, computing `finishExtra` and `totalExtra` for each choice.
   - Swatch selectors, live configurator viewports, and checkout carts reflect identical tier-adjusted totals seamlessly.
@@ -1961,3 +1960,15 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 - **Reviews card**: pending reviews from `GET /reviews?status=pending` (ids arrive as strings; `normalizePendingReviews` converts them), count from `stats.pending`. Approve and Reject call `updateReviewStatusDirect` like the Reviews screen, after a confirmation pop-up.
 - **Open order**: switches to `orders` and sets `#orders?order={id}`; `OrdersView` opens the order panel from the URL on mount.
 
+---
+
+## 63. One Finishes Editor (Finishes & Stock)
+
+- **One editor**: global finishes (`exacoat_global_finishes`), finish groups (`exacoat_global_finish_groups`), group display settings (`exacoat_finish_group_settings`) and price tiers (`exacoat_finish_surcharge_tiers`) are edited only on the **Finishes & Stock** screen (`src/pages/MaterialsStockPage.tsx`, tab key `materials`, aliases `#finishes`, `#stock`). The Studio Master Textures pop-up was removed. Studio's "Finishes" button and "Tone Settings" link open the screen: in the same tab from the catalog, in a new tab while a device is open (Studio has no unsaved-changes tracking for devices). Studio re-reads finishes, groups and tiers when its window regains focus.
+- **Layout**: one card per group in stored group order (empty groups included), rows sorted by `order` then name (`src/lib/finishesEditor.ts`). Row controls save immediately: Stock select (`toggleFinishStockDirect`), Active switch (`toggleFinishActiveDirect`), Move up/down (`saveAllGlobalFinishesDirect` with the renumbered group and the stored groups). Each reverts on failure.
+- **Edit panel** (`src/components/finishes/FinishEditPanel.tsx`, kit Drawer): every finish field, three Media Library slots (swatch, master texture, big texture), shading sliders, surface shading, badge, custom per device, disable logo cutout. One Save; the header shows Unsaved changes; closing with changes asks to discard. The same panel adds finishes and blocks a slug that already exists (saving an existing slug would overwrite that finish).
+- **Full-record save invariant**: `/finishes/save` resets fields it does not receive (`accent_extra_price` to 0, `is_active` to true, badge and `is_custom_per_device` cleared). Saves must always send the whole finish: `buildFinishSavePayload(original, draft)` spreads the original and overlays the draft. The old Materials edit wiped badges and re-activated inactive finishes; the old Studio card save wiped the accent override.
+- **Pickers over the drawer**: `MediaLibraryModal` (legacy Modal, `z-[200]`) opens above the kit Drawer (`z-[110]`). The panel's `blockClose` prop keeps the drawer open while the picker is up, because Escape reaches both.
+- **Groups pop-up** (`FinishGroupsModal.tsx`, kit Modal): order, add, rename (Enter saves), delete when empty, and display settings (Cards or Dots, collapsed by default, show more after N) inline per group.
+- **Global looks**: the store-wide bespoke presets list (`exacoat_configurator_presets`) is not a finish field; it stays in Studio, opened from the Presets inspector tab ("Global looks"). The storefront shows only per-device looks.
+- **Known limit**: `toggleFinishStockDirect` and `toggleFinishActiveDirect` report success even when the request fails (they fall back to the local cache), so a failed row toggle can look saved until the next refresh.
