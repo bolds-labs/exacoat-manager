@@ -329,6 +329,11 @@ export const App: React.FC = () => {
     }
   }, [user, isAffiliatePortal, showToast]);
 
+  const refreshAll = useCallback(() => {
+    void refreshOrderCounts();
+    return loadWorkspaceData(true);
+  }, [refreshOrderCounts, loadWorkspaceData]);
+
   useEffect(() => {
     if (user && !isAffiliatePortal && needsOrderList && !ordersLoaded) {
       loadWorkspaceData();
@@ -476,10 +481,7 @@ export const App: React.FC = () => {
       case 'testing':
         return (
           <TestingSandboxPage
-            onRefreshData={() => {
-        void refreshOrderCounts();
-        return loadWorkspaceData(true);
-      }}
+            onRefreshData={refreshAll}
             onNavigate={handleTabChange}
           />
         );
@@ -500,7 +502,7 @@ export const App: React.FC = () => {
     <Layout
       currentTab={currentTab}
       onTabChange={handleTabChange}
-      onRefreshData={() => loadWorkspaceData(true)}
+      onRefreshData={refreshAll}
       isRefreshing={isRefreshing}
       pendingOrdersCount={orderCounts ? orderCounts.webstore.to_prepare : processingCount}
       navCounts={orderCounts ? { orders: orderCounts.webstore.to_prepare, rma: orderCounts.webstore.warranty_pending } : undefined}

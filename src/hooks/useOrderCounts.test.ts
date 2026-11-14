@@ -60,4 +60,20 @@ describe('useOrderCounts', () => {
     expect(calls).toBe(2);
     expect(result.current.counts).toEqual(sample);
   });
+
+  it('shares one fetch between concurrent mounts and a refresh during the initial load', async () => {
+    let release: (v: unknown) => void = () => {};
+    impl = () => new Promise((resolve) => { release = resolve; });
+    const a = renderHook(() => useOrderCounts());
+    const b = renderHook(() => useOrderCounts());
+    let pending: Promise<void>;
+    act(() => { pending = a.result.current.refresh(); });
+    expect(calls).toBe(1);
+    await act(async () => {
+      release({ success: true, counts: sample });
+      await pending;
+    });
+    await waitFor(() => expect(b.result.current.counts).toEqual(sample));
+    expect(calls).toBe(1);
+  });
 });
