@@ -30,7 +30,7 @@ export function extractDeviceKeywords(rawName: string): string {
 const MARKETPLACE = /shopee|tiktok|tokopedia|lazada/i;
 
 /**
- * Warranty, redeem and marketplace items carry a price that is not a webstore price, so Edit
+ * Warranty, redeem, endorsement and marketplace items carry a price that is not a webstore price, so Edit
  * configuration leaves it alone unless staff press "Use webstore price".
  */
 export function keepsOwnPrice(order: Order, item: OrderItem | null): boolean {
@@ -38,6 +38,10 @@ export function keepsOwnPrice(order: Order, item: OrderItem | null): boolean {
   const rmaType = String(order.rma?.order_type || '').toLowerCase();
   if (!order.rma?.is_parent_order && (rmaType === 'warranty' || rmaType === 'redeem')) return true;
   const meta = Array.isArray(order.meta_data) ? order.meta_data : [];
+  // Same endorsement detection as financialAnalyticsService.
+  if (meta.some((m) => (m.key === '_order_badge' && m.value === 'ENDORSEMENT') || (m.key === '_is_endorsement' && m.value === 'yes'))) {
+    return true;
+  }
   if (meta.some((m) => (m.key === '_rma_marketplace_channel' || m.key === '_marketplace_invoice') && String(m.value ?? '').trim())) {
     return true;
   }

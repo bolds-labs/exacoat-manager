@@ -165,9 +165,6 @@ describe('preselectFromSpecs and selectionToSpecs', () => {
     expect(preselectFromSpecs(data, [{ label: 'Finish', value: 'Woven' }]).selection.layers[BACK]).toBe(
       choice(BACK, 'Woven').id,
     );
-    expect(preselectFromSpecs(data, [{ label: 'Variation', value: 'Emerald Green' }]).selection.layers[BACK]).toBe(
-      choice(BACK, 'Emerald Green').id,
-    );
   });
 
   it('flags a finish that no longer exists and keeps it on save', () => {
@@ -250,5 +247,63 @@ describe('fetchWebstoreConfigurator', () => {
   it('reports network failures', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
     expect(await fetchWebstoreConfigurator(1)).toEqual({ ok: false, status: 'network' });
+  });
+});
+
+describe('fix round 1', () => {
+  const ipad: WebstoreConfigurator = {
+    ...data,
+    productName: 'iPad Air 11" / 13" (M4) Skins',
+    variants: [
+      { id: 'series', name: 'Series', options: [{ id: '11', name: '11"', price_diff: 0 }, { id: '13', name: '13"', price_diff: 40000 }] },
+    ],
+  };
+
+  it('keeps warranty claim specs exactly and adds no Back, Coverage or Logo lines', () => {
+    const specs = [
+      { label: 'Claimed Part', value: 'Camera' },
+      { label: 'Original Invoice', value: '587139186755077421' },
+      { label: 'Variation', value: 'Emerald Green' },
+    ];
+    const { selection, missing } = preselectFromSpecs(data, specs, 'Warranty Replacement - iPhone 17 Pro Skin - Model 360');
+    expect(missing).toEqual([]);
+    expect(selectionToSpecs(data, selection)).toEqual(specs);
+  });
+
+  it('does not map Variation or Colour onto the base layer', () => {
+    expect(preselectFromSpecs(data, [{ label: 'Variation', value: 'Emerald Green' }]).selection.layers[BACK]).toBeNull();
+    expect(preselectFromSpecs(data, [{ label: 'Color', value: 'Emerald Green' }]).selection.layers[BACK]).toBeNull();
+    expect(preselectFromSpecs(data, [{ label: 'Varian', value: 'Emerald Green' }]).selection.layers[BACK]).toBe(
+      choice(BACK, 'Emerald Green').id,
+    );
+  });
+
+  it('leaves variants the item never recorded unset, out of the specs and the price', () => {
+    const { selection } = preselectFromSpecs(ipad, [{ label: 'Back', value: 'Swarm' }, { label: 'Coverage', value: 'Model Cut' }, { label: 'Logo', value: 'With Logo Cutout' }]);
+    expect(selection.unset).toContain('variant:series');
+    expect(selectionToSpecs(ipad, selection).some((s) => s.label === 'Series')).toBe(false);
+    const sel13 = { ...selection, variants: { series: '13' } };
+    expect(computeWebstoreTotal(ipad, sel13).total).toBe(data.basePrice + 30000);
+    const picked = { ...sel13, unset: sel13.unset.filter((u) => u !== 'variant:series') };
+    expect(selectionToSpecs(ipad, picked)[0]).toEqual({ label: 'Series', value: '13"' });
+    expect(computeWebstoreTotal(ipad, picked).total).toBe(data.basePrice + 70000);
+  });
+
+  it('keeps a saved variant option that is no longer offered until staff pick one', () => {
+    const { selection, missing } = preselectFromSpecs(ipad, [{ label: 'Series', value: '12.9"' }]);
+    expect(missing).toEqual(['Series: 12.9"']);
+    expect(selectionToSpecs(ipad, selection)[0]).toEqual({ label: 'Series', value: '12.9"' });
+  });
+
+  it('keeps the saved logo value on a finish that disables the cutout until staff change something', () => {
+    const saved = [
+      { label: 'Back', value: 'Burgundy' },
+      { label: 'Coverage', value: 'Model Cut' },
+      { label: 'Logo', value: 'With Logo Cutout' },
+    ];
+    const { selection } = preselectFromSpecs(data, saved);
+    expect(selectionToSpecs(data, selection)).toEqual(saved);
+    const changed = { ...selection, preserveLogo: false };
+    expect(selectionToSpecs(data, changed)).toContainEqual({ label: 'Logo', value: 'No Logo Cutout' });
   });
 });

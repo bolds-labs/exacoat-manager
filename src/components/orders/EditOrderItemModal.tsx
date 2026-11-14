@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, Check, Loader2, Package, RefreshCw, Search, Trash2 } from 'lucide-react';
+import { AlertCircle, Check, Loader2, Package, Plus, RefreshCw, Search, Trash2, X } from 'lucide-react';
 import { Modal } from '../ds/Modal';
 import { Button } from '../ds/Button';
 import { TextField } from '../ds/TextField';
+import { IconButton } from '../ds/IconButton';
 import { ConfirmModal, ConfirmText } from './panel/ConfirmModal';
 import { ConfigurationEditor } from './editItem/ConfigurationEditor';
 import { PriceBox } from './editItem/PriceBox';
@@ -57,7 +58,10 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({ order, i
   const { showToast } = useToast();
   const isEditing = Boolean(item);
   const currency = order?.currency || 'IDR';
+  // Webstore prices are IDR; other order currencies never follow them.
+  const isIdrOrder = currency.toUpperCase() === 'IDR';
   const ownPrice = useMemo(() => (order ? keepsOwnPrice(order, item) : false), [order, item]);
+  const canFollow = !ownPrice && isIdrOrder;
   const originalSpecs = useMemo<ItemCustomizationSpec[]>(() => (item ? extractItemSpecs(item) : []), [item]);
 
   const [productId, setProductId] = useState(0);
@@ -72,6 +76,8 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({ order, i
   const [load, setLoad] = useState<LoadState>({ kind: 'idle' });
   const [selection, setSelection] = useState<Selection | null>(null);
   const [missing, setMissing] = useState<string[]>([]);
+  /** Free-form details for products without a webstore configurator (404). */
+  const [freeSpecs, setFreeSpecs] = useState<FreeSpecRow[]>([]);
   const loadSeq = useRef(0);
   const lastLoad = useRef<{ id: number; name: string; fresh: boolean } | null>(null);
 
@@ -84,6 +90,12 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({ order, i
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // No configurator on the webstore: staff edit the item's details as free-form rows.
+  const showNone = useCallback(() => {
+    setFreeSpecs(originalSpecs.map((sp, i) => ({ id: `spec_${i}`, label: sp.label, value: sp.value })));
+    setLoad({ kind: 'none' });
+  }, [originalSpecs]);
 
   /** Loads the webstore data for a product. `fresh` starts with no choices (new item or another device). */
   const loadConfigurator = useCallback(
@@ -99,15 +111,19 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({ order, i
           // Marketplace and warranty items: find the webstore product from the device name.
           const kw = extractDeviceKeywords(name);
           if (!kw) {
-            if (seq === loadSeq.current) setLoad({ kind: 'none' });
+            if (seq === loadSeq.current) showNone();
             return;
           }
           const found = await fetchProductsDirect({ search: kw, per_page: 5 });
           if (seq !== loadSeq.current) return;
-          const products = found.success && Array.isArray(found.products) ? found.products : [];
+          if (!found.success) {
+            setLoad({ kind: 'error' });
+            return;
+          }
+          const products = Array.isArray(found.products) ? found.products : [];
           const match = products.find((p) => (p.name || '').toLowerCase().includes(kw.toLowerCase())) || products[0];
           if (!match) {
-            setLoad({ kind: 'none' });
+            showNone();
             return;
           }
           id = match.id;
@@ -122,7 +138,8 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({ order, i
       const res = await fetchWebstoreConfigurator(id);
       if (seq !== loadSeq.current) return;
       if (!res.ok) {
-        setLoad(res.status === 404 ? { kind: 'none' } : { kind: 'error' });
+        if (res.status === 404) showNone();
+        else setLoad({ kind: 'error' });
         return;
       }
       const data = res.data;
@@ -142,7 +159,7 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({ order, i
       }
       setLoad({ kind: 'ready', data });
     },
-    [item, originalSpecs],
+    [item, originalSpecs, showNone],
   );
 
   // Initialise from the item (or empty for Add item) each time the pop-up opens.
@@ -167,7 +184,7 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({ order, i
       setProductImage('');
       setQuantity(1);
       setUnitPrice(0);
-      setPriceFollows(!ownPrice);
+      setPriceFollows(canFollow);
       setIsChangingProduct(true);
       setLoad({ kind: 'idle' });
       setSelection(null);
@@ -202,8 +219,9 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({ order, i
   }, [priceFollows, breakdown]);
 
   const handleSelectionChange = (next: Selection) => {
-    setSelection(next);
-    if (!ownPrice && !priceTouched) setPriceFollows(true);
+    // Any change ends keeping a saved logo value that the back finish no longer allows.
+    setSelection({ ...next, preserveLogo: false });
+    if (canFollow && !priceTouched) setPriceFollows(true);
   };
 
   const handleUnitPriceChange = (v: number) => {
@@ -223,7 +241,7 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({ order, i
     setProductImage(product.images?.[0]?.src || '');
     setIsChangingProduct(false);
     setDeviceChanged(true);
-    if (!ownPrice && !priceTouched) setPriceFollows(true);
+    if (canFollow && !priceTouched) setPriceFollows(true);
     loadConfigurator(product.id, product.name || '', true);
   };
 
@@ -234,9 +252,17 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({ order, i
 
   const compiledSpecs = useMemo<ItemCustomizationSpec[]>(() => {
     if (data && selection) return selectionToSpecs(data, selection);
+    if (load.kind === 'none') {
+      return freeSpecs
+        .map((r) => ({ label: r.label.trim(), value: r.value.trim() }))
+        .filter((r) => r.label && r.value);
+    }
     // Without webstore data the item's details stay exactly as they are.
-    return deviceChanged ? [] : originalSpecs;
-  }, [data, selection, deviceChanged, originalSpecs]);
+    return originalSpecs;
+  }, [data, selection, load.kind, freeSpecs, originalSpecs]);
+
+  // After a device change the old details no longer describe the item, so Save needs the new device's options.
+  const deviceLoadFailed = deviceChanged && (load.kind === 'error' || load.kind === 'loading');
 
   const baseLayer = data ? interactiveLayers(data)[0] : undefined;
   const baseMissing = Boolean(
@@ -252,6 +278,10 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({ order, i
     if (!order) return;
     if (!productName.trim()) {
       setErrorMsg('Product name is required.');
+      return;
+    }
+    if (deviceLoadFailed) {
+      setErrorMsg(DEVICE_LOAD_FAILED);
       return;
     }
     if (baseMissing && baseLayer && (!isEditing || deviceChanged)) {
@@ -512,8 +542,10 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({ order, i
               <AlertCircle className="mt-px h-4 w-4 flex-none" strokeWidth={1.8} aria-hidden />
               <span>
                 {load.kind === 'none'
-                  ? 'exacoat.com has no configurator for this product, so its details cannot be changed here. They stay as they are.'
-                  : 'Could not reach exacoat.com to load the options. The details stay as they are.'}
+                  ? 'exacoat.com has no configurator for this product. Edit its details below.'
+                  : deviceChanged
+                    ? DEVICE_LOAD_FAILED
+                    : 'Could not reach exacoat.com to load the options. The details stay as they are.'}
               </span>
             </div>
             <div>
@@ -524,7 +556,9 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({ order, i
           </div>
         )}
 
-        {load.kind !== 'ready' && load.kind !== 'loading' && compiledSpecs.length > 0 && (
+        {load.kind === 'none' && <FreeSpecEditor rows={freeSpecs} onChange={setFreeSpecs} />}
+
+        {(load.kind === 'error' || load.kind === 'idle') && !deviceChanged && compiledSpecs.length > 0 && (
           <SpecList title="Current details" specs={compiledSpecs} />
         )}
 
@@ -535,7 +569,7 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({ order, i
                 <b className="font-semibold">Not available any more:</b> {missing.join(', ')}. These stay on the item until you pick a replacement.
               </div>
             )}
-            <ConfigurationEditor data={data} selection={selection} onChange={handleSelectionChange} currency={currency} />
+            <ConfigurationEditor data={data} selection={selection} onChange={handleSelectionChange} currency={data.currency || 'IDR'} />
             {baseMissing && baseLayer && (
               <p className="text-[12px] text-faint">{baseLayer.name} has no finish on this item.</p>
             )}
@@ -545,6 +579,8 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({ order, i
 
         <PriceBox
           currency={currency}
+          webstoreCurrency={data?.currency || 'IDR'}
+          canUseWebstorePrice={isIdrOrder}
           breakdown={breakdown}
           unitPrice={unitPrice}
           onUnitPriceChange={handleUnitPriceChange}
@@ -575,6 +611,37 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({ order, i
     </>
   );
 };
+
+const DEVICE_LOAD_FAILED = 'Could not load the options for this device. Retry, or cancel to keep the item as it is.';
+
+interface FreeSpecRow {
+  id: string;
+  label: string;
+  value: string;
+}
+
+/** Label and value rows for products without a webstore configurator (the old Form mode). */
+function FreeSpecEditor({ rows, onChange }: { rows: FreeSpecRow[]; onChange(rows: FreeSpecRow[]): void }) {
+  const update = (id: string, patch: Partial<FreeSpecRow>) => onChange(rows.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-card-border bg-card p-3.5">
+      <div className="text-[12px] text-faint">Item details</div>
+      {rows.length === 0 && <p className="text-[12.5px] text-faint">No details yet.</p>}
+      {rows.map((r) => (
+        <div key={r.id} className="flex items-center gap-2">
+          <TextField aria-label="Detail name" className="w-[38%]" value={r.label} placeholder="Name, e.g. Color" onChange={(e) => update(r.id, { label: e.target.value })} />
+          <TextField aria-label="Detail value" className="min-w-0 flex-1" value={r.value} placeholder="Value" onChange={(e) => update(r.id, { value: e.target.value })} />
+          <IconButton icon={X} label={`Remove detail ${r.label || 'row'}`} variant="ghost" size="sm" onClick={() => onChange(rows.filter((x) => x.id !== r.id))} />
+        </div>
+      ))}
+      <div>
+        <Button size="sm" variant="secondary" icon={Plus} onClick={() => onChange([...rows, { id: `spec_new_${Date.now()}_${rows.length}`, label: '', value: '' }])}>
+          Add detail
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 function SpecList({ title, specs }: { title: string; specs: ItemCustomizationSpec[] }) {
   if (specs.length === 0) return null;

@@ -102,9 +102,14 @@ export interface Selection {
   kept: Spec[];
   /** Offered options the saved item never recorded; left out of the specs and price until staff pick one. */
   unset: OptionKey[];
+  /** True while the saved logo value is kept although the back finish disables the cutout (cleared on any change). */
+  preserveLogo?: boolean;
 }
 
-export type OptionKey = 'coverage' | 'logo' | 'pencil';
+/** `variant:{id}` marks a production variant the item never recorded. */
+export type OptionKey = 'coverage' | 'logo' | 'pencil' | `variant:${string}`;
+
+export const variantKey = (variantId: string): OptionKey => `variant:${variantId}`;
 
 export interface WebstoreOptions {
   coverage: { offered: boolean; model360Price: number };
@@ -323,6 +328,7 @@ export function computeWebstoreTotal(
   const variantLines: { label: string; amount: number }[] = [];
   let variantsExtra = 0;
   options.variants.forEach((v) => {
+    if (selection.unset.includes(variantKey(v.id))) return;
     const opt = v.options?.find((o) => o.id === selection.variants[v.id]);
     if (opt && typeof opt.price_diff === 'number') {
       variantsExtra += opt.price_diff;
@@ -347,7 +353,9 @@ const normValue = (s: string) => s.trim().toLowerCase().replace(/[_\s]+/g, '-');
 
 const COVERAGE_LABEL = /^(coverage|model coverage|cut|model cut|360)$/i;
 const LOGO_LABEL = /^logo(\s*cutout)?$/i;
-const GENERIC_FINISH_LABEL = /^(finish|skin|texture|varian|variation|variant|warna|option|colou?r)$/i;
+// Same labels the old modal mapped onto the base layer; Variation and Colour stay as they are.
+const GENERIC_FINISH_LABEL = /^(finish|skin|texture|varian|warna|option)$/i;
+const CLAIMED_PART_LABEL = /^claimed\s*part$/i;
 const NEGATIVE_VALUE = /^(no|without)\b|\bnone\b/i;
 
 function matchChoice(data: WebstoreConfigurator, layerId: number, value: string): WebstoreChoice | null {
@@ -377,6 +385,8 @@ export function preselectFromSpecs(
   const pencilLabel = normLabel(options.pencil.label);
   const generic: Spec[] = [];
   const seen = new Set<OptionKey>();
+  // Warranty claim items describe the claimed piece in their own words; keep those lines as they are.
+  const isClaim = specs.some((s) => CLAIMED_PART_LABEL.test(s.label.trim()));
 
   for (const spec of specs) {
     const label = spec.label.trim();
@@ -385,8 +395,12 @@ export function preselectFromSpecs(
     const variant = options.variants.find((v) => normLabel(v.name) === nl);
     if (variant) {
       const opt = variant.options.find((o) => o.name.trim().toLowerCase() === spec.value.trim().toLowerCase());
+      seen.add(variantKey(variant.id));
       if (opt) selection.variants[variant.id] = opt.id;
-      else flag(spec, { variantId: variant.id });
+      else {
+        flag(spec, { variantId: variant.id });
+        selection.unset.push(variantKey(variant.id));
+      }
       continue;
     }
 
@@ -407,8 +421,10 @@ export function preselectFromSpecs(
 
     if (LOGO_LABEL.test(label)) {
       seen.add('logo');
-      if (options.logo.offered) selection.logoCutout = !NEGATIVE_VALUE.test(spec.value);
-      else flag(spec, {});
+      if (options.logo.offered) {
+        selection.logoCutout = !NEGATIVE_VALUE.test(spec.value);
+        selection.preserveLogo = true;
+      } else flag(spec, {});
       continue;
     }
 
@@ -419,7 +435,7 @@ export function preselectFromSpecs(
       continue;
     }
 
-    if (GENERIC_FINISH_LABEL.test(label)) {
+    if (!isClaim && GENERIC_FINISH_LABEL.test(label)) {
       generic.push(spec);
       continue;
     }
@@ -440,8 +456,11 @@ export function preselectFromSpecs(
     else flag(spec, { layerId: base.id });
   }
 
+  options.variants.forEach((v) => {
+    if (!seen.has(variantKey(v.id))) selection.unset.push(variantKey(v.id));
+  });
   if (options.coverage.offered && !seen.has('coverage')) {
-    if (/\b360\b/.test(titleHint)) selection.coverage = 'model_360';
+    if (!isClaim && /\b360\b/.test(titleHint)) selection.coverage = 'model_360';
     else selection.unset.push('coverage');
   }
   if (options.logo.offered && !seen.has('logo')) selection.unset.push('logo');
@@ -463,9 +482,10 @@ export function selectionToSpecs(data: WebstoreConfigurator, selection: Selectio
   options.variants.forEach((v) => {
     const opt = v.options.find((o) => o.id === selection.variants[v.id]);
     const old = unavailableFor({ variantId: v.id });
-    // A saved option that no longer exists stays until staff pick another one (the default first option is not a pick).
-    if (old && (!opt || opt.id === v.options[0]?.id)) out.push(old.spec);
-    else if (opt) out.push({ label: v.name, value: opt.name });
+    // Not recorded (or no longer offered) until staff pick an option; a saved value that is gone stays as it was.
+    if (selection.unset.includes(variantKey(v.id))) {
+      if (old) out.push(old.spec);
+    } else if (opt) out.push({ label: v.name, value: opt.name });
   });
 
   layers.forEach((layer) => {
@@ -486,7 +506,7 @@ export function selectionToSpecs(data: WebstoreConfigurator, selection: Selectio
     out.push({ label: 'Coverage', value: selection.coverage === 'model_360' ? '360° Full Coverage' : 'Model Cut' });
   }
   if (options.logo.offered && baseChosen && !selection.unset.includes('logo')) {
-    const forcedOff = isLogoCutoutDisabledByFinish(data, selectedBackChoice(data, selection));
+    const forcedOff = !selection.preserveLogo && isLogoCutoutDisabledByFinish(data, selectedBackChoice(data, selection));
     out.push({ label: 'Logo', value: !forcedOff && selection.logoCutout ? 'With Logo Cutout' : 'No Logo Cutout' });
   }
   if (options.pencil.offered && !selection.unset.includes('pencil')) {

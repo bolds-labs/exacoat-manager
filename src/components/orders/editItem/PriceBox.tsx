@@ -6,6 +6,10 @@ import { formatCurrency } from '../../../lib/formatters';
 
 export interface PriceBoxProps {
   currency: string;
+  /** Currency of the webstore amounts (IDR). */
+  webstoreCurrency?: string;
+  /** False when the order is not in the webstore currency: the unit price never takes the webstore total. */
+  canUseWebstorePrice?: boolean;
   /** Webstore breakdown; absent when the webstore data is not loaded. */
   breakdown: { total: number; lines: { label: string; amount: number }[] } | null;
   unitPrice: number;
@@ -21,6 +25,8 @@ export interface PriceBoxProps {
 
 export function PriceBox({
   currency,
+  webstoreCurrency = 'IDR',
+  canUseWebstorePrice = true,
   breakdown,
   unitPrice,
   onUnitPriceChange,
@@ -35,15 +41,15 @@ export function PriceBox({
     <div className="rounded-xl border border-card-border bg-card p-3.5" aria-label="Price">
       {breakdown && (
         <dl className="mb-3 flex flex-col gap-1 text-[12.5px]" data-testid="price-breakdown">
-          {breakdown.lines.map((l) => (
-            <div key={l.label} className="flex justify-between gap-3">
+          {breakdown.lines.map((l, i) => (
+            <div key={`${i}-${l.label}`} className="flex justify-between gap-3">
               <dt className="min-w-0 truncate text-muted">{l.label}</dt>
-              <dd className="font-mono text-fg">{formatCurrency(l.amount, currency)}</dd>
+              <dd className="font-mono text-fg">{formatCurrency(l.amount, webstoreCurrency)}</dd>
             </div>
           ))}
           <div className="mt-1 flex justify-between gap-3 border-t border-line pt-1.5 text-[13px] font-semibold">
             <dt className="text-fg">Webstore price</dt>
-            <dd className="font-mono text-fg" data-testid="webstore-total">{formatCurrency(breakdown.total, currency)}</dd>
+            <dd className="font-mono text-fg" data-testid="webstore-total">{formatCurrency(breakdown.total, webstoreCurrency)}</dd>
           </div>
         </dl>
       )}
@@ -72,14 +78,19 @@ export function PriceBox({
         <span className="text-muted">
           Line total <b className="ml-1 font-mono font-semibold text-fg">{formatCurrency(Math.round(unitPrice * quantity), currency)}</b>
         </span>
-        {breakdown && differs && (
+        {breakdown && differs && canUseWebstorePrice && (
           <Button size="sm" variant={keepsOwnPrice ? 'secondary' : 'ghost'} onClick={onUseWebstorePrice}>
             {keepsOwnPrice ? 'Use webstore price' : 'Reset to webstore price'}
           </Button>
         )}
       </div>
-      {breakdown && keepsOwnPrice && !follows && (
-        <p className="mt-1.5 text-[12px] text-faint">Warranty, redeem and marketplace items keep their price unless you use the webstore price.</p>
+      {breakdown && !canUseWebstorePrice && (
+        <p className="mt-1.5 text-[12px] text-faint">
+          Webstore prices are in {webstoreCurrency}; this order is in {currency}, so the unit price is not changed.
+        </p>
+      )}
+      {breakdown && canUseWebstorePrice && keepsOwnPrice && !follows && (
+        <p className="mt-1.5 text-[12px] text-faint">Warranty, redeem, endorsement and marketplace items keep their price unless you use the webstore price.</p>
       )}
     </div>
   );

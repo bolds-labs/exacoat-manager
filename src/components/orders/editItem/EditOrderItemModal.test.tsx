@@ -194,3 +194,111 @@ describe('EditOrderItemModal on webstore data', () => {
     expect(screen.getAllByText('Woven').length).toBeGreaterThan(0);
   });
 });
+
+describe('fix round 1', () => {
+  it('lets staff edit, add and remove details when the product has no configurator', async () => {
+    mockFetch(() => new Response('{}', { status: 404 }));
+    updateOrderDirect.mockResolvedValue({ success: true, order: webOrder });
+    open(webOrder, { ...item, specs: [{ label: 'Color', value: 'Black' }, { label: 'Size', value: 'M' }] });
+    await screen.findByText(/has no configurator for this product/);
+    fireEvent.change(screen.getByDisplayValue('Black'), { target: { value: 'White' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Remove detail Size' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add detail' }));
+    const labels = screen.getAllByLabelText('Detail name');
+    fireEvent.change(labels[labels.length - 1], { target: { value: 'Note' } });
+    const values = screen.getAllByLabelText('Detail value');
+    fireEvent.change(values[values.length - 1], { target: { value: 'Gift' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save item' }));
+    await waitFor(() => expect(updateOrderDirect).toHaveBeenCalled());
+    expect(updateOrderDirect.mock.calls[0][1].items[0].specs).toEqual([
+      { label: 'Color', value: 'White' },
+      { label: 'Note', value: 'Gift' },
+    ]);
+  });
+
+  it('keeps specs read-only when the webstore is unreachable', async () => {
+    mockFetch(() => {
+      throw new TypeError('Failed to fetch');
+    });
+    open();
+    await screen.findByText(/Could not reach exacoat.com/);
+    expect(screen.queryByRole('button', { name: 'Add detail' })).toBeNull();
+    expect(screen.queryByLabelText('Detail value')).toBeNull();
+  });
+
+  it('blocks Save when the new device fails to load', async () => {
+    let fail = false;
+    mockFetch(() => {
+      if (fail) throw new TypeError('Failed to fetch');
+      return ok();
+    });
+    fetchProductsDirect.mockResolvedValue({ success: true, products: [{ id: 999, name: 'Galaxy S26 Skins', images: [] }] });
+    open();
+    await screen.findByText('Additional Camera & Back Glass');
+    fail = true;
+    fireEvent.click(screen.getByRole('button', { name: 'Change device' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Galaxy S26 Skins/ }));
+    await screen.findByText(/Could not load the options for this device/);
+    fireEvent.click(screen.getByRole('button', { name: 'Save item' }));
+    expect(updateOrderDirect).not.toHaveBeenCalled();
+    expect(screen.getAllByText(/Retry, or cancel to keep the item as it is/).length).toBeGreaterThan(0);
+  });
+
+  it('shows the unreachable error when the product search fails', async () => {
+    mockFetch(ok);
+    fetchProductsDirect.mockResolvedValue({ success: false, products: [] });
+    open(webOrder, { ...item, product_id: 2_000_000_000, name: 'iPhone 17 Pro Skin' });
+    expect(await screen.findByText(/Could not reach exacoat.com/)).toBeTruthy();
+  });
+
+  it('does not reprice non-IDR orders and formats webstore prices in IDR', async () => {
+    mockFetch(ok);
+    const usdOrder = { ...webOrder, currency: 'USD', items: [{ ...item, price: 39, subtotal: 39, total: 39 }] };
+    open(usdOrder);
+    await screen.findByText('Additional Camera & Back Glass');
+    fireEvent.click(screen.getByRole('button', { name: /Swarm/ }));
+    expect(unitPrice().value).toBe('39');
+    expect(total()).toBe(rp(BASE + 30000));
+    expect(screen.queryByRole('button', { name: /webstore price/ })).toBeNull();
+    expect(screen.getByText(/Webstore prices are in IDR/)).toBeTruthy();
+  });
+
+  it('keeps an endorsement item price', async () => {
+    mockFetch(ok);
+    const endorsement = { ...webOrder, meta_data: [{ key: '_order_badge', value: 'ENDORSEMENT' }], items: [{ ...item, price: 0, subtotal: 0, total: 0 }] };
+    open(endorsement);
+    await screen.findByText('Additional Camera & Back Glass');
+    fireEvent.click(screen.getByRole('button', { name: /Swarm/ }));
+    expect(unitPrice().value).toBe('0');
+    expect(screen.getByRole('button', { name: 'Use webstore price' })).toBeTruthy();
+  });
+});
+
+describe('fix round 1: variants and logo', () => {
+  const ipad = {
+    ...fixture,
+    variants: [{ id: 'series', name: 'Series', options: [{ id: '11', name: '11"', price_diff: 0 }, { id: '13', name: '13"', price_diff: 40000 }] }],
+  };
+
+  it('shows an unrecorded variant as not picked and does not save it', async () => {
+    mockFetch(() => new Response(JSON.stringify(ipad), { status: 200 }));
+    updateOrderDirect.mockResolvedValue({ success: true, order: webOrder });
+    open();
+    await screen.findByText('Additional Camera & Back Glass');
+    expect(screen.getByText(/Series is not recorded on this item/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Save item' }));
+    await waitFor(() => expect(updateOrderDirect).toHaveBeenCalled());
+    expect(updateOrderDirect.mock.calls[0][1].items[0].specs.some((sp: any) => sp.label === 'Series')).toBe(false);
+  });
+
+  it('keeps a saved With Logo Cutout on a finish that disables it, with a note', async () => {
+    mockFetch(ok);
+    updateOrderDirect.mockResolvedValue({ success: true, order: webOrder });
+    open(webOrder, { ...item, specs: [{ label: 'Back', value: 'Burgundy' }, { label: 'Coverage', value: 'Model Cut' }, { label: 'Logo', value: 'With Logo Cutout' }] });
+    await screen.findByText('Additional Camera & Back Glass');
+    expect(screen.getByText(/saved value stays until you change something/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Save item' }));
+    await waitFor(() => expect(updateOrderDirect).toHaveBeenCalled());
+    expect(updateOrderDirect.mock.calls[0][1].items[0].specs).toContainEqual({ label: 'Logo', value: 'With Logo Cutout' });
+  });
+});

@@ -34,3 +34,11 @@ describe('keepsOwnPrice', () => {
     expect(keepsOwnPrice({ id: 1, meta_data: [] } as any, { id: 1, product_id: 2_000_000_000 } as any)).toBe(true);
   });
 });
+
+describe('keepsOwnPrice for endorsements', () => {
+  it('is true for endorsement orders', () => {
+    const item = { id: 1, product_id: 537268 } as any;
+    expect(keepsOwnPrice({ id: 1, meta_data: [{ key: '_order_badge', value: 'ENDORSEMENT' }] } as any, item)).toBe(true);
+    expect(keepsOwnPrice({ id: 1, meta_data: [{ key: '_is_endorsement', value: 'yes' }] } as any, item)).toBe(true);
+  });
+});

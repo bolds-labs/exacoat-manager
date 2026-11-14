@@ -15,6 +15,7 @@ import {
   isLogoCutoutDisabledByFinish,
   selectedBackChoice,
   type OptionKey,
+  variantKey,
   type Selection,
   type WebstoreChoice,
   type WebstoreConfigurator,
@@ -62,22 +63,26 @@ export function ConfigurationEditor({ data, selection, onChange, currency }: Con
   const setOption = (k: OptionKey, patch: Partial<Selection>) =>
     onChange({ ...selection, ...patch, unset: selection.unset.filter((u) => u !== k) });
   const notRecorded = <p className="mt-1.5 text-[12px] text-faint">Not recorded on this item. Pick one to save it.</p>;
-  const logoForcedOff = isLogoCutoutDisabledByFinish(data, backChoice);
+  const logoDisabledByFinish = isLogoCutoutDisabledByFinish(data, backChoice);
+  // A saved logo value is shown as saved until staff change something.
+  const logoForcedOff = logoDisabledByFinish && !selection.preserveLogo;
 
   return (
     <div className="flex flex-col gap-2.5">
       {options.variants.map((v) => {
         const old = selection.unavailable.find((u) => u.variantId === v.id);
+        const unsetVariant = isUnset(variantKey(v.id));
         return (
           <div key={v.id}>
             <Select
               label={v.name}
-              value={selection.variants[v.id] || ''}
+              value={unsetVariant ? '' : selection.variants[v.id] || ''}
               onChange={(optId) =>
                 onChange({
                   ...selection,
                   variants: { ...selection.variants, [v.id]: optId },
                   unavailable: selection.unavailable.filter((u) => u.variantId !== v.id),
+                  unset: selection.unset.filter((u) => u !== variantKey(v.id)),
                 })
               }
               options={v.options.map((o) => ({
@@ -89,6 +94,9 @@ export function ConfigurationEditor({ data, selection, onChange, currency }: Con
               <p className="mt-1 text-[12px] text-st-wait-fg">
                 Saved as {old.spec.value}, not available any more. Pick an option to replace it.
               </p>
+            )}
+            {unsetVariant && !old && (
+              <p className="mt-1 text-[12px] text-faint">{v.name} is not recorded on this item. Pick one to save it.</p>
             )}
           </div>
         );
@@ -139,12 +147,15 @@ export function ConfigurationEditor({ data, selection, onChange, currency }: Con
             value={isUnset('logo') ? '' : !logoForcedOff && selection.logoCutout ? 'with' : 'without'}
             onChange={(v) => setOption('logo', { logoCutout: v === 'with' })}
             options={[
-              { value: 'with', icon: Scissors, title: 'With Logo Cutout', disabled: logoForcedOff },
+              { value: 'with', icon: Scissors, title: 'With Logo Cutout', disabled: logoDisabledByFinish && !(selection.preserveLogo && selection.logoCutout) },
               { value: 'without', icon: Square, title: 'No Logo Cutout' },
             ]}
           />
-          {logoForcedOff && backChoice && (
-            <p className="mt-1.5 text-[12px] text-faint">The webstore does not offer a logo cutout with {backChoice.name}.</p>
+          {logoDisabledByFinish && backChoice && (
+            <p className="mt-1.5 text-[12px] text-faint">
+              The webstore does not offer a logo cutout with {backChoice.name}.
+              {selection.preserveLogo && selection.logoCutout ? ' The saved value stays until you change something.' : ''}
+            </p>
           )}
           {isUnset('logo') && notRecorded}
         </OptionBlock>
