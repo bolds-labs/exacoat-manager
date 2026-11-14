@@ -58,10 +58,17 @@ export const Layout: React.FC<LayoutProps> = ({
 
   return (
     <div className="manager-workspace h-screen w-screen bg-[#f6f6f3] dark:bg-[#080808] text-zinc-900 dark:text-zinc-100 flex relative overflow-hidden font-sans transition-colors duration-200">
-      {/* Ambient background glows */}
-      <div className="fixed top-0 left-1/4 w-[600px] h-[500px] bg-[#f3aa18]/5 rounded-full blur-[140px] pointer-events-none -z-10 animate-pulse-subtle" />
-      <div className="fixed bottom-0 right-1/4 w-[500px] h-[400px] bg-zinc-400/5 dark:bg-white/[0.02] rounded-full blur-[130px] pointer-events-none -z-10" />
-      <div className="fixed top-1/2 right-0 w-[400px] h-[400px] bg-zinc-400/5 dark:bg-zinc-600/5 rounded-full blur-[120px] pointer-events-none -z-10" />
+      {/* Ambient background glow: static gradients instead of animated blur filters, which repaint every frame on weak GPUs */}
+      <div
+        aria-hidden="true"
+        className="fixed inset-0 pointer-events-none -z-10"
+        style={{
+          background:
+            'radial-gradient(600px 500px at 30% 0%, rgba(243, 170, 24, 0.05), transparent 70%),' +
+            'radial-gradient(500px 400px at 70% 100%, rgba(161, 161, 170, 0.05), transparent 70%),' +
+            'radial-gradient(400px 400px at 100% 55%, rgba(113, 113, 122, 0.05), transparent 70%)',
+        }}
+      />
 
       {/* Sidebar with Desktop Fixed & Mobile Drawer Modes */}
       <Sidebar
@@ -100,7 +107,7 @@ export const Layout: React.FC<LayoutProps> = ({
       {!isShopManager && (
       <nav 
         aria-label="Mobile Navigation" 
-        className="lg:hidden fixed bottom-0 left-0 right-0 h-16 bg-white/95 dark:bg-[#0c0c0e]/95 border-t border-zinc-200 dark:border-white/10 backdrop-blur-2xl z-30 grid grid-cols-4 items-center px-3 font-sans select-none shadow-[0_-10px_30px_rgba(0,0,0,0.28)] pb-safe"
+        className="lg:hidden fixed bottom-0 left-0 right-0 h-16 bg-white dark:bg-[#0c0c0e] border-t border-zinc-200 dark:border-white/10 z-30 grid grid-cols-4 items-center px-3 font-sans select-none shadow-[0_-10px_30px_rgba(0,0,0,0.28)] pb-safe"
       >
         {/* 1. Dashboard */}
         <a

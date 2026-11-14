@@ -61,7 +61,7 @@ export const Header: React.FC<HeaderProps> = ({
   const { theme, toggleTheme } = useTheme();
 
   return (
-    <header className="h-16 px-3 sm:px-5 border-b border-zinc-200 dark:border-white/[0.07] bg-white/88 dark:bg-[#0a0a0c]/88 backdrop-blur-2xl flex items-center justify-between sticky top-0 z-20 font-sans select-none transition-colors duration-200 gap-3">
+    <header className="h-16 px-3 sm:px-5 border-b border-zinc-200 dark:border-white/[0.07] bg-white dark:bg-[#0a0a0c] flex items-center justify-between sticky top-0 z-20 font-sans select-none transition-colors duration-200 gap-3">
       <div className="flex items-center gap-3 min-w-0 lg:w-48 xl:w-56">
         {/* Mobile Hamburger Button */}
         {onOpenMobileNav && (
