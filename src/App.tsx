@@ -402,7 +402,7 @@ export const App: React.FC = () => {
       if (currentTab === 'tracking_pool') {
         return <TrackingPoolPage />;
       }
-      return <OrdersView initialStatus="all" onNavigateToCustomer={undefined} />;
+      return <OrdersView initialStatus="all" onNavigateToCustomer={undefined} orderCounts={orderCounts} onRefreshCounts={refreshOrderCounts} />;
     }
     const fallbackDashboard = (
       <DashboardPage
@@ -426,9 +426,11 @@ export const App: React.FC = () => {
         );
       case 'orders':
         return (
-          <OrdersView 
-            initialStatus="all" 
-            onNavigateToCustomer={handleNavigateToCustomer} 
+          <OrdersView
+            initialStatus="all"
+            onNavigateToCustomer={handleNavigateToCustomer}
+            orderCounts={orderCounts}
+            onRefreshCounts={refreshOrderCounts}
           />
         );
       case 'custom_label':

@@ -1,46 +1,43 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Order, getOrderRma } from '../../types';
-import { Badge } from '../ui/Badge';
-import { GlassCard } from '../ui/GlassCard';
-import { formatCurrency, formatDateTime } from '../../lib/formatters';
-import { matchesPhoneQuery } from '../../lib/phoneUtils';
+import { Order, OrderCounts, getOrderRma } from '../../types';
 import { updateOrderStatusDirect } from '../../lib/wordpressBridge';
 import { downloadCsv } from '../../lib/csvExport';
 import { ShippingLabelA6Modal } from './ShippingLabelA6Modal';
 import { Modal } from '../ui/Modal';
 import { useToast } from '../../context/ToastContext';
-import { FilterSelect } from '../ui/FilterSelect';
 import { isStorePickupOrder, getOrderCourierDisplay, matchesOrderSearch } from '../../lib/orderUtils';
-import { resolveCountryName } from '../../lib/countries';
-import { formatCleanText } from '../../lib/utils';
 import {
-  Search,
   RefreshCw,
-  Eye,
   Package,
-  Truck,
-  ShieldCheck,
-  ShieldAlert,
-  RotateCcw,
   Printer,
-  Copy,
-  Check,
-  CheckCircle2,
   Download,
   X,
   ChevronDown,
   Layers,
   Store,
   PackageCheck,
-  Sparkles,
+  RotateCcw,
+  Megaphone,
+  type LucideIcon,
 } from 'lucide-react';
+import { Button, Checkbox, CountPill, Menu, SearchField, Select, StatusChip, Tabs, type MenuItem } from '../ds';
+import { MORE_ORDER_TABS, PRIMARY_ORDER_TABS, tabCount } from './table/ordersTabs';
 import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from '../ui/dropdown-menu';
-import { clsx } from 'clsx';
+  ActionsCell,
+  CourierCell,
+  CustomerCell,
+  ItemsCell,
+  OrderIdCell,
+  TotalCell,
+  orderNumber,
+} from './table/OrderRowCells';
+
+const MORE_TAB_ICONS: Record<string, LucideIcon> = {
+  redeem: RotateCcw,
+  endorsement: Megaphone,
+  'store-pickup': Store,
+  'store-pickup-picked': PackageCheck,
+};
 
 export function isOrderConfirmed(status: string | null | undefined): boolean {
   const clean = String(status || '').replace(/^wc-/, '').toLowerCase().trim();
@@ -65,6 +62,8 @@ export interface OrderTableProps {
   onCourierFilterChange?: (courier: string) => void;
   searchQuery?: string;
   onSearchQueryChange?: (query: string) => void;
+  /** Store-wide counts for the tab pills; null hides the numbers. */
+  counts?: OrderCounts | null;
 }
 
 export const OrderTable: React.FC<OrderTableProps> = ({
@@ -85,6 +84,7 @@ export const OrderTable: React.FC<OrderTableProps> = ({
   onCourierFilterChange,
   searchQuery: propSearchQuery,
   onSearchQueryChange,
+  counts = null,
 }) => {
   const { showToast } = useToast();
   const [internalSearch, setInternalSearch] = useState(propSearchQuery ?? '');
@@ -109,11 +109,6 @@ export const OrderTable: React.FC<OrderTableProps> = ({
       setStorePickupSubFilter('all');
     }
   }, [propStatusFilter]);
-
-  const isStorePickupActive = ['store-pickup', 'store-pickup-ready', 'store-pickup-picked'].includes(activeStatus);
-  const currentPickupSub = activeStatus === 'store-pickup-ready'
-    ? 'ready'
-    : (activeStatus === 'store-pickup-picked' ? 'picked' : storePickupSubFilter);
 
   // Sync propSearchQuery changes to internalSearch
   useEffect(() => {
@@ -232,96 +227,6 @@ export const OrderTable: React.FC<OrderTableProps> = ({
     showToast('info', 'Copied to Clipboard', text);
     setTimeout(() => setCopiedId(null), 2000);
   };
-
-  const statusCounts = useMemo(() => {
-    let onHold = 0;
-    let confirmed = 0;
-    let preparing = 0;
-    let readyToShip = 0;
-    let storePickup = 0;
-    let storePickupReady = 0;
-    let storePickupPicked = 0;
-    let shipped = 0;
-    let completed = 0;
-    let warranty = 0;
-    let redeem = 0;
-    let endorsement = 0;
-
-    orders.forEach((o) => {
-      const cleanStatus = String(o.status || '').replace('wc-', '').toLowerCase();
-      const rma = getOrderRma(o);
-      const isParentRma = Boolean(rma?.is_parent_order || (o as any).has_warranty_claim || (o as any).has_redeem_claim);
-      if (rma?.order_type === 'Warranty' && !isParentRma) warranty++;
-      if (rma?.order_type === 'Redeem' && !isParentRma) redeem++;
-
-      const isEndorsement = (o.meta_data || []).some(
-        (m: any) => (m.key === '_order_badge' && m.value === 'ENDORSEMENT') || (m.key === '_is_endorsement' && m.value === 'yes')
-      );
-      if (isEndorsement) endorsement++;
-
-      const isPickup = isStorePickupOrder(o);
-
-      if (['on-hold', 'pending-payment', 'pending'].includes(cleanStatus)) {
-        onHold++;
-      } else if (cleanStatus === 'processing') {
-        confirmed++;
-      } else if (['preparing-order', 'preparing_order', 'in-production', 'in_production'].includes(cleanStatus)) {
-        preparing++;
-      }
-
-      // Waiting for pickup (strictly couriers, excluding store pickup)
-      if (['ready-to-ship', 'ready_to_ship', 'awaiting-pickup', 'awaiting_pickup'].includes(cleanStatus) && !isPickup) {
-        readyToShip++;
-      }
-
-      if (isPickup) {
-        storePickup++;
-        if (['smb-ready', 'ready-to-ship', 'ready_to_ship', 'awaiting-pickup', 'awaiting_pickup'].includes(cleanStatus)) {
-          storePickupReady++;
-        }
-        if (['smb-picked', 'completed', 'delivered'].includes(cleanStatus)) {
-          storePickupPicked++;
-        }
-      }
-
-      if (cleanStatus === 'shipped') {
-        shipped++;
-      } else if (cleanStatus === 'completed' || cleanStatus === 'delivered') {
-        completed++;
-      }
-    });
-
-    return { 
-      onHold, 
-      confirmed, 
-      preparing, 
-      readyToShip, 
-      storePickup, 
-      storePickupReady, 
-      storePickupPicked, 
-      shipped, 
-      completed, 
-      warranty, 
-      redeem,
-      endorsement
-    };
-  }, [orders]);
-
-  const storePickupLabel = useMemo(() => {
-    if (isStorePickupActive) {
-      if (currentPickupSub === 'ready') return 'Store Pickup: Ready';
-      if (currentPickupSub === 'picked') return 'Store Pickup: Picked Up';
-    }
-    return 'Store Pickup (SMB)';
-  }, [isStorePickupActive, currentPickupSub]);
-
-  const storePickupCount = useMemo(() => {
-    if (isStorePickupActive) {
-      if (currentPickupSub === 'ready') return statusCounts.storePickupReady;
-      if (currentPickupSub === 'picked') return statusCounts.storePickupPicked;
-    }
-    return statusCounts.storePickup;
-  }, [isStorePickupActive, currentPickupSub, statusCounts]);
 
   const availableCouriers = useMemo(() => {
     const map = new Map<string, string>();
@@ -661,834 +566,379 @@ export const OrderTable: React.FC<OrderTableProps> = ({
     showToast('success', 'CSV Exported', `Exported ${selectedOrdersList.length} orders to CSV.`);
   };
 
+  const handleTabSelect = (key: string) => {
+    if (key === 'store-pickup') handleSelectStorePickupSub('all');
+    else if (key === 'store-pickup-ready') handleSelectStorePickupSub('ready');
+    else if (key === 'store-pickup-picked') handleSelectStorePickupSub('picked');
+    else handleStatusChange(key);
+  };
+
+  const activeMoreTab = MORE_ORDER_TABS.find((t) => t.key === activeStatus);
+  const primaryTabItems = PRIMARY_ORDER_TABS.map((t) => ({
+    key: t.key,
+    label: t.label,
+    count: tabCount(t, counts),
+    hot: t.hot,
+  }));
+  const moreMenuItems: MenuItem[] = MORE_ORDER_TABS.map((t) => {
+    const n = tabCount(t, counts);
+    return {
+      icon: MORE_TAB_ICONS[t.key] || Layers,
+      title: t.label,
+      description: typeof n === 'number' ? `${n} ${n === 1 ? 'order' : 'orders'}` : undefined,
+      onSelect: () => handleTabSelect(t.key),
+    };
+  });
+
+  const hasActiveFilters =
+    activeCourier !== 'all' || printFilter !== 'all' || activeStatus !== 'all' || activeSearch.trim() !== '';
+
+  const showPrintFor = (order: Order) => isOrderConfirmed(order.status) && !printedOrderIds.has(order.id);
+
+  const shownFrom = filteredOrders.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const shownTo =
+    filteredOrders.length === 0
+      ? 0
+      : totalOrders && totalOrders > 0
+      ? Math.min((currentPage - 1) * pageSize + filteredOrders.length, totalOrders)
+      : (currentPage - 1) * pageSize + filteredOrders.length;
+  const shownTotal = totalOrders && totalOrders > 0 ? totalOrders : (currentPage - 1) * pageSize + filteredOrders.length;
+
+  const th = 'border-b border-line px-3 py-2.5 text-left text-[12px] font-[450] text-faint whitespace-nowrap';
+  const td = 'border-b border-line px-3 py-[13px] align-middle';
+
   return (
-    <div className="space-y-4 font-sans">
-      {/* Control Bar: Search & Status Filters */}
-      <GlassCard className="p-3 sm:p-4 rounded-2xl border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111] space-y-3 overflow-visible relative z-20">
-        {/* Row 1: Status Filter Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
-          {[
-            { key: 'all', label: 'All Orders' },
-            { key: 'on-hold', label: 'Waiting for Payment' },
-            { key: 'processing', label: 'Confirmed', count: statusCounts.confirmed },
-            { key: 'preparing-order', label: 'Preparing order', count: statusCounts.preparing },
-            { key: 'ready-to-ship', label: 'Waiting for Pickup', count: statusCounts.readyToShip },
-            { key: 'shipped', label: 'Shipped', count: statusCounts.shipped },
-            { key: 'completed', label: 'Completed' },
-            { key: 'warranty', label: 'Warranty Claims' },
-            { key: 'redeem', label: 'Redeem' },
-            { key: 'endorsement', label: 'Endorsements', count: statusCounts.endorsement },
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => handleStatusChange(tab.key)}
-              className={clsx(
-                'px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer border flex items-center gap-1.5',
-                activeStatus === tab.key
-                  ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-950 border-zinc-900 dark:border-white shadow-xs'
-                  : 'bg-zinc-100 dark:bg-white/[0.04] text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border-transparent'
-              )}
-            >
-              <span>{tab.label}</span>
-              {tab.count !== undefined && tab.count > 0 && (
-                <span
-                  className={clsx(
-                    'px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold',
-                    activeStatus === tab.key
-                      ? tab.key === 'redeem'
-                        ? 'bg-amber-500 text-black font-extrabold'
-                        : tab.key === 'endorsement'
-                        ? 'bg-purple-600 text-white font-extrabold'
-                        : 'bg-white/20 text-white dark:bg-black/20 dark:text-black'
-                      : tab.key === 'redeem'
-                      ? 'bg-amber-500/20 text-amber-500 dark:text-amber-400 border border-amber-500/30'
-                      : tab.key === 'endorsement'
-                      ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
-                      : 'bg-zinc-200 dark:bg-white/10 text-zinc-700 dark:text-zinc-300 border border-zinc-300 dark:border-white/10'
-                  )}
-                >
-                  {tab.count}
-                </span>
-              )}
-            </button>
-          ))}
-
-          {/* Visual Separator before Store Pickup */}
-          <div className="h-5 w-px bg-zinc-200 dark:bg-white/10 mx-1 shrink-0" aria-hidden="true" />
-
-          {/* Store Pickup (SMB) Dropdown Pill */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+    <section className="overflow-hidden rounded-[14px] border border-card-border bg-card font-sans text-[14px]">
+      {/* Tabs, More and filters */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2.5">
+        <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
+          <Tabs items={primaryTabItems} value={activeStatus} onChange={handleTabSelect} />
+          <Menu
+            align="start"
+            items={moreMenuItems}
+            trigger={
               <button
                 type="button"
-                className={clsx(
-                  'px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer border flex items-center gap-1.5 shrink-0 select-none outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50',
-                  isStorePickupActive
-                    ? 'bg-amber-500 text-black border-amber-500 font-bold shadow-xs'
-                    : 'bg-zinc-100 dark:bg-white/[0.04] text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border-transparent'
-                )}
-                title="Store Pickup options (SMB)"
+                className={`flex items-center gap-1.5 whitespace-nowrap rounded-[8px] border px-[11px] py-1.5 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                  activeMoreTab ? 'border-card-border bg-chip text-fg' : 'border-transparent text-muted hover:text-fg'
+                }`}
               >
-                <Store className={clsx('w-3.5 h-3.5', isStorePickupActive ? 'text-black' : 'text-amber-500')} />
-                <span>{storePickupLabel}</span>
-                {storePickupCount > 0 && (
-                  <span
-                    className={clsx(
-                      'px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold',
-                      isStorePickupActive
-                        ? 'bg-black/20 text-black font-extrabold'
-                        : 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
-                    )}
-                  >
-                    {storePickupCount}
-                  </span>
+                {activeMoreTab ? activeMoreTab.label : 'More'}
+                {activeMoreTab && typeof tabCount(activeMoreTab, counts) === 'number' && (
+                  <CountPill value={tabCount(activeMoreTab, counts) as number} />
                 )}
-                <ChevronDown className={clsx('w-3.5 h-3.5 transition-transform duration-200', isStorePickupActive ? 'text-black/80' : 'text-zinc-400')} />
+                <ChevronDown className="h-[14px] w-[14px] text-faint" strokeWidth={1.8} aria-hidden />
               </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56 p-1.5">
-              <DropdownMenuItem
-                onClick={() => handleSelectStorePickupSub('all')}
-                className={clsx(
-                  'flex items-center justify-between px-2.5 py-2 rounded-xl text-xs cursor-pointer',
-                  isStorePickupActive && currentPickupSub === 'all'
-                    ? 'bg-zinc-100 dark:bg-white/10 font-bold text-zinc-900 dark:text-white'
-                    : 'text-zinc-700 dark:text-zinc-300'
-                )}
-              >
-                <div className="flex items-center gap-2">
-                  <Store className="w-3.5 h-3.5 text-zinc-500" />
-                  <span>All Store Pickup</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {statusCounts.storePickup > 0 && (
-                    <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-zinc-200 dark:bg-white/10 text-zinc-700 dark:text-zinc-300">
-                      {statusCounts.storePickup}
-                    </span>
-                  )}
-                  {isStorePickupActive && currentPickupSub === 'all' && (
-                    <Check className="w-3.5 h-3.5 text-amber-500 ml-1" />
-                  )}
-                </div>
-              </DropdownMenuItem>
-
-              <DropdownMenuItem
-                onClick={() => handleSelectStorePickupSub('ready')}
-                className={clsx(
-                  'flex items-center justify-between px-2.5 py-2 rounded-xl text-xs cursor-pointer',
-                  isStorePickupActive && currentPickupSub === 'ready'
-                    ? 'bg-zinc-100 dark:bg-white/10 font-bold text-zinc-900 dark:text-white'
-                    : 'text-zinc-700 dark:text-zinc-300'
-                )}
-              >
-                <div className="flex items-center gap-2">
-                  <Package className="w-3.5 h-3.5 text-amber-500" />
-                  <span>Ready for Pickup</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {statusCounts.storePickupReady > 0 && (
-                    <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25">
-                      {statusCounts.storePickupReady}
-                    </span>
-                  )}
-                  {isStorePickupActive && currentPickupSub === 'ready' && (
-                    <Check className="w-3.5 h-3.5 text-amber-500 ml-1" />
-                  )}
-                </div>
-              </DropdownMenuItem>
-
-              <DropdownMenuItem
-                onClick={() => handleSelectStorePickupSub('picked')}
-                className={clsx(
-                  'flex items-center justify-between px-2.5 py-2 rounded-xl text-xs cursor-pointer',
-                  isStorePickupActive && currentPickupSub === 'picked'
-                    ? 'bg-zinc-100 dark:bg-white/10 font-bold text-zinc-900 dark:text-white'
-                    : 'text-zinc-700 dark:text-zinc-300'
-                )}
-              >
-                <div className="flex items-center gap-2">
-                  <PackageCheck className="w-3.5 h-3.5 text-emerald-500" />
-                  <span>Picked Up</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {statusCounts.storePickupPicked > 0 && (
-                    <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-zinc-200 dark:bg-white/10 text-zinc-700 dark:text-zinc-300">
-                      {statusCounts.storePickupPicked}
-                    </span>
-                  )}
-                  {isStorePickupActive && currentPickupSub === 'picked' && (
-                    <Check className="w-3.5 h-3.5 text-emerald-500 ml-1" />
-                  )}
-                </div>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            }
+          />
         </div>
 
-        {/* Row 2: Secondary Filters & Search Bar */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-2 border-t border-zinc-100 dark:border-white/5">
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Courier Filter */}
-            <FilterSelect
-              label="Courier"
-              value={activeCourier}
-              onChange={handleCourierChange}
-              icon={<Truck className="w-3.5 h-3.5" />}
-              options={[
-                { value: 'all', label: 'All Couriers' },
-                ...availableCouriers.map((c) => ({ value: c.key, label: c.name })),
-                { value: 'PICKUP', label: 'Store Pickup (SMB)' },
-              ]}
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                handleCourierChange('all');
+                handleStatusChange('all');
+                setPrintFilter('all');
+                if (onSearchQueryChange) onSearchQueryChange('');
+                setInternalSearch('');
+              }}
+            >
+              Reset filters
+            </Button>
+          )}
+          <Select
+            aria-label="Courier"
+            className="w-[136px]"
+            value={activeCourier}
+            onChange={handleCourierChange}
+            options={[
+              { value: 'all', label: 'All couriers' },
+              ...availableCouriers.map((c) => ({ value: c.key, label: c.name })),
+              { value: 'PICKUP', label: 'Store pickup' },
+            ]}
+          />
+          <Select
+            aria-label="Label status"
+            className="w-[124px]"
+            value={printFilter}
+            onChange={(val) => setPrintFilter(val as 'all' | 'printed' | 'unprinted')}
+            options={[
+              { value: 'all', label: 'All labels' },
+              { value: 'printed', label: 'Printed' },
+              { value: 'unprinted', label: 'Not printed' },
+            ]}
+          />
+          <div className="relative w-[220px]">
+            <SearchField
+              placeholder="Search orders, resi, phone"
+              value={internalSearch}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (onSearchQueryChange) {
+                    onSearchQueryChange(internalSearch);
+                  }
+                }
+              }}
+              className="pr-8 [&_input::-webkit-search-cancel-button]:appearance-none"
             />
-
-            {/* Print Status Filter */}
-            <FilterSelect
-              label="Label Status"
-              value={printFilter}
-              onChange={(val) => setPrintFilter(val as any)}
-              icon={<Printer className="w-3.5 h-3.5" />}
-              options={[
-                { value: 'all', label: 'All Orders' },
-                { value: 'printed', label: 'Printed Labels' },
-                { value: 'unprinted', label: 'Not Printed' },
-              ]}
-            />
-
-            {/* Clear Filters */}
-            {(activeCourier !== 'all' || printFilter !== 'all' || activeStatus !== 'all' || activeSearch.trim() !== '') && (
+            {internalSearch && (
               <button
                 type="button"
                 onClick={() => {
-                  handleCourierChange('all');
-                  handleStatusChange('all');
-                  setPrintFilter('all');
+                  handleSearchChange('');
                   if (onSearchQueryChange) onSearchQueryChange('');
-                  setInternalSearch('');
                 }}
-                className="px-2 py-1 rounded-lg text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white text-xs underline cursor-pointer"
+                className="absolute right-2 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-md text-faint hover:bg-chip hover:text-fg"
+                aria-label="Clear search"
+                title="Clear search"
               >
-                Reset filters
-              </button>
-            )}
-          </div>
-
-          {/* Search Input and Refresh */}
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1 sm:w-72">
-              <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                type="text"
-                placeholder="Search orders, items, resi, phone..."
-                value={internalSearch}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    if (onSearchQueryChange) {
-                      onSearchQueryChange(internalSearch);
-                    }
-                  }
-                }}
-                className="w-full pl-9 pr-8 py-1.5 rounded-xl bg-zinc-100 dark:bg-[#141414] border border-zinc-200 dark:border-white/[0.08] text-xs text-zinc-900 dark:text-white placeholder-zinc-500 focus:outline-none focus:border-[#f3aa18]"
-              />
-              {internalSearch && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleSearchChange('');
-                    if (onSearchQueryChange) onSearchQueryChange('');
-                  }}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 p-0.5 cursor-pointer"
-                  title="Clear search"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            {onRefresh && (
-              <button
-                type="button"
-                onClick={onRefresh}
-                disabled={isLoading}
-                className="p-2 rounded-xl bg-zinc-100 dark:bg-[#141414] hover:bg-zinc-200 dark:hover:bg-white/[0.06] text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border border-zinc-200 dark:border-white/[0.08] transition-colors disabled:opacity-50 cursor-pointer shrink-0"
-                title="Refresh Orders"
-              >
-                <RefreshCw className={clsx('w-4 h-4', isLoading && 'animate-spin text-[#f3aa18]')} />
+                <X className="h-[14px] w-[14px]" strokeWidth={1.8} aria-hidden />
               </button>
             )}
           </div>
         </div>
+      </div>
 
-        {/* Row 3: Multiselect Bulk Action Bar (Displayed under pills when items are selected) */}
-        {selectedIds.size > 0 && (
-          <div className="pt-3 border-t border-amber-500/20 flex flex-wrap items-center justify-between gap-3 bg-amber-500/[0.06] dark:bg-amber-500/[0.08] rounded-xl px-4 py-2.5">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-[#f3aa18] animate-pulse" />
-              <span className="text-xs font-bold text-zinc-900 dark:text-white">
-                {selectedIds.size} {selectedIds.size === 1 ? 'order' : 'orders'} selected
-              </span>
-              <span className="text-zinc-400 dark:text-zinc-600">|</span>
-              <button
-                type="button"
-                onClick={() => setSelectedIds(new Set())}
-                className="text-xs text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white underline cursor-pointer"
-              >
-                Deselect All
-              </button>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Bulk Change Status Selector */}
-              <div className="flex items-center gap-1.5 whitespace-nowrap">
-                <FilterSelect
-                  value={bulkStatusTarget}
-                  onChange={setBulkStatusTarget}
-                  options={[
-                    { value: 'processing', label: 'Confirmed (Processing)' },
-                    { value: 'preparing-order', label: 'Preparing Order' },
-                    { value: 'ready-to-ship', label: 'Waiting for Pickup' },
-                    { value: 'shipped', label: 'Shipped' },
-                    { value: 'completed', label: 'Completed' },
-                  ]}
-                />
-
-                <button
-                  type="button"
-                  onClick={handleBulkChangeStatus}
-                  disabled={isBulkUpdating}
-                  className="px-3.5 py-1.5 rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-neutral-950 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap shadow-xs"
-                >
-                  <RefreshCw className={clsx('w-3.5 h-3.5', isBulkUpdating && 'animate-spin')} />
-                  <span>{isBulkUpdating ? 'Updating...' : 'Update Status'}</span>
-                </button>
-              </div>
-
-              {/* Bulk Print A6 */}
-              <button
-                type="button"
-                onClick={handleBulkPrintA6}
-                className="px-3.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-800 dark:text-neutral-200 border border-zinc-300 dark:border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
-              >
-                <Printer className="w-3.5 h-3.5 text-zinc-500 dark:text-neutral-400" />
-                <span>Bulk Print A6</span>
-              </button>
-
-              {/* Bulk Export CSV */}
-              <button
-                type="button"
-                onClick={handleBulkExport}
-                className="px-3.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-800 dark:text-neutral-200 border border-zinc-300 dark:border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
-              >
-                <Download className="w-3.5 h-3.5 text-zinc-500 dark:text-neutral-400" />
-                <span>Export CSV</span>
-              </button>
-            </div>
-          </div>
-        )}
-      </GlassCard>
-
-      {/* Orders Table Container */}
-      <GlassCard className="rounded-2xl border-zinc-200 dark:border-white/[0.06] bg-white dark:bg-[#111111] overflow-hidden">
-        {/* Desktop Table View */}
-        <div className="hidden md:block overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs font-sans select-none">
-            <thead>
-              <tr className="border-b border-zinc-200 dark:border-white/[0.06] bg-zinc-50 dark:bg-[#0d0d0d]/80 text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider text-[10px]">
-                <th className="py-3.5 px-3 w-10 text-center">
-                  <input
-                    type="checkbox"
-                    checked={isAllSelected}
-                    ref={(input) => {
-                      if (input) {
-                        input.indeterminate = !isAllSelected && isSomeSelected;
-                      }
-                    }}
-                    onChange={handleToggleSelectAll}
-                    className="w-4 h-4 rounded border-zinc-300 dark:border-white/20 bg-white dark:bg-neutral-800 text-[#f3aa18] focus:ring-[#f3aa18] focus:ring-offset-0 cursor-pointer"
-                  />
-                </th>
-                <th className="py-3.5 px-4">Order</th>
-                <th className="py-3.5 px-4">Customer & Destination</th>
-                <th className="py-3.5 px-4">Items</th>
-                <th className="py-3.5 px-4 text-right">Total</th>
-                <th className="py-3.5 px-4 text-center">Status</th>
-                <th className="py-3.5 px-4">Courier & Tracking Resi</th>
-                <th className="py-3.5 px-4 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100 dark:divide-white/[0.04]">
-              {filteredOrders.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="py-16 text-center text-zinc-500 font-sans">
-                    <Package className="w-8 h-8 text-zinc-400 dark:text-zinc-600 mx-auto mb-2 opacity-50" />
-                    <p className="text-xs">
-                      {isLoading ? 'Fetching live orders...' : 'No orders match these criteria.'}
-                    </p>
-                  </td>
-                </tr>
-              ) : (
-                filteredOrders.map((order) => {
-                  const rawTrackingNum = String(order.tracking?.tracking_number || '').trim();
-                  const hasValidTracking = rawTrackingNum.length > 0 && !rawTrackingNum.startsWith('field_');
-                  const isSelected = selectedIds.has(order.id);
-                  const isPickup = isStorePickupOrder(order);
-                  const isPrinted = printedOrderIds.has(order.id);
-                  const isConfirmed = isOrderConfirmed(order.status);
-                  const isCompleted = String(order.status || '').replace(/^wc-/, '').toLowerCase().trim() === 'completed';
-                  const isEndorsement = (order.meta_data || []).some(
-                    (m: any) => (m.key === '_order_badge' && m.value === 'ENDORSEMENT') || (m.key === '_is_endorsement' && m.value === 'yes')
-                  );
-                  const influencerHandle = (order.meta_data || []).find((m: any) => m.key === '_influencer_handle')?.value;
-
-                  return (
-                    <tr
-                      key={order.id}
-                      onClick={() => onSelectOrder(order)}
-                      className={clsx(
-                        'hover:bg-zinc-50 dark:hover:bg-white/[0.02] transition-colors cursor-pointer group',
-                        isSelected && 'bg-[#f3aa18]/[0.04] dark:bg-[#f3aa18]/[0.04]'
-                      )}
-                    >
-                      {/* Checkbox Column */}
-                      <td className="py-3.5 px-3 w-10 text-center" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onClick={(e) => handleToggleSelect(order.id, e)}
-                          onChange={() => {}}
-                          className="w-4 h-4 rounded border-zinc-300 dark:border-white/20 bg-white dark:bg-neutral-800 text-[#f3aa18] focus:ring-[#f3aa18] focus:ring-offset-0 cursor-pointer"
-                        />
-                      </td>
-
-                      {/* Order Number & Date */}
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-mono font-bold text-zinc-900 dark:text-white">
-                            #{String(order.order_number || order.id).replace(/^#+/, '')}
-                          </span>
-                          {isEndorsement && (
-                            <span className="inline-flex items-center gap-0.5 text-[8px] font-mono font-bold text-purple-400 bg-purple-500/15 border border-purple-500/30 px-1 py-0.5 rounded shadow-xs">
-                              <Sparkles className="w-2.5 h-2.5 text-purple-400" />
-                              ENDORSEMENT
-                            </span>
-                          )}
-                          {getOrderRma(order)?.order_type === 'Redeem' && (
-                            <span className="inline-flex items-center gap-0.5 text-[8px] font-mono font-bold text-amber-500 dark:text-amber-400 bg-amber-500/15 border border-amber-500/30 px-1 py-0.5 rounded shadow-xs">
-                              <RotateCcw className="w-2.5 h-2.5 text-amber-400" />
-                              {getOrderRma(order)?.is_parent_order ? 'REDEEM (CLAIMED)' : 'REDEEM'}
-                            </span>
-                          )}
-                          {getOrderRma(order)?.order_type === 'Warranty' && (
-                            <span className={clsx(
-                              "inline-flex items-center gap-0.5 text-[8px] font-mono font-semibold px-1 py-0.5 rounded shadow-xs border",
-                              getOrderRma(order)?.is_parent_order
-                                ? "text-amber-500 dark:text-amber-400 bg-amber-500/15 border-amber-500/30"
-                                : "text-emerald-600 dark:text-emerald-400 bg-emerald-500/15 border-emerald-500/30"
-                            )}>
-                              <ShieldCheck className="w-2.5 h-2.5" />
-                              {getOrderRma(order)?.is_parent_order ? 'WARRANTY (CLAIMED)' : 'WARRANTY'}
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono block mt-0.5">
-                          {formatDateTime(order.created_at)}
-                        </span>
-                      </td>
-
-                      {/* Customer Name & Destination */}
-                      <td className="py-3.5 px-4">
-                        <p className="font-medium text-zinc-900 dark:text-white flex items-center gap-1.5 flex-wrap">
-                          <span>{order.customer_name || 'Customer'}</span>
-                          {influencerHandle && (
-                            <span className="text-[10px] font-mono text-purple-400 font-semibold bg-purple-500/10 px-1.5 py-0.2 rounded border border-purple-500/20">
-                              {influencerHandle}
-                            </span>
-                          )}
-                        </p>
-                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate max-w-[180px]">
-                          {isPickup ? (
-                            <span className="text-[#f3aa18] font-medium">Summarecon Bekasi Store</span>
-                          ) : (
-                            `${order.shipping?.city ? `${formatCleanText(order.shipping.city)}, ` : ''}${resolveCountryName(order.shipping?.country)}`
-                          )}
-                        </p>
-                      </td>
-
-                      {/* Items Count & Products */}
-                      <td className="py-3.5 px-4">
-                        <span className="inline-flex items-center gap-1 text-[11px] text-zinc-700 dark:text-zinc-300 font-medium">
-                          <Package className="w-3 h-3 text-zinc-400" />
-                          {order.item_count ?? (order.items?.length || 0)} {order.item_count === 1 ? 'item' : 'items'}
-                        </span>
-                        <div className="text-[10.5px] text-zinc-500 truncate max-w-[180px]">
-                          {order.items?.map((it) => `${it.quantity}x ${it.name}`).join(', ')}
-                        </div>
-                      </td>
-
-                      {/* Total */}
-                      <td className="py-3.5 px-4">
-                        <span className="font-mono font-bold text-zinc-900 dark:text-white">
-                          {formatCurrency(order.total, order.currency)}
-                        </span>
-                        <span className="text-[10px] text-zinc-500 block">
-                          {order.payment_method_title || order.payment_method || 'Direct'}
-                        </span>
-                      </td>
-
-                      {/* Status */}
-                      <td className="py-3.5 px-4 text-center">
-                        <div className="flex flex-col items-center gap-1">
-                          {isCompleted ? (
-                            <span
-                              className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 shadow-xs"
-                              title="Completed"
-                              aria-label="Completed"
-                            >
-                              <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                            </span>
-                          ) : (
-                            <Badge type="orderStatus" value={order.status} size="xs" />
-                          )}
-                          {(() => {
-                            const rma = getOrderRma(order);
-                            const isRmaClaim = Boolean(rma?.order_type === 'Warranty' || rma?.order_type === 'Redeem');
-                            const effectiveStatus = rma?.status || order.warranty_claim_status;
-                            const isPendingReview = isRmaClaim && effectiveStatus === 'pending_review' && rma?.status !== 'approved' && rma?.status !== 'rejected';
-                            const isApprovedAwaitingPayment = isRmaClaim && rma?.status === 'approved' && order.status === 'pending';
-
-                            return (
-                              <>
-                                {isPendingReview && (
-                                  <span
-                                    className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-amber-500 dark:text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded border border-amber-500/30 whitespace-nowrap shadow-xs"
-                                    title="Warranty claim proof pending review"
-                                  >
-                                    <ShieldAlert className="w-2.5 h-2.5 text-amber-400 shrink-0" />
-                                    PENDING REVIEW
-                                  </span>
-                                )}
-                                {isApprovedAwaitingPayment && (
-                                  <span
-                                    className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-emerald-500 dark:text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded border border-emerald-500/30 whitespace-nowrap shadow-xs"
-                                    title="Claim approved, awaiting customer shipping payment"
-                                  >
-                                    <ShieldCheck className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
-                                    CLAIM APPROVED
-                                  </span>
-                                )}
-                              </>
-                            );
-                          })()}
-                          {isPickup && (
-                            <span className="inline-flex items-center text-[9px] font-mono font-semibold text-[#f3aa18] bg-[#f3aa18]/10 px-1.5 py-0.5 rounded border border-[#f3aa18]/20 whitespace-nowrap">
-                              Store Pickup (SMB)
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Tracking Resi & Courier */}
-                      <td className="py-3.5 px-4">
-                        {isPickup ? (
-                          <div className="space-y-1">
-                            <span className="inline-flex items-center text-[10px] font-mono font-semibold text-[#f3aa18] bg-[#f3aa18]/10 px-2 py-0.5 rounded border border-[#f3aa18]/20 whitespace-nowrap">
-                              Store Pickup
-                            </span>
-                            <span className="text-[10px] text-zinc-500 block truncate max-w-[140px]">
-                              Summarecon Bekasi
-                            </span>
-                          </div>
-                        ) : hasValidTracking ? (
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1.5">
-                              <span className="inline-flex items-center gap-1 font-mono text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                                <Truck className="w-3 h-3 text-emerald-500" />
-                                {rawTrackingNum}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={(e) => handleCopy(rawTrackingNum, `track_${order.id}`, e)}
-                                className="p-1 rounded hover:bg-zinc-200 dark:hover:bg-white/10 text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
-                                title="Copy Resi"
-                              >
-                                {copiedId === `track_${order.id}` ? (
-                                  <Check className="w-3 h-3 text-emerald-400" />
-                                ) : (
-                                  <Copy className="w-3 h-3" />
-                                )}
-                              </button>
-                            </div>
-                            <span className="text-[10px] text-zinc-500 truncate max-w-[140px] font-medium block">
-                              {getOrderCourierDisplay(order)}
-                            </span>
-                          </div>
-                        ) : (
-                          <div className="space-y-1">
-                            <span className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono block">
-                              Resi pending
-                            </span>
-                            <span className="text-[10px] text-zinc-500 block truncate max-w-[140px]">
-                              {getOrderCourierDisplay(order)}
-                            </span>
-                          </div>
-                        )}
-                      </td>
-
-                      {/* Actions */}
-                      <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1.5">
-                          {/* Print Thermal Label - Only shown for Confirmed orders */}
-                          {isConfirmed && (
-                            <button
-                              type="button"
-                              onClick={(e) => handleSinglePrintA6(order, e)}
-                              className={clsx(
-                                'p-1.5 rounded-lg border transition-all cursor-pointer relative',
-                                !isPrinted
-                                  ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/40 hover:bg-amber-500/25'
-                                  : 'bg-zinc-100 dark:bg-white/[0.04] text-zinc-400 dark:text-zinc-500 border-transparent hover:border-zinc-300 dark:hover:border-white/10 hover:text-zinc-700 dark:hover:text-zinc-300'
-                              )}
-                              title={!isPrinted ? 'Print 4x6 Label (Not printed yet)' : 'Print 4x6 Label (Already printed)'}
-                            >
-                              <Printer className="w-3.5 h-3.5" />
-                              {!isPrinted && (
-                                <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-amber-500 ring-1 ring-white dark:ring-neutral-900" />
-                              )}
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => onSelectOrder(order)}
-                            className="p-1.5 rounded-lg bg-zinc-100 dark:bg-white/[0.04] hover:bg-zinc-200 dark:hover:bg-white/[0.1] text-zinc-600 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white border border-transparent hover:border-zinc-300 dark:hover:border-white/10 transition-colors cursor-pointer"
-                            title="Inspect Order Details"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Mobile Card List View */}
-        <div className="md:hidden divide-y divide-zinc-100 dark:divide-white/[0.04]">
-          {filteredOrders.length === 0 ? (
-            <div className="p-8 text-center text-zinc-500 font-sans">
-              <Package className="w-8 h-8 text-zinc-400 dark:text-zinc-600 mx-auto mb-2 opacity-50" />
-              <p className="text-xs">
-                {isLoading ? 'Fetching live orders...' : 'No orders found.'}
-              </p>
-            </div>
-          ) : (
-            filteredOrders.map((order) => {
-              const isSelected = selectedIds.has(order.id);
-              const rawTrackingNum = String(order.tracking?.tracking_number || '').trim();
-              const hasValidTracking = rawTrackingNum.length > 0 && !rawTrackingNum.startsWith('field_');
-              const isConfirmed = isOrderConfirmed(order.status);
-              const isCompleted = String(order.status || '').replace(/^wc-/, '').toLowerCase().trim() === 'completed';
-
-              return (
-                <div
-                  key={order.id}
-                  onClick={() => onSelectOrder(order)}
-                  className={clsx(
-                    'p-3.5 hover:bg-zinc-50 dark:hover:bg-white/[0.02] transition-colors cursor-pointer space-y-2.5',
-                    isSelected && 'bg-[#f3aa18]/[0.04] dark:bg-[#f3aa18]/[0.04]'
-                  )}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => handleToggleSelect(order.id, e as any)}
-                        className="w-4 h-4 rounded border-zinc-300 dark:border-white/20 bg-white dark:bg-neutral-800 text-[#f3aa18] focus:ring-[#f3aa18] focus:ring-offset-0 cursor-pointer shrink-0"
-                      />
-                      <span className="font-mono font-bold text-xs text-zinc-900 dark:text-white">
-                        #{String(order.order_number || order.id).replace(/^#+/, '')}
-                      </span>
-                      {(order.meta_data || []).some((m: any) => (m.key === '_order_badge' && m.value === 'ENDORSEMENT') || (m.key === '_is_endorsement' && m.value === 'yes')) && (
-                        <span className="inline-flex items-center gap-0.5 text-[8px] font-mono font-bold text-purple-400 bg-purple-500/20 border border-purple-500/40 px-1 py-0.2 rounded">
-                          <Sparkles className="w-2 h-2 text-purple-400" />
-                          ENDORSEMENT
-                        </span>
-                      )}
-                      {getOrderRma(order)?.order_type === 'Redeem' && (
-                        <span className="inline-flex items-center gap-0.5 text-[8px] font-mono font-bold text-amber-500 dark:text-amber-400 bg-amber-500/20 border border-amber-500/40 px-1 py-0.2 rounded">
-                          <RotateCcw className="w-2 h-2 text-amber-400" />
-                          {getOrderRma(order)?.is_parent_order ? 'REDEEM (CLAIMED)' : 'REDEEM'}
-                        </span>
-                      )}
-                      {getOrderRma(order)?.order_type === 'Warranty' && (
-                        <span className={clsx(
-                          "inline-flex items-center gap-0.5 text-[8px] font-mono font-bold px-1 py-0.2 rounded border",
-                          getOrderRma(order)?.is_parent_order
-                            ? "text-amber-500 dark:text-amber-400 bg-amber-500/20 border-amber-500/40"
-                            : "text-sky-500 dark:text-sky-400 bg-sky-500/20 border-sky-500/40"
-                        )}>
-                          <ShieldCheck className="w-2 h-2" />
-                          {getOrderRma(order)?.is_parent_order ? 'WARRANTY (CLAIMED)' : 'WARRANTY'}
-                        </span>
-                      )}
-                      <span className="text-[10px] text-zinc-500 font-mono">
-                        {formatDateTime(order.created_at)}
-                      </span>
-                    </div>
-                    <div className="flex flex-col items-end gap-1">
-                      {isCompleted ? (
-                        <span
-                          className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 shadow-xs"
-                          title="Completed"
-                          aria-label="Completed"
-                        >
-                          <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                        </span>
-                      ) : (
-                        <Badge type="orderStatus" value={order.status} size="xs" />
-                      )}
-                      {(() => {
-                        const rma = getOrderRma(order);
-                        const isRmaClaim = Boolean(rma?.order_type === 'Warranty' || rma?.order_type === 'Redeem');
-                        const effectiveStatus = rma?.status || order.warranty_claim_status;
-                        const isPendingReview = isRmaClaim && effectiveStatus === 'pending_review' && rma?.status !== 'approved' && rma?.status !== 'rejected';
-                        const isApprovedAwaitingPayment = isRmaClaim && rma?.status === 'approved' && order.status === 'pending';
-
-                        return (
-                          <>
-                            {isPendingReview && (
-                              <span className="inline-flex items-center gap-1 text-[8.5px] font-mono font-bold text-amber-500 dark:text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded border border-amber-500/30 whitespace-nowrap shadow-xs">
-                                <ShieldAlert className="w-2 h-2 text-amber-400" />
-                                PENDING REVIEW
-                              </span>
-                            )}
-                            {isApprovedAwaitingPayment && (
-                              <span className="inline-flex items-center gap-1 text-[8.5px] font-mono font-bold text-emerald-500 dark:text-emerald-400 bg-emerald-500/15 px-1.5 py-0.5 rounded border border-emerald-500/30 whitespace-nowrap shadow-xs">
-                                <ShieldCheck className="w-2 h-2 text-emerald-400" />
-                                CLAIM APPROVED
-                              </span>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs">
-                    <div>
-                      <p className="font-medium text-zinc-900 dark:text-white">
-                        {formatCleanText(order.customer_name) || 'Customer'}
-                      </p>
-                      <p className="text-[11px] text-zinc-500">
-                        {order.shipping?.city ? `${formatCleanText(order.shipping.city)}, ` : ''}{resolveCountryName(order.shipping?.country)}
-                      </p>
-                    </div>
-                    <p className="font-mono font-bold text-zinc-900 dark:text-white text-sm">
-                      {formatCurrency(order.total, order.currency)}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-between text-[11px] pt-1 border-t border-zinc-100 dark:border-white/5">
-                    <span className="text-zinc-500">{getOrderCourierDisplay(order)}</span>
-                    <div className="flex items-center gap-2">
-                      {hasValidTracking && (
-                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                          {rawTrackingNum}
-                        </span>
-                      )}
-                      {/* Print 4x6 Label - Only shown for Confirmed orders */}
-                      {isConfirmed && (
-                        <button
-                          type="button"
-                          onClick={(e) => handleSinglePrintA6(order, e)}
-                          className={clsx(
-                            'p-1.5 rounded-lg border transition-all cursor-pointer relative',
-                            !printedOrderIds.has(order.id)
-                              ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/40 hover:bg-amber-500/25'
-                              : 'bg-zinc-100 dark:bg-white/[0.04] text-zinc-400 dark:text-zinc-500 border-transparent hover:border-zinc-300 dark:hover:border-white/10 hover:text-zinc-700 dark:hover:text-zinc-300'
-                          )}
-                          title={!printedOrderIds.has(order.id) ? 'Print 4x6 Label (Not printed yet)' : 'Print 4x6 Label (Already printed)'}
-                        >
-                          <Printer className="w-3.5 h-3.5" />
-                          {!printedOrderIds.has(order.id) && (
-                            <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-amber-500 ring-1 ring-white dark:ring-neutral-900" />
-                          )}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-
-        {/* Table Pagination Footer */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-zinc-200 dark:border-white/[0.06] bg-zinc-50 dark:bg-[#0e0e0e]/80 text-xs text-zinc-600 dark:text-zinc-400 font-sans">
-          <div className="flex items-center gap-2">
-            <span>
-              Showing <span className="font-mono font-bold text-zinc-900 dark:text-white">{filteredOrders.length === 0 ? 0 : ((currentPage - 1) * pageSize) + 1}</span> to{' '}
-              <span className="font-mono font-bold text-zinc-900 dark:text-white">
-                {filteredOrders.length === 0
-                  ? 0
-                  : (totalOrders && totalOrders > 0
-                      ? Math.min(((currentPage - 1) * pageSize) + filteredOrders.length, totalOrders)
-                      : ((currentPage - 1) * pageSize) + filteredOrders.length)}
-              </span>{' '}
-              of <span className="font-mono font-bold text-zinc-900 dark:text-white">{totalOrders && totalOrders > 0 ? totalOrders : ((currentPage - 1) * pageSize) + filteredOrders.length}</span> orders
-            </span>
-            {Boolean(activeSearch && activeSearch.trim()) && (
-              <span className="ml-1.5 px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-[#f3aa18]/10 text-amber-600 dark:text-[#f3aa18] border border-[#f3aa18]/20">
-                Search Results
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3">
-            {/* Per Page Selector */}
-            <FilterSelect
-              label="Per page"
-              value={pageSize}
-              onChange={(val) => onPageSizeChange && onPageSizeChange(Number(val))}
-              dropUp={true}
+      {/* Bulk actions for the selected rows */}
+      {selectedIds.size > 0 && (
+        <div className="flex flex-wrap items-center gap-3 border-b border-line bg-accent-soft px-4 py-2.5">
+          <span className="text-[13px] font-medium text-fg">
+            {selectedIds.size} {selectedIds.size === 1 ? 'order' : 'orders'} selected
+          </span>
+          <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+            Deselect all
+          </Button>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <Select
+              aria-label="New status"
+              className="w-[190px]"
+              value={bulkStatusTarget}
+              onChange={setBulkStatusTarget}
               options={[
-                { value: 50, label: '50' },
-                { value: 100, label: '100' },
-                { value: 200, label: '200' },
+                { value: 'processing', label: 'To prepare' },
+                { value: 'preparing-order', label: 'Preparing' },
+                { value: 'ready-to-ship', label: 'Waiting for courier' },
+                { value: 'shipped', label: 'Shipped' },
+                { value: 'completed', label: 'Completed' },
               ]}
             />
-
-            {/* Page Navigation */}
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => onPageChange && onPageChange(currentPage - 1)}
-                disabled={currentPage <= 1}
-                className="px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-white/10 bg-white dark:bg-neutral-900 hover:bg-zinc-100 dark:hover:bg-white/5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors font-sans"
-              >
-                Prev
-              </button>
-              <span className="px-2 py-1 font-mono text-[11px]">
-                Page {currentPage} of {Math.max(1, maxPages || 1)}
-              </span>
-              <button
-                type="button"
-                onClick={() => onPageChange && onPageChange(currentPage + 1)}
-                disabled={currentPage >= (maxPages || 1)}
-                className="px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-white/10 bg-white dark:bg-neutral-900 hover:bg-zinc-100 dark:hover:bg-white/5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors font-sans"
-              >
-                Next
-              </button>
-            </div>
+            <Button
+              variant="primary"
+              icon={RefreshCw}
+              onClick={handleBulkChangeStatus}
+              disabled={isBulkUpdating}
+              className={isBulkUpdating ? '[&>svg:first-child]:animate-spin' : ''}
+            >
+              {isBulkUpdating ? 'Updating...' : 'Update status'}
+            </Button>
+            <Button icon={Printer} onClick={handleBulkPrintA6}>
+              Print A6 labels
+            </Button>
+            <Button icon={Download} onClick={handleBulkExport}>
+              Export CSV
+            </Button>
           </div>
         </div>
-      </GlassCard>
+      )}
+
+      {/* Desktop table */}
+      <div className="hidden overflow-x-auto md:block">
+        <table className="w-full min-w-[1180px] table-fixed border-collapse">
+          <colgroup>
+            <col className="w-[44px]" />
+            <col className="w-[200px]" />
+            <col className="w-[230px]" />
+            <col />
+            <col className="w-[140px]" />
+            <col className="w-[190px]" />
+            <col className="w-[230px]" />
+            <col className="w-[124px]" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th className={`${th} pr-0`}>
+                <Checkbox
+                  aria-label="Select all orders on this page"
+                  checked={isAllSelected}
+                  ref={(input) => {
+                    if (input) {
+                      input.indeterminate = !isAllSelected && isSomeSelected;
+                    }
+                  }}
+                  onChange={handleToggleSelectAll}
+                />
+              </th>
+              <th className={th}>Order</th>
+              <th className={th}>Customer &amp; destination</th>
+              <th className={th}>Items</th>
+              <th className={`${th} text-right`}>Total</th>
+              <th className={th}>Status</th>
+              <th className={th}>Courier &amp; resi</th>
+              <th className={th}><span className="sr-only">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredOrders.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="py-16 text-center">
+                  <Package className="mx-auto mb-2 h-8 w-8 text-faint" strokeWidth={1.5} aria-hidden />
+                  <p className="text-[13px] text-muted">
+                    {isLoading ? 'Fetching live orders...' : 'No orders match these criteria.'}
+                  </p>
+                </td>
+              </tr>
+            ) : (
+              filteredOrders.map((order) => {
+                const isSelected = selectedIds.has(order.id);
+                return (
+                  <tr
+                    key={order.id}
+                    onClick={() => onSelectOrder(order)}
+                    className={`cursor-pointer whitespace-nowrap transition-colors [&:last-child>td]:border-b-0 ${
+                      isSelected ? 'bg-accent-soft' : 'hover:bg-chip'
+                    }`}
+                  >
+                    <td className={`${td} pr-0`} onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        aria-label={`Select order ${orderNumber(order)}`}
+                        checked={isSelected}
+                        onClick={(e) => handleToggleSelect(order.id, e)}
+                        onChange={() => {}}
+                      />
+                    </td>
+                    <td className={td}><OrderIdCell order={order} /></td>
+                    <td className={td}><CustomerCell order={order} /></td>
+                    <td className={td}><ItemsCell order={order} /></td>
+                    <td className={td}><TotalCell order={order} /></td>
+                    <td className={`${td} overflow-hidden`}><StatusChip order={order} /></td>
+                    <td className={td}>
+                      <CourierCell
+                        order={order}
+                        copied={copiedId === `track_${order.id}`}
+                        onCopy={(resi, e) => handleCopy(resi, `track_${order.id}`, e)}
+                      />
+                    </td>
+                    <td className={td} onClick={(e) => e.stopPropagation()}>
+                      <ActionsCell
+                        order={order}
+                        showPrint={showPrintFor(order)}
+                        onPrint={(e) => handleSinglePrintA6(order, e)}
+                        onOpen={() => onSelectOrder(order)}
+                      />
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile list */}
+      <div className="md:hidden">
+        {filteredOrders.length === 0 ? (
+          <div className="p-8 text-center">
+            <Package className="mx-auto mb-2 h-8 w-8 text-faint" strokeWidth={1.5} aria-hidden />
+            <p className="text-[13px] text-muted">{isLoading ? 'Fetching live orders...' : 'No orders found.'}</p>
+          </div>
+        ) : (
+          filteredOrders.map((order) => {
+            const isSelected = selectedIds.has(order.id);
+            return (
+              <div
+                key={order.id}
+                onClick={() => onSelectOrder(order)}
+                className={`cursor-pointer space-y-2.5 border-b border-line p-3.5 transition-colors last:border-b-0 ${
+                  isSelected ? 'bg-accent-soft' : 'hover:bg-chip'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-start gap-2.5">
+                    <span onClick={(e) => e.stopPropagation()} className="pt-0.5">
+                      <Checkbox
+                        aria-label={`Select order ${orderNumber(order)}`}
+                        checked={isSelected}
+                        onChange={(e) => handleToggleSelect(order.id, e as any)}
+                      />
+                    </span>
+                    <OrderIdCell order={order} />
+                  </div>
+                  <StatusChip order={order} size="sm" />
+                </div>
+                <div className="flex items-start justify-between gap-3">
+                  <CustomerCell order={order} />
+                  <TotalCell order={order} />
+                </div>
+                <div className="flex items-center justify-between gap-3 border-t border-line pt-2">
+                  <CourierCell
+                    order={order}
+                    copied={copiedId === `track_${order.id}`}
+                    onCopy={(resi, e) => handleCopy(resi, `track_${order.id}`, e)}
+                  />
+                  <span onClick={(e) => e.stopPropagation()}>
+                    <ActionsCell
+                      order={order}
+                      showPrint={showPrintFor(order)}
+                      onPrint={(e) => handleSinglePrintA6(order, e)}
+                      onOpen={() => onSelectOrder(order)}
+                    />
+                  </span>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Pagination */}
+      <div className="flex flex-col items-center justify-between gap-3 border-t border-line px-4 py-3 text-[13px] text-muted sm:flex-row">
+        <div className="flex items-center gap-2">
+          <span>
+            Showing <span className="font-mono font-medium text-fg">{shownFrom}</span> to{' '}
+            <span className="font-mono font-medium text-fg">{shownTo}</span> of{' '}
+            <span className="font-mono font-medium text-fg">{shownTotal}</span> orders
+          </span>
+          {Boolean(activeSearch && activeSearch.trim()) && (
+            <span className="rounded-full bg-accent-soft px-2 py-px text-[12px] font-medium text-accent-fg">Search results</span>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-[12px] text-faint">Per page</span>
+            <Select
+              aria-label="Orders per page"
+              className="w-[84px]"
+              value={String(pageSize)}
+              onChange={(val) => onPageSizeChange && onPageSizeChange(Number(val))}
+              options={[
+                { value: '50', label: '50' },
+                { value: '100', label: '100' },
+                { value: '200', label: '200' },
+              ]}
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Button size="sm" onClick={() => onPageChange && onPageChange(currentPage - 1)} disabled={currentPage <= 1}>
+              Prev
+            </Button>
+            <span className="px-1.5 font-mono text-[12.5px] text-fg">
+              Page {currentPage} of {Math.max(1, maxPages || 1)}
+            </span>
+            <Button
+              size="sm"
+              onClick={() => onPageChange && onPageChange(currentPage + 1)}
+              disabled={currentPage >= (maxPages || 1)}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      </div>
 
       {/* Internal A6 Thermal Label Modal for Bulk / Row Print */}
       <ShippingLabelA6Modal
@@ -1526,97 +976,73 @@ export const OrderTable: React.FC<OrderTableProps> = ({
         onClose={handleCancelMarkPreparing}
         maxWidth="md"
         title={
-          <div className="flex items-center gap-2 text-zinc-900 dark:text-white">
-            <Layers className="w-5 h-5 text-[#f3aa18]" />
-            <span className="text-base font-bold font-sans">
+          <div className="flex items-center gap-2 text-fg">
+            <Layers className="h-5 w-5 text-accent-fg" strokeWidth={1.8} aria-hidden />
+            <span className="text-[15px] font-semibold">
               {ordersToMarkPreparing.length === 1
-                ? 'Mark order as "Preparing order"?'
-                : `Mark ${ordersToMarkPreparing.length} orders as "Preparing order"?`}
+                ? 'Move order to Preparing?'
+                : `Move ${ordersToMarkPreparing.length} orders to Preparing?`}
             </span>
           </div>
         }
         subtitle={
           ordersToMarkPreparing.length === 1
-            ? 'Shipping label has been sent to print. Advance order status to begin fulfillment.'
-            : `${ordersToMarkPreparing.length} shipping labels have been sent to print. Advance orders to begin fulfillment.`
+            ? 'The shipping label was sent to print. Move the order on to start fulfillment.'
+            : `${ordersToMarkPreparing.length} shipping labels were sent to print. Move the orders on to start fulfillment.`
         }
         footer={
-          <div className="flex items-center justify-end gap-2.5 w-full font-sans">
-            <button
-              type="button"
-              disabled={isMarkingPreparing}
-              onClick={handleCancelMarkPreparing}
-              className="px-4 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-white/[0.06] dark:hover:bg-white/[0.1] text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white text-xs font-semibold border border-zinc-200 dark:border-white/10 transition-colors cursor-pointer disabled:opacity-50"
-            >
-              Keep as Confirmed
-            </button>
-            <button
-              type="button"
+          <div className="flex w-full items-center justify-end gap-2.5">
+            <Button variant="ghost" disabled={isMarkingPreparing} onClick={handleCancelMarkPreparing}>
+              Keep as To prepare
+            </Button>
+            <Button
+              variant="primary"
               disabled={isMarkingPreparing}
               onClick={handleConfirmMarkPreparing}
-              className="px-4 py-2 rounded-xl bg-[#f3aa18] hover:bg-[#e09b15] text-neutral-950 text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50 shadow-xs active:scale-95"
+              icon={isMarkingPreparing ? RefreshCw : undefined}
+              className={isMarkingPreparing ? '[&>svg:first-child]:animate-spin' : ''}
             >
-              {isMarkingPreparing && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
-              <span>
-                {isMarkingPreparing
-                  ? 'Updating...'
-                  : ordersToMarkPreparing.length === 1
-                  ? 'Mark as Preparing order'
-                  : `Mark ${ordersToMarkPreparing.length} orders as Preparing order`}
-              </span>
-            </button>
+              {isMarkingPreparing
+                ? 'Updating...'
+                : ordersToMarkPreparing.length === 1
+                ? 'Move to Preparing'
+                : `Move ${ordersToMarkPreparing.length} orders to Preparing`}
+            </Button>
           </div>
         }
       >
-        <div className="space-y-3 font-sans text-xs">
-          <p className="text-zinc-600 dark:text-zinc-400">
+        <div className="space-y-3 text-[13.5px]">
+          <p className="text-muted">
             {ordersToMarkPreparing.length === 1 ? (
               <>
-                Do you want to update order{' '}
-                <strong className="text-zinc-900 dark:text-white font-mono">
-                  #{String(ordersToMarkPreparing[0].order_number || ordersToMarkPreparing[0].id).replace(/^#+/, '')}
-                </strong>{' '}
-                from <span className="text-emerald-500 font-semibold">Confirmed</span> to{' '}
-                <span className="text-cyan-400 font-semibold">Preparing order</span>?
+                Update order{' '}
+                <strong className="font-mono font-medium text-fg">#{orderNumber(ordersToMarkPreparing[0])}</strong> from To
+                prepare to Preparing?
               </>
             ) : (
               <>
-                Do you want to update{' '}
-                <strong className="text-zinc-900 dark:text-white font-semibold">
-                  {ordersToMarkPreparing.length} orders
-                </strong>{' '}
-                from <span className="text-emerald-500 font-semibold">Confirmed</span> to{' '}
-                <span className="text-cyan-400 font-semibold">Preparing order</span>?
+                Update <strong className="font-medium text-fg">{ordersToMarkPreparing.length} orders</strong> from To prepare
+                to Preparing?
               </>
             )}
           </p>
 
-          {/* List of orders preview */}
-          <div className="max-h-48 overflow-y-auto rounded-xl border border-zinc-200 dark:border-white/[0.08] bg-zinc-50 dark:bg-neutral-900/60 divide-y divide-zinc-200/60 dark:divide-white/[0.04]">
-            {ordersToMarkPreparing.map((ord) => {
-              const cleanNum = String(ord.order_number || ord.id).replace(/^#+/, '');
-              return (
-                <div key={ord.id} className="p-2.5 flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono font-bold text-zinc-900 dark:text-white">
-                      #{cleanNum}
-                    </span>
-                    <span className="text-zinc-500 truncate max-w-[160px]">
-                      {ord.customer_name || 'Customer'}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-zinc-400 font-mono">
-                      {getOrderCourierDisplay(ord)}
-                    </span>
-                    <Badge type="orderStatus" value="preparing-order" size="xs" />
-                  </div>
+          <div className="max-h-48 divide-y divide-line overflow-y-auto rounded-[10px] border border-card-border">
+            {ordersToMarkPreparing.map((ord) => (
+              <div key={ord.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="font-mono font-medium text-fg">#{orderNumber(ord)}</span>
+                  <span className="truncate text-muted">{ord.customer_name || 'Customer'}</span>
                 </div>
-              );
-            })}
+                <div className="flex flex-none items-center gap-2">
+                  <span className="text-[12.5px] text-faint">{getOrderCourierDisplay(ord)}</span>
+                  <StatusChip order={{ status: 'preparing-order' }} size="sm" />
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </Modal>
-    </div>
+    </section>
   );
 };

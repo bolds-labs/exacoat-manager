@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Order } from '../../types';
 import { OrderTable } from './OrderTable';
 import { OrderDetailDrawer } from './OrderDetailDrawer';
@@ -11,28 +11,25 @@ import { ShopeeOrdersView } from './ShopeeOrdersView';
 import { TikTokOrdersView } from './TikTokOrdersView';
 import { fetchOrdersDirect, fetchOrderDetailDirect, syncActiveShipmentsDirect, ShopeeOrder, TikTokOrder } from '../../lib/wordpressBridge';
 import { useToast } from '../../context/ToastContext';
-import { formatCurrency } from '../../lib/formatters';
-import { isStorePickupOrder } from '../../lib/orderUtils';
-import { RefreshCw, FileSpreadsheet, Package, ShieldCheck, RotateCcw, Layers, Tag, HelpCircle, Sparkles } from 'lucide-react';
-import { GlassCard } from '../ui/GlassCard';
-import { PageHeroHeader } from '../ui/PageHeroHeader';
-import { Tooltip } from '../ui/Tooltip';
-import { useAuth } from '../../context/AuthContext';
-import { clsx } from 'clsx';
+import { RefreshCw, Package, ShieldCheck, RotateCcw, Tag, Megaphone, Plus, ChevronDown, Clock, Store, Truck } from 'lucide-react';
+import type { OrderCounts } from '../../types';
+import { Button, IconButton, KpiCard, Menu, type MenuItem } from '../ds';
 
 interface OrdersViewProps {
   initialStatus?: string;
   onNavigateToCustomer?: (customerId: number, customerEmail?: string, customerName?: string) => void;
+  /** Store-wide counts from App's useOrderCounts (shared with the sidebar badges); null until the endpoint answers. */
+  orderCounts?: OrderCounts | null;
+  onRefreshCounts?: () => Promise<void> | void;
 }
 
 export const OrdersView: React.FC<OrdersViewProps> = ({ 
   initialStatus = 'all',
   onNavigateToCustomer,
+  orderCounts = null,
+  onRefreshCounts,
 }) => {
   const { showToast } = useToast();
-  const { user, simulatedRole } = useAuth();
-  const effectiveRole = simulatedRole || user?.role;
-  const isShopManager = effectiveRole === 'shop_manager';
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -232,151 +229,113 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
     };
   }, []);
 
-  // Multicurrency Metric Computations
-  const currencyBreakdown = useMemo(() => {
-    const map: Record<string, { total: number; count: number }> = {};
-    orders.forEach(o => {
-      const curr = (o.currency || 'USD').toUpperCase().trim();
-      if (!map[curr]) {
-        map[curr] = { total: 0, count: 0 };
-      }
-      map[curr].total += Number(o.total) || 0;
-      map[curr].count += 1;
-    });
-    return map;
-  }, [orders]);
+  // Header Refresh, table refresh and every successful change reload the list and the store-wide counts
+  const reloadAfterChange = (quiet = true) => {
+    void onRefreshCounts?.();
+    return loadOrders(quiet);
+  };
 
-  const currencyKeys = Object.keys(currencyBreakdown);
-  const primaryCurrency = currencyKeys.includes('IDR') ? 'IDR' : (currencyKeys[0] || 'USD');
-  const otherCurrencies = currencyKeys.filter(c => c !== primaryCurrency);
+  const countOrBlank = (value: number | undefined) =>
+    typeof value === 'number' ? value : <span className="text-faint" aria-label="Count not available">-</span>;
 
-  const preparingCount = orders.filter(o => ['preparing-order', 'preparing_order', 'in-production', 'in_production'].includes(String(o.status).replace('wc-', ''))).length;
-  const processingCount = orders.filter(o => String(o.status).replace('wc-', '') === 'processing').length;
-  const waitingPickupCount = orders.filter(o => 
-    ['ready-to-ship', 'ready_to_ship', 'awaiting-pickup', 'awaiting_pickup'].includes(String(o.status).replace('wc-', '')) &&
-    !isStorePickupOrder(o)
-  ).length;
-  const shippedCount = orders.filter(o => ['shipped', 'smb-picked'].includes(String(o.status).replace('wc-', ''))).length;
-  const deliveredCount = orders.filter(o => ['completed', 'delivered'].includes(String(o.status).replace('wc-', ''))).length;
+  const createItems: MenuItem[] = [
+    {
+      icon: ShieldCheck,
+      title: 'Warranty claim',
+      description: 'Replace a faulty skin for a customer',
+      onSelect: () => {
+        setManualClaimInitialType('Warranty');
+        setIsManualWarrantyModalOpen(true);
+      },
+    },
+    {
+      icon: RotateCcw,
+      title: 'Redeem',
+      description: 'Redeem a gift or voucher code',
+      onSelect: () => {
+        setManualClaimInitialType('Redeem');
+        setIsManualWarrantyModalOpen(true);
+      },
+    },
+    {
+      icon: Megaphone,
+      title: 'Endorsement',
+      description: 'Free order for a creator or partner',
+      onSelect: () => setIsEndorsementModalOpen(true),
+    },
+    'separator',
+    {
+      icon: Tag,
+      title: 'Custom label',
+      description: 'Print a shipping label without an order',
+      onSelect: () => {
+        window.location.hash = 'custom_label';
+      },
+    },
+  ];
+
+  const channels: { key: 'web' | 'shopee' | 'tiktok'; label: string; count?: number }[] = [
+    { key: 'web', label: 'Exacoat webstore', count: orderCounts?.channels.webstore },
+    { key: 'shopee', label: 'Shopee Indonesia', count: orderCounts?.channels.shopee },
+    { key: 'tiktok', label: 'TikTok Shop', count: orderCounts?.channels.tiktok },
+  ];
+
+  const busy = isLoading || isRefreshing;
 
   return (
-    <div className="space-y-6">
-      {/* Top Banner & Refresh */}
-      <PageHeroHeader
-        title="Orders"
-        subtitle="Orders, production, and delivery."
-        actions={
-          <div className="flex items-center gap-2.5">
-            <button
-              type="button"
-              onClick={() => {
-                window.location.hash = 'custom_label';
-              }}
-              className="px-3.5 py-2 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/20 text-xs font-semibold font-sans flex items-center gap-1.5 transition-all shrink-0 self-start sm:self-auto cursor-pointer shadow-xs"
-              title="Create custom 4x6 thermal shipping label"
-            >
-              <Tag className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Custom Label</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setManualClaimInitialType('Warranty');
-                setIsManualWarrantyModalOpen(true);
-              }}
-              className="px-3.5 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 text-xs font-semibold font-sans flex items-center gap-1.5 transition-all shrink-0 self-start sm:self-auto cursor-pointer shadow-xs"
-            >
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Warranty</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setManualClaimInitialType('Redeem');
-                setIsManualWarrantyModalOpen(true);
-              }}
-              className="px-3.5 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 text-xs font-semibold font-sans flex items-center gap-1.5 transition-all shrink-0 self-start sm:self-auto cursor-pointer shadow-xs"
-            >
-              <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
-              <span>Redeem</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsEndorsementModalOpen(true)}
-              className="px-3.5 py-2 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 text-xs font-semibold font-sans flex items-center gap-1.5 transition-all shrink-0 self-start sm:self-auto cursor-pointer shadow-xs"
-              title="Create Endorsement / Influencer PR Order"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-              <span>Endorsement</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (statusFilter === 'shipped') {
-                  syncActiveShipmentsDirect({ force: true }).catch(() => {});
-                }
-                loadOrders(true);
-              }}
-              disabled={isLoading || isRefreshing}
-              className="px-3.5 py-2 rounded-xl bg-[#141414] hover:bg-white/[0.06] text-neutral-300 hover:text-white border border-white/[0.08] text-xs font-semibold font-sans flex items-center gap-2 transition-all shrink-0 self-start sm:self-auto disabled:opacity-50 cursor-pointer shadow-xs"
-            >
-              <RefreshCw className={clsx('w-3.5 h-3.5', (isLoading || isRefreshing) && 'animate-spin text-[#f3aa18]')} />
-              <span>Refresh</span>
-            </button>
-          </div>
-        }
-      />
+    <div className="flex flex-col gap-4">
+      {/* Title row */}
+      <div className="flex flex-wrap items-end gap-4">
+        <div className="min-w-0">
+          <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.025em] text-fg">Orders</h1>
+          <p className="mt-0.5 text-[14px] text-muted">Webstore, Shopee and TikTok orders, production and delivery.</p>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <IconButton
+            icon={RefreshCw}
+            label="Refresh"
+            onClick={() => {
+              if (statusFilter === 'shipped') {
+                syncActiveShipmentsDirect({ force: true }).catch(() => {});
+              }
+              reloadAfterChange(true);
+            }}
+            disabled={busy}
+            className={busy ? '[&>svg]:animate-spin' : ''}
+          />
+          <Menu
+            items={createItems}
+            trigger={
+              <Button variant="primary" icon={Plus} trailingIcon={ChevronDown}>
+                Create
+              </Button>
+            }
+          />
+        </div>
+      </div>
 
-      {/* Sales Channel Tabs: WooCommerce Direct Web vs Shopee Indonesia */}
-      <div className="flex items-center gap-2 p-1 rounded-2xl bg-neutral-900/80 border border-white/10 w-fit">
-        <button
-          type="button"
-          onClick={() => setActiveChannel('web')}
-          className={clsx(
-            'px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer',
-            activeChannel === 'web'
-              ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
-              : 'text-neutral-400 hover:text-white hover:bg-white/5'
-          )}
-        >
-          <span>Exacoat Webstore</span>
-          <span
-            className={clsx(
-              'text-[10px] px-1.5 py-0.2 rounded-full font-mono',
-              activeChannel === 'web'
-                ? 'bg-black/20 text-neutral-950 font-bold'
-                : 'bg-white/10 text-neutral-400'
-            )}
-          >
-            {orders.length}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveChannel('shopee')}
-          className={clsx(
-            'px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer',
-            activeChannel === 'shopee'
-              ? 'bg-orange-500 text-white font-bold shadow-sm'
-              : 'text-neutral-400 hover:text-white hover:bg-white/5'
-          )}
-        >
-          <span>Shopee Indonesia</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveChannel('tiktok')}
-          className={clsx(
-            'px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer',
-            activeChannel === 'tiktok'
-              ? 'bg-rose-500 text-white font-bold shadow-sm'
-              : 'text-neutral-400 hover:text-white hover:bg-white/5'
-          )}
-        >
-          <span>TikTok Shop</span>
-        </button>
+      {/* Sales channel switcher */}
+      <div className="inline-flex w-fit items-center gap-1 rounded-[12px] border border-line bg-chip p-1" role="tablist" aria-label="Sales channel">
+        {channels.map((c) => {
+          const active = activeChannel === c.key;
+          return (
+            <button
+              key={c.key}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setActiveChannel(c.key)}
+              className={`flex items-center gap-2 rounded-[9px] border px-3.5 py-[7px] text-[13px] font-[450] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                active ? 'border-field-border bg-field text-fg' : 'border-transparent text-muted hover:text-fg'
+              }`}
+            >
+              {c.label}
+              {typeof c.count === 'number' && (
+                <span className={`text-[12px] font-medium tabular-nums ${active ? 'text-accent-fg' : 'text-faint'}`}>{c.count}</span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {activeChannel === 'tiktok' ? (
@@ -411,152 +370,23 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
         />
       ) : (
         <>
-          {/* Multicurrency Revenue & Status Metrics */}
-          <div className={clsx(
-            "grid gap-3 sm:gap-4",
-            isShopManager ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-2 lg:grid-cols-4"
-          )}>
-        {/* Payment Confirmed */}
-        <GlassCard className={clsx(
-          "p-4 sm:p-5 flex flex-col justify-between font-sans group transition-all min-h-[120px]",
-          processingCount > 0 && "border-amber-500/30 shadow-[0_0_20px_rgba(245,158,11,0.08)]"
-        )}>
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 truncate">
-              Payment confirmed
-            </p>
-            <span className={clsx(
-              "inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-mono font-bold shrink-0 border",
-              processingCount > 0
-                ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
-                : "bg-white/[0.04] text-zinc-400 border-white/[0.06]"
-            )}>
-              {processingCount > 0 ? 'To prepare' : 'Clear'}
-            </span>
+          {/* Store-wide KPIs (blank until the counts endpoint answers) */}
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <KpiCard icon={Package} value={countOrBlank(orderCounts?.webstore.to_prepare)} label="To prepare" highlight />
+            <KpiCard icon={Clock} value={countOrBlank(orderCounts?.webstore.awaiting_payment)} label="Awaiting payment" />
+            <KpiCard icon={Store} value={countOrBlank(orderCounts?.webstore.ready_for_pickup)} label="Ready for pickup" />
+            <KpiCard icon={Truck} value={countOrBlank(orderCounts?.shipped_last_7_days)} label="Shipped, last 7 days" />
           </div>
-          <div className="my-1 space-y-1">
-            <h3 className={clsx(
-              "text-xl sm:text-2xl font-bold tracking-tight font-mono tabular-nums",
-              processingCount > 0 ? "text-amber-400 font-medium" : "text-white"
-            )}>
-              {processingCount}
-            </h3>
-            <p className="text-xs text-zinc-400 font-mono leading-relaxed line-clamp-1">
-              Payment confirmed
-            </p>
-          </div>
-        </GlassCard>
-
-        {/* Preparing Order */}
-        <GlassCard className={clsx(
-          "p-4 sm:p-5 flex flex-col justify-between font-sans group transition-all min-h-[120px]",
-          preparingCount > 0 && "border-cyan-500/30 shadow-[0_0_20px_rgba(6,182,212,0.08)]"
-        )}>
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 truncate">
-              Preparing order
-            </p>
-            <span className={clsx(
-              "inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-mono font-bold shrink-0 border",
-              preparingCount > 0
-                ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/30"
-                : "bg-white/[0.04] text-zinc-400 border-white/[0.06]"
-            )}>
-              Active
-            </span>
-          </div>
-          <div className="my-1 space-y-1">
-            <h3 className={clsx(
-              "text-xl sm:text-2xl font-bold tracking-tight font-mono tabular-nums",
-              preparingCount > 0 ? "text-cyan-400 font-medium" : "text-white"
-            )}>
-              {preparingCount}
-            </h3>
-            <p className="text-xs text-zinc-400 font-mono leading-relaxed line-clamp-1">
-              {waitingPickupCount} waiting for pickup
-            </p>
-          </div>
-        </GlassCard>
-
-        {/* Shipped & Dispatched */}
-        <GlassCard className="p-4 sm:p-5 flex flex-col justify-between font-sans group transition-all min-h-[120px]">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 truncate">
-              Shipped
-            </p>
-            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20 shrink-0">
-              On the way
-            </span>
-          </div>
-          <div className="my-1 space-y-1">
-            <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-sky-400 font-mono tabular-nums">
-              {shippedCount}
-            </h3>
-            <p className="text-xs text-zinc-400 font-mono leading-relaxed line-clamp-1">
-              {deliveredCount} completed
-            </p>
-          </div>
-        </GlassCard>
-
-        {/* Gross Revenue - Only visible to administrators, hidden for shop manager */}
-        {!isShopManager && (
-          <GlassCard className="p-4 sm:p-5 flex flex-col justify-between font-sans group transition-all min-h-[120px] col-span-2 sm:col-span-2 lg:col-span-1">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 truncate">
-                Total Sales
-              </p>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-[#f3aa18]/10 text-[#f3aa18] border border-[#f3aa18]/20 shrink-0">
-                Revenue
-              </span>
-            </div>
-            <div className="my-1 space-y-1">
-              <div className="flex items-center gap-2">
-                <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-[#f3aa18] font-mono tabular-nums">
-                  {formatCurrency(currencyBreakdown[primaryCurrency]?.total || 0, primaryCurrency)}
-                </h3>
-                {otherCurrencies.length > 0 && (
-                  <Tooltip
-                    position="top"
-                    content={
-                      <div className="space-y-1.5 p-1 font-mono text-left max-w-xs">
-                        <p className="font-sans font-bold text-[11px] text-zinc-300 border-b border-white/10 pb-1">
-                          Other Currencies
-                        </p>
-                        {otherCurrencies.map((curr) => (
-                          <div key={curr} className="flex items-center justify-between gap-3 text-[10px] text-zinc-200">
-                            <span className="font-semibold text-zinc-400">{curr}:</span>
-                            <span>{formatCurrency(currencyBreakdown[curr].total, curr)} ({currencyBreakdown[curr].count} orders)</span>
-                          </div>
-                        ))}
-                      </div>
-                    }
-                  >
-                    <button
-                      type="button"
-                      className="p-1 rounded-md bg-white/[0.06] hover:bg-white/[0.12] text-zinc-400 hover:text-white transition-colors cursor-pointer border border-white/[0.08]"
-                      title="View currency breakdown"
-                    >
-                      <HelpCircle className="w-3.5 h-3.5 text-amber-400/80" />
-                    </button>
-                  </Tooltip>
-                )}
-              </div>
-              <div className="flex flex-col gap-0.5 pt-0.5">
-                <span className="text-[10px] text-zinc-400 font-mono">
-                  {orders.length} total orders placed
-                </span>
-              </div>
-            </div>
-          </GlassCard>
-        )}
-      </div>
-
       {/* Orders Table */}
       <OrderTable
         orders={orders}
         isLoading={isLoading}
         onSelectOrder={handleSelectOrder}
-        onRefresh={() => loadOrders(false, currentPage, pageSize, statusFilter, courierFilter, searchQuery)}
+        onRefresh={() => {
+          void onRefreshCounts?.();
+          loadOrders(false, currentPage, pageSize, statusFilter, courierFilter, searchQuery);
+        }}
+        counts={orderCounts}
         currentPage={currentPage}
         maxPages={maxPages}
         totalOrders={totalOrders}
@@ -578,7 +408,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
         order={selectedOrder}
         isOpen={isDrawerOpen}
         onClose={handleCloseDrawer}
-        onOrderUpdated={() => loadOrders(true)}
+        onOrderUpdated={() => reloadAfterChange(true)}
         onNavigateToCustomer={onNavigateToCustomer}
         onSelectOrderById={async (orderId: number) => {
           const found = orders.find(o => o.id === orderId);
@@ -597,14 +427,14 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
       <ExportShipmentsModal
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
-        onExportSuccess={() => loadOrders(true)}
+        onExportSuccess={() => reloadAfterChange(true)}
       />
 
       {/* Internal Tracking Number Pool Modal */}
       <TrackingPoolModal
         isOpen={isTrackingPoolModalOpen}
         onClose={() => setIsTrackingPoolModalOpen(false)}
-        onInventoryChanged={() => loadOrders(true)}
+        onInventoryChanged={() => reloadAfterChange(true)}
       />
 
       {/* Centralized RMA Claims & Redeem Audit Log Modal */}
@@ -641,14 +471,14 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
         initialShopeeOrder={selectedShopeeOrder}
         initialTikTokOrder={selectedTikTokOrder}
         initialClaimType={manualClaimInitialType}
-        onSuccess={() => loadOrders(true)}
+        onSuccess={() => reloadAfterChange(true)}
       />
 
       {/* Influencer Endorsement / PR Order Modal */}
       <EndorsementOrderModal
         isOpen={isEndorsementModalOpen}
         onClose={() => setIsEndorsementModalOpen(false)}
-        onSuccess={() => loadOrders(true)}
+        onSuccess={() => reloadAfterChange(true)}
       />
     </div>
   );
