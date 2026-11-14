@@ -59,6 +59,16 @@ $check( $sig( [ 'shipping_lines' => [ [ 'local_pickup', 'Store' ] ] ] ), true, '
 $check( $sig( [ 'shipping_lines' => [ [ 'flat_rate', 'Ambil di toko' ] ] ] ), true, 'pickup title' );
 $check( $sig( [ 'note' => 'Mohon ambil sendiri ya' ] ), true, 'customer note' );
 
+$check( Exacoat_Order_Manager::effective_claim_is_pending( 'pending_review', null ), true, 'rma pending_review' );
+$check( Exacoat_Order_Manager::effective_claim_is_pending( null, null ), true, 'both missing' );
+$check( Exacoat_Order_Manager::effective_claim_is_pending( '', '' ), true, 'both empty' );
+$check( Exacoat_Order_Manager::effective_claim_is_pending( '', 'pending_review' ), true, 'fallback pending_review' );
+$check( Exacoat_Order_Manager::effective_claim_is_pending( null, 'pending' ), true, 'fallback pending' );
+$check( Exacoat_Order_Manager::effective_claim_is_pending( 'pending_payment', 'pending_review' ), false, 'pending_payment wins' );
+$check( Exacoat_Order_Manager::effective_claim_is_pending( 'approved', 'pending_review' ), false, 'approved wins over stale claim status' );
+$check( Exacoat_Order_Manager::effective_claim_is_pending( '', 'rejected' ), false, 'fallback rejected' );
+$check( Exacoat_Order_Manager::effective_claim_is_pending( 'in_review', null ), false, 'in_review is not stored' );
+
 if ( $fails ) {
 	echo $fails . " failure(s)\n";
 	exit( 1 );

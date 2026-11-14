@@ -449,6 +449,22 @@ class Exacoat_Order_Manager {
 	}
 
 	/**
+	 * Whether a warranty claim is awaiting review. Uses the same key order as the manager's
+	 * effective status reader (`_rma_status`, then `_warranty_claim_status`, then pending_review).
+	 * pending_payment and every reviewed status are not pending.
+	 */
+	public static function effective_claim_is_pending( ?string $rma_status, ?string $claim_status ): bool {
+		$effective = trim( (string) $rma_status );
+		if ( '' === $effective ) {
+			$effective = trim( (string) $claim_status );
+		}
+		if ( '' === $effective ) {
+			return true;
+		}
+		return in_array( strtolower( $effective ), [ 'pending_review', 'pending' ], true );
+	}
+
+	/**
 	 * GET /orders/counts: store-wide order counts only (no order, customer or ID data).
 	 * Uses GROUP BY / COUNT queries. Never formats or loads WC_Order objects.
 	 */
@@ -477,7 +493,8 @@ class Exacoat_Order_Manager {
 			'ready_for_pickup' => 0, 'picked_up' => 0, 'shipped' => 0, 'completed' => 0,
 			'warranty' => 0, 'warranty_pending' => 0, 'redeem' => 0, 'endorsement' => 0,
 		];
-		$excluded = [ 'cancelled', 'refunded', 'failed', 'trash', 'auto-draft', 'draft', 'checkout-draft' ];
+		// Today's All tab (wc_get_orders 'any') keeps cancelled, refunded and failed; only trash and drafts are dropped.
+		$excluded = [ 'trash', 'auto-draft', 'draft', 'checkout-draft' ];
 
 		foreach ( $rows as $r ) {
 			$status = preg_replace( '/^wc-/', '', (string) $r->st );
@@ -505,9 +522,9 @@ class Exacoat_Order_Manager {
 			}
 		}
 
-		// Specialized tabs. get_specialized_order_ids() already excludes parent orders; here we
-		// also drop cancelled, refunded, failed and trashed orders.
-		$excl_in    = "'wc-cancelled','wc-refunded','wc-failed','trash'";
+		// Specialized tabs match today's tabs: parent orders are excluded by get_specialized_order_ids(),
+		// and only trash and drafts are dropped (cancelled, refunded and failed stay in).
+		$excl_in    = "'trash','auto-draft','draft','wc-checkout-draft'";
 		$active_ids = static function ( array $ids ) use ( $wpdb, $orders_tbl, $id_col, $status_col, $excl_in ): array {
 			if ( empty( $ids ) ) {
 				return [];
@@ -516,14 +533,33 @@ class Exacoat_Order_Manager {
 			return array_map( 'intval', (array) $wpdb->get_col( "SELECT {$id_col} FROM {$orders_tbl} WHERE {$id_col} IN ({$in}) AND {$status_col} NOT IN ({$excl_in})" ) );
 		};
 
+		$active_ids_no_dead = static function ( array $ids ) use ( $wpdb, $orders_tbl, $id_col, $status_col ): array {
+			if ( empty( $ids ) ) {
+				return [];
+			}
+			$in = implode( ',', array_map( 'intval', $ids ) );
+			return array_map( 'intval', (array) $wpdb->get_col( "SELECT {$id_col} FROM {$orders_tbl} WHERE {$id_col} IN ({$in}) AND {$status_col} NOT IN ('wc-cancelled','wc-refunded','wc-failed','trash','auto-draft','draft','wc-checkout-draft')" ) );
+		};
+
 		$warranty_ids            = $active_ids( self::get_specialized_order_ids( 'warranty' ) );
 		$webstore['warranty']    = count( $warranty_ids );
 		$webstore['redeem']      = count( $active_ids( self::get_specialized_order_ids( 'redeem' ) ) );
 		$webstore['endorsement'] = count( $active_ids( self::get_specialized_order_ids( 'endorsement' ) ) );
 
-		if ( ! empty( $warranty_ids ) ) {
-			$in = implode( ',', $warranty_ids );
-			$webstore['warranty_pending'] = (int) $wpdb->get_var( "SELECT COUNT(DISTINCT {$meta_id}) FROM {$meta_tbl} WHERE {$meta_id} IN ({$in}) AND meta_key = '_rma_status' AND meta_value IN ('pending','in_review')" );
+		// Pending review: effective status per effective_claim_is_pending(), excluding cancelled, refunded and failed.
+		$live_warranty_ids = $active_ids_no_dead( $warranty_ids );
+		if ( ! empty( $live_warranty_ids ) ) {
+			$in      = implode( ',', $live_warranty_ids );
+			$by_id   = [];
+			$m_rows  = (array) $wpdb->get_results( "SELECT {$meta_id} AS oid, meta_key, meta_value FROM {$meta_tbl} WHERE {$meta_id} IN ({$in}) AND meta_key IN ('_rma_status','_warranty_claim_status')" );
+			foreach ( $m_rows as $r ) {
+				$by_id[ (int) $r->oid ][ $r->meta_key ] = (string) $r->meta_value;
+			}
+			foreach ( $live_warranty_ids as $wid ) {
+				if ( self::effective_claim_is_pending( $by_id[ $wid ]['_rma_status'] ?? null, $by_id[ $wid ]['_warranty_claim_status'] ?? null ) ) {
+					$webstore['warranty_pending']++;
+				}
+			}
 		}
 
 		// Shipped in the last 7 days. _shipped_at is a site-local MySQL datetime string, so it is
