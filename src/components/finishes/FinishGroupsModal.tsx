@@ -92,6 +92,14 @@ export function FinishGroupsModal({
       title="Finish groups"
       description="Order here is the tab order on every configurator."
       width={640}
+      onEscapeKeyDown={(e) => {
+        // Escape first cancels an open rename and keeps the pop-up.
+        if (renaming) {
+          e.preventDefault();
+          setRenaming(null);
+          setError(null);
+        }
+      }}
       footer={
         <Button variant="secondary" onClick={() => onOpenChange(false)}>
           Done
@@ -114,11 +122,6 @@ export function FinishGroupsModal({
                     onChange={(e) => setRenaming({ group: g, value: e.target.value })}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') void submitRename();
-                      if (e.key === 'Escape') {
-                        e.stopPropagation();
-                        setRenaming(null);
-                        setError(null);
-                      }
                     }}
                   />
                 ) : (

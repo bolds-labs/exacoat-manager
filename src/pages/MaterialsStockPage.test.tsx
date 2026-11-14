@@ -15,6 +15,8 @@ const bridge = vi.hoisted(() => ({
   toggleFinishActiveDirect: vi.fn(),
   saveGlobalFinishDirect: vi.fn(),
   saveAllGlobalFinishesDirect: vi.fn(),
+  updateAllGlobalFinishesDirect: vi.fn(),
+  fetchLiveGlobalFinishesDirect: vi.fn(),
   deleteGlobalFinishDirect: vi.fn(),
   reorderFinishGroupsDirect: vi.fn(),
   renameFinishGroupDirect: vi.fn(),
@@ -30,7 +32,19 @@ import { MaterialsStockPage } from './MaterialsStockPage';
 
 beforeEach(() => {
   Object.values(bridge).forEach((m) => m.mockReset());
+  const liveResponse = () => ({
+    success: true,
+    source: 'live',
+    finishes: structuredClone(finishes),
+    groups: ['Limited', 'Signature skins', 'Colors'],
+    group_settings: { Colors: { display_style: 'compact_dots', show_more_limit: 6 } },
+  });
+  bridge.fetchLiveGlobalFinishesDirect.mockImplementation(async () => liveResponse());
+  bridge.updateAllGlobalFinishesDirect.mockResolvedValue({ success: true });
+  bridge.saveFinishGroupSettingsDirect.mockImplementation(async (v: unknown) => ({ success: true, group_settings: v }));
+  bridge.renameFinishGroupDirect.mockResolvedValue({ success: true, groups: ['Limited', 'Signature skins', 'Pastels'], updated_count: 1 });
   bridge.fetchGlobalFinishesDirect.mockResolvedValue({
+    source: 'live',
     success: true,
     finishes: structuredClone(finishes),
     groups: ['Limited', 'Signature skins', 'Colors'],
@@ -78,11 +92,15 @@ describe('Finishes & Stock screen', () => {
   it('moving a finish down saves the renumbered group through save-all with the stored groups', async () => {
     await loaded();
     fireEvent.click(screen.getByRole('button', { name: 'Move Swarm down' }));
-    await waitFor(() => expect(bridge.saveAllGlobalFinishesDirect).toHaveBeenCalledTimes(1));
-    const [sent, groups] = bridge.saveAllGlobalFinishesDirect.mock.calls[0];
-    const order = Object.fromEntries((sent as GlobalFinish[]).map((f) => [f.slug, f.order]));
-    expect(order).toMatchObject({ 'black-camo': 0, swarm: 1, 'matte-black': 0 });
-    expect(groups).toEqual(['Limited', 'Signature skins', 'Colors']);
+    await waitFor(() => expect(bridge.updateAllGlobalFinishesDirect).toHaveBeenCalledTimes(1));
+    expect(bridge.saveAllGlobalFinishesDirect).not.toHaveBeenCalled();
+    // The move is applied to the fresh list the bridge hands over, not to the screen's copy.
+    const transform = bridge.updateAllGlobalFinishesDirect.mock.calls[0][0] as (l: GlobalFinish[], g: string[]) => GlobalFinish[] | null;
+    const fresh = [...structuredClone(finishes), { ...finishes[1], id: 'new', slug: 'new', name: 'New', order: 2 }];
+    const out = transform(fresh, ['Signature skins'])!;
+    const order = Object.fromEntries(out.map((f) => [f.slug, f.order]));
+    expect(order).toMatchObject({ 'black-camo': 0, swarm: 1, new: 2, 'matte-black': 0 });
+    expect(transform(fresh.filter((f) => f.id !== 'swarm'), [])).toBeNull();
   });
 
   it('first and last rows cannot move further', async () => {
@@ -99,16 +117,23 @@ describe('Finishes & Stock screen', () => {
     expect((save as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(screen.getByLabelText('Main skin extra (Rp)'), { target: { value: '35000' } });
     expect(screen.getByText('Unsaved changes')).toBeTruthy();
+    // Someone else moved Swarm and marked it coming soon meanwhile; the save keeps that.
+    bridge.fetchLiveGlobalFinishesDirect.mockImplementationOnce(async () => ({
+      success: true,
+      source: 'live',
+      finishes: structuredClone(finishes).map((f) => (f.id === 'swarm' ? { ...f, order: 5, status: 'coming_soon', in_stock: false } : f)),
+    }));
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(bridge.saveGlobalFinishDirect).toHaveBeenCalledTimes(1));
     expect(bridge.saveGlobalFinishDirect.mock.calls[0][0]).toMatchObject({
+      order: 5,
+      status: 'coming_soon',
       id: 'swarm',
       extra_price: 35000,
       accent_extra_price: 10000,
       badge_text: 'HOT',
       is_custom_per_device: true,
       is_active: true,
-      order: 0,
     });
   });
 
@@ -138,5 +163,77 @@ describe('Finishes & Stock screen', () => {
     const btn = await screen.findByRole('button', { name: 'Colors has 1 finish; move them first' });
     expect((btn as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole('button', { name: 'Delete Limited' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('blocks every write while showing a fallback copy and offers Retry', async () => {
+    bridge.fetchGlobalFinishesDirect.mockResolvedValueOnce({ success: true, source: 'fallback', finishes: structuredClone(finishes) });
+    await loaded();
+    expect(screen.getByText('Showing a saved copy, edits are off until finishes load.')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Add finish' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Groups' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Price tiers' }) as HTMLButtonElement).disabled).toBe(true);
+    const row = screen.getByText('Swarm').closest('li')!;
+    expect((within(row).getByRole('button', { name: 'Edit' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((within(row).getByRole('switch') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Move Swarm down' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(screen.queryByText('Showing a saved copy, edits are off until finishes load.')).toBeNull());
+    expect((screen.getByRole('button', { name: 'Add finish' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('a refresh that only gets a fallback keeps the live list and stays editable', async () => {
+    await loaded();
+    bridge.fetchGlobalFinishesDirect.mockResolvedValueOnce({ success: true, source: 'fallback', finishes: [] });
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await waitFor(() => expect(bridge.fetchGlobalFinishesDirect).toHaveBeenCalledTimes(2));
+    expect(screen.getByText('Swarm')).toBeTruthy();
+    expect(screen.queryByText('Showing a saved copy, edits are off until finishes load.')).toBeNull();
+  });
+
+  it('a failed Active toggle switches back', async () => {
+    bridge.toggleFinishActiveDirect.mockResolvedValue({ success: false, error: 'offline' });
+    await loaded();
+    const sw = screen.getByRole('switch', { name: 'Show Matte Black on the storefront' });
+    fireEvent.click(sw);
+    await waitFor(() => expect(bridge.toggleFinishActiveDirect).toHaveBeenCalled());
+    await waitFor(() => expect(sw.getAttribute('aria-checked')).toBe('false'));
+  });
+
+  it('renaming a group carries its display settings to the new name', async () => {
+    await loaded();
+    fireEvent.click(screen.getByRole('button', { name: 'Groups' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Rename Colors' }));
+    fireEvent.change(screen.getByLabelText('New name for Colors'), { target: { value: 'Pastels' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(bridge.renameFinishGroupDirect).toHaveBeenCalledWith('Colors', 'Pastels'));
+    await waitFor(() =>
+      expect(bridge.saveFinishGroupSettingsDirect).toHaveBeenCalledWith({ Pastels: { display_style: 'compact_dots', show_more_limit: 6 } }),
+    );
+  });
+
+  it('Escape while renaming cancels only the rename', async () => {
+    await loaded();
+    fireEvent.click(screen.getByRole('button', { name: 'Groups' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Rename Colors' }));
+    const field = screen.getByLabelText('New name for Colors');
+    fireEvent.keyDown(field, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByLabelText('New name for Colors')).toBeNull());
+    expect(screen.getByText('Finish groups')).toBeTruthy();
+  });
+
+  it('keeps the panel open with a notice when its finish was deleted elsewhere', async () => {
+    await loaded();
+    const row = screen.getByText('Swarm').closest('li')!;
+    fireEvent.click(within(row).getByRole('button', { name: 'Edit' }));
+    await screen.findByRole('button', { name: 'Save' });
+    bridge.fetchGlobalFinishesDirect.mockResolvedValueOnce({
+      success: true,
+      source: 'live',
+      finishes: structuredClone(finishes).filter((f) => f.id !== 'swarm'),
+      groups: ['Limited', 'Signature skins', 'Colors'],
+    });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Refresh' })[0]);
+    expect(await screen.findByText('This finish was deleted elsewhere. Close the panel; nothing here can be saved.')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

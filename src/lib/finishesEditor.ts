@@ -258,3 +258,28 @@ export function buildNewFinishPayload(draft: FinishDraft, order: number): Global
     texture_url: fields.texture_url || fields.thumbnail,
   };
 }
+
+/**
+ * Save payload built on a freshly fetched copy of the finish: only the fields the panel changed
+ * (draft against the finish it was opened with) overwrite the fresh values, so order, stock or
+ * active changed elsewhere in the meantime are kept.
+ */
+export function mergeDraftOntoFresh(original: GlobalFinish, draft: FinishDraft, fresh: GlobalFinish): GlobalFinish {
+  const opened = normalize(draftFromFinish(original));
+  const edited = normalize(draft);
+  const merged: FinishDraft = { ...draftFromFinish(fresh) };
+  (Object.keys(edited) as (keyof FinishDraft)[]).forEach((k) => {
+    if (edited[k] !== opened[k]) (merged as unknown as Record<string, unknown>)[k] = edited[k];
+  });
+  return buildFinishSavePayload(fresh, merged);
+}
+
+/** Display settings keyed by the new group name after a rename; null when there was nothing to move. */
+export function renameGroupSettings<T>(settings: Record<string, T>, oldName: string, newName: string): Record<string, T> | null {
+  if (!(oldName in settings)) return null;
+  const next: Record<string, T> = {};
+  Object.entries(settings).forEach(([k, v]) => {
+    next[k === oldName ? newName : k] = v;
+  });
+  return next;
+}

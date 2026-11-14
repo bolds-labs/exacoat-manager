@@ -15,7 +15,7 @@ Branch `design/manager-redesign`, version 0.1.228 (unchanged, no plugin changes,
   - Groups pop-up (`FinishGroupsModal.tsx`, kit Modal): move, rename inline (Enter), display settings inline (Cards or Dots RadioCardGroup, collapsed switch, show more after presets and custom number), delete only when empty, add group with validation.
   - Price tiers: the existing `FinishSurchargeTiersModal`.
 - **Studio** (`src/pages/ConfiguratorStudioPage.tsx`, about 2,890 lines removed): Master Textures pop-up, image picker, Add finish, Delete finish, group display pop-up, all finish edit state and handlers removed. "Master Textures (v2)" button is now "Finishes" and opens `#materials` (same tab from the catalog, new tab while a device editor is open so device edits survive). The layer inspector "Tone Settings" link does the same. Studio re-reads finishes, groups and tiers on window focus. The canvas now reads surface shading from saved finish values. The global looks manager (store-wide presets) stays in Studio and opens from a new "Global looks" button in the Presets inspector tab. Price tiers buttons in Studio unchanged.
-- **Docs**: AGENTS.md sections 16, 20, 21, 27, 41, 44, 45, 48, 50 and the surcharge tiers section updated to name the one editor; new section 63. CHANGELOG 0.1.228 has a "Design: Finishes & Stock" block.
+- **Docs**: AGENTS.md sections 16, 20, 21, 27, 41, 44, 45, 48, 50 and the surcharge tiers section updated to name the one editor; new section 63 (renumbered 66 in fix round 1). CHANGELOG 0.1.228 has a "Design: Finishes & Stock" block.
 
 ## Write paths (verified by tests and code reading, not in the browser)
 
@@ -40,8 +40,20 @@ Screenshots in `docs/superpowers/screens/`: `before-finishes-materials-dark.jpg`
 
 ## Concerns
 
-- `toggleFinishStockDirect` and `toggleFinishActiveDirect` return `success: true` even when the request fails (local cache fallback), so a failed row toggle looks saved until the next refresh. Not changed here because the bridge was out of scope; noted in AGENTS s63.
+- `toggleFinishStockDirect` and `toggleFinishActiveDirect` return `success: true` even when the request fails (local cache fallback), so a failed row toggle looks saved until the next refresh. Not changed here because the bridge was out of scope; noted in AGENTS (now section 66). Fixed in fix round 1.
 - Reorder uses save-all with the whole list, as Studio did: if two staff edit finishes at the same moment, the later reorder can overwrite the other's change.
 - The Groups pop-up closes on Escape while renaming (Radix handles Escape before the field), losing only the unsent rename text.
 - `MediaLibraryModal` and `FinishSurchargeTiersModal` are legacy styled (unchanged), so they look older than the screen, especially in light mode.
 - Global looks (`exacoat_configurator_presets`) are kept in Studio but the storefront no longer shows them; consider retiring them.
+
+## Fix round 1
+
+1. **Honest toggles**: `toggleFinishStockDirect` and `toggleFinishActiveDirect` now return `success: false` with the error when the request fails or WordPress refuses; the row reverts and shows an error toast. No finish call writes the per-PC `exacoat_finishes_inventory_cache` any more (10 writes removed); it is only read as a last-resort display fallback.
+2. **Live vs fallback**: `fetchGlobalFinishesDirect` returns `source: 'live' | 'fallback'`. On a fallback list the screen shows "Showing a saved copy, edits are off until finishes load." with Retry and disables every write (row controls, Edit, Add finish, Groups, Price tiers, group display shortcut). A refresh that only gets a fallback keeps the last live list. Studio's focus reload ignores fallback data. Whole-list saves go through the new `updateAllGlobalFinishesDirect(transform)`: it re-fetches the live list, applies the move to it and saves with the live group order, or saves nothing when the live list cannot load or the move no longer applies. The screen no longer calls `saveAllGlobalFinishesDirect` directly (it was the only caller).
+3. **Edit panel Save** re-fetches the live finish (`fetchLiveGlobalFinishesDirect`) and sends only the edited fields on top of it (`mergeDraftOntoFresh`), so order, stock and active changed elsewhere are kept. Add re-checks the slug against the live list and uses the live length for `order`.
+4. **Group rename** re-saves `exacoat_finish_group_settings` with the settings moved to the new name (`renameGroupSettings`), because `/finishes/rename-group` does not move them.
+5. **Deleted elsewhere**: the panel keeps the copy it opened with; if a refresh drops that finish the panel stays open with "This finish was deleted elsewhere. Close the panel; nothing here can be saved." and Save and Delete are disabled.
+6. **Escape while renaming** cancels only the rename: the kit Modal gained an optional `onEscapeKeyDown` prop and the Groups pop-up uses it.
+7. **AGENTS.md**: section 49 now describes the panel's dirty tracking and fresh-merge save; duplicate 63s renumbered (63 Edit Configuration, 65 Staff Dashboard, 66 One Finishes Editor) with references updated (including the staff dashboard report). Section 66 lists the new rules; the "known limit" note is gone.
+
+Checks: `npx tsc --noEmit` clean; `npm test` 48 files, 500 tests passed (20 new: 10 bridge tests in `src/lib/finishesBridge.test.ts`, 4 helper tests, 6 screen tests); `npm run build` passed, initial JS 891,929 bytes; zips and `public/version.json` restored. Browser: the screen loads live data with editing enabled and no console errors; nothing was saved.

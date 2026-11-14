@@ -3903,6 +3903,8 @@ async function fetchGlobalFinishesUncached(): Promise<{
   group_settings?: Record<string, FinishGroupSetting>;
   presets?: ConfiguratorPreset[];
   surcharge_tiers?: FinishSurchargeTier[];
+  /** 'live' when WordPress answered; 'fallback' for the storefront list, the old per-PC copy or the built-in defaults. */
+  source: 'live' | 'fallback';
   error?: string;
 }> {
   let localFinishes: GlobalFinish[] = DEFAULT_GLOBAL_FINISHES;
@@ -3924,9 +3926,9 @@ async function fetchGlobalFinishesUncached(): Promise<{
     const data = await res.json();
     if (res.ok && !!data?.success && Array.isArray(data?.finishes)) {
       const normalized = normalizeGlobalFinishes(decodeDeep(data.finishes));
-      try { localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(normalized)); } catch {}
       return {
         success: true,
+        source: 'live',
         finishes: normalized,
         groups: Array.isArray(data?.groups) ? decodeDeep(data.groups) : undefined,
         group_settings: data?.group_settings ? decodeDeep(data.group_settings) : undefined,
@@ -3943,9 +3945,9 @@ async function fetchGlobalFinishesUncached(): Promise<{
       const nextData = await nextRes.json();
       if (nextData?.success && Array.isArray(nextData?.finishes)) {
         const normalized = normalizeGlobalFinishes(decodeDeep(nextData.finishes));
-        try { localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(normalized)); } catch {}
         return {
           success: true,
+          source: 'fallback',
           finishes: normalized,
           groups: Array.isArray(nextData?.groups) ? decodeDeep(nextData.groups) : undefined,
           group_settings: nextData?.group_settings ? decodeDeep(nextData.group_settings) : undefined,
@@ -3958,6 +3960,7 @@ async function fetchGlobalFinishesUncached(): Promise<{
 
   return {
     success: true,
+    source: 'fallback',
     finishes: normalizeGlobalFinishes(localFinishes),
     surcharge_tiers: DEFAULT_FINISH_SURCHARGE_TIERS,
   };
@@ -4027,46 +4030,12 @@ export async function toggleFinishStockDirect(
   id: string,
   inStockOrStatus?: boolean | 'in_stock' | 'out_of_stock' | 'coming_soon'
 ): Promise<{ success: boolean; finishes?: GlobalFinish[]; error?: string }> {
-  let status: 'in_stock' | 'out_of_stock' | 'coming_soon' | undefined;
-  let inStock: boolean;
-
-  if (typeof inStockOrStatus === 'string') {
-    status = inStockOrStatus;
-    inStock = inStockOrStatus === 'in_stock';
-  } else if (typeof inStockOrStatus === 'boolean') {
-    inStock = inStockOrStatus;
-    status = inStock ? 'in_stock' : 'out_of_stock';
-  } else {
-    inStock = true;
-  }
-
-  let updatedList: GlobalFinish[] = DEFAULT_GLOBAL_FINISHES;
-  let targetStatus: 'in_stock' | 'out_of_stock' | 'coming_soon' = status || 'in_stock';
-  try {
-    const cached = typeof localStorage !== 'undefined' ? localStorage.getItem(FINISHES_STORAGE_KEY) : null;
-    const current = cached ? JSON.parse(cached) : DEFAULT_GLOBAL_FINISHES;
-    updatedList = current.map((f: GlobalFinish) => {
-      if (f.id !== id && f.slug !== id) return f;
-      const currStatus = resolveFinishStatus(f);
-      targetStatus = status || (currStatus === 'in_stock' ? 'out_of_stock' : currStatus === 'out_of_stock' ? 'coming_soon' : 'in_stock');
-      return {
-        ...f,
-        status: targetStatus,
-        in_stock: targetStatus === 'in_stock',
-        is_coming_soon: targetStatus === 'coming_soon',
-      };
-    });
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(updatedList));
-    }
-  } catch {}
-
-  const postPayload: Record<string, any> = {
-    id,
-    status: targetStatus,
-    in_stock: targetStatus === 'in_stock',
-    is_coming_soon: targetStatus === 'coming_soon',
-  };
+  const targetStatus: 'in_stock' | 'out_of_stock' | 'coming_soon' =
+    typeof inStockOrStatus === 'string'
+      ? inStockOrStatus
+      : inStockOrStatus === false
+      ? 'out_of_stock'
+      : 'in_stock';
 
   const base = getWordPressBaseUrl();
   const url = `${base}/wp-json/exacoat-core/v1/finishes/toggle-stock`;
@@ -4075,42 +4044,33 @@ export async function toggleFinishStockDirect(
     const res = await authenticatedFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify(postPayload),
+      body: JSON.stringify({
+        id,
+        status: targetStatus,
+        in_stock: targetStatus === 'in_stock',
+        is_coming_soon: targetStatus === 'coming_soon',
+      }),
     });
-    const data = await res.json();
-    if (res.ok && !!data?.success && Array.isArray(data?.finishes)) {
+    const data = await res.json().catch(() => null);
+    if (res.ok && !!data?.success) {
       const overrides = new Map<string, Partial<GlobalFinish>>();
       overrides.set(id, {
         status: targetStatus,
         in_stock: targetStatus === 'in_stock',
         is_coming_soon: targetStatus === 'coming_soon',
       });
-      const normalizedFinishes = normalizeGlobalFinishes(data.finishes, overrides);
-      try { localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(normalizedFinishes)); } catch {}
       return {
         success: true,
-        finishes: normalizedFinishes,
+        finishes: Array.isArray(data?.finishes) ? normalizeGlobalFinishes(data.finishes, overrides) : undefined,
       };
     }
-  } catch {}
-
-  return {
-    success: true,
-    finishes: updatedList,
-  };
+    return { success: false, error: data?.error || data?.message || `The store answered ${res.status}.` };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Could not reach the store.' };
+  }
 }
 
 export async function toggleFinishActiveDirect(id: string, isActive: boolean): Promise<{ success: boolean; finishes?: GlobalFinish[]; error?: string }> {
-  let updatedList: GlobalFinish[] = DEFAULT_GLOBAL_FINISHES;
-  try {
-    const cached = typeof localStorage !== 'undefined' ? localStorage.getItem(FINISHES_STORAGE_KEY) : null;
-    const current = cached ? JSON.parse(cached) : DEFAULT_GLOBAL_FINISHES;
-    updatedList = current.map((f: GlobalFinish) => f.id === id ? { ...f, is_active: isActive } : f);
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(updatedList));
-    }
-  } catch {}
-
   const base = getWordPressBaseUrl();
   const url = `${base}/wp-json/exacoat-core/v1/finishes/toggle-active`;
 
@@ -4120,20 +4080,14 @@ export async function toggleFinishActiveDirect(id: string, isActive: boolean): P
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ id, is_active: isActive }),
     });
-    const data = await res.json();
-    if (res.ok && !!data?.success && Array.isArray(data?.finishes)) {
-      try { localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(data.finishes)); } catch {}
-      return {
-        success: true,
-        finishes: data.finishes,
-      };
+    const data = await res.json().catch(() => null);
+    if (res.ok && !!data?.success) {
+      return { success: true, finishes: Array.isArray(data?.finishes) ? data.finishes : undefined };
     }
-  } catch {}
-
-  return {
-    success: true,
-    finishes: updatedList,
-  };
+    return { success: false, error: data?.error || data?.message || `The store answered ${res.status}.` };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Could not reach the store.' };
+  }
 }
 
 export async function saveGlobalFinishDirect(finish: Partial<GlobalFinish>): Promise<{ success: boolean; finishes?: GlobalFinish[]; groups?: string[]; error?: string }> {
@@ -4161,7 +4115,6 @@ export async function saveGlobalFinishDirect(finish: Partial<GlobalFinish>): Pro
       if (payload.id) overrides.set(payload.id, payload);
       if (payload.slug) overrides.set(payload.slug, payload);
       normalizedFinishes = normalizeGlobalFinishes(data.finishes, overrides);
-      try { localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(normalizedFinishes)); } catch {}
     }
     return {
       success: res.ok && !!data?.success,
@@ -4186,7 +4139,6 @@ export async function deleteGlobalFinishDirect(id: string): Promise<{ success: b
     });
     const data = await res.json();
     if (res.ok && !!data?.success && Array.isArray(data?.finishes)) {
-      try { localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(data.finishes)); } catch {}
     }
     return {
       success: res.ok && !!data?.success,
@@ -4232,7 +4184,6 @@ export async function renameFinishGroupDirect(oldName: string, newName: string):
     });
     const data = await res.json();
     if (res.ok && !!data?.success && Array.isArray(data?.finishes)) {
-      try { localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(data.finishes)); } catch {}
     }
     return {
       success: res.ok && !!data?.success,
@@ -4279,7 +4230,6 @@ export async function saveAllGlobalFinishesDirect(
         if (f.slug) overrides.set(f.slug, f);
       });
       normalizedFinishes = normalizeGlobalFinishes(data.finishes, overrides);
-      try { localStorage.setItem(FINISHES_STORAGE_KEY, JSON.stringify(normalizedFinishes)); } catch {}
     }
     return {
       success: res.ok && !!data?.success,
@@ -4291,6 +4241,32 @@ export async function saveAllGlobalFinishesDirect(
   } catch (err: any) {
     return { success: false, error: err.message };
   }
+}
+
+/**
+ * Whole-list save that cannot overwrite changes made elsewhere: re-fetches the live list from
+ * WordPress, applies `transform` to it and saves the result with the live group order.
+ * Returns success false (and saves nothing) when the live list cannot be loaded or `transform`
+ * returns null because the change no longer applies.
+ */
+export async function updateAllGlobalFinishesDirect(
+  transform: (live: GlobalFinish[], groups: string[]) => GlobalFinish[] | null,
+): Promise<{ success: boolean; finishes?: GlobalFinish[]; groups?: string[]; error?: string }> {
+  const fresh = await fetchGlobalFinishesUncached();
+  if (fresh.source !== 'live') {
+    return { success: false, error: 'Could not load the live finishes, so nothing was saved.' };
+  }
+  const groups = Array.isArray(fresh.groups) ? fresh.groups : [];
+  const next = transform(fresh.finishes, groups);
+  if (!next) {
+    return { success: false, error: 'The finishes changed elsewhere. Refresh and try again.' };
+  }
+  return saveAllGlobalFinishesDirect(next, groups.length > 0 ? groups : undefined);
+}
+
+/** Live list straight from WordPress (no shared in-flight request), for read-modify-write saves. */
+export async function fetchLiveGlobalFinishesDirect() {
+  return fetchGlobalFinishesUncached();
 }
 
 export async function saveFinishGroupSettingsDirect(settings: Record<string, FinishGroupSetting>): Promise<{

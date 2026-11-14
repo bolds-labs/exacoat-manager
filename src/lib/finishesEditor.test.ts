@@ -10,6 +10,8 @@ import {
   finishCounts,
   groupFinishes,
   isDraftDirty,
+  mergeDraftOntoFresh,
+  renameGroupSettings,
   moveFinishInGroup,
   moveGroup,
   orderedGroups,
@@ -210,5 +212,31 @@ describe('slugify', () => {
   it('lowercases and dashes', () => {
     expect(slugify('  Titanium+ Black ')).toBe('titanium-black');
     expect(slugify('***')).toBe('');
+  });
+});
+
+describe('mergeDraftOntoFresh', () => {
+  it('keeps changes made elsewhere and applies only the fields edited in the panel', () => {
+    const original = f({ slug: 'swarm', name: 'Swarm', order: 1, extra_price: 30000, is_active: true, status: 'in_stock' });
+    const fresh = { ...original, order: 4, is_active: false, status: 'out_of_stock' as const, in_stock: false, badge_text: 'HOT' };
+    const draft = { ...draftFromFinish(original), extra_price: 35000 };
+    const p = mergeDraftOntoFresh(original, draft, fresh);
+    expect(p).toMatchObject({ order: 4, is_active: false, status: 'out_of_stock', badge_text: 'HOT', extra_price: 35000 });
+  });
+  it('lets an edited field win over the fresh value', () => {
+    const original = f({ slug: 'a', status: 'in_stock' });
+    const fresh = { ...original, status: 'coming_soon' as const };
+    const p = mergeDraftOntoFresh(original, { ...draftFromFinish(original), status: 'out_of_stock' }, fresh);
+    expect(p.status).toBe('out_of_stock');
+  });
+});
+
+describe('renameGroupSettings', () => {
+  it('moves the display settings to the new name', () => {
+    const s = { Colors: { display_style: 'compact_dots' as const }, Natural: { show_more_limit: 3 } };
+    expect(renameGroupSettings(s, 'Colors', 'Pastels')).toEqual({ Pastels: { display_style: 'compact_dots' }, Natural: { show_more_limit: 3 } });
+  });
+  it('returns null when the old group had no settings', () => {
+    expect(renameGroupSettings({}, 'Colors', 'Pastels')).toBeNull();
   });
 });

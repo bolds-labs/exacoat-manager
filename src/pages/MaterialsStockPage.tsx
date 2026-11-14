@@ -6,7 +6,8 @@ import {
   fetchGlobalFinishesDirect,
   renameFinishGroupDirect,
   reorderFinishGroupsDirect,
-  saveAllGlobalFinishesDirect,
+  fetchLiveGlobalFinishesDirect,
+  updateAllGlobalFinishesDirect,
   saveFinishGroupSettingsDirect,
   saveGlobalFinishDirect,
   toggleFinishActiveDirect,
@@ -16,15 +17,16 @@ import {
   type GlobalFinish,
 } from '../lib/wordpressBridge';
 import {
-  buildFinishSavePayload,
   buildNewFinishPayload,
   canDeleteGroup,
   filterFinishes,
   finishCounts,
   groupFinishes,
   moveFinishInGroup,
+  mergeDraftOntoFresh,
   moveGroup,
   orderedGroups,
+  renameGroupSettings,
   type FinishDraft,
   type FinishStatus,
   type FinishStatusFilter,
@@ -44,7 +46,8 @@ import { FinishGroupsModal, describeGroupSetting } from '../components/finishes/
 import { FinishSurchargeTiersModal } from '../components/modals/FinishSurchargeTiersModal';
 import { MediaLibraryModal } from '../components/modals/MediaLibraryModal';
 
-type PanelState = { mode: 'edit'; id: string } | { mode: 'create' } | null;
+/** `finish` is the copy the panel opened with: its draft is compared against it, and it survives a refresh that drops the finish. */
+type PanelState = { mode: 'edit'; finish: GlobalFinish } | { mode: 'create' } | null;
 
 const MEDIA_TITLES: Record<MediaRole, { title: string; size: string }> = {
   thumbnail: { title: 'Swatch thumbnail', size: 'Square swatch (150x150 or 500x500)' },
@@ -70,6 +73,9 @@ export const MaterialsStockPage: React.FC = () => {
   const [tiers, setTiers] = useState<FinishSurchargeTier[]>(DEFAULT_FINISH_SURCHARGE_TIERS);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  // 'fallback' means the list on screen is not WordPress's (storefront list, old per-PC copy or defaults): writes are off.
+  const [source, setSource] = useState<'live' | 'fallback' | null>(null);
+  const sourceRef = useRef<'live' | 'fallback' | null>(null);
 
   const [status, setStatus] = useState<FinishStatusFilter>('all');
   const [query, setQuery] = useState('');
@@ -92,6 +98,14 @@ export const MaterialsStockPage: React.FC = () => {
     else setLoading(true);
     try {
       const res = await fetchGlobalFinishesDirect();
+      const live = res.source === 'live';
+      if (!live && sourceRef.current === 'live') {
+        // Keep the last live list rather than swapping in a copy that may be out of date.
+        toast.error('Could not refresh finishes', 'Showing the list loaded earlier.');
+        return;
+      }
+      sourceRef.current = live ? 'live' : 'fallback';
+      setSource(sourceRef.current);
       if (Array.isArray(res.finishes)) setFinishes(res.finishes);
       if (Array.isArray(res.groups) && res.groups.length > 0) setStoredGroups(res.groups);
       else if (Array.isArray(res.finishes)) setStoredGroups(orderedGroups([], res.finishes));
@@ -132,7 +146,9 @@ export const MaterialsStockPage: React.FC = () => {
       .filter((s) => (filtering ? s.finishes.length > 0 && (groupFilter === 'all' || s.group === groupFilter) : true));
   }, [storedGroups, finishes, visible, status, query, groupFilter]);
 
-  const panelFinish = panel?.mode === 'edit' ? finishes.find((f) => f.id === panel.id) ?? null : null;
+  const readOnly = source !== 'live';
+  const panelFinish = panel?.mode === 'edit' ? panel.finish : null;
+  const panelDeleted = panelFinish !== null && !loading && !finishes.some((f) => f.id === panelFinish.id);
 
   const markBusy = (id: string, on: boolean) =>
     setBusyIds((prev) => {
@@ -184,9 +200,11 @@ export const MaterialsStockPage: React.FC = () => {
     setFinishes(next);
     setReordering(true);
     try {
-      const res = await saveAllGlobalFinishesDirect(next, storedGroups);
+      // The move is applied to a freshly loaded list so changes made elsewhere are not overwritten.
+      const res = await updateAllGlobalFinishesDirect((live) => moveFinishInGroup(live, finish.id, direction));
       if (!res.success) throw new Error(res.error || 'The store did not accept the new order.');
       if (Array.isArray(res.finishes)) setFinishes(res.finishes);
+      if (Array.isArray(res.groups) && res.groups.length > 0) setStoredGroups(res.groups);
     } catch (err) {
       setFinishes(before);
       toast.error('Order not saved', errorText(err, 'Could not reach the store.'));
@@ -198,7 +216,24 @@ export const MaterialsStockPage: React.FC = () => {
   const handleSave = async (draft: FinishDraft) => {
     setSaving(true);
     try {
-      const payload = panelFinish ? buildFinishSavePayload(panelFinish, draft) : buildNewFinishPayload(draft, finishes.length);
+      // Start from WordPress's current copy so order, stock or active changed elsewhere are kept.
+      const fresh = await fetchLiveGlobalFinishesDirect();
+      if (fresh.source !== 'live') throw new Error('Could not load the live finishes, so nothing was saved.');
+      let payload: GlobalFinish;
+      if (panelFinish) {
+        const current = fresh.finishes.find((f) => f.id === panelFinish.id);
+        if (!current) {
+          setFinishes(fresh.finishes);
+          throw new Error('This finish was deleted elsewhere.');
+        }
+        payload = mergeDraftOntoFresh(panelFinish, draft, current);
+      } else {
+        payload = buildNewFinishPayload(draft, fresh.finishes.length);
+        if (fresh.finishes.some((f) => f.slug === payload.slug || f.id === payload.id)) {
+          setFinishes(fresh.finishes);
+          throw new Error(`A finish with the slug "${payload.slug}" already exists.`);
+        }
+      }
       const res = await saveGlobalFinishDirect(payload);
       if (!res.success) throw new Error(res.error || 'The store did not accept the finish.');
       if (Array.isArray(res.finishes)) setFinishes(res.finishes);
@@ -280,6 +315,13 @@ export const MaterialsStockPage: React.FC = () => {
       if (Array.isArray(res.finishes)) setFinishes(res.finishes);
       else setFinishes((prev) => prev.map((f) => (f.group === oldName ? { ...f, group: newName } : f)));
       if (groupFilter === oldName) setGroupFilter(newName);
+      // Display settings are keyed by group name and the rename endpoint does not move them.
+      const moved = renameGroupSettings(groupSettings, oldName, newName);
+      if (moved) {
+        const saved = await saveFinishGroupSettingsDirect(moved);
+        if (saved.success) setGroupSettings(saved.group_settings || moved);
+        else toast.error('Display settings not moved', `Set the display for ${newName} again. ${saved.error || ''}`.trim());
+      }
       toast.success('Group renamed', `${oldName} is now ${newName}; ${res.updated_count ?? 0} finishes moved with it.`);
       return true;
     } catch (err) {
@@ -331,17 +373,26 @@ export const MaterialsStockPage: React.FC = () => {
             disabled={refreshing || loading}
             className={refreshing ? '[&>svg]:animate-spin' : ''}
           />
-          <Button icon={FolderTree} onClick={() => openGroups(null)}>
+          <Button icon={FolderTree} onClick={() => openGroups(null)} disabled={readOnly}>
             Groups
           </Button>
-          <Button icon={Coins} onClick={() => setTiersOpen(true)}>
+          <Button icon={Coins} onClick={() => setTiersOpen(true)} disabled={readOnly}>
             Price tiers
           </Button>
-          <Button variant="primary" icon={Plus} onClick={() => setPanel({ mode: 'create' })} disabled={loading}>
+          <Button variant="primary" icon={Plus} onClick={() => setPanel({ mode: 'create' })} disabled={loading || readOnly}>
             Add finish
           </Button>
         </div>
       </div>
+
+      {source === 'fallback' && !loading && (
+        <div role="status" className="flex flex-wrap items-center gap-3 rounded-[12px] border border-st-wait-border bg-st-wait-bg px-4 py-3">
+          <p className="min-w-0 flex-1 text-[13.5px] text-st-wait-fg">Showing a saved copy, edits are off until finishes load.</p>
+          <Button size="sm" icon={RefreshCw} onClick={() => void load(true)} disabled={refreshing}>
+            Retry
+          </Button>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5">
         <div className="max-w-full overflow-x-auto [&_button]:whitespace-nowrap">
@@ -390,7 +441,7 @@ export const MaterialsStockPage: React.FC = () => {
             title={section.group}
             count={section.all.length}
             actions={
-              <Button size="sm" variant="ghost" icon={SlidersHorizontal} onClick={() => openGroups(section.group)}>
+              <Button size="sm" variant="ghost" icon={SlidersHorizontal} onClick={() => openGroups(section.group)} disabled={readOnly}>
                 {describeGroupSetting(groupSettings[section.group])}
               </Button>
             }
@@ -410,10 +461,11 @@ export const MaterialsStockPage: React.FC = () => {
                       isLast={pos === section.all.length - 1}
                       busy={busyIds.has(f.id)}
                       reorderDisabled={reordering}
+                      readOnly={readOnly}
                       onStock={(s) => void handleStock(f, s)}
                       onActive={(a) => void handleActive(f, a)}
                       onMove={(d) => void handleMove(f, d)}
-                      onEdit={() => setPanel({ mode: 'edit', id: f.id })}
+                      onEdit={() => setPanel({ mode: 'edit', finish: f })}
                     />
                   );
                 })}
@@ -424,8 +476,9 @@ export const MaterialsStockPage: React.FC = () => {
       )}
 
       <FinishEditPanel
-        open={panel !== null && (panel.mode === 'create' || panelFinish !== null)}
+        open={panel !== null}
         finish={panelFinish}
+        deleted={panelDeleted}
         groups={groups}
         defaultGroup={groupFilter !== 'all' ? groupFilter : groups[0] || 'Signature skins'}
         existingSlugs={finishes.flatMap((f) => [f.slug, f.id])}

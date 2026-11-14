@@ -472,7 +472,7 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   Viewport rendering and simulation evaluate textures in order:
   `customLayerTexUrl || activeFinish.texture_url || activeFinish.thumbnail || ''`.
 - **Global Master Textures Management**:
-  - Managed only on the **Finishes & Stock** screen (`MaterialsStockPage.tsx`, tab key `materials`), the one editor for global finishes (see section 63). Configurator Studio has no finish editor: its "Finishes" top bar button and the layer inspector "Tone Settings" link open that screen.
+  - Managed only on the **Finishes & Stock** screen (`MaterialsStockPage.tsx`, tab key `materials`), the one editor for global finishes (see section 66). Configurator Studio has no finish editor: its "Finishes" top bar button and the layer inspector "Tone Settings" link open that screen.
 - **Category Combobox Dropdown**:
   Replaces overflowing horizontal category button strips with a compact, glassmorphic combobox dropdown featuring real-time brand search, live device counts per category, and 1-click reset to "All Categories".
 
@@ -1008,7 +1008,7 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - Different vinyl materials reflect light differently (e.g. dark textured finishes like Black Camo or Black Matte require stronger highlights, while bright white finishes require deeper multiply shadows).
   - Finishes support individual `shadow_opacity` and `highlight_opacity` values on `GlobalFinish`, saved to WordPress options via `saveGlobalFinishDirect` / `rest_save_finish`.
   - Storefront canvas (`stacked-layer-canvas.tsx`), composite generator (`device-skin-configurator.tsx`), and Studio viewport evaluate finish-level opacity before falling back to angle defaults.
-- **Finish Editing (superseded layout)**: the Studio Master Textures card list was replaced by the Finishes & Stock screen (section 63). The fields below still exist in its Edit panel:
+- **Finish Editing (superseded layout)**: the Studio Master Textures card list was replaced by the Finishes & Stock screen (section 66). The fields below still exist in its Edit panel:
   - Replaced unstructured horizontal form rows with clean, structured cards.
   - Header: Swatch thumbnail mini, Finish Name, Group dropdown, Slug, Stock toggle, Extra Price input, Delete, and Save button.
   - Media Grid: 3 dedicated slots for Swatch Thumbnail (150x150), Master Texture URL v2 (1000x1000), and Master Texture Big (2000x2000).
@@ -1097,7 +1097,7 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 
 ---
 
-## 49. Master Textures Batch Save & Automated Storefront Revalidation
+## 49. Finish Saves & Automated Storefront Revalidation
 
 - **Global Master Texture Inheritance Invariant**:
   - In v2 Modern Engine, device configurators do not store hardcoded texture URLs or finish slice assets in individual WooCommerce product metadata.
@@ -1105,12 +1105,10 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
   - On the customer storefront (`web.exacoat.com`), all device configurators dynamically inherit master finish textures from the global finishes endpoint (`/api/configurator/finishes` / `/wp-json/exacoat-core/v1/finishes`).
   - Consequently, **operators do NOT need to revalidate, re-save, or re-audit individual devices when master textures are edited**. Updating a master finish automatically updates every phone, tablet, laptop, and console configurator storewide.
 
-- **Unified Dirty Tracking & Footer Controls**:
-  - `isFinishDirty(f)` centralizes dirty detection across all finish editing states (texture URLs, thumbnails, names, groups, prices, stock, active status, badges, shadow opacities, and highlight opacities).
-  - Modal footer dynamically reflects dirty state:
-    - When dirty: displays animated amber counter badge (`{count} finish(es) with unsaved changes`), "Cancel" button to revert and close, and golden "Save All Changes ({count})" button.
-    - When clean: displays informative operational hint and standard "Done" button.
-  - Individual card saves (`handleSaveMasterFinish`) cleanly purge the saved finish ID from all editing state maps upon success, instantly transitioning the card button from "Save Changes" to "Saved".
+- **Dirty Tracking & Save (Finishes & Stock Edit panel, section 66)**:
+  - One finish is edited at a time. `isDraftDirty(original, draft)` in `src/lib/finishesEditor.ts` compares the panel draft with the finish the panel opened with (text trimmed), covering every field (name, group, prices, stock, active, three image URLs, shading, surface shading, badge, custom per device, disable logo cutout).
+  - The panel header shows "Unsaved changes", Save stays disabled while the draft is clean, and closing a dirty panel asks to discard. The old Studio "Save All Changes (n)" footer is gone: there is never more than one unsaved finish.
+  - Save re-fetches the live finish and sends only the edited fields on top of it (`mergeDraftOntoFresh`), so order, stock or active changed elsewhere are kept.
 
 - **Automated Next.js Storefront Cache Revalidation**:
   - Both `rest_save_finish` and `rest_save_all_finishes` in `class-configurator-engine.php` automatically trigger Next.js On-Demand Incremental Static Regeneration (ISR) and Cloudflare edge purge via `Exacoat_Configurator_Engine::trigger_storefront_revalidation()` with `tag=finishes` and `path=/api/configurator/finishes`.
@@ -1939,7 +1937,7 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 
 ---
 
-## 63. Staff Dashboard (`#staff`)
+## 65. Staff Dashboard (`#staff`)
 
 - **Screen**: `src/pages/StaffDashboardPage.tsx` (lazy), cards in `src/components/staff/`. Tab key `staff` ("Staff dashboard") sits in the Operations group under Dashboard and is in `SHOP_MANAGER_ALLOWED_TABS`. It loads its own data and never needs the 500-order list.
 - **Landing**: shop managers land on `staff` (App.tsx redirects any tab they may not open, including the default `dashboard`, to `#staff`). Administrators keep `dashboard` as landing.
@@ -1962,13 +1960,16 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 
 ---
 
-## 63. One Finishes Editor (Finishes & Stock)
+## 66. One Finishes Editor (Finishes & Stock)
 
 - **One editor**: global finishes (`exacoat_global_finishes`), finish groups (`exacoat_global_finish_groups`), group display settings (`exacoat_finish_group_settings`) and price tiers (`exacoat_finish_surcharge_tiers`) are edited only on the **Finishes & Stock** screen (`src/pages/MaterialsStockPage.tsx`, tab key `materials`, aliases `#finishes`, `#stock`). The Studio Master Textures pop-up was removed. Studio's "Finishes" button and "Tone Settings" link open the screen: in the same tab from the catalog, in a new tab while a device is open (Studio has no unsaved-changes tracking for devices). Studio re-reads finishes, groups and tiers when its window regains focus.
-- **Layout**: one card per group in stored group order (empty groups included), rows sorted by `order` then name (`src/lib/finishesEditor.ts`). Row controls save immediately: Stock select (`toggleFinishStockDirect`), Active switch (`toggleFinishActiveDirect`), Move up/down (`saveAllGlobalFinishesDirect` with the renumbered group and the stored groups). Each reverts on failure.
+- **Layout**: one card per group in stored group order (empty groups included), rows sorted by `order` then name (`src/lib/finishesEditor.ts`). Row controls save immediately: Stock select (`toggleFinishStockDirect`), Active switch (`toggleFinishActiveDirect`), Move up/down (`updateAllGlobalFinishesDirect`). Each reverts and shows an error toast on failure.
+- **Honest toggles, no per-PC cache writes**: `toggleFinishStockDirect` and `toggleFinishActiveDirect` return `success: false` with the error when the request fails or WordPress refuses. No finish call writes `exacoat_finishes_inventory_cache` any more (section 3); `fetchGlobalFinishesDirect` may still read an old copy as a last-resort display fallback.
+- **Live vs fallback**: `fetchGlobalFinishesDirect` returns `source: 'live'` only when WordPress answered; the storefront list, the old per-PC copy and `DEFAULT_GLOBAL_FINISHES` are `source: 'fallback'`. The screen blocks every write on a fallback list (rows, Edit, Add, Groups, Price tiers) and shows "Showing a saved copy, edits are off until finishes load." with Retry. A refresh that only gets a fallback keeps the last live list. Studio's focus reload ignores fallback data.
+- **Whole-list saves start from live data**: `updateAllGlobalFinishesDirect(transform)` re-fetches the live list, applies `transform` (for example `moveFinishInGroup`) to it and saves with the live group order; it saves nothing when the live list cannot load or `transform` returns null. Do not call `saveAllGlobalFinishesDirect` with a list held on screen.
 - **Edit panel** (`src/components/finishes/FinishEditPanel.tsx`, kit Drawer): every finish field, three Media Library slots (swatch, master texture, big texture), shading sliders, surface shading, badge, custom per device, disable logo cutout. One Save; the header shows Unsaved changes; closing with changes asks to discard. The same panel adds finishes and blocks a slug that already exists (saving an existing slug would overwrite that finish).
 - **Full-record save invariant**: `/finishes/save` resets fields it does not receive (`accent_extra_price` to 0, `is_active` to true, badge and `is_custom_per_device` cleared). Saves must always send the whole finish: `buildFinishSavePayload(original, draft)` spreads the original and overlays the draft. The old Materials edit wiped badges and re-activated inactive finishes; the old Studio card save wiped the accent override.
 - **Pickers over the drawer**: `MediaLibraryModal` (legacy Modal, `z-[200]`) opens above the kit Drawer (`z-[110]`). The panel's `blockClose` prop keeps the drawer open while the picker is up, because Escape reaches both.
-- **Groups pop-up** (`FinishGroupsModal.tsx`, kit Modal): order, add, rename (Enter saves), delete when empty, and display settings (Cards or Dots, collapsed by default, show more after N) inline per group.
+- **Groups pop-up** (`FinishGroupsModal.tsx`, kit Modal): order, add, rename (Enter saves, Escape cancels only the rename through the kit Modal `onEscapeKeyDown` prop), delete when empty, and display settings (Cards or Dots, collapsed by default, show more after N) inline per group. `/finishes/rename-group` does not move `exacoat_finish_group_settings`, so after a rename the screen re-saves the settings under the new name (`renameGroupSettings`).
+- **Deleted elsewhere**: the Edit panel keeps the copy it opened with. If a refresh no longer lists that finish, the panel stays open with "This finish was deleted elsewhere" and only Close works.
 - **Global looks**: the store-wide bespoke presets list (`exacoat_configurator_presets`) is not a finish field; it stays in Studio, opened from the Presets inspector tab ("Global looks"). The storefront shows only per-device looks.
-- **Known limit**: `toggleFinishStockDirect` and `toggleFinishActiveDirect` report success even when the request fails (they fall back to the local cache), so a failed row toggle can look saved until the next refresh.

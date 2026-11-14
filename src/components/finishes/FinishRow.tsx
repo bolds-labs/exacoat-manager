@@ -17,6 +17,8 @@ export interface FinishRowProps {
   isLast: boolean;
   busy: boolean;
   reorderDisabled: boolean;
+  /** Writes are off (the list is a fallback copy). */
+  readOnly?: boolean;
   onStock(status: FinishStatus): void;
   onActive(active: boolean): void;
   onMove(direction: 'up' | 'down'): void;
@@ -25,7 +27,7 @@ export interface FinishRowProps {
 
 const chip = 'rounded-[7px] px-2 py-[2px] text-[12px] font-medium';
 
-export function FinishRow({ finish, position, isFirst, isLast, busy, reorderDisabled, onStock, onActive, onMove, onEdit }: FinishRowProps) {
+export function FinishRow({ finish, position, isFirst, isLast, busy, reorderDisabled, readOnly = false, onStock, onActive, onMove, onEdit }: FinishRowProps) {
   const status = resolveFinishStatus(finish);
   const active = finish.is_active !== false;
   const extra = Number(finish.extra_price) || 0;
@@ -91,7 +93,7 @@ export function FinishRow({ finish, position, isFirst, isLast, busy, reorderDisa
         className="w-[150px] flex-none"
         value={status}
         options={STOCK_OPTIONS}
-        disabled={busy}
+        disabled={busy || readOnly}
         onChange={(v) => {
           if (v !== status) onStock(v as FinishStatus);
         }}
@@ -101,15 +103,15 @@ export function FinishRow({ finish, position, isFirst, isLast, busy, reorderDisa
         label="Active"
         aria-label={`Show ${finish.name} on the storefront`}
         checked={active}
-        disabled={busy}
+        disabled={busy || readOnly}
         onCheckedChange={onActive}
         className="w-[86px] flex-none disabled:opacity-50"
       />
 
       <div className="flex flex-none items-center gap-1">
-        <IconButton size="sm" variant="ghost" icon={ChevronUp} label={`Move ${finish.name} up`} disabled={reorderDisabled || isFirst} onClick={() => onMove('up')} />
-        <IconButton size="sm" variant="ghost" icon={ChevronDown} label={`Move ${finish.name} down`} disabled={reorderDisabled || isLast} onClick={() => onMove('down')} />
-        <Button size="sm" icon={Pencil} onClick={onEdit} className="ml-1">
+        <IconButton size="sm" variant="ghost" icon={ChevronUp} label={`Move ${finish.name} up`} disabled={readOnly || reorderDisabled || isFirst} onClick={() => onMove('up')} />
+        <IconButton size="sm" variant="ghost" icon={ChevronDown} label={`Move ${finish.name} down`} disabled={readOnly || reorderDisabled || isLast} onClick={() => onMove('down')} />
+        <Button size="sm" icon={Pencil} onClick={onEdit} disabled={readOnly} className="ml-1">
           Edit
         </Button>
       </div>

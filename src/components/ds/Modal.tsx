@@ -13,13 +13,15 @@ export interface ModalProps {
   children?: ReactNode;
   footer?: ReactNode;
   width?: number;
+  /** Lets a caller keep the modal open on Escape (call preventDefault), e.g. to cancel an inline edit first. */
+  onEscapeKeyDown?: (event: KeyboardEvent) => void;
 }
 
 // Clicking a toast (for example its close button) must not dismiss the modal underneath.
 export const isToastTarget = (target: EventTarget | null) =>
   target instanceof Element && Boolean(target.closest('[data-sonner-toaster]'));
 
-export function Modal({ open, onOpenChange, title, reference, description, children, footer, width = 520 }: ModalProps) {
+export function Modal({ open, onOpenChange, title, reference, description, children, footer, width = 520, onEscapeKeyDown }: ModalProps) {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -27,6 +29,7 @@ export function Modal({ open, onOpenChange, title, reference, description, child
         <Dialog.Content
           aria-describedby={undefined}
           style={{ width }}
+          onEscapeKeyDown={onEscapeKeyDown}
           onInteractOutside={(e) => {
             if (isToastTarget(e.target)) e.preventDefault();
           }}

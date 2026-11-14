@@ -1088,7 +1088,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
   useEffect(() => {
     const reloadFinishes = async () => {
       const res = await fetchGlobalFinishesDirect();
-      if (!res.success || !Array.isArray(res.finishes)) return;
+      // Only live WordPress data replaces what Studio shows; a fallback copy could be out of date.
+      if (!res.success || res.source !== 'live' || !Array.isArray(res.finishes)) return;
       setFinishes(res.finishes);
       if (Array.isArray(res.groups) && res.groups.length > 0) setStoredFinishGroups(res.groups);
       if (Array.isArray(res.surcharge_tiers) && res.surcharge_tiers.length > 0) setSurchargeTiers(res.surcharge_tiers);

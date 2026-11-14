@@ -37,6 +37,8 @@ export interface FinishEditPanelProps {
   saving: boolean;
   /** True while a picker opened from the panel is on top; Escape or scrim clicks then leave the panel open. */
   blockClose?: boolean;
+  /** The finish was removed elsewhere after the panel opened: show a notice and allow nothing but closing. */
+  deleted?: boolean;
   onClose(): void;
   onSave(draft: FinishDraft): void;
   onDelete(finish: GlobalFinish): void;
@@ -109,6 +111,7 @@ export function FinishEditPanel({
   existingSlugs,
   saving,
   blockClose = false,
+  deleted = false,
   onClose,
   onSave,
   onDelete,
@@ -134,7 +137,7 @@ export function FinishEditPanel({
   const createSlug = slugify(draft.slug) || slugify(draft.name);
   const slugTaken = isCreate && createSlug !== '' && existingSlugs.includes(createSlug);
   const nameMissing = draft.name.trim() === '';
-  const canSave = dirty && !saving && !nameMissing && (!isCreate || (createSlug !== '' && !slugTaken));
+  const canSave = dirty && !saving && !deleted && !nameMissing && (!isCreate || (createSlug !== '' && !slugTaken));
 
   const groupOptions = useMemo(() => {
     const list = groups.includes(draft.group) || !draft.group ? groups : [...groups, draft.group];
@@ -142,7 +145,7 @@ export function FinishEditPanel({
   }, [groups, draft.group]);
 
   const requestClose = () => {
-    if (dirty && !saving) setConfirmDiscard(true);
+    if (dirty && !saving && !deleted) setConfirmDiscard(true);
     else onClose();
   };
 
@@ -179,6 +182,11 @@ export function FinishEditPanel({
       >
         <div className="flex min-h-full flex-col">
           <div className="flex-1">
+            {deleted && (
+              <p role="alert" className="mx-5 mt-4 rounded-[10px] border border-st-stop-border bg-st-stop-bg px-3.5 py-2.5 text-[13px] text-st-stop-fg">
+                This finish was deleted elsewhere. Close the panel; nothing here can be saved.
+              </p>
+            )}
             <Section title="Basics">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <TextField label="Name" value={draft.name} onChange={(e) => set('name', e.target.value)} placeholder="e.g. Swarm" />
@@ -341,7 +349,7 @@ export function FinishEditPanel({
 
           <footer className="sticky bottom-0 flex items-center gap-2 border-t border-line bg-panel px-5 py-3.5">
             {!isCreate && finish && (
-              <Button variant="danger" icon={Trash2} onClick={() => onDelete(finish)} disabled={saving}>
+              <Button variant="danger" icon={Trash2} onClick={() => onDelete(finish)} disabled={saving || deleted}>
                 Delete
               </Button>
             )}

@@ -19,7 +19,7 @@ Spec: `docs/superpowers/specs/2026-11-14-staff-dashboard-design.md`. Branch `des
 - `src/pages/StaffDashboardPage.tsx` (lazy) with cards in `src/components/staff/`: KPI row (Payment confirmed and Warranty to review from the shared counts, with the same processing-count fallback the Dashboard uses; Reviews to approve from `stats.pending`; Overdue international), Overdue international orders with Open order, Team notes (add, pin, done, delete with confirmation, done notes folded), Reviews waiting for approval (stars, customer, product, text, photos, Approve and Reject), Quick links. Header Refresh and the page Refresh reload all cards.
 - Navigation: tab `staff` "Staff dashboard" in Operations under Dashboard, in `SHOP_MANAGER_ALLOWED_TABS`, Header title, Command palette entry, URL aliases `#staff`, `#staff-dashboard`. Shop managers are redirected to `#staff` (was `#orders`) for any tab they cannot open, so they land there after sign-in. Admins still land on Dashboard.
 - `SELF_LOADING_TABS` no longer exists; the order list is an allowlist (`tabNeedsOrderList`, only `skin_performance`). Added `staff` to the workspaceTabs test and corrected the stale AGENTS.md reference.
-- Docs: AGENTS.md section 63, CHANGELOG 0.1.228 "Staff dashboard", changelog line in `scripts/package-plugin.cjs`.
+- Docs: AGENTS.md section 65 (numbered 63 when written), CHANGELOG 0.1.228 "Staff dashboard", changelog line in `scripts/package-plugin.cjs`.
 
 ## Verification
 - `php -l` on the new class and `exacoat-core.php`: clean. `php tests/staff-dashboard-test.php`: OK. `tests/counts-bucket-test.php`: OK.
