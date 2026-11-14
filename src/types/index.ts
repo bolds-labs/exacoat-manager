@@ -854,3 +854,14 @@ export interface CustomLabelData {
   manifest_items: CustomLabelManifestItem[];
 }
 
+
+export type OrderCountKey =
+  | 'all' | 'awaiting_payment' | 'to_prepare' | 'preparing' | 'waiting_for_courier'
+  | 'ready_for_pickup' | 'picked_up' | 'shipped' | 'completed' | 'warranty'
+  | 'warranty_pending' | 'redeem' | 'endorsement';
+
+export interface OrderCounts {
+  webstore: Record<OrderCountKey, number>;
+  shipped_last_7_days: number;
+  channels: { webstore: number; shopee: number; tiktok: number };
+}

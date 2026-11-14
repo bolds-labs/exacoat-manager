@@ -26,7 +26,8 @@ import {
   AffiliateClick,
   AffiliateDailyStat,
   CustomLabelAddress,
-  CustomLabelSender
+  CustomLabelSender,
+  OrderCounts
 } from '../types';
 export type { MarketplaceDeviceImageSettings, CustomLabelAddress, CustomLabelSender };
 import { 
@@ -10774,3 +10775,32 @@ export function getGooritaAwbDocumentUrl(orderId: number | string): string {
 
 
 
+
+const ORDER_COUNT_KEYS = [
+  'all', 'awaiting_payment', 'to_prepare', 'preparing', 'waiting_for_courier', 'ready_for_pickup',
+  'picked_up', 'shipped', 'completed', 'warranty', 'warranty_pending', 'redeem', 'endorsement',
+] as const;
+
+function isCountMap(v: unknown, keys: readonly string[]): v is Record<string, number> {
+  return !!v && typeof v === 'object' && keys.every((k) => Number.isFinite((v as Record<string, unknown>)[k]));
+}
+
+export async function fetchOrderCountsDirect(): Promise<{ success: boolean; counts?: OrderCounts }> {
+  try {
+    const url = `${getWordPressBaseUrl()}/wp-json/exacoat-core/v1/orders/counts`;
+    const res = await authenticatedFetch(url, { headers: { Accept: 'application/json' } });
+    if (!res.ok) return { success: false };
+    const data = await res.json();
+    if (
+      !data
+      || !isCountMap(data.webstore, ORDER_COUNT_KEYS)
+      || !Number.isFinite(data.shipped_last_7_days)
+      || !isCountMap(data.channels, ['webstore', 'shopee', 'tiktok'])
+    ) {
+      return { success: false };
+    }
+    return { success: true, counts: data as OrderCounts };
+  } catch {
+    return { success: false };
+  }
+}

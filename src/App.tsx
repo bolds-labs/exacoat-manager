@@ -5,6 +5,7 @@ import { Layout } from './components/layout/Layout';
 import { NavItemKey } from './components/layout/Sidebar';
 import { SHOP_MANAGER_ALLOWED_TABS } from './components/layout/sidebarNav';
 import { LoginPage } from './pages/LoginPage';
+import { useOrderCounts } from './hooks/useOrderCounts';
 import { fetchOrdersDirect, handleShopeeCallbackDirect, handleTikTokCallbackDirect } from './lib/wordpressBridge';
 import { tabNeedsOrderList } from './lib/workspaceTabs';
 import { Order, AuditLog } from './types';
@@ -304,6 +305,7 @@ export const App: React.FC = () => {
   const needsOrderList = tabNeedsOrderList(currentTab, isShopManager);
   const [ordersLoaded, setOrdersLoaded] = useState(false);
   const [processingCount, setProcessingCount] = useState(0);
+  const { counts: orderCounts, loaded: countsLoaded, refresh: refreshOrderCounts } = useOrderCounts();
 
   const loadWorkspaceData = useCallback(async (quiet = false) => {
     if (!user || isAffiliatePortal) return;
@@ -333,9 +335,9 @@ export const App: React.FC = () => {
     }
   }, [user, isAffiliatePortal, needsOrderList, ordersLoaded, loadWorkspaceData]);
 
-  // Sidebar badge: ask only for the count of processing orders, not the orders themselves
+  // Fallback badge when the store-wide counts endpoint is unavailable: count processing orders only
   useEffect(() => {
-    if (!user || isAffiliatePortal) return;
+    if (!user || isAffiliatePortal || !countsLoaded || orderCounts) return;
     let cancelled = false;
     fetchOrdersDirect({ status: 'processing', per_page: 1 })
       .then((res) => {
@@ -345,7 +347,7 @@ export const App: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [user, isAffiliatePortal]);
+  }, [user, isAffiliatePortal, countsLoaded, orderCounts]);
 
   // Auth Loading
   if (isAuthLoading) {
@@ -474,7 +476,10 @@ export const App: React.FC = () => {
       case 'testing':
         return (
           <TestingSandboxPage
-            onRefreshData={() => loadWorkspaceData(true)}
+            onRefreshData={() => {
+        void refreshOrderCounts();
+        return loadWorkspaceData(true);
+      }}
             onNavigate={handleTabChange}
           />
         );
@@ -497,7 +502,8 @@ export const App: React.FC = () => {
       onTabChange={handleTabChange}
       onRefreshData={() => loadWorkspaceData(true)}
       isRefreshing={isRefreshing}
-      pendingOrdersCount={processingCount}
+      pendingOrdersCount={orderCounts ? orderCounts.webstore.to_prepare : processingCount}
+      navCounts={orderCounts ? { orders: orderCounts.webstore.to_prepare, rma: orderCounts.webstore.warranty_pending } : undefined}
       pendingReviewsCount={0}
     >
       <React.Suspense

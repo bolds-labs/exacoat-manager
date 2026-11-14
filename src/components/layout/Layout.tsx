@@ -22,6 +22,7 @@ interface LayoutProps {
   isRefreshing?: boolean;
   pendingOrdersCount?: number;
   pendingReviewsCount?: number;
+  navCounts?: Partial<Record<NavItemKey, number>>;
   dbLatencyMs?: number;
   dbStatus?: 'healthy' | 'warning' | 'error';
 }
@@ -46,6 +47,7 @@ export const Layout: React.FC<LayoutProps> = ({
   isRefreshing,
   pendingOrdersCount = 0,
   pendingReviewsCount = 0,
+  navCounts,
   dbLatencyMs,
   dbStatus,
 }) => {
@@ -78,6 +80,7 @@ export const Layout: React.FC<LayoutProps> = ({
         currentTab={currentTab}
         onTabChange={onTabChange}
         pendingReviewCount={pendingReviewsCount}
+        counts={navCounts}
         isMobileOpen={isMobileNavOpen}
         onMobileClose={() => setIsMobileNavOpen(false)}
       />
