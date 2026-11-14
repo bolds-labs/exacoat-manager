@@ -1,42 +1,31 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AlertCircle, Check, Loader2, Package, RefreshCw, Search, Trash2 } from 'lucide-react';
 import { Modal } from '../ds/Modal';
-import { Button as KitButton } from '../ds/Button';
-import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
+import { Button } from '../ds/Button';
+import { TextField } from '../ds/TextField';
 import { ConfirmModal, ConfirmText } from './panel/ConfirmModal';
-import { Order, OrderItem, DeviceConfiguratorProfile, ConfiguratorVariant, DeviceFamily } from '../../types';
-import {
-  fetchProductsDirect,
-  fetchGlobalFinishesDirect,
-  fetchProductConfiguratorProfileDirect,
-  updateOrderDirect,
-  GlobalFinish,
-  DEFAULT_GLOBAL_FINISHES,
-  Product,
-} from '../../lib/wordpressBridge';
-import { extractItemSpecs, cleanItemTitle, ItemCustomizationSpec } from '../../lib/orderItems';
+import { ConfigurationEditor } from './editItem/ConfigurationEditor';
+import { PriceBox } from './editItem/PriceBox';
+import { extractDeviceKeywords, isLinkedProductId, keepsOwnPrice } from './editItem/itemLookup';
+import type { Order, OrderItem } from '../../types';
+import { fetchProductsDirect, updateOrderDirect, type Product } from '../../lib/wordpressBridge';
+import { extractItemSpecs, type ItemCustomizationSpec } from '../../lib/orderItems';
 import { formatCurrency } from '../../lib/formatters';
-import { useToast } from '../../context/ToastContext';
 import {
-  Layers,
-  Package,
-  Plus,
-  Trash2,
-  Check,
-  Search,
-  Sliders,
-  Sparkles,
-  X,
-  AlertCircle,
-  RefreshCw,
-  Eye,
-  CheckCircle2,
-  ChevronDown,
-  ChevronRight,
-  Palette,
-  Cpu,
-} from 'lucide-react';
-import { clsx } from 'clsx';
+  computeWebstoreTotal,
+  emptySelection,
+  fetchWebstoreConfigurator,
+  interactiveLayers,
+  layerChoices,
+  preselectFromSpecs,
+  selectionToSpecs,
+  type Selection,
+  type WebstoreConfigurator,
+} from '../../lib/webstoreConfigurator';
+import { useToast } from '../../context/ToastContext';
+
+// Re-exported for older imports; the lookup lives in editItem/itemLookup.ts.
+export { extractDeviceKeywords };
 
 interface EditOrderItemModalProps {
   order: Order | null;
@@ -47,325 +36,156 @@ interface EditOrderItemModalProps {
   onDeleted?: (deletedItemId: number) => void;
 }
 
-interface DynamicLayerOption {
-  id: string;
-  name: string;
-  is_required: boolean;
-  default_selected: boolean;
+type LoadState =
+  | { kind: 'idle' }
+  | { kind: 'loading' }
+  | { kind: 'ready'; data: WebstoreConfigurator }
+  | { kind: 'none' }
+  | { kind: 'error' };
+
+function initialUnitPrice(item: OrderItem): number {
+  const parsed =
+    item.price !== undefined && item.price !== null && item.price !== '' && !isNaN(Number(item.price))
+      ? Number(item.price)
+      : item.subtotal && item.quantity
+        ? Number(item.subtotal) / item.quantity
+        : Number(item.total || 0);
+  return Math.round(parsed || 0);
 }
 
-interface CustomSpecEntry {
-  id: string;
-  label: string;
-  value: string;
-}
-
-function isDeviceSupportingCoverage(
-  productName: string,
-  profile?: DeviceConfiguratorProfile | null
-): boolean {
-  const nameLower = (productName || profile?.device_name || '').toLowerCase();
-  const fam = (profile?.family || '').toLowerCase();
-  const cat = (profile?.category || '').toLowerCase();
-
-  // Explicit non-phone devices (Macbooks, laptops, tablets, consoles, audio) NEVER support 360 vs Model Cut coverage
-  const isNonPhone =
-    fam === 'macbook' ||
-    fam === 'laptop' ||
-    fam === 'tablet' ||
-    fam === 'ipad' ||
-    fam === 'console' ||
-    fam === 'audio' ||
-    fam === 'foldable' ||
-    fam === 'charger' ||
-    cat.includes('laptop') ||
-    cat.includes('macbook') ||
-    cat.includes('tablet') ||
-    cat.includes('ipad') ||
-    cat.includes('console') ||
-    nameLower.includes('macbook') ||
-    nameLower.includes('laptop') ||
-    nameLower.includes('notebook') ||
-    nameLower.includes('thinkpad') ||
-    nameLower.includes('surface') ||
-    nameLower.includes('ipad') ||
-    nameLower.includes('tablet') ||
-    nameLower.includes('tab ') ||
-    nameLower.includes('tab s') ||
-    nameLower.includes('playstation') ||
-    nameLower.includes('ps5') ||
-    nameLower.includes('ps4') ||
-    nameLower.includes('xbox') ||
-    nameLower.includes('switch') ||
-    nameLower.includes('steam deck') ||
-    nameLower.includes('rog ally') ||
-    nameLower.includes('keyboard') ||
-    nameLower.includes('airpods');
-
-  if (isNonPhone) {
-    return false;
-  }
-
-  // For phone devices, check true configurator profile coverage settings
-  const cov = profile?.coverage_and_cutouts;
-  if (!cov) return false;
-
-  const covType = (cov.coverage_type || '').toLowerCase();
-  // If explicitly none or single cut only, buyer has no choice between Model Cut and 360
-  if (covType === 'none' || covType === 'model_cut_only' || covType === 'model_360_only') {
-    return false;
-  }
-
-  if (covType === 'model_cut_and_360' || (covType as any) === 'both') {
-    return true;
-  }
-
-  if (Array.isArray(cov.available_coverages) && cov.available_coverages.length > 1) {
-    return true;
-  }
-
-  return false;
-}
-
-export function extractDeviceKeywords(rawName: string): string {
-  if (!rawName) return '';
-  let text = cleanItemTitle(rawName);
-  text = text.replace(/^(?:Warranty\s*(?:Replacement)?|Redeem|Claim|Replacement)\s*[-:]\s*/gi, '');
-  const segments = text.split(/\s*[-|/:]\s*/);
-  let bestSegment = segments[0] || text;
-  if (/^(?:skin\s*hp|garskin|sticker|case|pelindung)$/i.test(bestSegment.trim()) && segments.length > 1) {
-    bestSegment = segments[1];
-  }
-  const clean = bestSegment
-    .replace(/\b(?:Skins?|Garskin|Sticker|Pelindung|Case|Cover|Vinyl|Wrap)\b/gi, ' ')
-    .replace(/\((?:Model Cut|360|Full Body|Back Only|Case Friendly)[^)]*\)/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return clean;
-}
-
-function synthesizeConfiguratorProfile(deviceName: string): {
-  profile: DeviceConfiguratorProfile;
-  layers: DynamicLayerOption[];
-  hasCoverage: boolean;
-  hasLogo: boolean;
-  hasPencil: boolean;
-} {
-  const nameLower = (deviceName || '').toLowerCase();
-
-  const isLaptop =
-    nameLower.includes('macbook') ||
-    nameLower.includes('laptop') ||
-    nameLower.includes('notebook') ||
-    nameLower.includes('thinkpad') ||
-    nameLower.includes('surface');
-
-  const isTablet =
-    nameLower.includes('ipad') ||
-    nameLower.includes('tablet') ||
-    nameLower.includes('tab ') ||
-    nameLower.includes('tab s');
-
-  const isConsole =
-    nameLower.includes('playstation') ||
-    nameLower.includes('ps5') ||
-    nameLower.includes('ps4') ||
-    nameLower.includes('xbox') ||
-    nameLower.includes('switch') ||
-    nameLower.includes('steam deck') ||
-    nameLower.includes('rog ally');
-
-  const isKeyboard = nameLower.includes('keyboard');
-  const isAudio = nameLower.includes('airpods') || nameLower.includes('buds') || nameLower.includes('audio');
-  const isCharger = nameLower.includes('charger') || nameLower.includes('power bank') || nameLower.includes('magsafe');
-
-  let rawLayers: DynamicLayerOption[] = [];
-  let category = 'Smartphone';
-  let family: DeviceFamily = 'phone';
-  let hasCoverage = false;
-  let hasLogo = false;
-  let hasPencil = false;
-
-  if (isLaptop) {
-    category = 'Laptop';
-    family = 'laptop';
-    rawLayers = [
-      { id: 'top', name: 'Top Skin', is_required: true, default_selected: true },
-      { id: 'bottom', name: 'Bottom Skin', is_required: false, default_selected: true },
-      { id: 'palmrest', name: 'Inside / Palmrest', is_required: false, default_selected: false },
-      { id: 'trackpad', name: 'Trackpad', is_required: false, default_selected: false },
-    ];
-    hasLogo = true;
-  } else if (isTablet) {
-    category = 'Tablet';
-    family = 'tablet';
-    rawLayers = [
-      { id: 'back', name: 'Back Skin', is_required: true, default_selected: true },
-      { id: 'pencil', name: 'Apple Pencil / Accent', is_required: false, default_selected: false },
-      { id: 'frame', name: 'Frame / Sides', is_required: false, default_selected: false },
-    ];
-    hasLogo = true;
-    hasPencil = true;
-  } else if (isConsole) {
-    category = 'Gaming';
-    family = 'console';
-    rawLayers = [
-      { id: 'body', name: 'Main Body / Plates', is_required: true, default_selected: true },
-      { id: 'middle', name: 'Middle Strip / Accent', is_required: false, default_selected: false },
-      { id: 'controller', name: 'Controller Skin', is_required: false, default_selected: false },
-    ];
-  } else if (isKeyboard) {
-    category = 'Keyboard';
-    family = 'keyboard';
-    rawLayers = [
-      { id: 'body', name: 'Main Keyboard Body', is_required: true, default_selected: true },
-      { id: 'surround', name: 'Key Surround Accent', is_required: false, default_selected: false },
-    ];
-  } else if (isAudio) {
-    category = 'Audio';
-    family = 'audio';
-    rawLayers = [
-      { id: 'case', name: 'Case Skin', is_required: true, default_selected: true },
-      { id: 'accent', name: 'Buds Accent', is_required: false, default_selected: false },
-    ];
-  } else if (isCharger) {
-    category = 'Charger';
-    family = 'accessory';
-    rawLayers = [
-      { id: 'body', name: 'Body Skin', is_required: true, default_selected: true },
-      { id: 'accent', name: 'Ring / Accent', is_required: false, default_selected: false },
-    ];
-  } else {
-    category = 'Smartphone';
-    family = 'phone';
-    rawLayers = [
-      { id: 'back', name: 'Back Skin', is_required: true, default_selected: true },
-      { id: 'camera', name: 'Camera Accent', is_required: false, default_selected: false },
-      { id: 'frame', name: 'Frame / Sides', is_required: false, default_selected: false },
-    ];
-    hasCoverage = true;
-    hasLogo = nameLower.includes('iphone') || nameLower.includes('apple');
-  }
-
-  const profile: DeviceConfiguratorProfile = {
-    product_id: 0,
-    base_price: 130000,
-    device_name: deviceName,
-    device_slug: deviceName.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-    category,
-    family,
-    currency: 'IDR',
-    size_multiplier: 1,
-    views: [],
-    layers: rawLayers as any,
-    variants: [],
-    presets: [],
-    coverage_and_cutouts: {
-      coverage_type: hasCoverage ? 'model_cut_and_360' : 'none',
-      has_logo_cutout: hasLogo,
-      has_pencil_cutout: hasPencil,
-    },
-    is_configurable: true,
-  };
-
-  return {
-    profile,
-    layers: rawLayers,
-    hasCoverage,
-    hasLogo,
-    hasPencil,
-  };
-}
-
-export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
-  order,
-  item,
-  isOpen,
-  onClose,
-  onSaved,
-  onDeleted,
-}) => {
+export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({ order, item, isOpen, onClose, onSaved, onDeleted }) => {
   const { showToast } = useToast();
   const isEditing = Boolean(item);
+  const currency = order?.currency || 'IDR';
+  const ownPrice = useMemo(() => (order ? keepsOwnPrice(order, item) : false), [order, item]);
+  const originalSpecs = useMemo<ItemCustomizationSpec[]>(() => (item ? extractItemSpecs(item) : []), [item]);
 
-  // Core Product Identification
-  const [productId, setProductId] = useState<number>(0);
-  const [productName, setProductName] = useState<string>('');
-  const [productImage, setProductImage] = useState<string>('');
-  const [quantity, setQuantity] = useState<number>(1);
-  const [unitPrice, setUnitPrice] = useState<number>(0);
+  const [productId, setProductId] = useState(0);
+  const [productName, setProductName] = useState('');
+  const [productImage, setProductImage] = useState('');
+  const [quantity, setQuantity] = useState(1);
+  const [unitPrice, setUnitPrice] = useState(0);
+  const [priceFollows, setPriceFollows] = useState(false);
+  const [priceTouched, setPriceTouched] = useState(false);
+  const [deviceChanged, setDeviceChanged] = useState(false);
 
-  // Product Search / Switcher
+  const [load, setLoad] = useState<LoadState>({ kind: 'idle' });
+  const [selection, setSelection] = useState<Selection | null>(null);
+  const [missing, setMissing] = useState<string[]>([]);
+  const loadSeq = useRef(0);
+  const lastLoad = useRef<{ id: number; name: string; fresh: boolean } | null>(null);
+
   const [isChangingProduct, setIsChangingProduct] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Product[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
-  // Global Finishes Catalog (loaded from live backend)
-  const [allFinishes, setAllFinishes] = useState<GlobalFinish[]>(DEFAULT_GLOBAL_FINISHES);
-  const [finishSearch, setFinishSearch] = useState('');
-  const [activeFinishGroup, setActiveFinishGroup] = useState<string>('all');
-
-  // Configurator Profile & Mode State
-  const [profile, setProfile] = useState<DeviceConfiguratorProfile | null>(null);
-  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
-  const [isConfiguratorProduct, setIsConfiguratorProduct] = useState(false);
-  const [configMode, setConfigMode] = useState<'configurator' | 'form'>('configurator');
-
-  // Production Variants State (e.g. Series, Connectivity, Hardware Model)
-  const [productionVariants, setProductionVariants] = useState<ConfiguratorVariant[]>([]);
-  const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
-
-  // Configurator Layers & Options State
-  const [layers, setLayers] = useState<DynamicLayerOption[]>([]);
-  const [layerFinishes, setLayerFinishes] = useState<Record<string, string>>({});
-  const [layerActive, setLayerActive] = useState<Record<string, boolean>>({});
-  const [activeLayerId, setActiveLayerId] = useState<string | null>(null);
-
-  // Cutouts & Coverage (only active when supported by true profile data)
-  const [hasCoverageOption, setHasCoverageOption] = useState(false);
-  const [coverage, setCoverage] = useState<'Model Cut' | '360° Full Coverage' | 'None' | null>(null);
-
-  const [hasLogoOption, setHasLogoOption] = useState(false);
-  const [logoCutout, setLogoCutout] = useState<'With Logo Cutout' | 'No Logo Cutout' | 'None' | null>(null);
-
-  const [hasPencilOption, setHasPencilOption] = useState(false);
-  const [pencilCutout, setPencilCutout] = useState<'With Pencil Cutout' | 'No Pencil Cutout' | 'None' | null>(null);
-
-  // Custom Specs & Non-Layer Notes (Dynamic key-value pairs)
-  const [customSpecs, setCustomSpecs] = useState<CustomSpecEntry[]>([]);
-  const [selectedCustomSpecId, setSelectedCustomSpecId] = useState<string | null>(null);
-  const [showCustomNotesSection, setShowCustomNotesSection] = useState(false);
-
-  // Modal Actions & Confirmations
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Fetch finishes once on mount
-  useEffect(() => {
-    fetchGlobalFinishesDirect()
-      .then((res) => {
-        if (res.success && Array.isArray(res.finishes) && res.finishes.length > 0) {
-          setAllFinishes(res.finishes);
+  /** Loads the webstore data for a product. `fresh` starts with no choices (new item or another device). */
+  const loadConfigurator = useCallback(
+    async (pId: number, name: string, fresh: boolean) => {
+      const seq = ++loadSeq.current;
+      lastLoad.current = { id: pId, name, fresh };
+      setLoad({ kind: 'loading' });
+      setSelection(null);
+      setMissing([]);
+      let id = pId;
+      try {
+        if (!isLinkedProductId(pId)) {
+          // Marketplace and warranty items: find the webstore product from the device name.
+          const kw = extractDeviceKeywords(name);
+          if (!kw) {
+            if (seq === loadSeq.current) setLoad({ kind: 'none' });
+            return;
+          }
+          const found = await fetchProductsDirect({ search: kw, per_page: 5 });
+          if (seq !== loadSeq.current) return;
+          const products = found.success && Array.isArray(found.products) ? found.products : [];
+          const match = products.find((p) => (p.name || '').toLowerCase().includes(kw.toLowerCase())) || products[0];
+          if (!match) {
+            setLoad({ kind: 'none' });
+            return;
+          }
+          id = match.id;
+          setProductId(match.id);
+          if (match.images?.[0]?.src) setProductImage((prev) => prev || match.images[0].src);
         }
-      })
-      .catch(() => {});
-  }, []);
+      } catch {
+        if (seq === loadSeq.current) setLoad({ kind: 'error' });
+        return;
+      }
 
-  // Product search debounce
+      const res = await fetchWebstoreConfigurator(id);
+      if (seq !== loadSeq.current) return;
+      if (!res.ok) {
+        setLoad(res.status === 404 ? { kind: 'none' } : { kind: 'error' });
+        return;
+      }
+      const data = res.data;
+      if (fresh) {
+        setSelection(emptySelection(data));
+      } else {
+        const pre = preselectFromSpecs(data, originalSpecs, item?.name || '');
+        const base = interactiveLayers(data)[0];
+        // Old items may only carry the finish in `finish_type`.
+        const finishType = String(item?.finish_type || '').trim();
+        if (base && finishType && pre.selection.layers[base.id] === null && !pre.selection.unavailable.some((u) => u.layerId === base.id)) {
+          const c = layerChoices(data, base.id).find((x) => x.name.toLowerCase() === finishType.toLowerCase());
+          if (c) pre.selection.layers[base.id] = c.id;
+        }
+        setSelection(pre.selection);
+        setMissing(pre.missing);
+      }
+      setLoad({ kind: 'ready', data });
+    },
+    [item, originalSpecs],
+  );
+
+  // Initialise from the item (or empty for Add item) each time the pop-up opens.
+  useEffect(() => {
+    if (!isOpen) return;
+    setErrorMsg(null);
+    setPriceTouched(false);
+    setDeviceChanged(false);
+    setSearchQuery('');
+    if (item) {
+      setProductId(item.product_id || 0);
+      setProductName(item.name || '');
+      setProductImage(item.image_url || '');
+      setQuantity(item.quantity || 1);
+      setUnitPrice(initialUnitPrice(item));
+      setPriceFollows(false);
+      setIsChangingProduct(false);
+      loadConfigurator(item.product_id || 0, item.name || '', false);
+    } else {
+      setProductId(0);
+      setProductName('');
+      setProductImage('');
+      setQuantity(1);
+      setUnitPrice(0);
+      setPriceFollows(!ownPrice);
+      setIsChangingProduct(true);
+      setLoad({ kind: 'idle' });
+      setSelection(null);
+      setMissing([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item, isOpen]);
+
+  // Product search debounce.
   useEffect(() => {
     if (!isChangingProduct) return;
     const timer = setTimeout(async () => {
       setIsSearching(true);
       try {
         const res = await fetchProductsDirect({ search: searchQuery.trim(), per_page: 12 });
-        if (res.success && Array.isArray(res.products)) {
-          setSearchResults(res.products);
-        }
+        if (res.success && Array.isArray(res.products)) setSearchResults(res.products);
       } catch {
-        // ignore
+        // keep the previous results
       } finally {
         setIsSearching(false);
       }
@@ -373,583 +193,69 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
     return () => clearTimeout(timer);
   }, [searchQuery, isChangingProduct]);
 
-  // Load product configurator profile and initialize true layers/options
-  const loadProductConfig = async (
-    pId: number,
-    currentSpecs: ItemCustomizationSpec[],
-    isNewItem = false,
-    nameOverride?: string
-  ) => {
-    setIsLoadingProfile(true);
-    let loadedProfile: DeviceConfiguratorProfile | null = null;
-    let resolvedLayers: DynamicLayerOption[] = [];
-    const effectiveProductName = (nameOverride || productName || item?.name || '').trim();
+  const data = load.kind === 'ready' ? load.data : null;
+  const breakdown = useMemo(() => (data && selection ? computeWebstoreTotal(data, selection) : null), [data, selection]);
 
-    // 1. Try direct profile fetch if valid WooCommerce product ID
-    if (pId > 0 && pId !== 507022 && pId < 1000000000) {
-      try {
-        const res = await fetchProductConfiguratorProfileDirect(pId);
-        if (res.success && res.profile) {
-          loadedProfile = res.profile;
-          if (
-            Array.isArray(res.profile.layers) &&
-            res.profile.layers.length > 0 &&
-            res.profile.is_configurable !== false
-          ) {
-            resolvedLayers = res.profile.layers
-              .filter((l: any) => {
-                const lName = (l.name || '').toLowerCase();
-                return (
-                  lName !== 'device' &&
-                  !lName.includes('device-body') &&
-                  !lName.includes('logo') &&
-                  !lName.includes('cutout')
-                );
-              })
-              .map((l: any, idx: number) => ({
-                id: String(l.id || `layer_${idx}`),
-                name: String(l.name || `Part ${idx + 1}`),
-                is_required: Boolean(l.is_required),
-                default_selected: Boolean(l.default_selected ?? (idx === 0 || l.is_required)),
-              }));
-          }
-        }
-      } catch {
-        // ignore
-      }
-    }
+  // Webstore orders: the unit price follows the webstore total until staff type their own.
+  useEffect(() => {
+    if (priceFollows && breakdown) setUnitPrice(Math.round(breakdown.total));
+  }, [priceFollows, breakdown]);
 
-    // 2. If no profile found (marketplace item, placeholder warranty ID, or unlinked item),
-    // search WooCommerce catalog using cleaned device keywords
-    const deviceKw = extractDeviceKeywords(effectiveProductName);
-    if ((!loadedProfile || resolvedLayers.length === 0) && deviceKw) {
-      try {
-        const pSearch = await fetchProductsDirect({ search: deviceKw, per_page: 5 });
-        if (pSearch.success && Array.isArray(pSearch.products) && pSearch.products.length > 0) {
-          const matchedProd =
-            pSearch.products.find((p) => {
-              const pNameLower = (p.name || '').toLowerCase();
-              const kwLower = deviceKw.toLowerCase();
-              return pNameLower.includes(kwLower);
-            }) || pSearch.products[0];
-
-          if (matchedProd) {
-            const profRes = await fetchProductConfiguratorProfileDirect(matchedProd.id);
-            if (
-              profRes.success &&
-              profRes.profile &&
-              Array.isArray(profRes.profile.layers) &&
-              profRes.profile.layers.length > 0
-            ) {
-              loadedProfile = profRes.profile;
-              resolvedLayers = profRes.profile.layers
-                .filter((l: any) => {
-                  const lName = (l.name || '').toLowerCase();
-                  return (
-                    lName !== 'device' &&
-                    !lName.includes('device-body') &&
-                    !lName.includes('logo') &&
-                    !lName.includes('cutout')
-                  );
-                })
-                .map((l: any, idx: number) => ({
-                  id: String(l.id || `layer_${idx}`),
-                  name: String(l.name || `Part ${idx + 1}`),
-                  is_required: Boolean(l.is_required),
-                  default_selected: Boolean(l.default_selected ?? (idx === 0 || l.is_required)),
-                }));
-
-              if (pId <= 0 || pId === 507022 || pId >= 1000000000) {
-                setProductId(matchedProd.id);
-                if (matchedProd.images?.[0]?.src && !productImage) {
-                  setProductImage(matchedProd.images[0].src);
-                }
-              }
-            }
-          }
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    // 3. Fallback: Synthesize high-fidelity configurator profile so operators always have authentic skin configurator
-    if ((!loadedProfile || resolvedLayers.length === 0) && deviceKw) {
-      const synthetic = synthesizeConfiguratorProfile(deviceKw || effectiveProductName);
-      loadedProfile = synthetic.profile;
-      resolvedLayers = synthetic.layers;
-    }
-
-    setProfile(loadedProfile);
-
-    // Extract production variants (Hardware models requiring distinct physical cut templates)
-    const loadedVariants = (Array.isArray(loadedProfile?.variants) ? loadedProfile.variants : []).filter(
-      (v) => v && v.name && Array.isArray(v.options) && v.options.length > 0
-    );
-    setProductionVariants(loadedVariants);
-
-    const initialSelectedVariants: Record<string, string> = {};
-    loadedVariants.forEach((v, vIdx) => {
-      const vKey = v.id || v.name || `variant_${vIdx}`;
-
-      // 1. Direct label match (e.g. spec label === "Series", spec value === "iPad Pro 11")
-      const directMatch = currentSpecs.find(
-        (s) => s.label.trim().toLowerCase() === v.name.trim().toLowerCase()
-      );
-      if (directMatch) {
-        const found = v.options.find(
-          (o) =>
-            o.name.trim().toLowerCase() === directMatch.value.trim().toLowerCase() ||
-            directMatch.value.trim().toLowerCase().includes(o.name.trim().toLowerCase())
-        );
-        if (found) {
-          initialSelectedVariants[vKey] = found.name;
-          return;
-        }
-      }
-
-      // 2. Search any spec whose value or label contains the option name
-      for (const opt of v.options) {
-        const optLower = opt.name.trim().toLowerCase();
-        if (optLower.length < 2) continue;
-        const specMatch = currentSpecs.find((s) => {
-          const valLower = s.value.trim().toLowerCase();
-          const lblLower = s.label.trim().toLowerCase();
-          return valLower.includes(optLower) || lblLower.includes(optLower);
-        });
-        if (specMatch) {
-          initialSelectedVariants[vKey] = opt.name;
-          return;
-        }
-      }
-
-      // 3. Fallback: Search raw strings (item name, meta string, formatted meta)
-      const itemAny = item as any;
-      const rawText = `${item?.name || ''} ${itemAny?.meta || ''} ${JSON.stringify(itemAny?.meta_data || [])} ${JSON.stringify(itemAny?.formatted_meta || [])}`.toLowerCase();
-      for (const opt of v.options) {
-        const optLower = opt.name.trim().toLowerCase();
-        if (optLower.length >= 3 && rawText.includes(optLower)) {
-          initialSelectedVariants[vKey] = opt.name;
-          return;
-        }
-      }
-
-      // 4. Default to first option
-      if (v.options.length > 0) {
-        initialSelectedVariants[vKey] = v.options[0].name;
-      }
-    });
-    setSelectedVariants(initialSelectedVariants);
-
-    // If profile has layers or production variants, this is a configurator product
-    const isConfigurable = resolvedLayers.length > 0 || loadedVariants.length > 0;
-    setIsConfiguratorProduct(isConfigurable);
-    setConfigMode(isConfigurable ? 'configurator' : 'form');
-
-    if (isConfigurable) {
-      // 1. Configure layers based on true existingSpecs
-      setLayers(resolvedLayers);
-      const initialActive: Record<string, boolean> = {};
-      const initialFinishes: Record<string, string> = {};
-
-      // Check if item has a global/single finish indicator
-      const genericFinishSpec = currentSpecs.find((s) =>
-        /^(finish|skin|texture|varian|warna|option)$/i.test(s.label.trim())
-      );
-      const itemAny = item as any;
-      const genericFinishVal =
-        genericFinishSpec?.value ||
-        item?.finish_type ||
-        itemAny?.meta_data?.find((m: any) => /^(finish|skin|texture|varian|warna)$/i.test(m.key))?.value ||
-        '';
-
-      resolvedLayers.forEach((l, idx) => {
-        const lClean = l.name.trim().toLowerCase().replace(/s$/, '');
-        const match = currentSpecs.find((s) => {
-          const sClean = s.label.trim().toLowerCase().replace(/s$/, '');
-          return sClean === lClean || s.label.trim().toLowerCase() === l.name.trim().toLowerCase();
-        });
-        if (match) {
-          initialActive[l.id] = true;
-          initialFinishes[l.id] = match.value;
-        } else if (idx === 0 && genericFinishVal) {
-          initialActive[l.id] = true;
-          initialFinishes[l.id] = genericFinishVal;
-        } else {
-          // If editing an existing item: unpurchased layers stay inactive and empty (no fake fallbacks)
-          // If adding a brand new item: default-selected layers are active with blank finish
-          initialActive[l.id] = isNewItem ? Boolean(l.default_selected || l.is_required) : false;
-          initialFinishes[l.id] = '';
-        }
-      });
-
-      setLayerActive(initialActive);
-      setLayerFinishes(initialFinishes);
-
-      // Set active layer to the first active layer, or first available layer
-      const firstActive = resolvedLayers.find((l) => initialActive[l.id]);
-      setActiveLayerId(firstActive ? firstActive.id : resolvedLayers[0]?.id || null);
-
-      // 2. Coverage option: ONLY show if device genuinely supports coverage choice (Model Cut vs 360)
-      const deviceSupportsCoverage = isDeviceSupportingCoverage(effectiveProductName, loadedProfile);
-      setHasCoverageOption(deviceSupportsCoverage);
-      if (deviceSupportsCoverage) {
-        const existingCov = currentSpecs.find((s) =>
-          /^(coverage|cut|model cut|360)$/i.test(s.label.trim())
-        );
-        const rawText = `${item?.name || ''} ${itemAny?.meta || ''} ${JSON.stringify(itemAny?.meta_data || [])}`.toLowerCase();
-        if (existingCov) {
-          setCoverage(
-            existingCov.value.toLowerCase().includes('360')
-              ? '360° Full Coverage'
-              : 'Model Cut'
-          );
-        } else if (rawText.includes('360') || rawText.includes('full coverage') || rawText.includes('full body')) {
-          setCoverage('360° Full Coverage');
-        } else {
-          setCoverage('Model Cut');
-        }
-      } else {
-        setCoverage(null);
-      }
-
-      // 3. Logo cutout: ONLY show if profile has logo cutout option OR existing order had it
-      const profileHasLogo = Boolean(loadedProfile?.coverage_and_cutouts?.has_logo_cutout);
-      const existingLogo = currentSpecs.find((s) =>
-        /^(logo|logo cutout)$/i.test(s.label.trim())
-      );
-      const showLogo = Boolean(profileHasLogo || existingLogo);
-      setHasLogoOption(showLogo);
-      if (showLogo) {
-        if (existingLogo) {
-          setLogoCutout(
-            /no logo|without logo|none/i.test(existingLogo.value)
-              ? 'No Logo Cutout'
-              : 'With Logo Cutout'
-          );
-        } else {
-          setLogoCutout('With Logo Cutout');
-        }
-      } else {
-        setLogoCutout(null);
-      }
-
-      // 4. Pencil cutout: ONLY show if profile has pencil cutout option OR existing order had it
-      const profileHasPencil = Boolean(loadedProfile?.coverage_and_cutouts?.has_pencil_cutout);
-      const existingPencil = currentSpecs.find((s) => /pencil/i.test(s.label.trim()));
-      const showPencil = Boolean(profileHasPencil || existingPencil);
-      setHasPencilOption(showPencil);
-      if (showPencil) {
-        if (existingPencil) {
-          setPencilCutout(
-            /no|without|none/i.test(existingPencil.value)
-              ? 'No Pencil Cutout'
-              : 'With Pencil Cutout'
-          );
-        } else {
-          setPencilCutout('With Pencil Cutout');
-        }
-      } else {
-        setPencilCutout(null);
-      }
-
-      // 5. Custom specs for configurator: ONLY non-layer, non-coverage, non-logo, non-variant extra metadata
-      const nonLayerSpecs = currentSpecs.filter((s) => {
-        const lbl = s.label.trim().toLowerCase();
-        const lblClean = lbl.replace(/s$/, '');
-        const isLayer = resolvedLayers.some((l) => {
-          const lClean = l.name.trim().toLowerCase().replace(/s$/, '');
-          return lClean === lblClean || l.name.trim().toLowerCase() === lbl;
-        });
-        const isCoverage = /^(coverage|cut|model cut|360)$/i.test(lbl);
-        const isLogo = /^(logo|logo cutout)$/i.test(lbl);
-        const isPencil = /pencil/i.test(lbl);
-        const isRelic = lbl === 'configuration' && /^(custom|default|none)$/i.test(s.value.trim());
-
-        const isVariant = loadedVariants.some((v) => {
-          if (v.name.trim().toLowerCase() === lbl) return true;
-          return v.options.some((o) => o.name.trim().toLowerCase() === s.value.trim().toLowerCase());
-        });
-
-        return !isLayer && !isCoverage && !isLogo && !isPencil && !isRelic && !isVariant;
-      });
-
-      setCustomSpecs(
-        nonLayerSpecs.map((s, idx) => ({
-          id: `spec_${idx}_${Date.now()}`,
-          label: s.label,
-          value: s.value,
-        }))
-      );
-      setShowCustomNotesSection(nonLayerSpecs.length > 0);
-    } else {
-      // Non-configurator / Form Product (e.g. Titanium Skins, Addon drops, Kits, Merchandise)
-      setLayers([]);
-      setLayerActive({});
-      setLayerFinishes({});
-      setActiveLayerId(null);
-      setHasCoverageOption(false);
-      setCoverage(null);
-      setHasLogoOption(false);
-      setLogoCutout(null);
-      setHasPencilOption(false);
-      setPencilCutout(null);
-
-      // Populate true form specs directly from existingSpecs
-      const formSpecsList = currentSpecs.map((s, idx) => ({
-        id: `spec_${idx}_${Date.now()}`,
-        label: s.label,
-        value: s.value,
-      }));
-      setCustomSpecs(formSpecsList);
-      if (formSpecsList.length > 0) {
-        setSelectedCustomSpecId(formSpecsList[0].id);
-      }
-      setShowCustomNotesSection(false);
-    }
-
-    setIsLoadingProfile(false);
+  const handleSelectionChange = (next: Selection) => {
+    setSelection(next);
+    if (!ownPrice && !priceTouched) setPriceFollows(true);
   };
 
-  // Initialize modal state from item or defaults
-  useEffect(() => {
-    if (!isOpen) return;
+  const handleUnitPriceChange = (v: number) => {
+    setUnitPrice(v);
+    setPriceTouched(true);
+    setPriceFollows(false);
+  };
 
-    if (item) {
-      setProductId(item.product_id || 0);
-      setProductName(item.name || 'Custom Product');
-      setProductImage(item.image_url || '');
-      setQuantity(item.quantity || 1);
-
-      const parsedPrice =
-        typeof item.price === 'number'
-          ? item.price
-          : item.subtotal && item.quantity
-          ? Number(item.subtotal) / item.quantity
-          : Number(item.total || 0);
-      setUnitPrice(Math.round(parsedPrice || 0));
-
-      const existingSpecs = extractItemSpecs(item);
-      loadProductConfig(item.product_id || 0, existingSpecs, false, item.name || '');
-      setIsChangingProduct(false);
-    } else {
-      // Add mode defaults
-      setProductId(0);
-      setProductName('');
-      setProductImage('');
-      setQuantity(1);
-      setUnitPrice(0);
-      setLayers([]);
-      setLayerFinishes({});
-      setLayerActive({});
-      setActiveLayerId(null);
-      setHasCoverageOption(false);
-      setCoverage(null);
-      setHasLogoOption(false);
-      setLogoCutout(null);
-      setHasPencilOption(false);
-      setPencilCutout(null);
-      setCustomSpecs([]);
-      setProductionVariants([]);
-      setSelectedVariants({});
-      setIsChangingProduct(true);
-    }
-
-    setErrorMsg(null);
-  }, [item, isOpen]);
+  const handleUseWebstorePrice = () => {
+    setPriceTouched(false);
+    setPriceFollows(true);
+  };
 
   const handleSelectProduct = (product: Product) => {
     setProductId(product.id);
     setProductName(product.name);
     setProductImage(product.images?.[0]?.src || '');
-    const priceNum = parseFloat(product.price || product.regular_price || '0');
-    if (priceNum > 0) setUnitPrice(priceNum);
     setIsChangingProduct(false);
-
-    loadProductConfig(product.id, [], !isEditing, product.name || '');
+    setDeviceChanged(true);
+    if (!ownPrice && !priceTouched) setPriceFollows(true);
+    loadConfigurator(product.id, product.name || '', true);
   };
 
-  // Filter finishes based on group & search query (uses real store catalog only)
-  const filteredFinishes = useMemo(() => {
-    let list = allFinishes;
-    if (activeFinishGroup !== 'all') {
-      list = list.filter((f) => (f.group || '').toLowerCase() === activeFinishGroup.toLowerCase());
-    }
+  const retry = () => {
+    const last = lastLoad.current;
+    if (last) loadConfigurator(last.id, last.name, last.fresh);
+  };
 
-    if (finishSearch.trim()) {
-      const q = finishSearch.toLowerCase().trim();
-      list = list.filter((f) => f.name.toLowerCase().includes(q) || f.slug.toLowerCase().includes(q));
-    }
-
-    return list;
-  }, [allFinishes, activeFinishGroup, finishSearch]);
-
-  // Finish groups for tabs (strictly from real backend finish groups)
-  const finishGroups = useMemo(() => {
-    const set = new Set<string>();
-    set.add('all');
-    allFinishes.forEach((f) => {
-      if (f.group && f.group.trim()) {
-        set.add(f.group.trim());
-      }
-    });
-    return Array.from(set);
-  }, [allFinishes]);
-
-  // Checks if any back/body/top skin is active with a selected finish
-  const hasActiveBackLayer = useMemo(() => {
-    return layers.some((l) => {
-      const lName = (l.name || '').toLowerCase();
-      const lId = (l.id || '').toLowerCase();
-      const isBackOrMain =
-        lId === 'back' ||
-        lId === 'top' ||
-        lId === 'body' ||
-        lName.includes('back') ||
-        lName.includes('top') ||
-        lName.includes('body') ||
-        lName.includes('plate') ||
-        lName.includes('main');
-      return isBackOrMain && Boolean(layerActive[l.id]) && Boolean(layerFinishes[l.id]?.trim());
-    });
-  }, [layers, layerActive, layerFinishes]);
-
-  // Compile final specifications for submission and live preview
   const compiledSpecs = useMemo<ItemCustomizationSpec[]>(() => {
-    const list: ItemCustomizationSpec[] = [];
+    if (data && selection) return selectionToSpecs(data, selection);
+    // Without webstore data the item's details stay exactly as they are.
+    return deviceChanged ? [] : originalSpecs;
+  }, [data, selection, deviceChanged, originalSpecs]);
 
-    if (configMode === 'configurator') {
-      // 0. Production Variants (Hardware models e.g. Series, Connectivity)
-      productionVariants.forEach((v, vIdx) => {
-        const vKey = v.id || v.name || `variant_${vIdx}`;
-        const selectedOpt = selectedVariants[vKey];
-        if (selectedOpt && selectedOpt.trim()) {
-          list.push({ label: v.name, value: selectedOpt.trim() });
-        }
-      });
+  const baseLayer = data ? interactiveLayers(data)[0] : undefined;
+  const baseMissing = Boolean(
+    data &&
+      selection &&
+      baseLayer &&
+      selection.layers[baseLayer.id] === null &&
+      !selection.unavailable.some((u) => u.layerId === baseLayer.id),
+  );
 
-      // 1. Configurator Layers (only active layers with non-empty finish)
-      layers.forEach((l) => {
-        if (layerActive[l.id] && layerFinishes[l.id]?.trim()) {
-          list.push({ label: l.name, value: layerFinishes[l.id].trim() });
-        }
-      });
-
-      // 2. Coverage Option (only if device supports coverage choice, back layer is active, and coverage is not None)
-      if (hasCoverageOption && hasActiveBackLayer && coverage && coverage !== 'None') {
-        list.push({ label: 'Coverage', value: coverage });
-      }
-
-      // 3. Logo Cutout (only if device supports logo cutout, back layer is active, and logo is not None)
-      if (hasLogoOption && hasActiveBackLayer && logoCutout && logoCutout !== 'None') {
-        list.push({ label: 'Logo', value: logoCutout });
-      }
-
-      // 4. Pencil Cutout (only if device supports pencil cutout and not None)
-      if (hasPencilOption && pencilCutout && pencilCutout !== 'None') {
-        list.push({ label: 'Pencil Cutout', value: pencilCutout });
-      }
-
-      // 5. Additional custom specs (non-layer production notes)
-      customSpecs.forEach((s) => {
-        const l = s.label.trim();
-        const v = s.value.trim();
-        if (l && v && !list.some((existing) => existing.label.toLowerCase() === l.toLowerCase())) {
-          list.push({ label: l, value: v });
-        }
-      });
-    } else {
-      // Form / Non-configurator Mode: Include production variants if defined, plus customSpecs
-      productionVariants.forEach((v, vIdx) => {
-        const vKey = v.id || v.name || `variant_${vIdx}`;
-        const selectedOpt = selectedVariants[vKey];
-        if (selectedOpt && selectedOpt.trim() && !customSpecs.some((s) => s.label.toLowerCase() === v.name.toLowerCase())) {
-          list.push({ label: v.name, value: selectedOpt.trim() });
-        }
-      });
-
-      customSpecs.forEach((s) => {
-        const l = s.label.trim();
-        const v = s.value.trim();
-        if (l && v && !list.some((existing) => existing.label.toLowerCase() === l.toLowerCase())) {
-          list.push({ label: l, value: v });
-        }
-      });
-    }
-
-    return list;
-  }, [
-    configMode,
-    productionVariants,
-    selectedVariants,
-    layers,
-    layerActive,
-    layerFinishes,
-    hasActiveBackLayer,
-    hasCoverageOption,
-    coverage,
-    hasLogoOption,
-    logoCutout,
-    hasPencilOption,
-    pencilCutout,
-    customSpecs,
-  ]);
-
-  const handleApplyFinishToActiveLayer = (finish: GlobalFinish, targetLayerId?: string) => {
-    const layerIdToApply = targetLayerId || activeLayerId;
-    if (configMode === 'configurator') {
-      if (!layerIdToApply) return;
-      setLayerFinishes((prev) => ({
-        ...prev,
-        [layerIdToApply]: finish.name,
-      }));
-      setLayerActive((prev) => ({
-        ...prev,
-        [layerIdToApply]: true,
-      }));
-    } else {
-      // In Form mode: Apply finish to selected custom spec field
-      if (selectedCustomSpecId) {
-        handleUpdateCustomSpec(selectedCustomSpecId, 'value', finish.name);
-      } else {
-        const target =
-          customSpecs.find((s) => /^(color|finish|skin|accent|texture)/i.test(s.label)) ||
-          customSpecs[customSpecs.length - 1];
-        if (target) {
-          handleUpdateCustomSpec(target.id, 'value', finish.name);
-        }
-      }
-    }
-  };
-
-  const handleAddCustomSpec = () => {
-    const newId = `spec_${Date.now()}`;
-    setCustomSpecs((prev) => [
-      ...prev,
-      { id: newId, label: configMode === 'form' ? 'Option' : 'Note', value: '' },
-    ]);
-    setSelectedCustomSpecId(newId);
-  };
-
-  const handleRemoveCustomSpec = (id: string) => {
-    setCustomSpecs((prev) => prev.filter((s) => s.id !== id));
-    if (selectedCustomSpecId === id) {
-      setSelectedCustomSpecId(null);
-    }
-  };
-
-  const handleUpdateCustomSpec = (id: string, field: 'label' | 'value', text: string) => {
-    setCustomSpecs((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, [field]: text } : s))
-    );
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent | React.MouseEvent) => {
     e.preventDefault();
     if (!order) return;
-
     if (!productName.trim()) {
-      setErrorMsg('Product name is required');
+      setErrorMsg('Product name is required.');
+      return;
+    }
+    if (baseMissing && baseLayer && (!isEditing || deviceChanged)) {
+      setErrorMsg(`Choose a finish for ${baseLayer.name}.`);
       return;
     }
 
@@ -959,89 +265,55 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
     const safeQty = Math.max(1, quantity);
     const lineSubtotal = Math.round(safeQty * unitPrice);
     const lineTotal = lineSubtotal;
+    const currentItems = order.items && order.items.length > 0 ? [...order.items] : order.line_items ? [...order.line_items] : [];
 
-    const currentItems =
-      order.items && order.items.length > 0
-        ? [...order.items]
-        : order.line_items
-        ? [...order.line_items]
-        : [];
+    const specFields = {
+      parsed_configurator: compiledSpecs.map((s) => ({ layer_name: s.label, name: s.value, choice_title: s.value, is_choice: true })),
+      specs: compiledSpecs,
+      custom_addons: [],
+      formatted_meta: compiledSpecs.map((s, idx) => ({
+        id: idx,
+        key: s.label,
+        label: s.label,
+        value: s.value,
+        display_key: s.label,
+        display_value: s.value,
+      })),
+      meta_data: compiledSpecs.map((s, idx) => ({ id: idx, key: s.label, value: s.value })),
+    };
 
-    let updatedItemsList: any[] = [];
-
+    let updatedItemsList: any[];
     if (isEditing && item) {
-      // Modify existing item
-      updatedItemsList = currentItems.map((it) => {
-        if (it.id === item.id) {
-          return {
-            ...it,
-            product_id: productId || it.product_id,
-            name: productName.trim(),
-            quantity: safeQty,
-            price: unitPrice,
-            subtotal: lineSubtotal,
-            total: lineTotal,
-            image_url: productImage || it.image_url,
-            parsed_configurator: compiledSpecs.map((s) => ({
-              layer_name: s.label,
-              name: s.value,
-              choice_title: s.value,
-              is_choice: true,
-            })),
-            specs: compiledSpecs,
-            custom_addons: [],
-            formatted_meta: compiledSpecs.map((s, idx) => ({
-              id: idx,
-              key: s.label,
-              label: s.label,
-              value: s.value,
-              display_key: s.label,
-              display_value: s.value,
-            })),
-            meta_data: compiledSpecs.map((s, idx) => ({
-              id: idx,
-              key: s.label,
-              value: s.value,
-            })),
-          };
-        }
-        return it;
-      });
+      updatedItemsList = currentItems.map((it) =>
+        it.id === item.id
+          ? {
+              ...it,
+              product_id: productId || it.product_id,
+              name: productName.trim(),
+              quantity: safeQty,
+              price: unitPrice,
+              subtotal: lineSubtotal,
+              total: lineTotal,
+              image_url: productImage || it.image_url,
+              ...specFields,
+            }
+          : it,
+      );
     } else {
-      // Append new item
-      const newItemId = Date.now();
-      const newItem: any = {
-        id: newItemId,
-        product_id: productId || 0,
-        name: productName.trim(),
-        quantity: safeQty,
-        price: unitPrice,
-        subtotal: lineSubtotal,
-        total: lineTotal,
-        image_url: productImage || '',
-        parsed_configurator: compiledSpecs.map((s) => ({
-          layer_name: s.label,
-          name: s.value,
-          choice_title: s.value,
-          is_choice: true,
-        })),
-        specs: compiledSpecs,
-        custom_addons: [],
-        formatted_meta: compiledSpecs.map((s, idx) => ({
-          id: idx,
-          key: s.label,
-          label: s.label,
-          value: s.value,
-          display_key: s.label,
-          display_value: s.value,
-        })),
-        meta_data: compiledSpecs.map((s, idx) => ({
-          id: idx,
-          key: s.label,
-          value: s.value,
-        })),
-      };
-      updatedItemsList = [...currentItems, newItem];
+      updatedItemsList = [
+        ...currentItems,
+        {
+          id: Date.now(),
+          product_id: productId || 0,
+          name: productName.trim(),
+          quantity: safeQty,
+          price: unitPrice,
+          subtotal: lineSubtotal,
+          total: lineTotal,
+          image_url: productImage || '',
+          ...specFields,
+        },
+      ];
     }
 
     const payload = {
@@ -1060,22 +332,13 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
     try {
       const res = await updateOrderDirect(order.id, payload);
       if (res.success && res.order) {
-        showToast(
-          'success',
-          'Item Updated',
-          `Item configurations for Order ${order.order_number || `#${order.id}`} saved.`
-        );
+        showToast('success', 'Item Updated', `Item configurations for Order ${order.order_number || `#${order.id}`} saved.`);
         onSaved(res.order);
         onClose();
       } else {
-        // Optimistic local update
         const newSubtotal = updatedItemsList.reduce((acc, it) => acc + (Number(it.subtotal) || 0), 0);
         const newTotal =
-          newSubtotal +
-          Number(order.shipping_total || 0) +
-          Number(order.fee_total || 0) -
-          Number(order.discount_total || 0);
-
+          newSubtotal + Number(order.shipping_total || 0) + Number(order.fee_total || 0) - Number(order.discount_total || 0);
         const optimisticOrder: Order = {
           ...order,
           items: updatedItemsList,
@@ -1084,16 +347,12 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
           subtotal: newSubtotal,
           total: newTotal,
         };
-        showToast(
-          'success',
-          'Item Updated',
-          `Item configuration for Order ${order.order_number || `#${order.id}`} updated locally.`
-        );
+        showToast('success', 'Item Updated', `Item configuration for Order ${order.order_number || `#${order.id}`} updated locally.`);
         onSaved(optimisticOrder);
         onClose();
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Failed saving item configuration');
+      setErrorMsg(err?.message || 'Failed saving item configuration');
     } finally {
       setIsSaving(false);
     }
@@ -1101,34 +360,20 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
 
   const handleDeleteItem = async () => {
     if (!order || !item) return;
-
     setIsDeleting(true);
     setShowDeleteConfirm(false);
-
     try {
-      const res = await updateOrderDirect(order.id, {
-        deleted_item_ids: [item.id],
-      });
-
+      const res = await updateOrderDirect(order.id, { deleted_item_ids: [item.id] });
       if (res.success && res.order) {
-        showToast(
-          'success',
-          'Item Removed',
-          `Removed ${item.name} from Order ${order.order_number || `#${order.id}`}.`
-        );
+        showToast('success', 'Item Removed', `Removed ${item.name} from Order ${order.order_number || `#${order.id}`}.`);
         onSaved(res.order);
         if (onDeleted) onDeleted(item.id);
         onClose();
       } else {
-        // Optimistic local removal
         const filteredItems = (order.items || []).filter((it) => it.id !== item.id);
         const newSubtotal = filteredItems.reduce((acc, it) => acc + (Number(it.subtotal) || 0), 0);
         const newTotal =
-          newSubtotal +
-          Number(order.shipping_total || 0) +
-          Number(order.fee_total || 0) -
-          Number(order.discount_total || 0);
-
+          newSubtotal + Number(order.shipping_total || 0) + Number(order.fee_total || 0) - Number(order.discount_total || 0);
         const optimisticOrder: Order = {
           ...order,
           items: filteredItems,
@@ -1137,21 +382,19 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
           subtotal: newSubtotal,
           total: newTotal,
         };
-        showToast('success', 'Item Removed', `Item removed from order locally.`);
+        showToast('success', 'Item Removed', 'Item removed from order locally.');
         onSaved(optimisticOrder);
         if (onDeleted) onDeleted(item.id);
         onClose();
       }
     } catch (err: any) {
-      showToast('error', 'Removal Failed', err.message || 'Could not delete item.');
+      showToast('error', 'Removal Failed', err?.message || 'Could not delete item.');
     } finally {
       setIsDeleting(false);
     }
   };
 
   if (!isOpen || !order) return null;
-
-  const activeLayer = layers.find((l) => l.id === activeLayerId);
 
   return (
     <>
@@ -1162,11 +405,12 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
         }}
         title={isEditing ? 'Edit item' : 'Add item'}
         reference={`#${String(order.order_number || order.id).replace(/^#+/, '')}${item ? ` · item ${item.id}` : ''}`}
-        width={896}
+        description="Options and prices come from exacoat.com for this product."
+        width={760}
         footer={
           <>
             {isEditing && (
-              <KitButton
+              <Button
                 variant="danger"
                 icon={Trash2}
                 className="mr-auto"
@@ -1174,1081 +418,144 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
                 disabled={isSaving || isDeleting}
               >
                 Remove item
-              </KitButton>
+              </Button>
             )}
-            <KitButton variant="ghost" onClick={onClose} disabled={isSaving || isDeleting}>
+            <Button variant="ghost" onClick={onClose} disabled={isSaving || isDeleting}>
               Cancel
-            </KitButton>
-            <KitButton variant="primary" icon={Check} onClick={handleSubmit} disabled={isSaving}>
+            </Button>
+            <Button variant="primary" icon={Check} onClick={handleSubmit} disabled={isSaving || load.kind === 'loading'}>
               {isSaving ? 'Saving...' : isEditing ? 'Save item' : 'Add item to order'}
-            </KitButton>
+            </Button>
           </>
         }
       >
-        <div className="space-y-4 py-1">
-          {errorMsg && (
-            <div className="p-3 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
-              <span>{errorMsg}</span>
+        {errorMsg && (
+          <div role="alert" className="flex items-center gap-2 rounded-xl border border-st-stop-border bg-st-stop-bg p-3 text-[12.5px] text-st-stop-fg">
+            <AlertCircle className="h-4 w-4 flex-none" strokeWidth={1.8} aria-hidden />
+            <span>{errorMsg}</span>
+          </div>
+        )}
+
+        {/* Product */}
+        <div className="rounded-xl border border-card-border bg-card p-3.5">
+          <div className="flex items-start gap-3">
+            <span className="flex h-11 w-11 flex-none items-center justify-center overflow-hidden rounded-[10px] border border-card-border bg-chip">
+              {productImage ? (
+                <img src={productImage} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <Package className="h-5 w-5 text-faint" strokeWidth={1.8} aria-hidden />
+              )}
+            </span>
+            <TextField
+              className="min-w-0 flex-1"
+              label="Product name"
+              value={productName}
+              onChange={(e) => setProductName(e.target.value)}
+              placeholder="e.g. iPhone 17 Pro Skins"
+            />
+            <Button className="mt-[22px]" size="md" variant="secondary" icon={Search} onClick={() => setIsChangingProduct(!isChangingProduct)}>
+              {isChangingProduct ? 'Close search' : 'Change device'}
+            </Button>
+          </div>
+
+          {isChangingProduct && (
+            <div className="mt-3 flex flex-col gap-2 border-t border-line pt-3">
+              <TextField
+                aria-label="Search products"
+                placeholder="Search the catalog, e.g. iPhone 17 Pro, MacBook Air"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                trailing={isSearching ? <Loader2 className="h-4 w-4 animate-spin text-faint" aria-hidden /> : null}
+                autoFocus
+              />
+              <div className="flex max-h-48 flex-col gap-1 overflow-y-auto">
+                {searchResults.length === 0 && !isSearching && (
+                  <p className="py-2 text-center text-[12.5px] text-faint">Type a product name to search the catalog.</p>
+                )}
+                {searchResults.map((prod) => (
+                  <button
+                    key={prod.id}
+                    type="button"
+                    onClick={() => handleSelectProduct(prod)}
+                    className="flex items-center gap-2.5 rounded-[9px] px-2 py-1.5 text-left hover:bg-chip focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  >
+                    <span className="flex h-8 w-8 flex-none items-center justify-center overflow-hidden rounded-md bg-chip">
+                      {prod.images?.[0]?.src ? (
+                        <img src={prod.images[0].src} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        <Package className="h-4 w-4 text-faint" strokeWidth={1.8} aria-hidden />
+                      )}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] font-medium text-fg">{prod.name}</span>
+                      <span className="font-mono text-[11.5px] text-faint">#{prod.id}</span>
+                    </span>
+                    <span className="font-mono text-[12.5px] text-muted">{formatCurrency(prod.price || prod.regular_price || 0, currency)}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
+        </div>
 
-          {/* Section 1: Item Core & Product Switcher */}
-          <div className="p-4 rounded-xl border border-white/[0.06] bg-[#141417] space-y-3.5">
-            <div className="flex items-center justify-between border-b border-white/[0.06] pb-2">
-              <div className="flex items-center gap-2">
-                <Package className="w-4 h-4 text-[#f3aa18]" />
-                <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans">
-                  Product Details
-                </h4>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsChangingProduct(!isChangingProduct)}
-                className="text-[11px] font-sans font-medium text-[#f3aa18] hover:text-[#f8ba3a] transition-colors cursor-pointer"
-              >
-                {isChangingProduct ? 'Close Catalog' : 'Change Product from Catalog'}
-              </button>
+        {/* Configuration */}
+        {load.kind === 'loading' && (
+          <div className="flex items-center gap-2 rounded-xl border border-card-border bg-card p-3.5 text-[12.5px] text-muted" role="status">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            Loading the webstore options...
+          </div>
+        )}
+
+        {(load.kind === 'error' || load.kind === 'none') && (
+          <div role="alert" className="flex flex-col gap-2 rounded-xl border border-st-wait-border bg-st-wait-bg p-3.5 text-[12.5px] text-st-wait-fg">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="mt-px h-4 w-4 flex-none" strokeWidth={1.8} aria-hidden />
+              <span>
+                {load.kind === 'none'
+                  ? 'exacoat.com has no configurator for this product, so its details cannot be changed here. They stay as they are.'
+                  : 'Could not reach exacoat.com to load the options. The details stay as they are.'}
+              </span>
             </div>
+            <div>
+              <Button size="sm" variant="secondary" icon={RefreshCw} onClick={retry}>
+                Retry
+              </Button>
+            </div>
+          </div>
+        )}
 
-            {/* Product Switcher Dropdown */}
-            {isChangingProduct && (
-              <div className="p-3 rounded-xl border border-[#f3aa18]/30 bg-[#0d0e11] space-y-3">
-                <div className="relative">
-                  <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search product in catalog (e.g. MacBook Pro, iPhone 16 Pro, Titanium Skins)..."
-                    className="w-full pl-9 pr-4 py-2 rounded-lg bg-black/40 border border-white/10 text-xs text-white placeholder:text-neutral-500 focus:outline-none focus:border-[#f3aa18]"
-                  />
-                  {isSearching && (
-                    <RefreshCw className="w-3.5 h-3.5 text-[#f3aa18] animate-spin absolute right-3 top-1/2 -translate-y-1/2" />
-                  )}
-                </div>
+        {load.kind !== 'ready' && load.kind !== 'loading' && compiledSpecs.length > 0 && (
+          <SpecList title="Current details" specs={compiledSpecs} />
+        )}
 
-                <div className="max-h-48 overflow-y-auto space-y-1 custom-scrollbar">
-                  {searchResults.length === 0 && !isSearching && (
-                    <p className="text-xs text-neutral-500 py-2 text-center">
-                      Type product name to search store catalog
-                    </p>
-                  )}
-                  {searchResults.map((prod) => (
-                    <div
-                      key={prod.id}
-                      onClick={() => handleSelectProduct(prod)}
-                      className="p-2 rounded-lg hover:bg-white/[0.06] border border-transparent hover:border-white/[0.08] flex items-center justify-between cursor-pointer transition-colors"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-8 h-8 rounded bg-black/60 border border-white/10 overflow-hidden shrink-0 flex items-center justify-center">
-                          {prod.images?.[0]?.src ? (
-                            <img
-                              src={prod.images[0].src}
-                              alt={prod.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <Package className="w-4 h-4 text-neutral-600" />
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold text-white truncate">{prod.name}</p>
-                          <span className="text-[10px] font-mono text-neutral-400">ID #{prod.id}</span>
-                        </div>
-                      </div>
-                      <span className="text-xs font-mono text-[#f3aa18] shrink-0 font-bold ml-2">
-                        {formatCurrency(prod.price || prod.regular_price || 0, order.currency)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+        {data && selection && (
+          <>
+            {missing.length > 0 && (
+              <div role="status" className="rounded-xl border border-st-wait-border bg-st-wait-bg p-3 text-[12.5px] text-st-wait-fg">
+                <b className="font-semibold">Not available any more:</b> {missing.join(', ')}. These stay on the item until you pick a replacement.
               </div>
             )}
+            <ConfigurationEditor data={data} selection={selection} onChange={handleSelectionChange} currency={currency} />
+            {baseMissing && baseLayer && (
+              <p className="text-[12px] text-faint">{baseLayer.name} has no finish on this item.</p>
+            )}
+            <SpecList title="Will be saved as" specs={compiledSpecs} />
+          </>
+        )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5 items-end">
-              <div className="sm:col-span-6">
-                <Input
-                  label="Product Title / Name *"
-                  value={productName}
-                  onChange={(e) => setProductName(e.target.value)}
-                  placeholder="e.g. MacBook Pro 16 or iPhone 16 Pro"
-                  required
-                />
-              </div>
-
-              <div className="sm:col-span-3">
-                <div className="space-y-1.5 font-sans">
-                  <label className="block text-xs font-medium text-zinc-300">Quantity</label>
-                  <div className="flex items-center rounded-xl border border-white/[0.09] bg-[#0c0d10] overflow-hidden">
-                    <button
-                      type="button"
-                      onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                      className="px-3 py-2 text-neutral-400 hover:text-white hover:bg-white/[0.06] transition-colors"
-                    >
-                      -
-                    </button>
-                    <input
-                      type="number"
-                      min={1}
-                      value={quantity}
-                      onChange={(e) =>
-                        setQuantity(Math.max(1, parseInt(e.target.value || '1', 10)))
-                      }
-                      className="w-full text-center text-xs font-mono text-white bg-transparent focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setQuantity(quantity + 1)}
-                      className="px-3 py-2 text-neutral-400 hover:text-white hover:bg-white/[0.06] transition-colors"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="sm:col-span-3">
-                <Input
-                  label="Unit Price"
-                  type="number"
-                  value={unitPrice}
-                  onChange={(e) => setUnitPrice(Math.max(0, parseFloat(e.target.value || '0')))}
-                  placeholder="0"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Section 2: Mode Navigation */}
-          <div className="flex items-center justify-between border-b border-white/[0.06] pb-2">
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setConfigMode('configurator')}
-                className={clsx(
-                  "px-3 py-1.5 rounded-lg text-xs font-sans font-bold flex items-center gap-1.5 transition-all cursor-pointer",
-                  configMode === 'configurator'
-                    ? "bg-[#f3aa18]/20 text-[#f3aa18] border border-[#f3aa18]/30 shadow-xs"
-                    : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.04]"
-                )}
-              >
-                <Layers className="w-3.5 h-3.5" />
-                <span>Configurator Layers</span>
-                {isConfiguratorProduct && (
-                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-[#f3aa18]/30 text-[#f3aa18] font-mono font-normal">
-                    Active
-                  </span>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setConfigMode('form')}
-                className={clsx(
-                  "px-3 py-1.5 rounded-lg text-xs font-sans font-bold flex items-center gap-1.5 transition-all cursor-pointer",
-                  configMode === 'form'
-                    ? "bg-[#f3aa18]/20 text-[#f3aa18] border border-[#f3aa18]/30 shadow-xs"
-                    : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.04]"
-                )}
-              >
-                <Sliders className="w-3.5 h-3.5" />
-                <span>Form Specifications</span>
-                {!isConfiguratorProduct && (
-                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-[#f3aa18]/30 text-[#f3aa18] font-mono font-normal">
-                    Active
-                  </span>
-                )}
-              </button>
-            </div>
-
-            <div className="text-[11px] font-mono text-neutral-400 flex items-center gap-2">
-              {isLoadingProfile ? (
-                <span className="flex items-center gap-1 text-[#f3aa18]">
-                  <RefreshCw className="w-3 h-3 animate-spin" />
-                  Loading profile...
-                </span>
-              ) : isConfiguratorProduct ? (
-                <span>
-                  {layers.length} profile layers
-                  {productionVariants.length > 0 && ` • ${productionVariants.length} variants`}
-                </span>
-              ) : (
-                <span>Form / Custom Product</span>
-              )}
-            </div>
-          </div>
-
-          {/* Mode 1: Configurator Skin Layers View */}
-          {configMode === 'configurator' && (
-            <div className="space-y-4">
-              {/* Production Variants (Hardware Models requiring distinct physical cut templates) */}
-              {productionVariants.length > 0 && (
-                <div className="p-4 rounded-xl border border-white/[0.06] bg-[#141417] space-y-3.5">
-                  <div className="flex items-center justify-between border-b border-white/[0.06] pb-2">
-                    <div className="flex items-center gap-2">
-                      <Cpu className="w-3.5 h-3.5 text-[#f3aa18]" />
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans">
-                        Production Variants ({productionVariants.length})
-                      </h4>
-                      <span className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-[#f3aa18]/10 text-[#f3aa18] border border-[#f3aa18]/20">
-                        Hardware Cut
-                      </span>
-                    </div>
-                    <span className="text-[11px] font-mono text-neutral-400">
-                      Physical cut template & device model
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {productionVariants.map((v, vIdx) => {
-                      const vKey = v.id || v.name || `variant_${vIdx}`;
-                      const currentSelected = selectedVariants[vKey] || (v.options[0]?.name ?? '');
-
-                      return (
-                        <div
-                          key={vKey}
-                          className="p-3 rounded-lg border border-white/[0.06] bg-[#101114] space-y-2"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium text-neutral-200">
-                              {v.name}
-                            </span>
-                            <span className="text-[10px] font-mono text-neutral-400">
-                              {v.options.length} {v.options.length === 1 ? 'option' : 'options'}
-                            </span>
-                          </div>
-
-                          <div className="flex flex-wrap gap-1.5">
-                            {v.options.map((opt) => {
-                              const isOptSelected = currentSelected.toLowerCase() === opt.name.toLowerCase();
-                              return (
-                                <button
-                                  key={opt.id || opt.name}
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedVariants((prev) => ({
-                                      ...prev,
-                                      [vKey]: opt.name,
-                                    }));
-                                  }}
-                                  className={clsx(
-                                    "px-2.5 py-1.5 rounded-md text-xs font-medium border transition-all text-left flex items-center gap-1.5",
-                                    isOptSelected
-                                      ? "bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18] shadow-xs"
-                                      : "bg-white/[0.03] border-white/[0.08] text-neutral-300 hover:border-white/20 hover:text-white"
-                                  )}
-                                >
-                                  <span className={clsx(
-                                    "w-1.5 h-1.5 rounded-full shrink-0",
-                                    isOptSelected ? "bg-[#f3aa18]" : "bg-neutral-500"
-                                  )} />
-                                  <span>{opt.name}</span>
-                                  {typeof opt.price_diff === 'number' && opt.price_diff !== 0 && (
-                                    <span className="text-[10px] opacity-75 font-mono ml-0.5">
-                                      ({opt.price_diff > 0 ? `+Rp ${opt.price_diff.toLocaleString('id-ID')}` : `-Rp ${Math.abs(opt.price_diff).toLocaleString('id-ID')}`})
-                                    </span>
-                                  )}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-              {/* Vertical Stack of Layer Accordions matching web configurator */}
-              <div className="space-y-2.5 font-sans">
-                <div className="flex items-center justify-between px-1">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300 flex items-center gap-2">
-                    <Layers className="w-3.5 h-3.5 text-[#f3aa18]" />
-                    <span>Skin Layers & Finishes</span>
-                  </h4>
-                  <span className="text-[11px] text-neutral-400 font-mono">
-                    {layers.filter((l) => layerActive[l.id] && layerFinishes[l.id]).length} of {layers.length} parts selected
-                  </span>
-                </div>
-
-                {layers.length === 0 ? (
-                  <div className="p-4 rounded-xl border border-white/[0.06] bg-[#141417] text-center text-xs text-neutral-500">
-                    No configurator layers defined for this product. You can switch to Form Specifications above.
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {layers.map((layer) => {
-                      const isOpen = activeLayerId === layer.id;
-                      const isIncluded = Boolean(layerActive[layer.id]);
-                      const finishName = layerFinishes[layer.id];
-                      const selectedFinishObj = allFinishes.find(
-                        (f) =>
-                          f.name.toLowerCase() === (finishName || '').toLowerCase() ||
-                          f.slug.toLowerCase() === (finishName || '').toLowerCase()
-                      );
-
-                      return (
-                        <div
-                          key={layer.id}
-                          className={clsx(
-                            "rounded-xl border transition-all duration-200 overflow-hidden",
-                            isOpen
-                              ? "border-[#f3aa18]/60 bg-[#161619] shadow-lg shadow-black/40 ring-1 ring-[#f3aa18]/30"
-                              : isIncluded
-                              ? "border-white/[0.12] bg-[#121215] hover:border-white/25 hover:bg-[#151518]"
-                              : "border-white/[0.05] bg-[#0c0d10]/70 opacity-70 hover:opacity-100 hover:border-white/15"
-                          )}
-                        >
-                          {/* Layer Header Accordion Button */}
-                          <div
-                            onClick={() => {
-                              setActiveLayerId(isOpen ? null : layer.id);
-                              if (!isOpen && !isIncluded) {
-                                setLayerActive((prev) => ({ ...prev, [layer.id]: true }));
-                              }
-                            }}
-                            className="w-full flex items-center justify-between p-3 sm:px-4 cursor-pointer select-none text-left gap-3"
-                          >
-                            <div className="flex items-center gap-3 min-w-0">
-                              {/* Swatch preview wide mini capsule */}
-                              <div className="w-10 h-6 rounded-full border border-white/15 overflow-hidden bg-black/60 shrink-0 p-[1.5px] flex items-center justify-center relative">
-                                <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center">
-                                  {isIncluded && selectedFinishObj?.thumbnail ? (
-                                    <img
-                                      src={selectedFinishObj.thumbnail}
-                                      alt={selectedFinishObj.name}
-                                      className="w-full h-full object-cover"
-                                    />
-                                  ) : isIncluded && selectedFinishObj?.color_hex ? (
-                                    <div
-                                      className="w-full h-full"
-                                      style={{ backgroundColor: selectedFinishObj.color_hex }}
-                                    />
-                                  ) : (
-                                    <Palette className="w-3.5 h-3.5 text-neutral-500" />
-                                  )}
-                                </div>
-                              </div>
-
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs sm:text-sm font-bold text-white tracking-wide truncate">
-                                    {layer.name}
-                                  </span>
-                                  {layer.is_required && (
-                                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#f3aa18]/15 text-[#f3aa18] font-semibold border border-[#f3aa18]/30">
-                                      Required
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="text-[11px] text-neutral-400 truncate flex items-center gap-1.5 mt-0.5">
-                                  {isIncluded ? (
-                                    finishName ? (
-                                      <>
-                                        <span className="text-neutral-200 font-medium truncate">{finishName}</span>
-                                        {selectedFinishObj?.group && (
-                                          <span className="text-[10px] text-neutral-500 font-mono">
-                                            ({selectedFinishObj.group})
-                                          </span>
-                                        )}
-                                      </>
-                                    ) : (
-                                      <span className="text-amber-400 font-medium">Click to select finish...</span>
-                                    )
-                                  ) : (
-                                    <span className="text-neutral-500 italic">Not Included (Skipped)</span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2 shrink-0">
-                              {/* Quick Include / Remove toggle button */}
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const nextIncluded = !isIncluded;
-                                  setLayerActive((prev) => ({ ...prev, [layer.id]: nextIncluded }));
-                                  if (nextIncluded) {
-                                    setActiveLayerId(layer.id);
-                                  } else if (isOpen) {
-                                    setActiveLayerId(null);
-                                  }
-                                }}
-                                className={clsx(
-                                  "px-2.5 py-1 rounded-full text-[10px] font-semibold transition-all cursor-pointer",
-                                  isIncluded
-                                    ? "bg-white/[0.08] hover:bg-rose-500/20 hover:text-rose-300 text-neutral-300 border border-white/10 hover:border-rose-500/30"
-                                    : "bg-[#f3aa18]/15 hover:bg-[#f3aa18]/25 text-[#f3aa18] border border-[#f3aa18]/30"
-                                )}
-                              >
-                                {isIncluded ? "Remove" : "+ Include"}
-                              </button>
-
-                              <div
-                                className={clsx(
-                                  "w-6 h-6 rounded-full flex items-center justify-center text-neutral-400 transition-transform duration-200",
-                                  isOpen && "rotate-180 text-[#f3aa18]"
-                                )}
-                              >
-                                <ChevronDown className="w-4 h-4" />
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Embedded Swatch Selector when open */}
-                          {isOpen && (
-                            <div className="p-3.5 pt-2 border-t border-white/[0.08] bg-[#0f1013] space-y-3">
-                              {/* Header & Filter Controls */}
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  {finishGroups.map((grp) => (
-                                    <button
-                                      key={grp}
-                                      type="button"
-                                      onClick={() => setActiveFinishGroup(grp)}
-                                      className={clsx(
-                                        "px-2.5 py-1 rounded-md text-[11px] font-sans font-semibold transition-colors cursor-pointer capitalize",
-                                        activeFinishGroup === grp
-                                          ? "bg-[#f3aa18] text-[#08090b] font-bold"
-                                          : "bg-white/[0.05] text-neutral-400 hover:text-white"
-                                      )}
-                                    >
-                                      {grp}
-                                    </button>
-                                  ))}
-                                </div>
-
-                                <div className="relative">
-                                  <Search className="w-3.5 h-3.5 text-neutral-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                                  <input
-                                    type="text"
-                                    value={finishSearch}
-                                    onChange={(e) => setFinishSearch(e.target.value)}
-                                    placeholder="Search finish..."
-                                    className="pl-8 pr-2.5 py-1 rounded-lg bg-black/50 border border-white/10 text-xs text-white placeholder:text-neutral-500 focus:outline-none focus:border-[#f3aa18]"
-                                  />
-                                </div>
-                              </div>
-
-                              {/* Swatches Grid matching exacoat web wide rounded capsule pill */}
-                              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2.5 sm:gap-3 max-h-60 overflow-y-auto custom-scrollbar p-1">
-                                {filteredFinishes.map((finish) => {
-                                  const isSelected = finishName === finish.name;
-
-                                  return (
-                                    <button
-                                      key={finish.id || finish.slug}
-                                      type="button"
-                                      onClick={() => handleApplyFinishToActiveLayer(finish, layer.id)}
-                                      className="group flex flex-col items-center gap-0.5 p-0 transition-all select-none w-full cursor-pointer text-left"
-                                    >
-                                      {/* Full Rounded Capsule Pill with Outer Border & Inset Gap */}
-                                      <div
-                                        className={clsx(
-                                          "relative w-full rounded-full p-[2.5px] border transition-all",
-                                          isSelected
-                                            ? "border-[#f3aa18] bg-[#0a0a0a] ring-1 ring-[#f3aa18]/50 shadow-[0_0_12px_rgba(243,170,24,0.3)]"
-                                            : "border-white/25 bg-[#0a0a0a] hover:border-white/45 group-hover:scale-[1.02]"
-                                        )}
-                                      >
-                                        <div className="relative w-full aspect-[1.85/1] rounded-full overflow-hidden bg-[#141414]">
-                                          {finish.thumbnail ? (
-                                            <img
-                                              src={finish.thumbnail}
-                                              alt={finish.name}
-                                              className="h-full w-full object-cover select-none"
-                                              loading="eager"
-                                              draggable={false}
-                                            />
-                                          ) : (
-                                            <div
-                                              className="w-full h-full flex items-center justify-center text-[10px] text-neutral-400"
-                                              style={{ backgroundColor: finish.color_hex || '#333' }}
-                                            >
-                                              ●
-                                            </div>
-                                          )}
-                                        </div>
-                                        {finish.badge_text && (
-                                          <span
-                                            style={{
-                                              backgroundColor: finish.badge_color || "#f3aa18",
-                                              color: "#000000",
-                                            }}
-                                            className="pointer-events-none absolute -top-0.5 left-1/2 -translate-x-1/2 z-20 px-2 py-[1.5px] rounded-full text-[7.5px] sm:text-[8px] font-mono font-bold uppercase tracking-wider shadow-md leading-none whitespace-nowrap"
-                                          >
-                                            {finish.badge_text}
-                                          </span>
-                                        )}
-                                      </div>
-
-                                      {/* Swatch name & extra price underneath */}
-                                      <div className="flex flex-col items-center text-center w-full px-0.5 mt-0.5 min-h-[14px] justify-start">
-                                        <span
-                                          className={clsx(
-                                            "w-full text-[8px] sm:text-[8.5px] font-medium uppercase tracking-[0.06em] leading-tight truncate",
-                                            isSelected
-                                              ? "text-white font-semibold"
-                                              : "text-neutral-300 group-hover:text-white"
-                                          )}
-                                        >
-                                          {finish.name}
-                                        </span>
-                                        {finish.extra_price && finish.extra_price > 0 ? (
-                                          <span className="text-[7px] sm:text-[7.5px] font-mono text-amber-400 mt-0.5 leading-tight">
-                                            +{formatCurrency(finish.extra_price, order?.currency || 'IDR')}
-                                          </span>
-                                        ) : null}
-                                      </div>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* Coverage & Cutout Options (Rendered ONLY when supported by device) */}
-              {(hasCoverageOption || hasLogoOption || hasPencilOption) && (
-                <div className="p-4 rounded-xl border border-white/[0.06] bg-[#141417] space-y-3 font-sans">
-                  <div className="flex items-center justify-between border-b border-white/[0.06] pb-2">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300 flex items-center gap-2">
-                      <Sliders className="w-3.5 h-3.5 text-[#f3aa18]" />
-                      <span>Coverage & Cutout Options</span>
-                    </h4>
-                    {!hasActiveBackLayer && (
-                      <span className="text-[11px] text-amber-400/90 font-medium">
-                        Back skin not included: Coverage & Logo set to None
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                    {/* Coverage Option (ONLY for phones/devices that support 360 vs Model Cut) */}
-                    {hasCoverageOption && (
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <label className="block text-xs font-medium text-zinc-300">
-                            Coverage Option
-                          </label>
-                          {!hasActiveBackLayer && (
-                            <span className="text-[10px] text-neutral-500 italic">No Back</span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            disabled={!hasActiveBackLayer}
-                            onClick={() => setCoverage('Model Cut')}
-                            className={clsx(
-                              "flex-1 py-1.5 px-2 rounded-lg border text-[11px] font-semibold transition-all text-center truncate",
-                              !hasActiveBackLayer
-                                ? "bg-white/[0.02] border-white/[0.04] text-neutral-600 cursor-not-allowed"
-                                : coverage === 'Model Cut'
-                                ? "bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]"
-                                : "bg-[#101114] border-white/10 text-neutral-400 hover:text-white cursor-pointer"
-                            )}
-                          >
-                            Model Cut
-                          </button>
-                          <button
-                            type="button"
-                            disabled={!hasActiveBackLayer}
-                            onClick={() => setCoverage('360° Full Coverage')}
-                            className={clsx(
-                              "flex-1 py-1.5 px-2 rounded-lg border text-[11px] font-semibold transition-all text-center truncate",
-                              !hasActiveBackLayer
-                                ? "bg-white/[0.02] border-white/[0.04] text-neutral-600 cursor-not-allowed"
-                                : coverage === '360° Full Coverage'
-                                ? "bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]"
-                                : "bg-[#101114] border-white/10 text-neutral-400 hover:text-white cursor-pointer"
-                            )}
-                          >
-                            360° Wrap
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setCoverage('None')}
-                            className={clsx(
-                              "py-1.5 px-2.5 rounded-lg border text-[11px] font-semibold transition-all text-center truncate cursor-pointer",
-                              coverage === 'None' || !hasActiveBackLayer
-                                ? "bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]"
-                                : "bg-[#101114] border-white/10 text-neutral-400 hover:text-white"
-                            )}
-                          >
-                            None
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Logo Cutout (ONLY when device supports logo cutout) */}
-                    {hasLogoOption && (
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <label className="block text-xs font-medium text-zinc-300">
-                            Logo Cutout
-                          </label>
-                          {!hasActiveBackLayer && (
-                            <span className="text-[10px] text-neutral-500 italic">No Back</span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            disabled={!hasActiveBackLayer}
-                            onClick={() => setLogoCutout('With Logo Cutout')}
-                            className={clsx(
-                              "flex-1 py-1.5 px-2 rounded-lg border text-[11px] font-semibold transition-all text-center truncate",
-                              !hasActiveBackLayer
-                                ? "bg-white/[0.02] border-white/[0.04] text-neutral-600 cursor-not-allowed"
-                                : logoCutout === 'With Logo Cutout'
-                                ? "bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]"
-                                : "bg-[#101114] border-white/10 text-neutral-400 hover:text-white cursor-pointer"
-                            )}
-                          >
-                            With Logo
-                          </button>
-                          <button
-                            type="button"
-                            disabled={!hasActiveBackLayer}
-                            onClick={() => setLogoCutout('No Logo Cutout')}
-                            className={clsx(
-                              "flex-1 py-1.5 px-2 rounded-lg border text-[11px] font-semibold transition-all text-center truncate",
-                              !hasActiveBackLayer
-                                ? "bg-white/[0.02] border-white/[0.04] text-neutral-600 cursor-not-allowed"
-                                : logoCutout === 'No Logo Cutout'
-                                ? "bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]"
-                                : "bg-[#101114] border-white/10 text-neutral-400 hover:text-white cursor-pointer"
-                            )}
-                          >
-                            No Logo
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setLogoCutout('None')}
-                            className={clsx(
-                              "py-1.5 px-2.5 rounded-lg border text-[11px] font-semibold transition-all text-center truncate cursor-pointer",
-                              logoCutout === 'None' || !hasActiveBackLayer
-                                ? "bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]"
-                                : "bg-[#101114] border-white/10 text-neutral-400 hover:text-white"
-                            )}
-                          >
-                            None
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Pencil Cutout (ONLY when device supports pencil cutout) */}
-                    {hasPencilOption && (
-                      <div className="space-y-1.5">
-                        <label className="block text-xs font-medium text-zinc-300">
-                          Pencil Cutout
-                        </label>
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => setPencilCutout('With Pencil Cutout')}
-                            className={clsx(
-                              "flex-1 py-1.5 px-2 rounded-lg border text-[11px] font-semibold transition-all text-center truncate cursor-pointer",
-                              pencilCutout === 'With Pencil Cutout'
-                                ? "bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]"
-                                : "bg-[#101114] border-white/10 text-neutral-400 hover:text-white"
-                            )}
-                          >
-                            With Pencil
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setPencilCutout('No Pencil Cutout')}
-                            className={clsx(
-                              "flex-1 py-1.5 px-2 rounded-lg border text-[11px] font-semibold transition-all text-center truncate cursor-pointer",
-                              pencilCutout === 'No Pencil Cutout'
-                                ? "bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]"
-                                : "bg-[#101114] border-white/10 text-neutral-400 hover:text-white"
-                            )}
-                          >
-                            No Pencil
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setPencilCutout('None')}
-                            className={clsx(
-                              "py-1.5 px-2.5 rounded-lg border text-[11px] font-semibold transition-all text-center truncate cursor-pointer",
-                              pencilCutout === 'None'
-                                ? "bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18]"
-                                : "bg-[#101114] border-white/10 text-neutral-400 hover:text-white"
-                            )}
-                          >
-                            None
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Additional Non-Layer Production Notes & Metadata (Collapsible) */}
-              <div className="p-4 rounded-xl border border-white/[0.06] bg-[#141417] space-y-3 font-sans">
-                <div className="flex items-center justify-between">
-                  <button
-                    type="button"
-                    onClick={() => setShowCustomNotesSection(!showCustomNotesSection)}
-                    className="text-xs text-neutral-400 hover:text-neutral-200 font-sans flex items-center gap-1.5 transition-colors cursor-pointer"
-                  >
-                    {showCustomNotesSection ? (
-                      <ChevronDown className="w-3.5 h-3.5 text-neutral-400" />
-                    ) : (
-                      <ChevronRight className="w-3.5 h-3.5 text-neutral-400" />
-                    )}
-                    <span>Additional Production Notes / Overrides ({customSpecs.length})</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCustomNotesSection(true);
-                      handleAddCustomSpec();
-                    }}
-                    className="text-[11px] text-[#f3aa18] hover:text-[#f8ba3a] font-sans flex items-center gap-1 cursor-pointer"
-                  >
-                    <Plus className="w-3 h-3" />
-                    Add Note
-                  </button>
-                </div>
-
-                {showCustomNotesSection && (
-                  <div className="mt-3 space-y-2">
-                    {customSpecs.length === 0 ? (
-                      <p className="text-xs text-neutral-500 italic py-1">
-                        No extra notes or metadata attached to this item.
-                      </p>
-                    ) : (
-                      customSpecs.map((spec) => (
-                        <div key={spec.id} className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={spec.label}
-                            onChange={(e) => handleUpdateCustomSpec(spec.id, 'label', e.target.value)}
-                            placeholder="Note Label (e.g. Buyer Note, Cutting Instruction)"
-                            className="w-1/3 px-3 py-1.5 rounded-lg bg-[#0c0d10] border border-white/[0.08] text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]"
-                          />
-                          <input
-                            type="text"
-                            value={spec.value}
-                            onChange={(e) => handleUpdateCustomSpec(spec.id, 'value', e.target.value)}
-                            placeholder="Value"
-                            className="flex-1 px-3 py-1.5 rounded-lg bg-[#0c0d10] border border-white/[0.08] text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveCustomSpec(spec.id)}
-                            className="p-1.5 rounded-lg text-neutral-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
-                            title="Remove note"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Mode 2: Form Specifications View (For non-configurator drops, kits, merchandise) */}
-          {configMode === 'form' && (
-            <div className="space-y-4">
-              {/* Production Variants if profile has variants configured */}
-              {productionVariants.length > 0 && (
-                <div className="p-4 rounded-xl border border-white/[0.06] bg-[#141417] space-y-3.5">
-                  <div className="flex items-center justify-between border-b border-white/[0.06] pb-2">
-                    <div className="flex items-center gap-2">
-                      <Cpu className="w-3.5 h-3.5 text-[#f3aa18]" />
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans">
-                        Production Variants ({productionVariants.length})
-                      </h4>
-                      <span className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-[#f3aa18]/10 text-[#f3aa18] border border-[#f3aa18]/20">
-                        Hardware Cut
-                      </span>
-                    </div>
-                    <span className="text-[11px] font-mono text-neutral-400">
-                      Physical cut template & device model
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {productionVariants.map((v, vIdx) => {
-                      const vKey = v.id || v.name || `variant_${vIdx}`;
-                      const currentSelected = selectedVariants[vKey] || (v.options[0]?.name ?? '');
-
-                      return (
-                        <div
-                          key={vKey}
-                          className="p-3 rounded-lg border border-white/[0.06] bg-[#101114] space-y-2"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium text-neutral-200">
-                              {v.name}
-                            </span>
-                            <span className="text-[10px] font-mono text-neutral-400">
-                              {v.options.length} {v.options.length === 1 ? 'option' : 'options'}
-                            </span>
-                          </div>
-
-                          <div className="flex flex-wrap gap-1.5">
-                            {v.options.map((opt) => {
-                              const isOptSelected = currentSelected.toLowerCase() === opt.name.toLowerCase();
-                              return (
-                                <button
-                                  key={opt.id || opt.name}
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedVariants((prev) => ({
-                                      ...prev,
-                                      [vKey]: opt.name,
-                                    }));
-                                  }}
-                                  className={clsx(
-                                    "px-2.5 py-1.5 rounded-md text-xs font-medium border transition-all text-left flex items-center gap-1.5",
-                                    isOptSelected
-                                      ? "bg-[#f3aa18]/20 border-[#f3aa18] text-[#f3aa18] shadow-xs"
-                                      : "bg-white/[0.03] border-white/[0.08] text-neutral-300 hover:border-white/20 hover:text-white"
-                                  )}
-                                >
-                                  <span className={clsx(
-                                    "w-1.5 h-1.5 rounded-full shrink-0",
-                                    isOptSelected ? "bg-[#f3aa18]" : "bg-neutral-500"
-                                  )} />
-                                  <span>{opt.name}</span>
-                                  {typeof opt.price_diff === 'number' && opt.price_diff !== 0 && (
-                                    <span className="text-[10px] opacity-75 font-mono ml-0.5">
-                                      ({opt.price_diff > 0 ? `+Rp ${opt.price_diff.toLocaleString('id-ID')}` : `-Rp ${Math.abs(opt.price_diff).toLocaleString('id-ID')}`})
-                                    </span>
-                                  )}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              <div className="p-4 rounded-xl border border-white/[0.06] bg-[#141417] space-y-3.5">
-                <div className="flex items-center justify-between border-b border-white/[0.06] pb-2">
-                  <div className="flex items-center gap-2">
-                    <Sliders className="w-3.5 h-3.5 text-[#f3aa18]" />
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans">
-                      Form Specifications ({customSpecs.length})
-                    </h4>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="xs"
-                    onClick={handleAddCustomSpec}
-                    leftIcon={<Plus className="w-3 h-3" />}
-                  >
-                    Add Field
-                  </Button>
-                </div>
-
-                <p className="text-xs text-neutral-400">
-                  Customer choices and options submitted for this item (e.g. Model, Color, Variant, or custom addon form data).
-                </p>
-
-                <div className="space-y-2">
-                  {customSpecs.length === 0 ? (
-                    <div className="p-4 rounded-lg bg-black/20 border border-white/[0.06] text-center text-xs text-neutral-500">
-                      No specification fields recorded. Click "Add Field" to attach options.
-                    </div>
-                  ) : (
-                    customSpecs.map((spec) => {
-                      const isFocused = selectedCustomSpecId === spec.id;
-                      return (
-                        <div
-                          key={spec.id}
-                          onClick={() => setSelectedCustomSpecId(spec.id)}
-                          className={clsx(
-                            "p-2.5 rounded-xl border transition-all flex items-center gap-2",
-                            isFocused
-                              ? "border-[#f3aa18]/60 bg-[#f3aa18]/5 shadow-xs"
-                              : "border-white/[0.06] bg-[#0c0d10]"
-                          )}
-                        >
-                          <input
-                            type="text"
-                            value={spec.label}
-                            onChange={(e) => handleUpdateCustomSpec(spec.id, 'label', e.target.value)}
-                            placeholder="Field Label (e.g. Model, Color, Variant)"
-                            className="w-1/3 px-3 py-1.5 rounded-lg bg-black/40 border border-white/[0.08] text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]"
-                          />
-                          <input
-                            type="text"
-                            value={spec.value}
-                            onChange={(e) => handleUpdateCustomSpec(spec.id, 'value', e.target.value)}
-                            placeholder="Field Value (e.g. iPhone 16 Pro Max, Shadow Titanium)"
-                            className="flex-1 px-3 py-1.5 rounded-lg bg-black/40 border border-white/[0.08] text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#f3aa18]"
-                          />
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRemoveCustomSpec(spec.id);
-                            }}
-                            className="p-1.5 rounded-lg text-neutral-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
-                            title="Remove field"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-
-              {/* Quick Swatch Catalog Picker for Form Fields */}
-              <div className="p-4 rounded-xl border border-white/[0.06] bg-[#141417] space-y-3.5">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/[0.06] pb-2">
-                  <div className="flex items-center gap-2">
-                    <Palette className="w-3.5 h-3.5 text-[#f3aa18]" />
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans">
-                      Quick Swatch Picker
-                      {selectedCustomSpecId && (
-                        <span className="text-[11px] text-neutral-400 normal-case ml-2 font-mono">
-                          (Applies to selected field:{' '}
-                          {customSpecs.find((s) => s.id === selectedCustomSpecId)?.label || 'Field'})
-                        </span>
-                      )}
-                    </h4>
-                  </div>
-                  <input
-                    type="text"
-                    value={finishSearch}
-                    onChange={(e) => setFinishSearch(e.target.value)}
-                    placeholder="Filter finishes..."
-                    className="px-2.5 py-1 rounded-lg bg-black/40 border border-white/10 text-xs text-white placeholder:text-neutral-500 focus:outline-none focus:border-[#f3aa18]"
-                  />
-                </div>
-
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {finishGroups.map((grp) => (
-                    <button
-                      key={grp}
-                      type="button"
-                      onClick={() => setActiveFinishGroup(grp)}
-                      className={clsx(
-                        "px-2.5 py-1 rounded-md text-[11px] font-sans font-semibold transition-colors cursor-pointer capitalize",
-                        activeFinishGroup === grp
-                          ? "bg-[#f3aa18] text-[#08090b] font-bold"
-                          : "bg-white/[0.05] text-neutral-400 hover:text-white"
-                      )}
-                    >
-                      {grp}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2.5 sm:gap-3 max-h-56 overflow-y-auto custom-scrollbar p-1">
-                  {filteredFinishes.map((finish) => (
-                    <button
-                      key={finish.id || finish.slug}
-                      type="button"
-                      onClick={() => handleApplyFinishToActiveLayer(finish)}
-                      className="group flex flex-col items-center gap-0.5 p-0 transition-all select-none w-full cursor-pointer text-left"
-                    >
-                      <div className="relative w-full rounded-full p-[2.5px] border border-white/25 bg-[#0a0a0a] hover:border-white/45 group-hover:scale-[1.02] transition-all">
-                        <div className="relative w-full aspect-[1.85/1] rounded-full overflow-hidden bg-[#141414]">
-                          {finish.thumbnail ? (
-                            <img
-                              src={finish.thumbnail}
-                              alt={finish.name}
-                              className="h-full w-full object-cover select-none"
-                              loading="eager"
-                              draggable={false}
-                            />
-                          ) : (
-                            <div
-                              className="w-full h-full flex items-center justify-center text-[10px] text-neutral-400"
-                              style={{ backgroundColor: finish.color_hex || '#333' }}
-                            >
-                              ●
-                            </div>
-                          )}
-                        </div>
-                        {finish.badge_text && (
-                          <span
-                            style={{
-                              backgroundColor: finish.badge_color || "#f3aa18",
-                              color: "#000000",
-                            }}
-                            className="pointer-events-none absolute -top-0.5 left-1/2 -translate-x-1/2 z-20 px-2 py-[1.5px] rounded-full text-[7.5px] sm:text-[8px] font-mono font-bold uppercase tracking-wider shadow-md leading-none whitespace-nowrap"
-                          >
-                            {finish.badge_text}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex flex-col items-center text-center w-full px-0.5 mt-0.5 min-h-[14px] justify-start">
-                        <span className="w-full text-[8px] sm:text-[8.5px] font-medium uppercase tracking-[0.06em] leading-tight truncate text-neutral-300 group-hover:text-white">
-                          {finish.name}
-                        </span>
-                        {finish.extra_price && finish.extra_price > 0 ? (
-                          <span className="text-[7px] sm:text-[7.5px] font-mono text-amber-400 mt-0.5 leading-tight">
-                            +{formatCurrency(finish.extra_price, order?.currency || 'IDR')}
-                          </span>
-                        ) : null}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Section 3: Live Output Summary Preview Card */}
-          <div className="p-4 rounded-xl border border-amber-500/30 dark:border-[#f3aa18]/20 bg-amber-500/5 dark:bg-[#f3aa18]/5 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-[#f3aa18] font-sans flex items-center gap-1.5">
-                <Eye className="w-3.5 h-3.5 text-amber-600 dark:text-[#f3aa18]" />
-                Live Configuration Summary Preview
-              </span>
-              <span className="text-xs font-mono font-bold text-zinc-900 dark:text-white">
-                Line Total: {formatCurrency(Math.max(1, quantity) * unitPrice, order.currency)} ({quantity}x)
-              </span>
-            </div>
-
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {compiledSpecs.length === 0 ? (
-                <span className="text-xs text-zinc-500 dark:text-neutral-400 italic">No configurations selected yet</span>
-              ) : (
-                compiledSpecs.map((sp, idx) => (
-                  <span
-                    key={idx}
-                    className="text-[11px] font-mono px-2 py-0.5 rounded bg-white dark:bg-white/[0.08] text-zinc-800 dark:text-neutral-200 border border-zinc-200 dark:border-white/10 shadow-xs"
-                  >
-                    <strong className="text-zinc-950 dark:text-white font-semibold">{sp.label}:</strong> {sp.value}
-                  </span>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
+        <PriceBox
+          currency={currency}
+          breakdown={breakdown}
+          unitPrice={unitPrice}
+          onUnitPriceChange={handleUnitPriceChange}
+          quantity={quantity}
+          onQuantityChange={setQuantity}
+          keepsOwnPrice={ownPrice}
+          follows={priceFollows}
+          onUseWebstorePrice={handleUseWebstorePrice}
+        />
       </Modal>
 
-      {/* Confirmation modal for removing line item */}
       <ConfirmModal
         open={showDeleteConfirm}
         onOpenChange={setShowDeleteConfirm}
@@ -2268,3 +575,20 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({
     </>
   );
 };
+
+function SpecList({ title, specs }: { title: string; specs: ItemCustomizationSpec[] }) {
+  if (specs.length === 0) return null;
+  return (
+    <div className="rounded-xl border border-card-border bg-card p-3.5">
+      <div className="mb-2 text-[12px] text-faint">{title}</div>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[12.5px]">
+        {specs.map((s, i) => (
+          <React.Fragment key={`${s.label}-${i}`}>
+            <dt className="text-muted">{s.label}</dt>
+            <dd className="text-fg">{s.value}</dd>
+          </React.Fragment>
+        ))}
+      </dl>
+    </div>
+  );
+}

@@ -165,6 +165,9 @@ describe('preselectFromSpecs and selectionToSpecs', () => {
     expect(preselectFromSpecs(data, [{ label: 'Finish', value: 'Woven' }]).selection.layers[BACK]).toBe(
       choice(BACK, 'Woven').id,
     );
+    expect(preselectFromSpecs(data, [{ label: 'Variation', value: 'Emerald Green' }]).selection.layers[BACK]).toBe(
+      choice(BACK, 'Emerald Green').id,
+    );
   });
 
   it('flags a finish that no longer exists and keeps it on save', () => {
@@ -190,6 +193,25 @@ describe('preselectFromSpecs and selectionToSpecs', () => {
   it('leaves out coverage and logo when no back finish is chosen', () => {
     const { selection } = preselectFromSpecs(data, [{ label: 'Additional Camera & Back Glass', value: 'Swarm' }]);
     expect(selectionToSpecs(data, selection)).toEqual([{ label: 'Additional Camera & Back Glass', value: 'Swarm' }]);
+  });
+
+  it('does not invent coverage or logo values the item never had', () => {
+    const { selection } = preselectFromSpecs(data, [{ label: 'Back', value: 'Swarm' }]);
+    expect(selection.unset).toEqual(['coverage', 'logo']);
+    expect(selectionToSpecs(data, selection)).toEqual([{ label: 'Back', value: 'Swarm' }]);
+    const picked = { ...selection, coverage: 'model_360' as const, unset: selection.unset.filter((u) => u !== 'coverage') };
+    expect(selectionToSpecs(data, picked)).toContainEqual({ label: 'Coverage', value: '360° Full Coverage' });
+  });
+
+  it('reads Model 360 from the item title when no coverage is saved', () => {
+    const { selection } = preselectFromSpecs(data, [{ label: 'Back', value: 'Swarm' }], 'iPhone 17 Pro Skin - Model 360 - Swarm');
+    expect(selection.coverage).toBe('model_360');
+    expect(selection.unset).toEqual(['logo']);
+  });
+
+  it('leaves Model 360 out of the price while coverage is not set', () => {
+    const sel = select({ layers: { [BACK]: choice(BACK, 'Matte Black').id }, coverage: 'model_360', unset: ['coverage'] });
+    expect(computeWebstoreTotal(data, sel).total).toBe(data.basePrice);
   });
 
   it('writes variants first with the option name', () => {

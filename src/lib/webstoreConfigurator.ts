@@ -100,7 +100,11 @@ export interface Selection {
   unavailable: { layerId?: number; variantId?: string; spec: Spec }[];
   /** Saved details that are not configurator options (notes, invoice numbers); kept as they are. */
   kept: Spec[];
+  /** Offered options the saved item never recorded; left out of the specs and price until staff pick one. */
+  unset: OptionKey[];
 }
+
+export type OptionKey = 'coverage' | 'logo' | 'pencil';
 
 export interface WebstoreOptions {
   coverage: { offered: boolean; model360Price: number };
@@ -290,7 +294,7 @@ export function emptySelection(data: WebstoreConfigurator): Selection {
   getWebstoreOptions(data).variants.forEach((v) => {
     if (v.options && v.options.length > 0) variants[v.id] = v.options[0].id;
   });
-  return { layers, coverage: 'model_cut', logoCutout: true, pencilCutout: true, variants, unavailable: [], kept: [] };
+  return { layers, coverage: 'model_cut', logoCutout: true, pencilCutout: true, variants, unavailable: [], kept: [], unset: [] };
 }
 
 /** Mirrors the storefront `totalPrice`: base + chosen finishes + Model 360 when offered + variant differences when positive. */
@@ -311,7 +315,7 @@ export function computeWebstoreTotal(
     lines.push({ label: `${layer.name}: ${choice.name}`, amount });
   });
 
-  if (options.coverage.offered && selection.coverage === 'model_360') {
+  if (options.coverage.offered && selection.coverage === 'model_360' && !selection.unset.includes('coverage')) {
     total += options.coverage.model360Price;
     lines.push({ label: 'Model 360°', amount: options.coverage.model360Price });
   }
@@ -343,7 +347,7 @@ const normValue = (s: string) => s.trim().toLowerCase().replace(/[_\s]+/g, '-');
 
 const COVERAGE_LABEL = /^(coverage|model coverage|cut|model cut|360)$/i;
 const LOGO_LABEL = /^logo(\s*cutout)?$/i;
-const GENERIC_FINISH_LABEL = /^(finish|skin|texture|varian|warna|option|colou?r)$/i;
+const GENERIC_FINISH_LABEL = /^(finish|skin|texture|varian|variation|variant|warna|option|colou?r)$/i;
 const NEGATIVE_VALUE = /^(no|without)\b|\bnone\b/i;
 
 function matchChoice(data: WebstoreConfigurator, layerId: number, value: string): WebstoreChoice | null {
@@ -353,8 +357,15 @@ function matchChoice(data: WebstoreConfigurator, layerId: number, value: string)
   );
 }
 
-/** Reads an item's saved specs (manager or webstore checkout wording) into a selection. */
-export function preselectFromSpecs(data: WebstoreConfigurator, specs: Spec[]): { selection: Selection; missing: string[] } {
+/**
+ * Reads an item's saved specs (manager or webstore checkout wording) into a selection.
+ * `titleHint` (the item name) supplies Model 360 for old items that only say it in the title.
+ */
+export function preselectFromSpecs(
+  data: WebstoreConfigurator,
+  specs: Spec[],
+  titleHint = '',
+): { selection: Selection; missing: string[] } {
   const selection = emptySelection(data);
   const options = getWebstoreOptions(data);
   const layers = interactiveLayers(data);
@@ -365,6 +376,7 @@ export function preselectFromSpecs(data: WebstoreConfigurator, specs: Spec[]): {
   };
   const pencilLabel = normLabel(options.pencil.label);
   const generic: Spec[] = [];
+  const seen = new Set<OptionKey>();
 
   for (const spec of specs) {
     const label = spec.label.trim();
@@ -387,18 +399,21 @@ export function preselectFromSpecs(data: WebstoreConfigurator, specs: Spec[]): {
     }
 
     if (COVERAGE_LABEL.test(label)) {
+      seen.add('coverage');
       if (options.coverage.offered) selection.coverage = /360|full/i.test(spec.value) ? 'model_360' : 'model_cut';
       else flag(spec, {});
       continue;
     }
 
     if (LOGO_LABEL.test(label)) {
+      seen.add('logo');
       if (options.logo.offered) selection.logoCutout = !NEGATIVE_VALUE.test(spec.value);
       else flag(spec, {});
       continue;
     }
 
     if (/pencil|stylus/i.test(label) || (options.pencil.offered && nl === pencilLabel)) {
+      seen.add('pencil');
       if (options.pencil.offered) selection.pencilCutout = !NEGATIVE_VALUE.test(spec.value);
       else flag(spec, {});
       continue;
@@ -424,6 +439,13 @@ export function preselectFromSpecs(data: WebstoreConfigurator, specs: Spec[]): {
     if (c) selection.layers[base.id] = c.id;
     else flag(spec, { layerId: base.id });
   }
+
+  if (options.coverage.offered && !seen.has('coverage')) {
+    if (/\b360\b/.test(titleHint)) selection.coverage = 'model_360';
+    else selection.unset.push('coverage');
+  }
+  if (options.logo.offered && !seen.has('logo')) selection.unset.push('logo');
+  if (options.pencil.offered && !seen.has('pencil')) selection.unset.push('pencil');
 
   return { selection, missing };
 }
@@ -460,14 +482,14 @@ export function selectionToSpecs(data: WebstoreConfigurator, selection: Selectio
     base && (findChoice(data, base.id, selection.layers[base.id]) || unavailableFor({ layerId: base.id })),
   );
 
-  if (options.coverage.offered && baseChosen) {
+  if (options.coverage.offered && baseChosen && !selection.unset.includes('coverage')) {
     out.push({ label: 'Coverage', value: selection.coverage === 'model_360' ? '360° Full Coverage' : 'Model Cut' });
   }
-  if (options.logo.offered && baseChosen) {
+  if (options.logo.offered && baseChosen && !selection.unset.includes('logo')) {
     const forcedOff = isLogoCutoutDisabledByFinish(data, selectedBackChoice(data, selection));
     out.push({ label: 'Logo', value: !forcedOff && selection.logoCutout ? 'With Logo Cutout' : 'No Logo Cutout' });
   }
-  if (options.pencil.offered) {
+  if (options.pencil.offered && !selection.unset.includes('pencil')) {
     out.push({ label: 'Pencil Cutout', value: selection.pencilCutout ? 'With Pencil Cutout' : 'No Pencil Cutout' });
   }
 
