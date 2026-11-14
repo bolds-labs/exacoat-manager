@@ -2001,6 +2001,12 @@ class Exacoat_Core {
 			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
 		] );
 
+		$register( '/orders/counts', [
+			'methods'             => 'GET',
+			'callback'            => [ 'Exacoat_Order_Manager', 'get_order_counts' ],
+			'permission_callback' => [ __CLASS__, 'verify_bridge_permission' ],
+		] );
+
 		$register( '/orders/(?P<id>\d+)', [
 			'methods'             => [ 'GET', 'POST', 'PUT' ],
 			'callback'            => function( $request ) {

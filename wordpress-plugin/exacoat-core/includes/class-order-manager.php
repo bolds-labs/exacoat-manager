@@ -251,6 +251,334 @@ class Exacoat_Order_Manager {
 	}
 
 	/**
+	 * Map a WooCommerce order status to a counts bucket (spec 7.2).
+	 * Returns null for statuses that belong to no bucket (cancelled, refunded, failed, trash).
+	 *
+	 * @param string $status    Status with or without the wc- prefix.
+	 * @param bool   $is_pickup Whether the order is a store pickup order.
+	 */
+	public static function bucket_for_status( string $status, bool $is_pickup ): ?string {
+		$status = strtolower( trim( $status ) );
+		if ( str_starts_with( $status, 'wc-' ) ) {
+			$status = substr( $status, 3 );
+		}
+		switch ( $status ) {
+			case 'pending':
+			case 'on-hold':
+			case 'pending-payment':
+				return 'awaiting_payment';
+			case 'processing':
+				return 'to_prepare';
+			case 'preparing-order':
+			case 'in-production':
+				return 'preparing';
+			case 'ready-to-ship':
+			case 'awaiting-pickup':
+				return $is_pickup ? 'ready_for_pickup' : 'waiting_for_courier';
+			case 'smb-ready':
+				return 'ready_for_pickup';
+			case 'smb-picked':
+				return 'picked_up';
+			case 'shipped':
+				return 'shipped';
+			case 'completed':
+			case 'delivered':
+				return 'completed';
+		}
+		return null;
+	}
+
+	/**
+	 * Pure pickup classification. Mirrors Exacoat_Tracking_Pool::is_store_pickup_order()
+	 * but works on pre-fetched signals instead of a WC_Order object.
+	 *
+	 * @param array $s Keys: delivery_override, pickup_meta, tracking, carrier, status, company,
+	 *                 addr1, addr2, postcode, city, shipping_lines (list of [method_id, method_title]), note.
+	 */
+	public static function is_pickup_from_signals( array $s ): bool {
+		$truthy = [ 'yes', '1', 'true' ];
+		$falsy  = [ 'no', '0', 'false' ];
+
+		if ( in_array( strtolower( trim( (string) ( $s['delivery_override'] ?? '' ) ) ), $truthy, true ) ) {
+			return false;
+		}
+		$pickup_meta = strtolower( trim( (string) ( $s['pickup_meta'] ?? '' ) ) );
+		if ( in_array( $pickup_meta, $falsy, true ) ) {
+			return false;
+		}
+		if ( in_array( $pickup_meta, $truthy, true ) ) {
+			return true;
+		}
+
+		$tracking = trim( (string) ( $s['tracking'] ?? '' ) );
+		$carrier  = strtolower( trim( (string) ( $s['carrier'] ?? '' ) ) );
+		if ( '' !== $tracking && ! str_starts_with( $tracking, 'field_' ) && '' !== $carrier && 'pickup' !== $carrier && 'custom' !== $carrier ) {
+			return false;
+		}
+
+		$status = str_replace( 'wc-', '', (string) ( $s['status'] ?? '' ) );
+		if ( in_array( $status, [ 'smb-ready', 'smb-picked' ], true ) ) {
+			return true;
+		}
+
+		$company  = strtolower( trim( (string) ( $s['company'] ?? '' ) ) );
+		$addr1    = strtolower( trim( (string) ( $s['addr1'] ?? '' ) ) );
+		$addr2    = strtolower( trim( (string) ( $s['addr2'] ?? '' ) ) );
+		$postcode = trim( (string) ( $s['postcode'] ?? '' ) );
+		$city     = strtolower( trim( (string) ( $s['city'] ?? '' ) ) );
+
+		if (
+			( str_contains( $addr1, 'ruby commercial' ) || str_contains( $addr1, 'summarecon bekasi' ) || str_contains( $addr2, 'summarecon bekasi' ) ) &&
+			( '17142' === $postcode || str_contains( $addr1, 'bekasi' ) || str_contains( $addr2, 'bekasi' ) || str_contains( $city, 'bekasi' ) )
+		) {
+			return true;
+		}
+		if ( ( str_contains( $company, 'exacoat store' ) || str_contains( $company, 'store bekasi' ) ) && ( '' === $addr1 || str_contains( $addr1, 'ruby' ) || str_contains( $addr1, 'bekasi' ) || str_contains( $city, 'bekasi' ) ) ) {
+			return true;
+		}
+
+		foreach ( (array) ( $s['shipping_lines'] ?? [] ) as $line ) {
+			$m_id    = strtolower( (string) ( $line[0] ?? '' ) );
+			$m_title = strtolower( (string) ( $line[1] ?? '' ) );
+			if ( str_contains( $m_id, 'pickup' ) || str_contains( $m_title, 'pickup' ) || str_contains( $m_title, 'ambil di toko' ) || str_contains( $m_title, 'ambil sendiri' ) ) {
+				return true;
+			}
+		}
+
+		$note = strtolower( (string) ( $s['note'] ?? '' ) );
+		return str_contains( $note, 'ambil di toko' ) || str_contains( $note, 'ambil sendiri' ) || str_contains( $note, 'store pickup' );
+	}
+
+	/**
+	 * Load the pickup signals for a small set of order IDs with a handful of bulk queries
+	 * (meta, addresses, shipping lines) and classify each with is_pickup_from_signals().
+	 * Used only for ready-to-ship and awaiting-pickup orders, whose pickup status cannot be
+	 * expressed in a single SQL expression (the PHP rules mix meta, address and method text).
+	 *
+	 * @param int[] $ids
+	 * @return array<int,bool> order id => is pickup
+	 */
+	private static function classify_pickup_for_ids( array $ids, bool $has_hpos ): array {
+		global $wpdb;
+		$ids = array_values( array_unique( array_filter( array_map( 'intval', $ids ) ) ) );
+		if ( empty( $ids ) ) {
+			return [];
+		}
+		$in = implode( ',', $ids );
+
+		$sig = [];
+		foreach ( $ids as $id ) {
+			$sig[ $id ] = [
+				'delivery_override' => '', 'pickup_meta' => '', 'tracking' => '', 'carrier' => '', 'status' => '',
+				'company' => '', 'addr1' => '', 'addr2' => '', 'postcode' => '', 'city' => '', 'shipping_lines' => [], 'note' => '',
+			];
+		}
+
+		$meta_keys = [
+			'_delivery_override', '_is_store_pickup', 'is_store_pickup', 'store_pickup',
+			'tracking_number', '_tracking_number', 'carrier_id', '_carrier_id',
+			'_shipping_company', '_billing_company', '_shipping_address_1', '_billing_address_1',
+			'_shipping_address_2', '_billing_address_2', '_shipping_postcode', '_billing_postcode',
+			'_shipping_city', '_billing_city',
+		];
+		$keys_in = "'" . implode( "','", array_map( 'esc_sql', $meta_keys ) ) . "'";
+		$raw     = [];
+
+		if ( $has_hpos ) {
+			$rows = $wpdb->get_results( "SELECT order_id AS oid, meta_key, meta_value FROM {$wpdb->prefix}wc_orders_meta WHERE order_id IN ({$in}) AND meta_key IN ({$keys_in})" );
+			foreach ( (array) $rows as $r ) {
+				$raw[ (int) $r->oid ][ $r->meta_key ] = (string) $r->meta_value;
+			}
+			$rows = $wpdb->get_results( "SELECT id, status, customer_note FROM {$wpdb->prefix}wc_orders WHERE id IN ({$in})" );
+			foreach ( (array) $rows as $r ) {
+				$sig[ (int) $r->id ]['status'] = (string) $r->status;
+				$sig[ (int) $r->id ]['note']   = (string) $r->customer_note;
+			}
+			$rows = $wpdb->get_results( "SELECT order_id, address_type, company, address_1, address_2, postcode, city FROM {$wpdb->prefix}wc_order_addresses WHERE order_id IN ({$in})" );
+			foreach ( (array) $rows as $r ) {
+				$p = ( 'shipping' === $r->address_type ) ? '_shipping_' : '_billing_';
+				$o = (int) $r->order_id;
+				$raw[ $o ][ $p . 'company' ]   = (string) $r->company;
+				$raw[ $o ][ $p . 'address_1' ] = (string) $r->address_1;
+				$raw[ $o ][ $p . 'address_2' ] = (string) $r->address_2;
+				$raw[ $o ][ $p . 'postcode' ]  = (string) $r->postcode;
+				$raw[ $o ][ $p . 'city' ]      = (string) $r->city;
+			}
+		} else {
+			$rows = $wpdb->get_results( "SELECT post_id AS oid, meta_key, meta_value FROM {$wpdb->postmeta} WHERE post_id IN ({$in}) AND meta_key IN ({$keys_in})" );
+			foreach ( (array) $rows as $r ) {
+				$raw[ (int) $r->oid ][ $r->meta_key ] = (string) $r->meta_value;
+			}
+			$rows = $wpdb->get_results( "SELECT ID, post_status, post_excerpt FROM {$wpdb->posts} WHERE ID IN ({$in})" );
+			foreach ( (array) $rows as $r ) {
+				$sig[ (int) $r->ID ]['status'] = (string) $r->post_status;
+				$sig[ (int) $r->ID ]['note']   = (string) $r->post_excerpt;
+			}
+		}
+
+		$rows = $wpdb->get_results( "SELECT i.order_id, i.order_item_name, MAX(CASE WHEN m.meta_key = 'method_id' THEN m.meta_value END) AS method_id FROM {$wpdb->prefix}woocommerce_order_items i LEFT JOIN {$wpdb->prefix}woocommerce_order_itemmeta m ON m.order_item_id = i.order_item_id WHERE i.order_id IN ({$in}) AND i.order_item_type = 'shipping' GROUP BY i.order_item_id, i.order_id, i.order_item_name" );
+		foreach ( (array) $rows as $r ) {
+			$sig[ (int) $r->order_id ]['shipping_lines'][] = [ (string) $r->method_id, (string) $r->order_item_name ];
+		}
+
+		// First non-empty value, like the PHP `a ?: b ?: c` chains in is_store_pickup_order().
+		$first = static function ( array $m, array $keys ): string {
+			foreach ( $keys as $k ) {
+				if ( isset( $m[ $k ] ) && '' !== trim( $m[ $k ] ) && '0' !== $m[ $k ] ) {
+					return $m[ $k ];
+				}
+			}
+			return '';
+		};
+
+		$out = [];
+		foreach ( $ids as $id ) {
+			$m = $raw[ $id ] ?? [];
+			$sig[ $id ]['delivery_override'] = $m['_delivery_override'] ?? '';
+			$sig[ $id ]['pickup_meta']       = $first( $m, [ '_is_store_pickup', 'is_store_pickup', 'store_pickup' ] );
+			$sig[ $id ]['tracking']          = $first( $m, [ 'tracking_number', '_tracking_number' ] );
+			$sig[ $id ]['carrier']           = $first( $m, [ 'carrier_id', '_carrier_id' ] );
+			$sig[ $id ]['company']           = $first( $m, [ '_shipping_company', '_billing_company' ] );
+			$sig[ $id ]['addr1']             = $first( $m, [ '_shipping_address_1', '_billing_address_1' ] );
+			$sig[ $id ]['addr2']             = $first( $m, [ '_shipping_address_2', '_billing_address_2' ] );
+			$sig[ $id ]['postcode']          = $first( $m, [ '_shipping_postcode', '_billing_postcode' ] );
+			$sig[ $id ]['city']              = $first( $m, [ '_shipping_city', '_billing_city' ] );
+			$out[ $id ]                      = self::is_pickup_from_signals( $sig[ $id ] );
+		}
+		return $out;
+	}
+
+	/**
+	 * GET /orders/counts: store-wide order counts only (no order, customer or ID data).
+	 * Uses GROUP BY / COUNT queries. Never formats or loads WC_Order objects.
+	 */
+	public static function get_order_counts( WP_REST_Request $request ): WP_REST_Response {
+		global $wpdb;
+
+		$hpos_orders = "{$wpdb->prefix}wc_orders";
+		if ( class_exists( '\Automattic\WooCommerce\Utilities\OrderUtil' ) ) {
+			$has_hpos = \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled();
+		} else {
+			$has_hpos = ( $wpdb->get_var( "SHOW TABLES LIKE '{$hpos_orders}'" ) === $hpos_orders );
+		}
+
+		$orders_tbl = $has_hpos ? $hpos_orders : $wpdb->posts;
+		$id_col     = $has_hpos ? 'id' : 'ID';
+		$status_col = $has_hpos ? 'status' : 'post_status';
+		$type_col   = $has_hpos ? 'type' : 'post_type';
+		$meta_tbl   = $has_hpos ? "{$wpdb->prefix}wc_orders_meta" : $wpdb->postmeta;
+		$meta_id    = $has_hpos ? 'order_id' : 'post_id';
+
+		// Statuses carry the wc- prefix in both HPOS and classic CPT storage.
+		$rows = (array) $wpdb->get_results( "SELECT {$status_col} AS st, COUNT(*) AS n FROM {$orders_tbl} WHERE {$type_col} = 'shop_order' GROUP BY {$status_col}" );
+
+		$webstore = [
+			'all' => 0, 'awaiting_payment' => 0, 'to_prepare' => 0, 'preparing' => 0, 'waiting_for_courier' => 0,
+			'ready_for_pickup' => 0, 'picked_up' => 0, 'shipped' => 0, 'completed' => 0,
+			'warranty' => 0, 'warranty_pending' => 0, 'redeem' => 0, 'endorsement' => 0,
+		];
+		$excluded = [ 'cancelled', 'refunded', 'failed', 'trash', 'auto-draft', 'draft', 'checkout-draft' ];
+
+		foreach ( $rows as $r ) {
+			$status = preg_replace( '/^wc-/', '', (string) $r->st );
+			$n      = (int) $r->n;
+			if ( ! in_array( $status, $excluded, true ) ) {
+				$webstore['all'] += $n;
+			}
+			if ( in_array( $status, [ 'ready-to-ship', 'awaiting-pickup' ], true ) ) {
+				continue; // Split by pickup classification below.
+			}
+			$bucket = self::bucket_for_status( $status, false );
+			if ( null !== $bucket ) {
+				$webstore[ $bucket ] += $n;
+			}
+		}
+
+		// ready-to-ship and awaiting-pickup are small sets: fetch only their IDs, then classify
+		// pickup vs courier with bulk meta queries and the pure helper (SQL alone cannot express it).
+		$split_rows = (array) $wpdb->get_results( "SELECT {$id_col} AS oid, {$status_col} AS st FROM {$orders_tbl} WHERE {$type_col} = 'shop_order' AND {$status_col} IN ('wc-ready-to-ship','wc-awaiting-pickup')" );
+		$pickup_map = self::classify_pickup_for_ids( array_map( static fn( $r ) => (int) $r->oid, $split_rows ), $has_hpos );
+		foreach ( $split_rows as $r ) {
+			$bucket = self::bucket_for_status( (string) $r->st, ! empty( $pickup_map[ (int) $r->oid ] ) );
+			if ( null !== $bucket ) {
+				$webstore[ $bucket ]++;
+			}
+		}
+
+		// Specialized tabs. get_specialized_order_ids() already excludes parent orders; here we
+		// also drop cancelled, refunded, failed and trashed orders.
+		$excl_in    = "'wc-cancelled','wc-refunded','wc-failed','trash'";
+		$active_ids = static function ( array $ids ) use ( $wpdb, $orders_tbl, $id_col, $status_col, $excl_in ): array {
+			if ( empty( $ids ) ) {
+				return [];
+			}
+			$in = implode( ',', array_map( 'intval', $ids ) );
+			return array_map( 'intval', (array) $wpdb->get_col( "SELECT {$id_col} FROM {$orders_tbl} WHERE {$id_col} IN ({$in}) AND {$status_col} NOT IN ({$excl_in})" ) );
+		};
+
+		$warranty_ids            = $active_ids( self::get_specialized_order_ids( 'warranty' ) );
+		$webstore['warranty']    = count( $warranty_ids );
+		$webstore['redeem']      = count( $active_ids( self::get_specialized_order_ids( 'redeem' ) ) );
+		$webstore['endorsement'] = count( $active_ids( self::get_specialized_order_ids( 'endorsement' ) ) );
+
+		if ( ! empty( $warranty_ids ) ) {
+			$in = implode( ',', $warranty_ids );
+			$webstore['warranty_pending'] = (int) $wpdb->get_var( "SELECT COUNT(DISTINCT {$meta_id}) FROM {$meta_tbl} WHERE {$meta_id} IN ({$in}) AND meta_key = '_rma_status' AND meta_value IN ('pending','in_review')" );
+		}
+
+		// Shipped in the last 7 days. _shipped_at is a site-local MySQL datetime string, so it is
+		// compared as a string. Orders without _shipped_at fall back to status plus modified date (GMT).
+		$local_cutoff = wp_date( 'Y-m-d H:i:s', time() - 7 * DAY_IN_SECONDS );
+		$gmt_cutoff   = gmdate( 'Y-m-d H:i:s', time() - 7 * DAY_IN_SECONDS );
+		$mod_col      = $has_hpos ? 'date_updated_gmt' : 'post_modified_gmt';
+
+		$with_stamp = (int) $wpdb->get_var( $wpdb->prepare(
+			"SELECT COUNT(DISTINCT m.{$meta_id}) FROM {$meta_tbl} m INNER JOIN {$orders_tbl} o ON o.{$id_col} = m.{$meta_id}
+			 WHERE m.meta_key = '_shipped_at' AND m.meta_value >= %s AND o.{$type_col} = 'shop_order' AND o.{$status_col} NOT IN ({$excl_in})",
+			$local_cutoff
+		) );
+		$without_stamp = (int) $wpdb->get_var( $wpdb->prepare(
+			"SELECT COUNT(*) FROM {$orders_tbl} o
+			 WHERE o.{$type_col} = 'shop_order' AND o.{$status_col} IN ('wc-shipped','wc-delivered','wc-completed') AND o.{$mod_col} >= %s
+			 AND NOT EXISTS ( SELECT 1 FROM {$meta_tbl} s WHERE s.{$meta_id} = o.{$id_col} AND s.meta_key = '_shipped_at' AND s.meta_value <> '' )",
+			$gmt_cutoff
+		) );
+
+		// Marketplace channels: cached orders that need action.
+		$shopee_open = 0;
+		if ( class_exists( 'Exacoat_Shopee_Client' ) ) {
+			$cache = get_option( Exacoat_Shopee_Client::ORDERS_CACHE_KEY, [] );
+			foreach ( is_array( $cache ) ? $cache : [] as $o ) {
+				if ( is_array( $o ) && 'READY_TO_SHIP' === strtoupper( (string) ( $o['order_status'] ?? '' ) ) ) {
+					$shopee_open++;
+				}
+			}
+		}
+		// Same statuses as the "Perlu Dikirim" count in TikTokOrdersView.tsx.
+		$tiktok_open = 0;
+		if ( class_exists( 'Exacoat_TikTok_Client' ) ) {
+			$cache = get_option( Exacoat_TikTok_Client::ORDERS_CACHE_KEY, [] );
+			foreach ( is_array( $cache ) ? $cache : [] as $o ) {
+				if ( is_array( $o ) && in_array( strtoupper( (string) ( $o['order_status'] ?? '' ) ), [ 'AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'READY_TO_SHIP' ], true ) ) {
+					$tiktok_open++;
+				}
+			}
+		}
+
+		return rest_ensure_response( [
+			'success'             => true,
+			'webstore'            => $webstore,
+			'shipped_last_7_days' => $with_stamp + $without_stamp,
+			'channels'            => [
+				'webstore' => $webstore['to_prepare'],
+				'shopee'   => $shopee_open,
+				'tiktok'   => $tiktok_open,
+			],
+			'generated_at'        => wp_date( 'c' ),
+		] );
+	}
+
+	/**
 	 * Search order IDs by order number, customer name, email, phone, tracking number, or item names.
 	 *
 	 * @param string $search
