@@ -1,0 +1,959 @@
+{
+  "productId": 537268,
+  "productName": "iPhone 17 Pro Skins",
+  "slug": "iphone-17-pro-skins",
+  "basePrice": 129000,
+  "currency": "IDR",
+  "currencyMinorUnit": 0,
+  "layers": [
+    {
+      "id": 1,
+      "name": "Back",
+      "order": 2,
+      "required": true,
+      "canDeselect": false,
+      "notAChoice": false,
+      "className": "cfg-back",
+      "isNonVisual": false
+    },
+    {
+      "id": 7,
+      "name": "Additional Camera & Back Glass",
+      "order": 3,
+      "required": false,
+      "canDeselect": true,
+      "notAChoice": false,
+      "className": "cfg-additional-camera-back-glass",
+      "defaultSelection": "select_nothing",
+      "isNonVisual": false
+    }
+  ],
+  "variants": [],
+  "choicesByLayer": {
+    "1": [
+      {
+        "id": 1001,
+        "layerId": 1,
+        "name": "Marble White",
+        "isGroup": false,
+        "parent": 3,
+        "extraPrice": 0,
+        "className": "cfg-marble-white",
+        "slug": "marble-white",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Marble-White-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 1002,
+        "layerId": 1,
+        "name": "Matte Black",
+        "isGroup": false,
+        "parent": 4,
+        "extraPrice": 0,
+        "className": "cfg-matte-black",
+        "slug": "matte-black",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Matte-Black-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 1003,
+        "layerId": 1,
+        "name": "Swarm",
+        "isGroup": false,
+        "parent": 2,
+        "extraPrice": 30000,
+        "className": "cfg-swarm",
+        "slug": "swarm",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Swarm-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 1004,
+        "layerId": 1,
+        "name": "Black Camo",
+        "isGroup": false,
+        "parent": 2,
+        "extraPrice": 30000,
+        "className": "cfg-black-camo",
+        "slug": "black-camo",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Black-Camo-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 1005,
+        "layerId": 1,
+        "name": "Leather Black",
+        "isGroup": false,
+        "parent": 3,
+        "extraPrice": 0,
+        "className": "cfg-leather-black",
+        "slug": "leather-black",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Leather-Black-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 1006,
+        "layerId": 1,
+        "name": "Matte White",
+        "isGroup": false,
+        "parent": 4,
+        "extraPrice": 0,
+        "className": "cfg-matte-white",
+        "slug": "matte-white",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Matte-White-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 1007,
+        "layerId": 1,
+        "name": "Arctic Blue",
+        "isGroup": false,
+        "parent": 4,
+        "extraPrice": 0,
+        "className": "cfg-arctic-blue",
+        "slug": "arctic-blue",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Arctic-Blue-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 1008,
+        "layerId": 1,
+        "name": "Burgundy",
+        "isGroup": false,
+        "parent": 1,
+        "extraPrice": 30000,
+        "className": "cfg-burgundy",
+        "slug": "burgundy",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "badgeText": "NEW",
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Burgundy-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 1009,
+        "layerId": 1,
+        "name": "Forged Carbon",
+        "isGroup": false,
+        "parent": 2,
+        "extraPrice": 30000,
+        "className": "cfg-forged-carbon",
+        "slug": "forged-carbon",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Forged-Carbon-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 1010,
+        "layerId": 1,
+        "name": "Titanium Black",
+        "isGroup": false,
+        "parent": 3,
+        "extraPrice": 0,
+        "className": "cfg-titanium-black",
+        "slug": "titanium-black",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Titanium-Black-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 1011,
+        "layerId": 1,
+        "name": "Glacial Green",
+        "isGroup": false,
+        "parent": 4,
+        "extraPrice": 0,
+        "className": "cfg-glacial-green",
+        "slug": "glacial-green",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Glacial-Green-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 1012,
+        "layerId": 1,
+        "name": "Titanium+",
+        "isGroup": false,
+        "parent": 1,
+        "extraPrice": 30000,
+        "className": "cfg-titanium-plus",
+        "slug": "titanium-plus",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "badgeText": "POPULAR",
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Titanium-Plus-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 1013,
+        "layerId": 1,
+        "name": "Woven",
+        "isGroup": false,
+        "parent": 2,
+        "extraPrice": 30000,
+        "className": "cfg-woven",
+        "slug": "woven",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Woven-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 1014,
+        "layerId": 1,
+        "name": "Dragon Black",
+        "isGroup": false,
+        "parent": 2,
+        "extraPrice": 0,
+        "className": "cfg-dragon-black",
+        "slug": "dragon-black",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Dragon-Black-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 1015,
+        "layerId": 1,
+        "name": "Mellow Yellow",
+        "isGroup": false,
+        "parent": 4,
+        "extraPrice": 0,
+        "className": "cfg-mellow-yellow",
+        "slug": "mellow-yellow",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Mellow-Yellow-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 1016,
+        "layerId": 1,
+        "name": "Carbon Fiber Black",
+        "isGroup": false,
+        "parent": 2,
+        "extraPrice": 0,
+        "className": "cfg-carbon-fiber-black",
+        "slug": "carbon-fiber-black",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Carbon-Fiber-Black-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 1017,
+        "layerId": 1,
+        "name": "Petal Pink",
+        "isGroup": false,
+        "parent": 4,
+        "extraPrice": 0,
+        "className": "cfg-petal-pink",
+        "slug": "petal-pink",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Petal-Pink-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 1018,
+        "layerId": 1,
+        "name": "Blush Pink",
+        "isGroup": false,
+        "parent": 4,
+        "extraPrice": 0,
+        "className": "cfg-blush-pink",
+        "slug": "blush-pink",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Blush-Pink-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 1019,
+        "layerId": 1,
+        "name": "Slate",
+        "isGroup": false,
+        "parent": 2,
+        "extraPrice": 30000,
+        "className": "cfg-slate",
+        "slug": "slate",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Slate-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 1020,
+        "layerId": 1,
+        "name": "Lemon Yellow",
+        "isGroup": false,
+        "parent": 4,
+        "extraPrice": 0,
+        "className": "cfg-lemon-yellow",
+        "slug": "lemon-yellow",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Lemon-Yellow-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 1021,
+        "layerId": 1,
+        "name": "Patina",
+        "isGroup": false,
+        "parent": 2,
+        "extraPrice": 30000,
+        "className": "cfg-patina",
+        "slug": "patina",
+        "status": "out_of_stock",
+        "inStock": false,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Patina-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 1022,
+        "layerId": 1,
+        "name": "Lust Red",
+        "isGroup": false,
+        "parent": 4,
+        "extraPrice": 0,
+        "className": "cfg-lust-red",
+        "slug": "lust-red",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Lust-Red-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 1023,
+        "layerId": 1,
+        "name": "Emerald Green",
+        "isGroup": false,
+        "parent": 4,
+        "extraPrice": 0,
+        "className": "cfg-emerald-green",
+        "slug": "emerald-green",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Emerald-Green-Texture-Thumbnail.jpg"
+        }
+      }
+    ],
+    "7": [
+      {
+        "id": 7001,
+        "layerId": 7,
+        "name": "Marble White",
+        "isGroup": false,
+        "parent": 3,
+        "extraPrice": 85000,
+        "className": "cfg-marble-white",
+        "slug": "marble-white",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Marble-White-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 7002,
+        "layerId": 7,
+        "name": "Matte Black",
+        "isGroup": false,
+        "parent": 4,
+        "extraPrice": 85000,
+        "className": "cfg-matte-black",
+        "slug": "matte-black",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Matte-Black-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 7003,
+        "layerId": 7,
+        "name": "Swarm",
+        "isGroup": false,
+        "parent": 2,
+        "extraPrice": 115000,
+        "className": "cfg-swarm",
+        "slug": "swarm",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Swarm-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 7004,
+        "layerId": 7,
+        "name": "Black Camo",
+        "isGroup": false,
+        "parent": 2,
+        "extraPrice": 115000,
+        "className": "cfg-black-camo",
+        "slug": "black-camo",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Black-Camo-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 7005,
+        "layerId": 7,
+        "name": "Leather Black",
+        "isGroup": false,
+        "parent": 3,
+        "extraPrice": 85000,
+        "className": "cfg-leather-black",
+        "slug": "leather-black",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Leather-Black-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 7006,
+        "layerId": 7,
+        "name": "Matte White",
+        "isGroup": false,
+        "parent": 4,
+        "extraPrice": 85000,
+        "className": "cfg-matte-white",
+        "slug": "matte-white",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Matte-White-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 7007,
+        "layerId": 7,
+        "name": "Arctic Blue",
+        "isGroup": false,
+        "parent": 4,
+        "extraPrice": 85000,
+        "className": "cfg-arctic-blue",
+        "slug": "arctic-blue",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Arctic-Blue-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 7008,
+        "layerId": 7,
+        "name": "Forged Carbon",
+        "isGroup": false,
+        "parent": 2,
+        "extraPrice": 115000,
+        "className": "cfg-forged-carbon",
+        "slug": "forged-carbon",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Forged-Carbon-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 7009,
+        "layerId": 7,
+        "name": "Titanium Black",
+        "isGroup": false,
+        "parent": 3,
+        "extraPrice": 85000,
+        "className": "cfg-titanium-black",
+        "slug": "titanium-black",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Titanium-Black-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 7010,
+        "layerId": 7,
+        "name": "Glacial Green",
+        "isGroup": false,
+        "parent": 4,
+        "extraPrice": 85000,
+        "className": "cfg-glacial-green",
+        "slug": "glacial-green",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Glacial-Green-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 7011,
+        "layerId": 7,
+        "name": "Titanium+",
+        "isGroup": false,
+        "parent": 1,
+        "extraPrice": 115000,
+        "className": "cfg-titanium-plus",
+        "slug": "titanium-plus",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "badgeText": "POPULAR",
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Titanium-Plus-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 7012,
+        "layerId": 7,
+        "name": "Woven",
+        "isGroup": false,
+        "parent": 2,
+        "extraPrice": 115000,
+        "className": "cfg-woven",
+        "slug": "woven",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Woven-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 7013,
+        "layerId": 7,
+        "name": "Dragon Black",
+        "isGroup": false,
+        "parent": 2,
+        "extraPrice": 85000,
+        "className": "cfg-dragon-black",
+        "slug": "dragon-black",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Dragon-Black-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 7014,
+        "layerId": 7,
+        "name": "Mellow Yellow",
+        "isGroup": false,
+        "parent": 4,
+        "extraPrice": 85000,
+        "className": "cfg-mellow-yellow",
+        "slug": "mellow-yellow",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Mellow-Yellow-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 7015,
+        "layerId": 7,
+        "name": "Carbon Fiber Black",
+        "isGroup": false,
+        "parent": 2,
+        "extraPrice": 85000,
+        "className": "cfg-carbon-fiber-black",
+        "slug": "carbon-fiber-black",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Carbon-Fiber-Black-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 7016,
+        "layerId": 7,
+        "name": "Petal Pink",
+        "isGroup": false,
+        "parent": 4,
+        "extraPrice": 85000,
+        "className": "cfg-petal-pink",
+        "slug": "petal-pink",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Petal-Pink-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 7017,
+        "layerId": 7,
+        "name": "Blush Pink",
+        "isGroup": false,
+        "parent": 4,
+        "extraPrice": 85000,
+        "className": "cfg-blush-pink",
+        "slug": "blush-pink",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Blush-Pink-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 7018,
+        "layerId": 7,
+        "name": "Slate",
+        "isGroup": false,
+        "parent": 2,
+        "extraPrice": 115000,
+        "className": "cfg-slate",
+        "slug": "slate",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Slate-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 7019,
+        "layerId": 7,
+        "name": "Lemon Yellow",
+        "isGroup": false,
+        "parent": 4,
+        "extraPrice": 85000,
+        "className": "cfg-lemon-yellow",
+        "slug": "lemon-yellow",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Lemon-Yellow-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 7020,
+        "layerId": 7,
+        "name": "Patina",
+        "isGroup": false,
+        "parent": 2,
+        "extraPrice": 115000,
+        "className": "cfg-patina",
+        "slug": "patina",
+        "status": "out_of_stock",
+        "inStock": false,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Patina-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 7021,
+        "layerId": 7,
+        "name": "Lust Red",
+        "isGroup": false,
+        "parent": 4,
+        "extraPrice": 85000,
+        "className": "cfg-lust-red",
+        "slug": "lust-red",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Lust-Red-Texture-Thumbnail.jpg"
+        }
+      },
+      {
+        "id": 7022,
+        "layerId": 7,
+        "name": "Emerald Green",
+        "isGroup": false,
+        "parent": 4,
+        "extraPrice": 85000,
+        "className": "cfg-emerald-green",
+        "slug": "emerald-green",
+        "status": "in_stock",
+        "inStock": true,
+        "isComingSoon": false,
+        "isCustomPerDevice": false,
+        "disableLogoCutout": false,
+        "disabledCutouts": [],
+        "thumbnail": {
+          "url": "https://media.exacoat.com/Emerald-Green-Texture-Thumbnail.jpg"
+        }
+      }
+    ]
+  },
+  "groupsByLayer": {
+    "1": [
+      {
+        "id": 1,
+        "name": "Limited"
+      },
+      {
+        "id": 2,
+        "name": "Signature skins"
+      },
+      {
+        "id": 3,
+        "name": "Natural"
+      },
+      {
+        "id": 4,
+        "name": "Colors"
+      }
+    ],
+    "7": [
+      {
+        "id": 1,
+        "name": "Limited"
+      },
+      {
+        "id": 2,
+        "name": "Signature skins"
+      },
+      {
+        "id": 3,
+        "name": "Natural"
+      },
+      {
+        "id": 4,
+        "name": "Colors"
+      }
+    ]
+  },
+  "v2Profile": {
+    "family": "phone",
+    "variants": [],
+    "coverage_and_cutouts": {
+      "model_360_extra_price": 40000,
+      "has_logo_cutout": true,
+      "logo_cutout_mask_url": "https://media.exacoat.com/iPhone-17-Pro-Logo.png",
+      "has_pencil_cutout": false,
+      "has_model_cut": true,
+      "coverage_type": "model_cut_and_360",
+      "model_cutout_url": "https://media.exacoat.com/iPhone-17-Pro-Frame.png",
+      "model_cut_mask_url": "https://media.exacoat.com/iPhone-17-Pro-Frame.png",
+      "disabled_logo_cutout_finishes": [
+        "burgundy"
+      ]
+    },
+    "views": [
+      {
+        "id": "view",
+        "name": "View",
+        "logo_cutout_mask_url": "https://media.exacoat.com/iPhone-17-Pro-Logo.png",
+        "model_cut_mask_url": "https://media.exacoat.com/iPhone-17-Pro-Frame.png"
+      }
+    ]
+  }
+}

@@ -32,6 +32,14 @@ export default defineConfig({
     port: 3005,
     host: true,
     proxy: {
+      // Dev only: Edit configuration reads the storefront's configurator data through this path
+      // (src/lib/webstoreConfigurator.ts) until the live route sends CORS headers.
+      '/webstore': {
+        target: process.env.VITE_WEB_URL || 'https://exacoat.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/webstore/, ''),
+      },
       '/cms': {
         target: process.env.VITE_WORDPRESS_URL || 'https://cms.exacoat.com',
         changeOrigin: true,
