@@ -19,19 +19,16 @@ export const Toaster: React.FC<ToasterProps> = ({ ...props }) => {
       }}
       swipeDirections={['bottom', 'right', 'left']}
       toastOptions={{
+        unstyled: true,
         classNames: {
           toast:
-            'group toast group-[.toaster]:bg-[#0d0f12]/95 group-[.toaster]:text-zinc-100 group-[.toaster]:border-white/[0.12] group-[.toaster]:backdrop-blur-2xl group-[.toaster]:shadow-[0_20px_50px_rgba(0,0,0,0.8),inset_0_1px_0_0_rgba(255,255,255,0.12)] group-[.toaster]:rounded-2xl font-sans p-4 border transition-all',
-          description: 'group-[.toast]:text-zinc-400 group-[.toast]:text-xs font-sans font-normal leading-relaxed break-words whitespace-pre-wrap mt-0.5',
-          title: 'font-bold text-xs leading-snug tracking-tight text-white font-sans',
-          actionButton:
-            'group-[.toast]:bg-[#f3aa18] group-[.toast]:text-zinc-950 font-bold group-[.toast]:rounded-xl font-sans text-xs',
-          cancelButton:
-            'group-[.toast]:bg-white/10 group-[.toast]:text-zinc-300 group-[.toast]:rounded-xl font-sans text-xs',
-          success: '!border-emerald-500/30 !bg-[#0a140e]/95 text-white shadow-[0_15px_40px_-5px_rgba(16,185,129,0.25)]',
-          error: '!border-rose-500/30 !bg-[#160a0d]/95 text-white shadow-[0_15px_40px_-5px_rgba(244,63,94,0.25)]',
-          warning: '!border-amber-500/30 !bg-[#181105]/95 text-white shadow-[0_15px_40px_-5px_rgba(245,158,11,0.25)]',
-          info: '!border-lime-500/30 !bg-[#0b140a]/95 text-white shadow-[0_15px_40px_-5px_rgba(169,255,93,0.25)]',
+            'flex w-[320px] max-w-full items-center gap-3 rounded-xl border border-card-border bg-card px-3.5 py-3 font-sans text-fg shadow-[0_12px_30px_rgba(0,0,0,0.3)]',
+          icon: 'flex-none',
+          content: 'min-w-0',
+          title: 'text-[13.5px] font-medium leading-snug text-fg',
+          description: 'text-[12.5px] leading-snug text-faint break-words whitespace-pre-wrap',
+          actionButton: 'rounded-[8px] bg-accent px-2.5 py-1 text-[12.5px] font-semibold text-accent-on',
+          cancelButton: 'rounded-[8px] bg-chip px-2.5 py-1 text-[12.5px] text-fg',
         },
       }}
       {...props}
