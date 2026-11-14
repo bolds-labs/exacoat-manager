@@ -81,11 +81,12 @@ export function PanelHeader({
             )}
             {extraChips}
           </div>
-          <div className="mt-1.5 flex flex-wrap items-center text-[13px] text-muted">
+          {/* Phone width: one part per line, so a wrap never strands a separator before the payment method. */}
+          <div className="mt-1.5 flex flex-col text-[13px] text-muted sm:flex-row sm:flex-wrap sm:items-center">
             {meta.map((part, i) => (
-              <span key={i} className="inline-flex items-center">
+              <span key={i} className="inline-flex min-w-0 items-center break-words">
                 {i > 0 && (
-                  <span className="mx-2 text-faint" aria-hidden>
+                  <span className="mx-2 hidden text-faint sm:inline" aria-hidden>
                     ·
                   </span>
                 )}
@@ -152,35 +153,38 @@ export function ClaimBanner({
   reviewLabel = 'Review claim proof',
 }: ClaimBannerProps) {
   return (
-    <div className="mt-3.5 flex flex-wrap items-center gap-3 rounded-[10px] border border-st-act-border bg-st-act-bg px-3 py-2.5">
-      <span className="grid h-8 w-8 flex-none place-items-center rounded-lg bg-chip text-st-act-fg">
-        <Icon className="h-4 w-4" strokeWidth={1.8} aria-hidden />
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <b className="text-[13.5px] font-medium text-fg">{title}</b>
-          {status}
+    // Narrow widths stack the text above the button; from sm up the button sits on the right as before.
+    <div className="mt-3.5 flex flex-col gap-3 rounded-[10px] border border-st-act-border bg-st-act-bg px-3 py-2.5 sm:flex-row sm:items-center">
+      <div className="flex min-w-0 flex-1 items-start gap-3 sm:items-center">
+        <span className="grid h-8 w-8 flex-none place-items-center rounded-lg bg-chip text-st-act-fg">
+          <Icon className="h-4 w-4" strokeWidth={1.8} aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <b className="text-[13.5px] font-medium text-fg">{title}</b>
+            {status}
+          </div>
+          <div className="text-[12.5px] text-muted">
+            Original{' '}
+            {reference && onOpenReference ? (
+              <button
+                type="button"
+                onClick={onOpenReference}
+                className="font-mono font-medium text-fg underline underline-offset-2 hover:text-accent-fg"
+              >
+                #{reference}
+              </button>
+            ) : (
+              <span className="font-mono font-medium text-fg">#{reference || 'N/A'}</span>
+            )}
+            {channel && <span> on {channel}</span>}
+            {reason && <span> · Reason: {reason}</span>}
+          </div>
+          {note && <div className="text-[12px] text-faint">{note}</div>}
         </div>
-        <div className="text-[12.5px] text-muted">
-          Original{' '}
-          {reference && onOpenReference ? (
-            <button
-              type="button"
-              onClick={onOpenReference}
-              className="font-mono font-medium text-fg underline underline-offset-2 hover:text-accent-fg"
-            >
-              #{reference}
-            </button>
-          ) : (
-            <span className="font-mono font-medium text-fg">#{reference || 'N/A'}</span>
-          )}
-          {channel && <span> on {channel}</span>}
-          {reason && <span> · Reason: {reason}</span>}
-        </div>
-        {note && <div className="text-[12px] text-faint">{note}</div>}
       </div>
       {onReview && (
-        <Button icon={Play} onClick={onReview} className="flex-none">
+        <Button icon={Play} onClick={onReview} className="flex-none self-start sm:self-auto">
           {reviewLabel}
         </Button>
       )}

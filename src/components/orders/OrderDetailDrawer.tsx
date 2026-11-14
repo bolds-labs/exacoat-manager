@@ -2,18 +2,20 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Drawer, type MenuItem } from '../ds';
 import { PanelHeader, ClaimBanner, ClaimStatusPill } from './panel/PanelHeader';
 import { StatusNavigator } from './panel/StatusNavigator';
+import { CustomerDeliveryCard, type EndorsementInfo } from './panel/CustomerDeliveryCard';
+import { ItemsCard, type LinkedClaim } from './panel/ItemsCard';
+import { ShippingCard, type GooritaUsInfo } from './panel/ShippingCard';
+import { ActivityCard } from './panel/ActivityCard';
+import { SummaryCard } from './panel/SummaryCard';
+import { RefundCard } from './panel/RefundCard';
+import { CouponsCard } from './panel/CouponsCard';
+import { ReviewCard } from './panel/ReviewCard';
+import { ResendEmailCard } from './panel/ResendEmailCard';
+import { AdminActionsCard } from './panel/AdminActionsCard';
 import { lockBodyScroll } from '../../lib/bodyScrollLock';
 import { Badge } from '../ui/Badge';
-import { Tooltip } from '../ui/Tooltip';
 import { Modal } from '../ui/Modal';
 import { ConfirmationModal } from '../ui/ConfirmationModal';
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem
-} from '../ui/Select';
 import { Order, OrderItem, OrderStatus, OrderNote, OrderReview, OrderReviewMedia, getOrderRma, getOrderGuarantee } from '../../types';
 import { formatCurrency, formatDateTime, formatDate, formatFeeLabel, getOrderStatusInfo } from '../../lib/formatters';
 import { 
@@ -1049,6 +1051,68 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
           },
         ];
 
+    const displayItems: OrderItem[] =
+      order.items && order.items.length > 0 ? order.items : order.line_items && order.line_items.length > 0 ? order.line_items : [];
+
+    const linkedClaims: LinkedClaim[] = [
+      ...(parentWarrantyClaimId
+        ? [{
+            kind: 'warranty' as const,
+            orderId: Number(parentWarrantyClaimId),
+            reference: String(parentWarrantyClaimInvoice || parentWarrantyClaimId),
+            status: String(parentWarrantyStatus || ''),
+          }]
+        : []),
+      ...(parentRedeemClaimId
+        ? [{ kind: 'redeem' as const, orderId: Number(parentRedeemClaimId), reference: String(parentRedeemClaimId) }]
+        : []),
+    ];
+
+    const endorsement: EndorsementInfo | null = isEndorsement
+      ? {
+          creator: String(influencerName || order.customer_name || ''),
+          handle: influencerHandle ? String(influencerHandle) : undefined,
+          platform: endorsementPlatform ? String(endorsementPlatform) : undefined,
+          campaign: campaignName ? String(campaignName) : undefined,
+          notes: campaignName && adminEndorsementNotes ? String(adminEndorsementNotes) : undefined,
+        }
+      : null;
+
+    const courierOptions = COURIER_PRESETS.map((p) =>
+      p.value === 'custom' ? { value: p.value, label: customCourierName.trim() || p.label } : p
+    );
+    const resolvedCourier = resolveOrderCourier(order);
+    const courierTag = resolvedCourier.serviceName
+      ? resolvedCourier.serviceName
+      : resolvedCourier.rawMatch && resolvedCourier.courierId !== 'jne' && !/pickup|ambil|summarecon/i.test(resolvedCourier.rawMatch)
+      ? resolvedCourier.rawMatch
+      : undefined;
+
+    const consolidationInfo = isConsolidationOrder
+      ? { orderIds: ((order.meta_data || []).find((m: any) => m.key === '_goorita_consolidated_orders')?.value || []) as number[] }
+      : null;
+
+    const gooritaUsInfo: GooritaUsInfo | null = isUsOrder
+      ? (() => {
+          const gooritaOrderId =
+            order.goorita_order_id || (courier === 'goorita' ? trackingNumber : null) || (order.meta_data || []).find((m: any) => m.key === '_goorita_order_id')?.value;
+          const gooritaAwbUrl =
+            order.goorita_awb_url || (order.meta_data || []).find((m: any) => m.key === '_goorita_awb_url' || m.key === 'goorita_awb_url')?.value;
+          return {
+            orderId: gooritaOrderId ? String(gooritaOrderId) : undefined,
+            awbUrl: gooritaAwbUrl ? String(gooritaAwbUrl) : undefined,
+            service: order.goorita_service || 'Saver (USPS)',
+            isBooked: Boolean(gooritaOrderId || (courier === 'goorita' && trackingNumber)),
+          };
+        })()
+      : null;
+
+    const rayspeedInfo = isRayspeedOrder
+      ? {
+          destination: destCountry,
+          trackUrl: order.tracking?.tracking_number ? getPublicTrackingUrl('rayspeed', order.tracking.tracking_number) : undefined,
+        }
+      : null;
     return (
       <>
       <Drawer
@@ -1137,1835 +1201,170 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
           </PanelHeader>
         }
       >
-      <div className="record-detail p-4 sm:p-5 md:p-6">
-      <div className="space-y-6">
+      <div>
+      <div className="grid grid-cols-1 items-start gap-5 px-4 py-5 md:px-7 md:pb-6 lg:grid-cols-[minmax(0,1fr)_390px]">
+        <div className="flex min-w-0 flex-col gap-4">
+          <CustomerDeliveryCard
+            order={order}
+            isStorePickup={isStorePickup}
+            isSwitchingFulfillment={isSwitchingFulfillment}
+            isStoreAddress={isStoreAddress}
+            copiedField={copiedField}
+            canOpenCustomer={!isShopManager}
+            endorsement={endorsement}
+            onToggleStorePickup={handleToggleStorePickup}
+            onEditAddress={() => setIsEditAddressModalOpen(true)}
+            onCopy={copyToClipboard}
+            onWhatsApp={() => setIsWhatsAppModalOpen(true)}
+            onOpenCustomer={() => {
+              if (onNavigateToCustomer) {
+                onNavigateToCustomer(order.customer_id, order.customer_email, order.customer_name);
+              } else {
+                window.location.hash = `#customers?id=${order.customer_id || 0}&email=${encodeURIComponent(order.customer_email || '')}`;
+              }
+              onClose();
+            }}
+          />
 
-        {/* Influencer Endorsement PR Card */}
-        {isEndorsement && (
-          <div className="p-4 rounded-2xl border border-purple-500/30 bg-purple-950/20 shadow-[0_0_20px_rgba(168,85,247,0.1)]">
-            <div className="flex items-start justify-between gap-3 flex-wrap">
-              <div className="flex items-start gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-xl border border-purple-500/30 bg-purple-500/15 text-purple-400 flex items-center justify-center shrink-0">
-                  <Sparkles className="w-5 h-5" />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-bold text-white font-sans">
-                      Influencer Endorsement PR Order
-                    </span>
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/40">
-                      VIP Collaboration
-                    </span>
-                  </div>
-                  <div className="text-xs text-neutral-300 font-mono mt-1 space-x-2">
-                    <span>Creator: <strong className="text-white">{influencerName || order.customer_name}</strong></span>
-                    {influencerHandle && (
-                      <span className="text-purple-400 font-bold">({influencerHandle})</span>
-                    )}
-                    {endorsementPlatform && (
-                      <span className="text-neutral-400">• Platform: <span className="text-neutral-200">{endorsementPlatform}</span></span>
-                    )}
-                  </div>
-                  {campaignName && (
-                    <div className="text-xs text-neutral-400 mt-1 font-sans">
-                      Campaign: <span className="text-white font-medium">{campaignName}</span>
-                      {adminEndorsementNotes && (
-                        <span> • Notes: <span className="italic text-neutral-300">{adminEndorsementNotes}</span></span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+          <ItemsCard
+            order={order}
+            items={displayItems}
+            claimType={rmaDetails?.order_type}
+            linkedClaims={linkedClaims}
+            onAddItem={() => {
+              setEditingItem(null);
+              setIsEditItemModalOpen(true);
+            }}
+            onEditItem={(item) => {
+              setEditingItem(item);
+              setIsEditItemModalOpen(true);
+            }}
+            onPreviewCustom={(item) => setPreviewCustomItem(item)}
+            onOpenOrder={onSelectOrderById}
+            onReviewClaim={(id) => {
+              setReviewTargetOrderId(id);
+              setIsWarrantyReviewModalOpen(true);
+            }}
+          />
 
-        {/* Parent Order Warranty Claim Notice */}
-        {parentWarrantyClaimId && (
-          <div className="p-3.5 rounded-2xl border border-sky-500/30 bg-sky-950/20 flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-2.5">
-              <ShieldCheck className="w-4 h-4 text-sky-400 shrink-0" />
-              <div className="text-xs font-sans text-neutral-300">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span>48h Warranty Replacement claim filed:</span>
-                  {onSelectOrderById ? (
-                    <button
-                      type="button"
-                      onClick={() => onSelectOrderById(Number(parentWarrantyClaimId))}
-                      className="font-mono font-bold text-sky-400 hover:text-sky-300 underline underline-offset-2 cursor-pointer"
-                    >
-                      #{parentWarrantyClaimInvoice || parentWarrantyClaimId}
-                    </button>
-                  ) : (
-                    <span className="font-mono font-bold text-white">
-                      #{parentWarrantyClaimInvoice || parentWarrantyClaimId}
-                    </span>
-                  )}
-                  {parentWarrantyStatus === 'pending_review' ? (
-                    <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-amber-400 bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 rounded shadow-xs">
-                      <ShieldAlert className="w-2.5 h-2.5 text-amber-400" />
-                      PENDING REVIEW
-                    </span>
-                  ) : parentWarrantyStatus === 'approved' ? (
-                    <span className="inline-flex items-center gap-0.5 text-[9px] font-mono font-medium text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 rounded shadow-xs">
-                      <Check className="w-2.5 h-2.5" />
-                      Approved
-                    </span>
-                  ) : parentWarrantyStatus === 'rejected' ? (
-                    <span className="inline-flex items-center gap-0.5 text-[9px] font-mono font-medium text-rose-400 bg-rose-500/15 border border-rose-500/30 px-1.5 py-0.5 rounded shadow-xs">
-                      <XCircle className="w-2.5 h-2.5" />
-                      Rejected
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-            </div>
+          <ShippingCard
+            order={order}
+            isStorePickup={isStorePickup}
+            isPrinted={isPrinted}
+            courier={courier}
+            courierOptions={courierOptions}
+            courierTag={courierTag}
+            customCourierName={customCourierName}
+            customTrackingUrl={customTrackingUrl}
+            trackingNumber={trackingNumber}
+            onCourierChange={handleCourierChange}
+            onCustomCourierNameChange={(v) => {
+              isFormDirtyRef.current = true;
+              setCustomCourierName(v);
+            }}
+            onCustomTrackingUrlChange={(v) => {
+              isFormDirtyRef.current = true;
+              setCustomTrackingUrl(v);
+            }}
+            onTrackingNumberChange={(v) => {
+              isFormDirtyRef.current = true;
+              setTrackingNumber(v);
+            }}
+            onSaveTracking={handleSaveTracking}
+            isFulfilling={isFulfilling}
+            isSyncingTracking={isSyncingTracking}
+            onSyncTracking={handleSyncTracking}
+            onOpenTracking={() => {
+              setIsTrackOrderModalOpen(true);
+              if (!order.tracking?.checkpoints || order.tracking.checkpoints.length === 0) {
+                handleSyncTracking();
+              }
+            }}
+            showAllCheckpoints={showAllCheckpoints}
+            onToggleCheckpoints={() => setShowAllCheckpoints(!showAllCheckpoints)}
+            onPrintLabel={() => setIsLabelModalOpen(true)}
+            consolidation={consolidationInfo}
+            gooritaUs={gooritaUsInfo}
+            onBookGoorita={() => setIsGooritaBookingModalOpen(true)}
+            onDownloadAwb={() => downloadGooritaAwbPdf(order.id)}
+            rayspeed={rayspeedInfo}
+            isBookingRayspeed={isBookingRayspeed}
+            onBookRayspeed={handleBookRayspeed}
+          />
 
-            <button
-              type="button"
-              onClick={() => {
-                setReviewTargetOrderId(Number(parentWarrantyClaimId));
-                setIsWarrantyReviewModalOpen(true);
-              }}
-              className="px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 bg-[#f3aa18] hover:bg-[#e09b15] text-black transition-all shadow-xs cursor-pointer"
-            >
-              <Video className="w-3.5 h-3.5" />
-              <span>Review Claim Proof</span>
-            </button>
-          </div>
-        )}
-
-        {/* Parent Order Redeem Claim Notice */}
-        {parentRedeemClaimId && (
-          <div className="p-3.5 rounded-2xl border border-amber-500/30 bg-amber-950/20 flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-2.5">
-              <RotateCcw className="w-4 h-4 text-amber-400 shrink-0" />
-              <div className="text-xs font-sans text-neutral-300">
-                <span>Redeem Replacement order filed: </span>
-                {onSelectOrderById ? (
-                  <button
-                    type="button"
-                    onClick={() => onSelectOrderById(Number(parentRedeemClaimId))}
-                    className="font-mono font-bold text-amber-400 hover:text-amber-300 underline underline-offset-2 cursor-pointer"
-                  >
-                    #{parentRedeemClaimId}
-                  </button>
-                ) : (
-                  <span className="font-mono font-bold text-white">
-                    #{parentRedeemClaimId}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 30-Day Money Back Guarantee Return Card */}
-        {guaranteeDetails && (
-          <div className="p-4 rounded-2xl border border-purple-500/30 bg-purple-950/20 space-y-3">
-            <div className="flex items-start justify-between gap-3 flex-wrap">
-              <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center shrink-0 mt-0.5">
-                  <RotateCcw className="w-5 h-5 text-purple-400" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-bold uppercase tracking-wider text-purple-300 font-sans">
-                      30-Day Money Back Guarantee Return
-                    </span>
-                    <span className={clsx(
-                      "px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase border",
-                      guaranteeDetails.status === 'refunded'
-                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
-                        : guaranteeDetails.status === 'package_received'
-                        ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
-                        : guaranteeDetails.status === 'rejected'
-                        ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
-                        : "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                    )}>
-                      {guaranteeDetails.status === 'refunded' 
-                        ? 'Refund Paid' 
-                        : guaranteeDetails.status === 'package_received'
-                        ? 'Package Received at Ruby Commercial TB12'
-                        : guaranteeDetails.status === 'rejected'
-                        ? 'Rejected'
-                        : 'Awaiting Return Package'}
-                    </span>
-                  </div>
-                  <div className="text-xs text-neutral-300 font-sans mt-1.5 space-y-1">
-                    <p>
-                      <span className="text-neutral-400">Method:</span>{' '}
-                      <span className="font-semibold text-white">
-                        {guaranteeDetails.refund_method === 'store_credit' 
-                          ? 'Store Credit (100%)' 
-                          : guaranteeDetails.refund_method === 'bank_transfer'
-                          ? 'Bank Transfer (70%)'
-                          : 'PayPal (70%)'}
-                      </span>
-                      {' • '}
-                      <span className="text-neutral-400">Amount:</span>{' '}
-                      <span className="font-bold text-amber-400 font-mono">
-                        {formatCurrency(guaranteeDetails.refund_amount, order.currency)}
-                      </span>
-                    </p>
-                    {guaranteeDetails.destination && (
-                      <p>
-                        <span className="text-neutral-400">Destination:</span>{' '}
-                        <span className="font-mono text-zinc-200">{guaranteeDetails.destination}</span>
-                      </p>
-                    )}
-                    <p className="text-[11px] text-zinc-400">
-                      <span className="text-neutral-400">Return Hub:</span>{' '}
-                      Exacoat Returns Hub, Ruby Commercial TB12, Jl. Bulevar Selatan, Bekasi 17142
-                    </p>
-                    {guaranteeDetails.return_tracking ? (
-                      <p className="text-[11px]">
-                        <span className="text-neutral-400">Customer Return Courier:</span>{' '}
-                        <span className="font-mono font-bold text-emerald-400">
-                          {guaranteeDetails.return_courier || 'Courier'} #{guaranteeDetails.return_tracking}
-                        </span>
-                      </p>
-                    ) : (
-                      <p className="text-[11px] text-amber-400/80 italic">
-                        Return shipment resi not yet uploaded by customer.
-                      </p>
-                    )}
-                    {guaranteeDetails.claim_data?.reason && (
-                      <p className="text-[11px] text-neutral-400">
-                        <span>Reason: </span>
-                        <span className="italic text-neutral-200">{guaranteeDetails.claim_data.reason}</span>
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center gap-2 self-start sm:self-auto shrink-0 flex-wrap">
-                {guaranteeDetails.status === 'pending_return' && (
-                  <button
-                    type="button"
-                    disabled={isProcessingGuaranteeAction}
-                    onClick={() => handleGuaranteeAction('mark_received')}
-                    className="px-3 py-1.5 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm active:scale-95 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 cursor-pointer disabled:opacity-50"
-                    title="Confirm package has been received and inspected at Ruby Commercial TB12"
-                  >
-                    <Package className="w-3.5 h-3.5" />
-                    <span>Mark Package Received</span>
-                  </button>
-                )}
-
-                {(guaranteeDetails.status === 'pending_return' || guaranteeDetails.status === 'package_received') && (
-                  <>
-                    <button
-                      type="button"
-                      disabled={isProcessingGuaranteeAction}
-                      onClick={() => handleGuaranteeAction('approve_refund')}
-                      className="px-3 py-1.5 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm active:scale-95 bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer disabled:opacity-50"
-                      title="Approve refund, record in WooCommerce, and send light-theme confirmation email"
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Approve & Issue Refund</span>
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isProcessingGuaranteeAction}
-                      onClick={() => setIsGuaranteeRejectModalOpen(true)}
-                      className="px-3 py-1.5 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm active:scale-95 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 cursor-pointer disabled:opacity-50"
-                      title="Reject guarantee return claim"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                      <span>Reject</span>
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-        
-        {/* Section 1: Customer & Delivery Address Card */}
-        <div className="p-5 rounded-2xl border border-white/[0.06] bg-[#111111] space-y-4">
-          <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 gap-3">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-2">
-              <User className="w-4 h-4 text-[#f3aa18]" />
-              Customer & Delivery
-            </h4>
-            <div className="flex items-center gap-2">
-              {!isShopManager ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (onNavigateToCustomer) {
-                      onNavigateToCustomer(order.customer_id, order.customer_email, order.customer_name);
-                    } else {
-                      window.location.hash = `#customers?id=${order.customer_id || 0}&email=${encodeURIComponent(order.customer_email || '')}`;
-                    }
-                    onClose();
-                  }}
-                  className="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-neutral-200 hover:text-[#f3aa18] border border-white/10 hover:border-[#f3aa18]/40 text-xs font-sans font-medium flex items-center gap-1.5 transition-all cursor-pointer group"
-                  title="View customer profile and past orders"
-                >
-                  <span className="w-4 h-4 rounded-full bg-[#f3aa18]/20 text-[#f3aa18] text-[9px] font-bold flex items-center justify-center font-mono">
-                    {order.customer_name ? formatCleanText(order.customer_name).charAt(0).toUpperCase() : 'C'}
-                  </span>
-                  <span className="font-semibold text-white group-hover:text-[#f3aa18] transition-colors truncate max-w-[140px] sm:max-w-[200px]">
-                    {formatCleanText(order.customer_name) || (order.customer_id ? `Customer #${order.customer_id}` : 'Guest Customer')}
-                  </span>
-                  <ExternalLink className="w-3 h-3 text-neutral-400 group-hover:text-[#f3aa18] transition-colors shrink-0" />
-                </button>
-              ) : (
-                <div className="px-2.5 py-1 rounded-lg bg-white/[0.04] text-neutral-200 border border-white/10 text-xs font-sans font-medium flex items-center gap-1.5">
-                  <span className="w-4 h-4 rounded-full bg-[#f3aa18]/20 text-[#f3aa18] text-[9px] font-bold flex items-center justify-center font-mono">
-                    {order.customer_name ? formatCleanText(order.customer_name).charAt(0).toUpperCase() : 'C'}
-                  </span>
-                  <span className="font-semibold text-white truncate max-w-[140px] sm:max-w-[200px]">
-                    {formatCleanText(order.customer_name) || (order.customer_id ? `Customer #${order.customer_id}` : 'Guest Customer')}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Left: Contact Info */}
-            <div className="space-y-2.5">
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 block mb-0.5">Recipient Name</span>
-                <p className="text-sm font-semibold text-white font-sans">{formatCleanText(order.customer_name)}</p>
-              </div>
-
-              {order.customer_email && (
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 block mb-0.5">Email Address</span>
-                  <div className="flex items-center gap-2">
-                    <a 
-                      href={`mailto:${order.customer_email}`}
-                      className="text-xs font-mono text-neutral-300 hover:text-[#f3aa18] truncate"
-                    >
-                      {order.customer_email}
-                    </a>
-                    <button 
-                      onClick={() => copyToClipboard(order.customer_email, 'email')}
-                      className="p-1 text-neutral-500 hover:text-white"
-                      title="Copy Email"
-                    >
-                      {copiedField === 'email' ? <Check className="w-3.5 h-3.5 text-[#f3aa18]" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {order.customer_phone && (
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 block mb-0.5">Phone Number</span>
-                  <div className="flex items-center gap-2">
-                    <a 
-                      href={`tel:${order.customer_phone}`}
-                      className="text-xs font-mono text-neutral-300 hover:text-[#f3aa18]"
-                    >
-                      {order.customer_phone}
-                    </a>
-                    <button 
-                      onClick={() => copyToClipboard(order.customer_phone!, 'phone')}
-                      className="p-1 text-neutral-500 hover:text-white"
-                      title="Copy Phone"
-                    >
-                      {copiedField === 'phone' ? <Check className="w-3.5 h-3.5 text-[#f3aa18]" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
-                    <button 
-                      type="button"
-                      onClick={() => setIsWhatsAppModalOpen(true)}
-                      className="p-1 text-emerald-500 hover:text-emerald-400 dark:text-emerald-400 dark:hover:text-emerald-300 hover:bg-emerald-500/10 rounded transition-colors"
-                      title="Contact Customer via WhatsApp"
-                    >
-                      <WhatsAppIcon className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Right: Destination Address or Store Pickup Location */}
-            <div className={clsx(
-              "space-y-1.5 p-3.5 rounded-xl border flex flex-col justify-between",
-              isStorePickup ? "border-[#f3aa18]/25 bg-[#f3aa18]/5" : "border-white/[0.04] bg-[#141414]"
-            )}>
-              <div className="flex items-center justify-between gap-2 pb-2 mb-1 border-b border-white/[0.04] flex-wrap">
-                <span className={clsx(
-                  "text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5",
-                  isStorePickup ? "text-[#f3aa18]" : "text-neutral-400"
-                )}>
-                  {isStorePickup ? <Store className="w-3.5 h-3.5 text-[#f3aa18]" /> : <MapPin className="w-3.5 h-3.5 text-[#f3aa18]" />}
-                  {isStorePickup ? 'Store Pickup Location' : 'Destination Address'}
-                </span>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setIsEditAddressModalOpen(true)}
-                    className="px-2 py-1 rounded-md text-[11px] font-sans font-medium text-neutral-300 hover:text-white bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 transition-colors flex items-center gap-1 cursor-pointer whitespace-nowrap"
-                    title="Edit customer shipping address"
-                  >
-                    <Edit2 className="w-3 h-3 text-[#f3aa18]" />
-                    <span>Edit</span>
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isSwitchingFulfillment}
-                    onClick={handleToggleStorePickup}
-                    className={clsx(
-                      "px-2 py-1 rounded-md text-[11px] font-sans font-medium transition-colors flex items-center gap-1 cursor-pointer whitespace-nowrap disabled:opacity-50",
-                      isStorePickup 
-                        ? "text-neutral-300 hover:text-white bg-white/[0.05] hover:bg-white/[0.1] border border-white/10" 
-                        : "text-neutral-400 hover:text-[#f3aa18] bg-white/[0.03] hover:bg-[#f3aa18]/10 border border-white/5 hover:border-[#f3aa18]/30"
-                    )}
-                    title="Toggle between store pickup and courier delivery view for this order"
-                  >
-                    {isSwitchingFulfillment ? (
-                      <>
-                        <Loader2 className="w-3 h-3 animate-spin text-[#f3aa18]" />
-                        <span>Updating...</span>
-                      </>
-                    ) : isStorePickup ? (
-                      <>
-                        <Truck className="w-3 h-3 text-[#f3aa18]" />
-                        <span>Switch to Courier</span>
-                      </>
-                    ) : (
-                      <>
-                        <Store className="w-3 h-3 text-[#f3aa18]" />
-                        <span>Store Pickup</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-              {isStorePickup ? (
-                <p className="text-xs text-neutral-300 font-sans leading-relaxed">
-                  <strong className="text-white">Exacoat Store Summarecon Bekasi</strong><br />
-                  Ruko Ruby Commercial TB12, Jl. Bulevar Selatan<br />
-                  Summarecon Bekasi, Kota Bekasi 17142<br />
-                  <span className="text-[11px] text-[#f3aa18]/90 font-medium block mt-0.5">Store Collection • Direct Handover</span>
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-xs text-neutral-300 font-sans leading-relaxed">
-                    {formatCleanText(order.shipping?.address_1 || order.billing?.address_1 || 'No address provided')}
-                    {order.shipping?.address_2 ? `, ${formatCleanText(order.shipping.address_2)}` : (order.billing?.address_2 ? `, ${formatCleanText(order.billing.address_2)}` : '')}<br />
-                    {formatCleanText(order.shipping?.city || order.billing?.city || '')}, {formatCleanText(order.shipping?.state || order.billing?.state || '')} {order.shipping?.postcode || order.billing?.postcode || ''}<br />
-                    <strong className="text-white">{resolveCountryName(order.shipping?.country || order.billing?.country)}</strong>
-                  </p>
-                  {isStoreAddress && (
-                    <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] font-sans flex items-center justify-between gap-2">
-                      <span>Address is set to Exacoat Store. Click Edit to enter delivery address.</span>
-                      <button
-                        type="button"
-                        onClick={() => setIsEditAddressModalOpen(true)}
-                        className="underline hover:text-white font-semibold shrink-0 cursor-pointer"
-                      >
-                        Edit Address
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {(() => {
-            const rawNote = String(order.customer_note || '');
-            const cleanNote = decodeHtmlEntities(rawNote)
-              .replace(/(?:shipping courier|jasa kirim|courier)\s*:\s*[^\r\n]+/gi, '')
-              .trim();
-            if (!cleanNote) return null;
-
-            return (
-              <div className="p-3 rounded-xl border border-amber-500/20 bg-amber-500/5 text-amber-300 text-xs">
-                <span className="font-bold block mb-0.5">Customer Note:</span>
-                "{cleanNote}"
-              </div>
-            );
-          })()}
+          <ActivityCard
+            notes={notes}
+            isLoading={isLoadingNotes}
+            newNote={newNote}
+            onNewNoteChange={setNewNote}
+            isCustomerNote={isCustomerNote}
+            onCustomerNoteChange={setIsCustomerNote}
+            isAdding={isAddingNote}
+            onAddNote={handleAddNote}
+            renderContent={renderNoteHtml}
+          />
         </div>
 
-        {/* Section 2: Ordered Precision Skins & Items */}
-        {(() => {
-          const displayItems = (order.items && order.items.length > 0)
-            ? order.items
-            : (order.line_items && order.line_items.length > 0 ? order.line_items : []);
+        <div className="flex min-w-0 flex-col gap-4">
+          <SummaryCard
+            order={order}
+            currentStatus={currentStatusClean}
+            shippingDiscount={shippingDiscount}
+            originalShippingRate={originalShippingRate}
+            shippingPromoCode={shippingPromoCode}
+            remainingAvailableRefund={remainingAvailableRefund}
+            onRefund={() => {
+              setRefundAmount(String(remainingAvailableRefund));
+              setMarkAsRefunded(false);
+              setIsRefundModalOpen(true);
+            }}
+          />
 
-          return (
-            <div className="p-5 rounded-2xl border border-white/[0.06] bg-[#111111] space-y-4">
-              <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
-                <div className="flex items-center gap-2">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-2">
-                    <Package className="w-4 h-4 text-[#f3aa18]" />
-                    Items ({displayItems.length})
-                  </h4>
-                  <span className="text-[11px] font-mono text-neutral-400">
-                    Total Units: {displayItems.reduce((acc, it) => acc + (it.quantity || 1), 0)}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingItem(null);
-                    setIsEditItemModalOpen(true);
-                  }}
-                  className="px-2.5 py-1 rounded-lg bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20 text-[#f3aa18] border border-[#f3aa18]/30 text-xs font-sans font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
-                  title="Add new precision skin or product to this order"
-                >
-                  <Plus className="w-3.5 h-3.5 text-[#f3aa18]" />
-                  <span>Add Item</span>
-                </button>
-              </div>
+          <RefundCard
+            order={order}
+            totalRefunded={totalRefunded}
+            netSettledTotal={netSettledTotal}
+            guarantee={guaranteeDetails}
+            isProcessingGuarantee={isProcessingGuaranteeAction}
+            onGuaranteeAction={(action) => handleGuaranteeAction(action)}
+            onRejectGuarantee={() => setIsGuaranteeRejectModalOpen(true)}
+          />
 
-              <div className="space-y-3">
-                {displayItems.map((item, idx) => {
-                  const itemDiscount = Number(item.discount || 0);
-                  const itemTax = Number(item.tax || 0);
-                  const itemSpecs = extractItemSpecs(item);
+          <CouponsCard order={order} shippingDiscount={shippingDiscount} shippingPromoCode={shippingPromoCode} />
 
-                  return (
-                    <div 
-                      key={item.id || idx}
-                      className="p-4 rounded-xl border border-white/[0.04] bg-[#141414] flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                    >
-                      {/* Left: Thumbnail & Item Meta */}
-                      <div className="flex items-center gap-3.5 min-w-0">
-                        <div className="w-14 h-16 rounded-lg overflow-hidden bg-black border border-white/[0.08] shrink-0 relative flex items-center justify-center">
-                          {item.image_url ? (
-                            <img 
-                              src={item.image_url} 
-                              alt={item.name}
-                              className="w-full h-full object-cover" 
-                            />
-                          ) : (
-                            <Package className="w-6 h-6 text-neutral-600" />
-                          )}
-                          <span className="absolute bottom-1 right-1 px-1 py-0.2 text-[9px] font-mono font-bold bg-black/80 text-white rounded border border-white/10">
-                            {item.quantity}x
-                          </span>
-                        </div>
+          <ReviewCard
+            order={order}
+            review={orderReview}
+            isSendingInvite={isSendingReviewInvite}
+            onSendInvite={handleSendReviewInvite}
+            onPreviewMedia={(med) => setPreviewReviewMedia(med)}
+          />
 
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h5 className={clsx("text-xs font-bold font-sans", item.is_refunded ? "text-neutral-500 line-through" : "text-white")}>
-                              {item.name}
-                            </h5>
-                            {rmaDetails?.order_type === 'Redeem' && (
-                              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 shrink-0 flex items-center gap-1 shadow-xs">
-                                <RotateCcw className="w-3 h-3 text-amber-400" />
-                                <span>Redeem Replacement (Free)</span>
-                              </span>
-                            )}
-                            {rmaDetails?.order_type === 'Warranty' && (
-                              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/40 shrink-0 flex items-center gap-1 shadow-xs">
-                                <ShieldCheck className="w-3 h-3 text-sky-400" />
-                                <span>Warranty Replacement</span>
-                              </span>
-                            )}
-                            {(item.name.toLowerCase().startsWith('custom order') || (item as any).is_custom) && (
-                              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 shrink-0 flex items-center gap-1">
-                                <span className="text-[#f3aa18] font-bold">✦</span>
-                                <span>Custom Order</span>
-                              </span>
-                            )}
-                            {item.qty_refunded && item.qty_refunded > 0 ? (
-                              <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 shrink-0">
-                                Refunded ({item.qty_refunded}x)
-                              </span>
-                            ) : null}
-                          </div>
+          <ResendEmailCard
+            isStorePickup={isStorePickup}
+            template={selectedEmailTemplate}
+            onTemplateChange={setSelectedEmailTemplate}
+            recipient={resendRecipientEmail}
+            fallbackRecipient={order.customer_email || order.billing?.email || undefined}
+            onRecipientChange={setResendRecipientEmail}
+            isSending={isSendingOrderEmail}
+            onSend={handleResendEmail}
+            confirmationSent={Boolean(order.meta_data?.some((m) => m.key === '_artmatter_confirmation_email_sent' && m.value === 'yes'))}
+            lastResult={lastEmailSentResult}
+            storeOrderUrl={`${getWpBaseUrl()}/wp-admin/post.php?post=${order.id}&action=edit`}
+            onOpenLogs={onClose}
+          />
 
-                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                            <span className="text-[10px] font-mono text-neutral-500">ID #{item.product_id}</span>
-                            {item.sku && (
-                              <span className="text-[10px] font-mono text-neutral-400">SKU: {item.sku}</span>
-                            )}
-                          </div>
-
-                          {/* Item Customization Specs / Attributes */}
-                          {itemSpecs.filter((sp) => !/^(image_url|image|composite_url|thumbnail_url)$/i.test(sp.label) && !/^https?:\/\//i.test(sp.value)).length > 0 && (
-                            <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                              {itemSpecs
-                                .filter((sp) => !/^(image_url|image|composite_url|thumbnail_url)$/i.test(sp.label) && !/^https?:\/\//i.test(sp.value))
-                                .map((sp, sIdx) => (
-                                  <span 
-                                    key={sIdx}
-                                    className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/[0.05] text-neutral-300 border border-white/[0.08]"
-                                  >
-                                    <span className="text-neutral-400">{sp.label}: </span>
-                                    <span className="text-white font-semibold">{sp.value}</span>
-                                  </span>
-                                ))}
-                            </div>
-                          )}
-
-                      {/* Action Buttons: Edit Configuration & Quick Inspect */}
-                      <div className="flex items-center gap-2 mt-2.5 flex-wrap">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingItem(item);
-                            setIsEditItemModalOpen(true);
-                          }}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-white border border-white/10 text-[11px] font-sans font-semibold transition-all cursor-pointer shadow-xs"
-                          title="Edit product, quantity, configuration layers, or form add-on specifications"
-                        >
-                          <Edit2 className="w-3 h-3 text-[#f3aa18]" />
-                          <span>Edit Configuration</span>
-                        </button>
-
-                        {(item.name.toLowerCase().startsWith('custom order') || (item as any).is_custom) && item.image_url && (
-                          <button
-                            type="button"
-                            onClick={() => setPreviewCustomItem(item)}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20 text-[#f3aa18] border border-[#f3aa18]/30 text-[11px] font-mono font-bold transition-all cursor-pointer"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            <span>View Custom Skin</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right: Pricing, Discount, Tax & Refunds */}
-                  <div className="flex items-center gap-3.5 justify-between sm:justify-end shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/[0.04]">
-                    <div className="text-right">
-                      <div className="flex items-center gap-1.5 justify-end">
-                        {itemDiscount > 0 && (
-                          <span className="text-[11px] font-mono text-neutral-500 line-through">
-                            {formatCurrency(item.subtotal, order.currency)}
-                          </span>
-                        )}
-                        <span className={clsx("text-xs font-mono font-bold", item.is_refunded ? "text-neutral-500 line-through" : "text-white")}>
-                          {formatCurrency(item.total, order.currency)}
-                        </span>
-                      </div>
-
-                      {item.amount_refunded && item.amount_refunded > 0 ? (
-                        <span className="text-[10px] font-mono text-rose-400 block mt-0.5">
-                          -{formatCurrency(item.amount_refunded, order.currency)} refunded
-                        </span>
-                      ) : null}
-
-                      {itemDiscount > 0 && (
-                        <span className="text-[10px] font-mono text-amber-400 block mt-0.5">
-                          -{formatCurrency(itemDiscount, order.currency)} discount
-                        </span>
-                      )}
-
-                      {itemTax > 0 && (
-                        <span className="text-[10px] font-mono text-neutral-400 block mt-0.5">
-                          +{formatCurrency(itemTax, order.currency)} DDP
-                        </span>
-                      )}
-
-                      {item.commission_amount ? (
-                        <span className="text-[10px] font-mono text-[#f3aa18] block mt-0.5">
-                          Cut: {formatCurrency(item.commission_amount, order.currency)} ({item.commission_rate || 12.5}%)
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          {/* Shop managers (including a simulated shop manager role) never see admin actions. */}
+          <AdminActionsCard
+            isAdmin={isAdmin && !isShopManager}
+            isCancelled={currentStatusClean === 'cancelled'}
+            isCancelling={isCancellingOrder}
+            isTrashing={isTrashingOrder}
+            onCancel={() => setShowCancelModal(true)}
+            onTrash={() => setShowTrashModal(true)}
+          />
         </div>
-      );
-    })()}
-
-
-        {/* Section 3: Courier Tracking & Fulfillment Dispatch Card (Omitted for Store Pickup) */}
-        {!isStorePickup ? (
-        <div className="p-5 rounded-2xl border border-white/[0.06] bg-[#111111] space-y-4">
-          <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
-            <div className="flex items-center gap-2">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-2">
-                <Truck className="w-4 h-4 text-[#f3aa18]" />
-                Shipping & Tracking
-              </h4>
-              <Tooltip 
-                position="top"
-                content="Domestic orders (SiCepat, JNE, POS, J&T) are verified with Biteship live tracking. Delivered status automatically moves the order to Completed."
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              {order.tracking?.latest_status && (
-                <span className={clsx(
-                  "text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider",
-                  order.tracking.latest_status === 'delivered'
-                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                    : "bg-[#f3aa18]/10 text-[#f3aa18] border-[#f3aa18]/30"
-                )}>
-                  {order.tracking.latest_status === 'delivered' ? '✓ Delivered' : order.tracking.latest_status.replace('_', ' ')}
-                </span>
-              )}
-              {order.tracking?.tracking_number && !order.tracking.tracking_number.startsWith('field_') && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsTrackOrderModalOpen(true);
-                    if (!order.tracking?.checkpoints || order.tracking.checkpoints.length === 0) {
-                      handleSyncTracking();
-                    }
-                  }}
-                  className="px-2.5 py-1 rounded-lg bg-[#f3aa18]/10 hover:bg-[#f3aa18]/20 text-xs text-[#f3aa18] font-sans font-semibold flex items-center gap-1.5 border border-[#f3aa18]/30 transition-all cursor-pointer shadow-xs"
-                  title="Track shipment timeline"
-                >
-                  <MapPin className="w-3 h-3 text-[#f3aa18]" />
-                  <span>Track Order</span>
-                </button>
-              )}
-              {order.tracking?.tracking_number && !order.tracking.tracking_number.startsWith('field_') && (
-                <button
-                  type="button"
-                  disabled={isSyncingTracking}
-                  onClick={handleSyncTracking}
-                  className="px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-xs text-neutral-200 font-sans font-medium flex items-center gap-1.5 border border-white/[0.08] transition-all disabled:opacity-50"
-                  title="Sync live status and checkpoints with carrier"
-                >
-                  <RefreshCw className={clsx("w-3 h-3", isSyncingTracking && "animate-spin text-[#f3aa18]")} />
-                  <span>{isSyncingTracking ? 'Syncing...' : 'Sync Status'}</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          <form onSubmit={handleSaveTracking} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block font-sans">
-                    Courier
-                  </label>
-                  {(() => {
-                    const resolved = resolveOrderCourier(order);
-                    if (resolved.serviceName) {
-                      return (
-                        <span className="text-[10px] font-mono text-amber-300 font-semibold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                          {`Service: ${resolved.serviceName}`}
-                        </span>
-                      );
-                    }
-                    if (resolved.rawMatch && resolved.courierId !== 'jne' && !/pickup|ambil|summarecon/i.test(resolved.rawMatch)) {
-                      return (
-                        <span className="text-[10px] font-mono text-amber-300 font-semibold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                          {resolved.rawMatch}
-                        </span>
-                      );
-                    }
-                    return null;
-                  })()}
-                </div>
-                <Select value={courier || 'jne'} onValueChange={handleCourierChange}>
-                  <SelectTrigger className="w-full h-10 px-3.5 rounded-xl bg-zinc-50 dark:bg-[#141414] border-zinc-200 dark:border-white/[0.08] text-xs text-zinc-900 dark:text-white">
-                    <SelectValue placeholder="Select Courier">
-                      {COURIER_PRESETS.find(preset => preset.value === courier)?.label || (courier === 'custom' ? (customCourierName.trim() || 'Custom / Other') : 'Select Courier')}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {COURIER_PRESETS.map(preset => (
-                      <SelectItem key={preset.value} value={preset.value}>
-                        {preset.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {courier === 'custom' ? (
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block mb-1.5 font-sans">
-                    Courier Name
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={customCourierName}
-                    onChange={e => {
-                      isFormDirtyRef.current = true;
-                      setCustomCourierName(e.target.value);
-                    }}
-                    placeholder="e.g. Royal Mail, USPS, Aramex"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#141414] border border-white/[0.08] text-xs font-sans text-white placeholder-neutral-600 focus:outline-none focus:border-[#f3aa18] transition-colors"
-                  />
-                </div>
-              ) : (
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block mb-1.5 font-sans">
-                    Tracking Number
-                  </label>
-                  <input
-                    type="text"
-                    value={trackingNumber}
-                    onChange={e => {
-                      isFormDirtyRef.current = true;
-                      setTrackingNumber(e.target.value);
-                    }}
-                    placeholder="e.g. 5252sf252, JNT1948293810"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#141414] border border-white/[0.08] text-xs font-mono text-white placeholder-neutral-600 focus:outline-none focus:border-[#f3aa18] transition-colors"
-                  />
-                </div>
-              )}
-            </div>
-
-            {courier === 'custom' && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block mb-1.5 font-sans">
-                    Tracking Number
-                  </label>
-                  <input
-                    type="text"
-                    value={trackingNumber}
-                    onChange={e => {
-                      isFormDirtyRef.current = true;
-                      setTrackingNumber(e.target.value);
-                    }}
-                    placeholder="e.g. GB123456789"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#141414] border border-white/[0.08] text-xs font-mono text-white placeholder-neutral-600 focus:outline-none focus:border-[#f3aa18] transition-colors"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 font-sans">
-                      Tracking URL (Optional)
-                    </label>
-                    <span className="text-[9px] text-neutral-500 font-mono">%s = tracking code</span>
-                  </div>
-                  <input
-                    type="text"
-                    value={customTrackingUrl}
-                    onChange={e => {
-                      isFormDirtyRef.current = true;
-                      setCustomTrackingUrl(e.target.value);
-                    }}
-                    placeholder="https://carrier.com/track?no=%s"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#141414] border border-white/[0.08] text-xs font-mono text-white placeholder-neutral-600 focus:outline-none focus:border-[#f3aa18] transition-colors"
-                  />
-                </div>
-              </div>
-            )}
-
-            <div className="flex items-center justify-end pt-1">
-              <button
-                type="submit"
-                disabled={isFulfilling || !trackingNumber.trim() || (courier === 'custom' && !customCourierName.trim())}
-                className="px-3.5 py-1.5 rounded-lg bg-[#f3aa18] hover:bg-[#f5b838] disabled:opacity-50 text-[#0a0a0a] text-xs font-bold font-sans flex items-center gap-1.5 shadow-sm transition-all shrink-0"
-              >
-                <Truck className="w-3.5 h-3.5" />
-                {isFulfilling ? 'Saving...' : 'Save Tracking'}
-              </button>
-            </div>
-          </form>
-
-          {/* Domestic Goorita Consolidation Shipment Banner */}
-          {isConsolidationOrder && (() => {
-            const consolidatedIds: number[] = (order.meta_data || []).find((m: any) => m.key === '_goorita_consolidated_orders')?.value || [];
-            return (
-              <div className="p-4 rounded-xl bg-cyan-950/20 border border-cyan-500/25 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Truck className="w-4 h-4 text-cyan-400" />
-                    <span className="text-xs font-bold text-white font-sans uppercase tracking-wider">
-                      Domestic JNE Consolidation
-                    </span>
-                    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-                      Ciracas, Jakarta Timur
-                    </span>
-                    {consolidatedIds.length > 0 && (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/25">
-                        {consolidatedIds.length} USA {consolidatedIds.length === 1 ? 'Order' : 'Orders'}
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-[11px] font-mono font-bold text-cyan-400">
-                    Goorita HQ Hub
-                  </span>
-                </div>
-                <p className="text-[11px] text-zinc-300 leading-snug">
-                  Master domestic parcel dispatched to Goorita freight forwarder hub (Jonathan Rio). Shipped via JNE Express.
-                </p>
-                {consolidatedIds.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                    <span className="text-[10px] text-zinc-400 font-medium">Consolidated shipments:</span>
-                    {consolidatedIds.map((cid: number) => (
-                      <span key={cid} className="px-2 py-0.5 rounded bg-white/[0.06] text-white font-mono text-[10px] font-semibold border border-white/[0.08]">
-                        #{cid}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <div className="pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setIsLabelModalOpen(true)}
-                    className="px-3.5 py-2 rounded-xl bg-[#f3aa18] hover:bg-[#d9940c] text-zinc-950 text-xs font-bold font-sans flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-                  >
-                    <Printer className="w-3.5 h-3.5" />
-                    <span>Print A6 JNE Thermal Label</span>
-                  </button>
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* Goorita US Shipment Quick Actions (US Orders & Goorita Courier) */}
-          {isUsOrder && (() => {
-            const gooritaOrderId = order.goorita_order_id || (courier === 'goorita' ? trackingNumber : null) || (order.meta_data || []).find((m: any) => m.key === '_goorita_order_id')?.value;
-            const gooritaAwbUrl = order.goorita_awb_url || (order.meta_data || []).find((m: any) => m.key === '_goorita_awb_url' || m.key === 'goorita_awb_url')?.value;
-            const gooritaService = order.goorita_service || 'Saver (USPS)';
-            const isBooked = Boolean(gooritaOrderId || (courier === 'goorita' && trackingNumber));
-
-            return (
-              <div className="p-4 rounded-xl bg-sky-950/20 border border-sky-500/25 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Plane className="w-4 h-4 text-sky-400" />
-                    <span className="text-xs font-bold text-white font-sans uppercase tracking-wider">
-                      Goorita US Shipment
-                    </span>
-                    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                      {order.shipping?.state ? `${order.shipping.state}, USA` : 'US Destination'}
-                    </span>
-                    {isBooked && (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">
-                        {gooritaService}
-                      </span>
-                    )}
-                  </div>
-                  {gooritaOrderId && (
-                    <span className="text-[11px] font-mono font-bold text-sky-400">
-                      #{gooritaOrderId}
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setIsGooritaBookingModalOpen(true)}
-                    className={clsx(
-                      "px-3.5 py-2 rounded-xl text-xs font-bold font-sans flex items-center gap-1.5 shadow-sm transition-all cursor-pointer",
-                      isBooked
-                        ? "bg-white/[0.08] hover:bg-white/[0.14] text-white border border-white/[0.1]"
-                        : "bg-sky-500 hover:bg-sky-400 text-zinc-950"
-                    )}
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    <span>
-                      {isBooked
-                        ? 'Re-generate Goorita AWB'
-                        : 'Book Goorita Production AWB'}
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsLabelModalOpen(true)}
-                    className="px-3.5 py-2 rounded-xl bg-[#f3aa18] hover:bg-[#d9940c] text-zinc-950 text-xs font-bold font-sans flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-                  >
-                    <Printer className="w-3.5 h-3.5" />
-                    <span>{isBooked ? 'Print 2-Page A6 Label' : 'Print A6 Thermal Label'}</span>
-                  </button>
-
-                  {gooritaAwbUrl && (
-                    <button
-                      type="button"
-                      onClick={() => downloadGooritaAwbPdf(order.id)}
-                      className="px-3.5 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-white text-xs font-bold font-sans flex items-center gap-1.5 border border-white/[0.1] transition-all cursor-pointer"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5 text-sky-400" />
-                      <span>View Official AWB PDF</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })()}
-
-          {isRayspeedOrder && (
-            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/25 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Plane className="w-4 h-4 text-amber-400" />
-                  <span className="text-xs font-bold text-white font-sans uppercase tracking-wider">
-                    Rayspeed Asia
-                  </span>
-                  <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/20">
-                    SEA Dispatch ({destCountry || 'International'})
-                  </span>
-                </div>
-                {order.tracking?.tracking_number && (
-                  <span className="text-[11px] font-mono font-bold text-amber-400">
-                    {order.tracking.tracking_number}
-                  </span>
-                )}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2 pt-1">
-                {(!order.tracking?.tracking_number || courier === 'rayspeed') && (
-                  <button
-                    type="button"
-                    onClick={handleBookRayspeed}
-                    disabled={isBookingRayspeed}
-                    className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-zinc-950 text-xs font-bold font-sans flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-                  >
-                    <Send className={clsx("w-3.5 h-3.5", isBookingRayspeed && "animate-spin")} />
-                    <span>{isBookingRayspeed ? 'Booking AWB...' : order.tracking?.tracking_number ? 'Re-generate AWB' : 'Dispatch via Rayspeed'}</span>
-                  </button>
-                )}
-                {order.tracking?.tracking_number && (
-                  <a
-                    href={getPublicTrackingUrl('rayspeed', order.tracking.tracking_number)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-3.5 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] text-white text-xs font-bold font-sans flex items-center gap-1.5 border border-white/[0.1] transition-all"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Track on Rayspeed</span>
-                  </a>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Live Tracking Timeline & Checkpoints */}
-          {order.tracking?.checkpoints && order.tracking.checkpoints.length > 0 && (
-            <div className="pt-3 border-t border-white/[0.06] space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 font-sans">
-                  Carrier Checkpoints ({order.tracking.checkpoints.length})
-                </span>
-                {order.tracking.checkpoints.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowAllCheckpoints(!showAllCheckpoints)}
-                    className="text-[11px] text-[#f3aa18] hover:underline font-sans flex items-center gap-1"
-                  >
-                    {showAllCheckpoints ? (
-                      <>Hide history <ChevronUp className="w-3 h-3" /></>
-                    ) : (
-                      <>View all checkpoints <ChevronDown className="w-3 h-3" /></>
-                    )}
-                  </button>
-                )}
-              </div>
-
-              {/* Latest Checkpoint Highlight Card */}
-              {order.tracking.checkpoints[0] && (
-                <div className="p-3 rounded-xl bg-[#141414] border border-white/[0.06] space-y-1">
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="font-semibold text-white font-sans flex items-center gap-1.5">
-                      <span className={clsx(
-                        "size-2 rounded-full shrink-0",
-                        order.tracking.latest_status === 'delivered' ? "bg-emerald-400" : "bg-[#f3aa18]"
-                      )} />
-                      <span className="line-clamp-1">{order.tracking.checkpoints[0].description}</span>
-                    </span>
-                    {order.tracking.checkpoints[0].stage && (
-                      <span className="text-[9px] font-mono text-neutral-400 uppercase bg-white/[0.04] px-1.5 py-0.5 rounded shrink-0 ml-2">
-                        {order.tracking.checkpoints[0].stage.replace('_', ' ')}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3 text-[10px] text-neutral-400 font-mono pt-0.5">
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3 h-3 text-neutral-500" />
-                      {order.tracking.checkpoints[0].time}
-                    </span>
-                    {order.tracking.checkpoints[0].location && (
-                      <span className="flex items-center gap-1">
-                        <MapPin className="w-3 h-3 text-neutral-500" />
-                        {order.tracking.checkpoints[0].location}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Expanded Checkpoint History */}
-              {showAllCheckpoints && order.tracking.checkpoints.length > 1 && (
-                <div className="space-y-1.5 pt-1 max-h-60 overflow-y-auto pr-1">
-                  {order.tracking.checkpoints.slice(1).map((cp, idx) => (
-                    <div 
-                      key={idx}
-                      className="p-2.5 rounded-lg bg-[#0e0e0e] border border-white/[0.04] text-xs font-sans space-y-1"
-                    >
-                      <p className="text-neutral-300 font-medium">{cp.description}</p>
-                      <div className="flex items-center gap-3 text-[10px] text-neutral-500 font-mono">
-                        <span>{cp.time}</span>
-                        {cp.location && <span>• {cp.location}</span>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-        ) : (
-          <div className="p-4 rounded-2xl border border-[#f3aa18]/25 bg-[#f3aa18]/5 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-[#f3aa18]/15 border border-[#f3aa18]/30 flex items-center justify-center shrink-0">
-                <Store className="w-5 h-5 text-[#f3aa18]" />
-              </div>
-              <div>
-                <span className="text-xs font-bold text-white block">Summarecon Bekasi Store Pickup</span>
-                <span className="text-[11px] text-neutral-400">Direct store handover at Ruko Ruby Commercial TB12. Courier dispatch and shipping tracking are not applicable.</span>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setIsLabelModalOpen(true)}
-              className="px-3 py-1.5 rounded-xl bg-[#f3aa18] hover:bg-[#d9940c] text-[#0a0a0a] text-xs font-bold font-sans flex items-center gap-1.5 shrink-0 shadow-sm transition-all"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Workshop Label</span>
-            </button>
-          </div>
-        )}
-
-        {/* Section 4: Financial Summary */}
-        <div className="p-5 rounded-2xl border border-white/[0.06] bg-[#111111] space-y-3">
-          <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-2">
-              <DollarSign className="w-4 h-4 text-[#f3aa18]" />
-              Order Summary
-            </h4>
-            <div className="flex items-center gap-2">
-              {remainingAvailableRefund > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRefundAmount(String(remainingAvailableRefund));
-                    setMarkAsRefunded(false);
-                    setIsRefundModalOpen(true);
-                  }}
-                  className="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 text-xs font-sans font-medium flex items-center gap-1.5 transition-all shadow-sm"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  Refund
-                </button>
-              )}
-              <span className="text-[10px] font-mono text-neutral-400 bg-white/[0.06] px-2 py-0.5 rounded border border-white/[0.08]">
-                Currency: {order.currency || 'USD'}
-              </span>
-            </div>
-          </div>
-
-          <div className="space-y-2 text-xs font-sans">
-            {/* Subtotal */}
-            <div className="flex items-center justify-between text-neutral-400">
-              <span>Items Subtotal</span>
-              <span className="font-mono text-white">
-                {formatCurrency(order.subtotal || order.total, order.currency)}
-              </span>
-            </div>
-
-            {/* Discount */}
-            {Number(order.discount_total || 0) > 0 && (
-              <div className="flex items-center justify-between text-amber-400">
-                <span>
-                  Discount Applied {order.coupon_codes && order.coupon_codes.length > 0 && `(${order.coupon_codes.join(', ')})`}
-                </span>
-                <span className="font-mono">
-                  -{formatCurrency(order.discount_total, order.currency)}
-                </span>
-              </div>
-            )}
-
-            {/* Fees & Adjustments */}
-            {order.fees && order.fees.length > 0 ? (
-              order.fees.map((f) => {
-                const label = formatFeeLabel(f.name, order);
-                const isNegative = f.total < 0;
-                return (
-                  <div key={f.id} className="flex items-center justify-between text-neutral-400">
-                    <span className={isNegative ? 'text-amber-400' : ''}>{label}</span>
-                    <span className={clsx('font-mono', isNegative ? 'text-amber-400' : 'text-white')}>
-                      {isNegative ? '-' : '+'}{formatCurrency(Math.abs(f.total), order.currency)}
-                    </span>
-                  </div>
-                );
-              })
-            ) : order.fee_total !== undefined && order.fee_total !== 0 ? (
-              <div className="flex items-center justify-between text-neutral-400">
-                <span className={order.fee_total < 0 ? 'text-amber-400' : ''}>
-                  {order.fee_total < 0 ? 'Discount' : 'Adjustment'}
-                </span>
-                <span className={clsx('font-mono', order.fee_total < 0 ? 'text-amber-400' : 'text-white')}>
-                  {order.fee_total < 0 ? '-' : '+'}{formatCurrency(Math.abs(order.fee_total), order.currency)}
-                </span>
-              </div>
-            ) : null}
-
-            {/* Shipping & Shipping Discount Breakdown */}
-            {shippingDiscount > 0 ? (
-              <>
-                <div className="flex items-center justify-between text-neutral-400">
-                  <span className="flex items-center gap-1.5">
-                    <span>Shipping ({order.shipping_method_name || 'Standard Delivery'})</span>
-                    <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-mono text-[9px] uppercase font-bold">
-                      PROMO
-                    </span>
-                  </span>
-                  <span className="font-mono text-white">{formatCurrency(originalShippingRate, order.currency)}</span>
-                </div>
-                <div className="flex items-center justify-between text-emerald-400">
-                  <span>
-                    Shipping Discount {shippingPromoCode ? `(${shippingPromoCode.toUpperCase()})` : ''}
-                  </span>
-                  <span className="font-mono font-medium">
-                    -{formatCurrency(shippingDiscount, order.currency)}
-                  </span>
-                </div>
-              </>
-            ) : (
-              <div className="flex items-center justify-between text-neutral-400">
-                <span>Shipping ({order.shipping_method_name || 'Standard Delivery'})</span>
-                <span className="font-mono text-white">{formatCurrency(order.shipping_total || 0, order.currency)}</span>
-              </div>
-            )}
-
-            {/* Tax */}
-            {Number(order.total_tax) > 0 && (
-              <div className="flex items-center justify-between text-neutral-400">
-                <span>Tax</span>
-                <span className="font-mono text-white">{formatCurrency(order.total_tax, order.currency)}</span>
-              </div>
-            )}
-
-            {/* Kode Unik BCA */}
-            {(() => {
-              const bcaCode = order.meta_data?.find(m => m.key === '_bca_unique_code')?.value;
-              if (!bcaCode) return null;
-              return (
-                <div className="flex items-center justify-between text-neutral-400">
-                  <span className="text-amber-400 text-xs flex items-center gap-1">
-                    Unique Payment Code
-                  </span>
-                  <span className="font-mono text-amber-400 font-semibold">
-                    +{formatCurrency(Number(bcaCode), order.currency)}
-                  </span>
-                </div>
-              );
-            })()}
-
-            {/* Grand Total */}
-            <div className="border-t border-white/[0.08] pt-2.5 flex items-center justify-between font-bold text-sm text-white">
-              <span>Order Total</span>
-              <span className="font-mono text-base text-[#f3aa18]">{formatCurrency(order.total, order.currency)}</span>
-            </div>
-
-            {/* Refund Ledger Lines */}
-            {totalRefunded > 0 && (
-              <>
-                <div className="flex items-center justify-between text-xs font-sans text-rose-400 pt-1">
-                  <span className="flex items-center gap-1.5 font-medium">
-                    <RotateCcw className="w-3.5 h-3.5" /> Amount Refunded:
-                  </span>
-                  <span className="font-mono font-bold">
-                    -{formatCurrency(totalRefunded, order.currency)}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between text-xs font-sans text-neutral-300 pt-0.5">
-                  <span className="font-medium">Net Amount:</span>
-                  <span className="font-mono font-bold text-white">
-                    {formatCurrency(netSettledTotal, order.currency)}
-                  </span>
-                </div>
-
-                {order.refunds && order.refunds.length > 0 && (
-                  <div className="mt-2 pt-2 border-t border-white/[0.04] space-y-1.5">
-                    <span className="text-[10px] uppercase font-bold text-neutral-500 tracking-wider block">
-                      Refund History ({order.refunds.length})
-                    </span>
-                    {order.refunds.map(ref => (
-                      <div key={ref.id} className="flex items-center justify-between text-[11px] text-neutral-400 bg-white/[0.02] p-2 rounded-lg border border-white/[0.04]">
-                        <div>
-                          <span className="text-white font-mono font-medium">Refund #{ref.id}</span>
-                          {ref.reason && <span className="text-neutral-400 ml-1.5 font-sans">({ref.reason})</span>}
-                        </div>
-                        <div className="text-right font-mono">
-                          <span className="text-rose-400 font-bold">-{formatCurrency(ref.amount, order.currency)}</span>
-                          {ref.date_created && <span className="text-[9px] text-neutral-500 block">{formatDate(ref.date_created)}</span>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* Paid status */}
-            <div className="text-[11px] text-neutral-400 font-sans pt-1 flex items-center justify-between border-t border-white/[0.04]">
-              <span>Payment:</span>
-              <span className="text-white font-mono">
-                {order.date_paid
-                  ? `${formatCurrency(order.total, order.currency)} paid on ${formatDate(order.date_paid)}`
-                  : ['processing', 'completed', 'in-production', 'ready-to-ship', 'shipped'].includes(currentStatusClean)
-                  ? `Confirmed (${order.payment_method_title || order.payment_method || 'Online Payment'})`
-                  : 'Pending'}
-              </span>
-            </div>
-
-            {/* Midtrans Transaction Detail */}
-            {(() => {
-              const midtransId = orderMetaList.find(m => m.key === '_midtrans_transaction_id')?.value;
-              if (!midtransId) return null;
-              return (
-                <div className="text-[10px] text-neutral-400 font-mono bg-white/[0.02] p-2.5 rounded-lg border border-white/[0.04] mt-1.5 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-emerald-400 font-sans font-semibold">Midtrans Transaction:</span>
-                    <span className="text-white uppercase font-bold text-[9px] px-1.5 py-0.5 rounded bg-white/10 font-mono">
-                      {String(order.payment_method_title || order.payment_method || 'Online Payment')}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-neutral-300">
-                    <span className="text-neutral-500 font-sans">Transaction ID:</span>
-                    <span className="text-neutral-300 truncate max-w-[220px]">{String(midtransId)}</span>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* BCA Mutation Detail */}
-            {(() => {
-              const bcaMutation = order.meta_data?.find(m => m.key === '_bca_mutation_desc')?.value;
-              if (!bcaMutation) return null;
-              return (
-                <div className="text-[10px] text-neutral-400 font-mono bg-white/[0.02] p-2.5 rounded-lg border border-white/[0.04] mt-1.5 break-all">
-                  <span className="text-emerald-400 font-sans font-semibold block mb-0.5">BCA Webhook Mutation:</span>
-                  {String(bcaMutation)}
-                </div>
-              );
-            })()}
-          </div>
-        </div>
-
-        {/* Section 4.5: Applied Coupons & Adjustments (Placed below Order Summary) */}
-        {((order.coupon_codes && order.coupon_codes.length > 0) || (order.fees && order.fees.length > 0)) && (
-          <div className="p-4 rounded-2xl border border-white/[0.06] bg-[#111111] space-y-3">
-            <div className="flex items-center justify-between border-b border-white/[0.06] pb-2.5">
-              <span className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-2">
-                <Ticket className="w-4 h-4 text-amber-400" />
-                Coupons & Adjustments
-              </span>
-            </div>
-
-            {/* Coupons Used */}
-            {order.coupon_codes && order.coupon_codes.length > 0 && (
-              <div className="space-y-2">
-                <span className="text-[11px] text-neutral-400 font-sans block">Coupons applied:</span>
-                <div className="space-y-1.5">
-                  {order.coupon_codes.map(code => {
-                    const isShippingCoupon =
-                      (shippingPromoCode && String(shippingPromoCode).toLowerCase() === code.toLowerCase()) ||
-                      code.toLowerCase().includes('ongkir') ||
-                      Boolean(shippingDiscount > 0 && order.coupon_codes?.length === 1);
-                    return (
-                      <div key={code} className="flex items-center justify-between text-xs font-sans">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/20 font-mono font-bold">
-                          <Tag className="w-3 h-3" />
-                          {code}
-                          {isShippingCoupon && (
-                            <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-200 uppercase font-sans font-normal ml-0.5">
-                              Shipping Promo
-                            </span>
-                          )}
-                        </span>
-                        <span className="font-mono text-emerald-400 font-semibold">
-                          {isShippingCoupon && shippingDiscount > 0
-                            ? `-${formatCurrency(shippingDiscount, order.currency)}`
-                            : Number(order.discount_total || 0) > 0
-                            ? `-${formatCurrency(order.discount_total, order.currency)}`
-                            : 'Applied'}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Fees Breakdown */}
-            {order.fees && order.fees.length > 0 && (
-              <div className="space-y-1.5 pt-1">
-                {order.fees.map(f => {
-                  const label = formatFeeLabel(f.name, order);
-                  const isNegative = f.total < 0;
-                  return (
-                    <div key={f.id} className="flex items-center justify-between text-xs font-sans text-neutral-300">
-                      <span className={isNegative ? 'text-amber-400 font-medium' : ''}>{label}</span>
-                      <div className="text-right font-mono">
-                        <span className={clsx(isNegative ? 'text-amber-400 font-semibold' : 'text-white')}>
-                          {isNegative ? '-' : '+'}{formatCurrency(Math.abs(f.total), order.currency)}
-                        </span>
-                        {f.tax !== 0 && (
-                          <span className="text-[10px] text-neutral-500 block">
-                            DDP: {formatCurrency(f.tax, order.currency)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Section 4B: Collector Review & Feedback */}
-        <div className="p-5 rounded-2xl border border-white/[0.06] bg-[#111111] space-y-4">
-          <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 flex-wrap gap-2">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-2">
-              <Star className="w-4 h-4 text-amber-400 fill-amber-400/20" />
-              Collector Review & Feedback
-            </h4>
-            {orderReview ? (
-              <span className={clsx(
-                "text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider",
-                orderReview.status === 'featured' && "bg-purple-500/10 text-purple-300 border-purple-500/30",
-                orderReview.status === 'approved' && "bg-[#f3aa18]/10 text-[#f3aa18] border-[#f3aa18]/30",
-                orderReview.status === 'pending' && "bg-amber-500/10 text-amber-300 border-amber-500/30",
-                orderReview.status === 'rejected' && "bg-rose-500/10 text-rose-400 border-rose-500/30",
-              )}>
-                {orderReview.status}
-              </span>
-            ) : (
-              <span className="text-[10px] font-mono text-neutral-500 bg-white/[0.04] px-2 py-0.5 rounded border border-white/[0.06]">
-                {order.status === 'delivered' || order.status === 'completed' ? 'Awaiting Collector' : 'Pre-delivery'}
-              </span>
-            )}
-          </div>
-
-          {orderReview ? (
-            <div className="space-y-3 bg-[#141414] p-4 rounded-xl border border-white/[0.04]">
-              {/* Rating stars & Author */}
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="flex items-center gap-1.5">
-                  <div className="flex items-center gap-0.5">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <Star
-                        key={star}
-                        className={clsx(
-                          "w-3.5 h-3.5",
-                          star <= orderReview.rating
-                            ? "text-amber-400 fill-amber-400"
-                            : "text-neutral-700"
-                        )}
-                      />
-                    ))}
-                  </div>
-                  <span className="text-xs font-mono font-bold text-white ml-1">
-                    {orderReview.rating}.0
-                  </span>
-                  {orderReview.verified_purchase && (
-                    <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 ml-1">
-                      Verified
-                    </span>
-                  )}
-                </div>
-
-                <span className="text-[10px] font-mono text-neutral-500">
-                  {formatDate(orderReview.created_at)}
-                </span>
-              </div>
-
-              {/* Review Content */}
-              {orderReview.title && (
-                <h5 className="text-xs font-bold text-white font-sans">
-                  {orderReview.title}
-                </h5>
-              )}
-              <p className="text-xs text-neutral-300 font-sans leading-relaxed">
-                "{orderReview.content}"
-              </p>
-
-              {/* Collector Details */}
-              <div className="text-[11px] text-neutral-400 font-sans flex items-center gap-2 pt-1 border-t border-white/[0.04]">
-                <span className="text-white font-medium">{orderReview.customer_name}</span>
-                {orderReview.customer_location && (
-                  <span className="text-neutral-500 font-mono text-[10px]">
-                    ({orderReview.customer_location})
-                  </span>
-                )}
-              </div>
-
-              {/* Uploaded Media (Photos / Videos) */}
-              {orderReview.media && orderReview.media.length > 0 && (
-                <div className="pt-2 border-t border-white/[0.04]">
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-neutral-400 block mb-2">
-                    Collector Wall Media ({orderReview.media.length})
-                  </span>
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                    {orderReview.media.map((med, mIdx) => (
-                      <button
-                        key={mIdx}
-                        type="button"
-                        onClick={() => setPreviewReviewMedia(med)}
-                        className="relative aspect-square rounded-lg overflow-hidden border border-white/[0.08] hover:border-[#f3aa18]/50 bg-black group transition-all"
-                      >
-                        {med.type === 'video' ? (
-                          <>
-                            {med.poster_url ? (
-                              <img
-                                src={med.poster_url}
-                                alt="Video thumbnail"
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center bg-zinc-900">
-                                <Video className="w-5 h-5 text-neutral-400" />
-                              </div>
-                            )}
-                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center group-hover:bg-black/20 transition-colors">
-                              <span className="w-6 h-6 rounded-full bg-black/70 border border-white/20 flex items-center justify-center text-white">
-                                <Play className="w-3 h-3 fill-white ml-0.5" />
-                              </span>
-                            </div>
-                            <span className="absolute bottom-1 right-1 px-1 py-0.2 rounded text-[8px] font-mono font-bold bg-black/80 text-white border border-white/10">
-                              VIDEO
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <img
-                              src={med.url}
-                              alt="Review media"
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                            />
-                            <span className="absolute bottom-1 right-1 px-1 py-0.2 rounded text-[8px] font-mono font-bold bg-black/80 text-white border border-white/10">
-                              PHOTO
-                            </span>
-                          </>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-3 bg-[#141414] p-4 rounded-xl border border-white/[0.04]">
-              <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
-                <p className="text-neutral-400 font-sans">
-                  No review received for this order yet.
-                </p>
-                {order.review_invited_at ? (
-                  <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                    Invite sent {formatDate(order.review_invited_at)}
-                  </span>
-                ) : order.review_invite_scheduled_at ? (
-                  <span className="text-[10px] font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                    Auto-scheduled {formatDate(order.review_invite_scheduled_at)}
-                  </span>
-                ) : null}
-              </div>
-
-              {(order.status === 'delivered' || order.status === 'completed') ? (
-                <div className="pt-2 border-t border-white/[0.04] flex items-center justify-between flex-wrap gap-2">
-                  <p className="text-[11px] text-neutral-500 font-sans">
-                    The order is complete. You can send a review invitation to the collector.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleSendReviewInvite}
-                    disabled={isSendingReviewInvite}
-                    className="px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] disabled:opacity-50 text-white text-xs font-semibold font-sans flex items-center gap-1.5 border border-white/[0.08] transition-all shrink-0"
-                  >
-                    <Mail className="w-3.5 h-3.5 text-amber-400" />
-                    <span>{isSendingReviewInvite ? 'Sending...' : order.review_invited_at ? 'Resend Invitation' : 'Send Review Invitation'}</span>
-                  </button>
-                </div>
-              ) : (
-                <p className="text-[11px] text-neutral-500 font-sans">
-                  Invitations are automatically dispatched 36 hours after this order is marked delivered or completed.
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Section 5: Order Notes & Activity Logs */}
-        <div className="p-5 rounded-2xl border border-white/[0.06] bg-[#111111] space-y-4">
-          <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 flex-wrap gap-2">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans flex items-center gap-2">
-              <MessageSquare className="w-4 h-4 text-[#f3aa18]" />
-              Activity Logs & Notes ({notes.length})
-            </h4>
-          </div>
-
-          {/* Add Note Form */}
-          <form onSubmit={handleAddNote} className="space-y-2.5">
-            <textarea
-              value={newNote}
-              onChange={e => setNewNote(e.target.value)}
-              placeholder="Add internal staff note or note to customer..."
-              rows={2}
-              className="w-full px-3.5 py-2.5 rounded-xl bg-[#141414] border border-white/[0.08] text-xs font-sans text-white placeholder-neutral-500 focus:outline-none focus:border-[#f3aa18] transition-colors resize-none"
-            />
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer text-neutral-400 text-xs">
-                <input
-                  type="checkbox"
-                  checked={isCustomerNote}
-                  onChange={e => setIsCustomerNote(e.target.checked)}
-                  className="rounded border-white/20 bg-[#141414] text-[#f3aa18] focus:ring-0"
-                />
-                <span>Customer note</span>
-              </label>
-
-              <button
-                type="submit"
-                disabled={isAddingNote || !newNote.trim()}
-                className="px-4 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] disabled:opacity-50 text-white text-xs font-semibold font-sans flex items-center gap-1.5 border border-white/[0.08] transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                {isAddingNote ? 'Adding...' : 'Add Note'}
-              </button>
-            </div>
-          </form>
-
-          {/* Notes List */}
-          <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
-            {isLoadingNotes ? (
-              <div className="text-center py-4 text-neutral-500 text-xs font-mono">Loading history...</div>
-            ) : notes.length === 0 ? (
-              <div className="text-center py-4 text-neutral-600 text-xs font-sans">No order notes yet.</div>
-            ) : (
-              notes.map(note => (
-                <div 
-                  key={note.id}
-                  className={clsx(
-                    'p-3 rounded-xl border text-xs font-sans space-y-2',
-                    note.customer_note 
-                      ? 'bg-amber-500/5 border-amber-500/20 text-amber-200' 
-                      : 'bg-[#141414] border-white/[0.04] text-neutral-300'
-                  )}
-                >
-                  <p className="leading-relaxed whitespace-pre-wrap">{renderNoteHtml(note.content)}</p>
-                  
-                  {/* Note Creator / Author Attribution */}
-                  <div className="flex items-center justify-between text-[10px] text-neutral-400 font-mono pt-2 border-t border-white/[0.04] flex-wrap gap-2">
-                    <div className="flex items-center gap-2">
-                      {note.author_avatar ? (
-                        <img src={note.author_avatar} alt="" className="w-4 h-4 rounded-full border border-white/10" />
-                      ) : (
-                        <User className="w-3.5 h-3.5 text-neutral-500" />
-                      )}
-                      <span className="text-neutral-200 font-sans font-medium">
-                        {note.author_name || note.added_by || 'System'}
-                      </span>
-                      {note.author_role && (
-                        <span className={clsx(
-                          "px-1.5 py-0.2 rounded text-[9px] font-sans font-bold uppercase",
-                          note.author_role === 'Operations Manager' || note.author_role === 'Manager' 
-                            ? "bg-[#f3aa18]/10 text-[#f3aa18] border border-[#f3aa18]/20"
-                            : note.author_role === 'Administrator' || note.author_role === 'Shop Manager'
-                            ? "bg-purple-500/10 text-purple-300 border border-purple-500/20"
-                            : "bg-white/[0.04] text-neutral-400 border border-white/[0.06]"
-                        )}>
-                          {note.author_role}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 text-neutral-500">
-                      <span>{note.date_created ? formatDateTime(note.date_created) : '-'}</span>
-                      {note.customer_note && (
-                        <span className="text-amber-400 font-sans font-bold text-[9px] uppercase px-1.5 py-0.2 rounded bg-amber-500/10 border border-amber-500/20">
-                          Customer
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Section 5.5: Resend Transactional Email */}
-        <div className="p-5 rounded-2xl border border-white/[0.06] bg-[#111111] space-y-4">
-          <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 flex-wrap gap-2">
-            <div className="flex items-center gap-2">
-              <Mail className="w-4 h-4 text-[#f3aa18]" />
-              <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-sans">
-                Resend Transactional Email
-              </h4>
-            </div>
-            {order.meta_data?.some(m => m.key === '_artmatter_confirmation_email_sent' && m.value === 'yes') && (
-              <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 flex items-center gap-1">
-                <Check className="w-3 h-3" />
-                <span>Confirmation Sent</span>
-              </span>
-            )}
-          </div>
-
-          <div className="space-y-3 font-sans text-xs">
-            {/* Recipient Address Row */}
-            <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-[#141414] border border-white/[0.04]">
-              <div className="space-y-0.5 flex-1 min-w-0">
-                <span className="text-[10px] font-mono uppercase tracking-wider text-neutral-500 block">Recipient Address</span>
-                {isEditingRecipientEmail ? (
-                  <input
-                    type="email"
-                    value={resendRecipientEmail}
-                    onChange={e => setResendRecipientEmail(e.target.value)}
-                    placeholder="customer@domain.com"
-                    className="w-full px-2.5 py-1 text-xs font-mono bg-neutral-900 border border-white/10 rounded-lg text-white focus:outline-none focus:border-[#f3aa18]"
-                    autoFocus
-                  />
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs text-white font-medium truncate">
-                      {resendRecipientEmail || order.customer_email || order.billing?.email || 'No email provided'}
-                    </span>
-                  </div>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsEditingRecipientEmail(!isEditingRecipientEmail)}
-                className="text-[11px] text-[#f3aa18] hover:text-[#e09a10] font-medium transition-colors shrink-0 cursor-pointer"
-              >
-                {isEditingRecipientEmail ? 'Done' : 'Change'}
-              </button>
-            </div>
-
-            {/* Template Selector & Dispatch Action */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              <div className="sm:col-span-2">
-                <select
-                  value={selectedEmailTemplate}
-                  onChange={e => setSelectedEmailTemplate(e.target.value)}
-                  className="w-full h-10 px-3 rounded-xl bg-[#141414] border border-white/[0.08] text-xs font-sans text-neutral-200 focus:outline-none focus:border-[#f3aa18] transition-colors"
-                >
-                  <option value="customer_order_processing">Order Confirmation (Processing)</option>
-                  <option value="customer_order_invoice">Order Invoice / Summary</option>
-                  <option value="customer_order_in_production">In Production Update</option>
-                  <option value="customer_order_awaiting_pickup">Ready for Courier Pickup</option>
-                  <option value="customer_order_shipped">Shipped &amp; Tracking Code</option>
-                  <option value="customer_order_on_hold">Order On Hold (Awaiting Payment)</option>
-                  <option value="customer_order_delivered">Order Delivered</option>
-                  {isStorePickup && (
-                    <option value="customer_order_store_pickup_ready">Store Pickup Ready (Bekasi)</option>
-                  )}
-                </select>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleResendEmail}
-                disabled={isSendingOrderEmail || !(resendRecipientEmail || order.customer_email || order.billing?.email)}
-                className="h-10 px-4 rounded-xl bg-[#f3aa18] hover:bg-[#e09a10] disabled:opacity-50 text-neutral-950 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer whitespace-nowrap"
-              >
-                {isSendingOrderEmail ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Sending...</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-3.5 h-3.5" />
-                    <span>Resend Email</span>
-                  </>
-                )}
-              </button>
-            </div>
-
-            {lastEmailSentResult && (
-              <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[11px] font-mono text-emerald-300 flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                  <span>{lastEmailSentResult.message}</span>
-                </div>
-                <span className="text-emerald-400 font-bold">{lastEmailSentResult.latency_ms}ms</span>
-              </div>
-            )}
-
-            <div className="pt-1 flex items-center justify-between text-[11px] text-zinc-400">
-              <span>Inspect ZeptoMail delivery telemetry:</span>
-              <a
-                href="#emails?tab=logs"
-                onClick={onClose}
-                className="text-amber-500 hover:text-amber-400 font-semibold flex items-center gap-1 hover:underline cursor-pointer"
-              >
-                <span>Delivery Logs</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            </div>
-          </div>
-        </div>
-
-        {/* Section 6: WordPress Quick Access Button */}
-        <div className="pt-2">
-          <a
-            href={`${getWpBaseUrl()}/wp-admin/post.php?post=${order.id}&action=edit`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="w-full py-3 px-4 rounded-xl bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.08] text-neutral-300 hover:text-white text-xs font-semibold font-sans flex items-center justify-center gap-2 transition-all group shadow-sm"
-          >
-            <span>Open Store Order</span>
-            <ExternalLink className="w-3.5 h-3.5 text-neutral-400 group-hover:text-white transition-colors" />
-          </a>
-        </div>
-
-        {/* Section 7: Administrator Actions (Cancel / Move to Trash) */}
-        {isAdmin && (
-          <div className="pt-2 border-t border-white/[0.08]">
-            <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.06] space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-amber-400" />
-                  <span className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-mono">Administrator Actions</span>
-                </div>
-                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 uppercase">
-                  Admin Only
-                </span>
-              </div>
-              <p className="text-xs text-neutral-400 font-sans leading-relaxed">
-                Administrative controls to cancel this order or move it to trash. Moving to trash removes it from active fulfillment.
-              </p>
-              <div className="grid grid-cols-2 gap-2.5 pt-1">
-                {/* Cancel Order */}
-                <button
-                  type="button"
-                  disabled={isCancellingOrder || isTrashingOrder || currentStatusClean === 'cancelled'}
-                  onClick={() => setShowCancelModal(true)}
-                  className={clsx(
-                    "px-3.5 py-2.5 rounded-xl border text-xs font-semibold font-sans flex items-center justify-center gap-2 transition-all cursor-pointer",
-                    currentStatusClean === 'cancelled'
-                      ? "bg-neutral-900/60 border-white/[0.06] text-neutral-500 cursor-not-allowed"
-                      : "bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border-rose-500/25 active:scale-95"
-                  )}
-                >
-                  <XCircle className="w-4 h-4 text-rose-400" />
-                  <span>{currentStatusClean === 'cancelled' ? 'Order Cancelled' : isCancellingOrder ? 'Cancelling...' : 'Cancel Order'}</span>
-                </button>
-
-                {/* Move to Trash */}
-                <button
-                  type="button"
-                  disabled={isCancellingOrder || isTrashingOrder}
-                  onClick={() => setShowTrashModal(true)}
-                  className="px-3.5 py-2.5 rounded-xl bg-neutral-900/80 hover:bg-rose-950/40 text-neutral-300 hover:text-rose-200 border border-white/[0.08] hover:border-rose-500/30 text-xs font-semibold font-sans flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95"
-                >
-                  <Trash2 className="w-4 h-4 text-neutral-400 hover:text-rose-400" />
-                  <span>{isTrashingOrder ? 'Trashing...' : 'Move to Trash'}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
       </div>
 
       {/* Refund Modal Overlay */}

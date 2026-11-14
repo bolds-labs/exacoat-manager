@@ -49,7 +49,7 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(function Select
             <SelectPrimitive.Value>{selected?.label ?? ''}</SelectPrimitive.Value>
           </span>
           {tag && (
-            <span className="rounded-md bg-chip px-[7px] py-px text-[12px] text-muted">{tag}</span>
+            <span className="min-w-0 max-w-[60%] truncate rounded-md bg-chip px-[7px] py-px text-[12px] text-muted" title={tag}>{tag}</span>
           )}
           <SelectPrimitive.Icon asChild>
             <ChevronDown className="h-[15px] w-[15px] flex-none text-faint" aria-hidden />
