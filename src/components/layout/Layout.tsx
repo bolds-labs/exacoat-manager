@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { Sidebar, NavItemKey, getTabHref } from './Sidebar';
 import { Header } from './Header';
 import { RoleSimulationBanner } from './RoleSimulationBanner';
@@ -12,7 +12,11 @@ import {
 import { clsx } from 'clsx';
 import { useAuth } from '../../context/AuthContext';
 import { useMarketplaceInjection } from '../../context/MarketplaceInjectionContext';
-import { ShopeeImageInjectorModal } from '../orders/ShopeeImageInjectorModal';
+// The injector (and the kit Select and image tools it uses) loads the first time it opens, never on the
+// first screen. Once loaded it stays mounted so a job running in the background keeps going.
+const ShopeeImageInjectorModal = lazy(() =>
+  import('../orders/ShopeeImageInjectorModal').then((m) => ({ default: m.ShopeeImageInjectorModal })),
+);
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -53,6 +57,10 @@ export const Layout: React.FC<LayoutProps> = ({
 }) => {
   const { user } = useAuth();
   const { isModalOpen, modalParams, closeInjectorModal, activeJob } = useMarketplaceInjection();
+  const [injectorLoaded, setInjectorLoaded] = useState(false);
+  useEffect(() => {
+    if (isModalOpen || activeJob) setInjectorLoaded(true);
+  }, [isModalOpen, activeJob]);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
 
@@ -219,14 +227,18 @@ export const Layout: React.FC<LayoutProps> = ({
       />
 
       {/* Global Marketplace Image Injector Modal */}
-      <ShopeeImageInjectorModal
-        isOpen={isModalOpen}
-        onClose={closeInjectorModal}
-        item={modalParams?.item ?? activeJob?.shopeeItem ?? null}
-        tiktokItem={modalParams?.tiktokItem ?? activeJob?.tiktokItem ?? null}
-        channel={modalParams?.channel ?? activeJob?.channel}
-        onSuccess={modalParams?.onSuccess}
-      />
+      {injectorLoaded && (
+        <Suspense fallback={null}>
+          <ShopeeImageInjectorModal
+            isOpen={isModalOpen}
+            onClose={closeInjectorModal}
+            item={modalParams?.item ?? activeJob?.shopeeItem ?? null}
+            tiktokItem={modalParams?.tiktokItem ?? activeJob?.tiktokItem ?? null}
+            channel={modalParams?.channel ?? activeJob?.channel}
+            onSuccess={modalParams?.onSuccess}
+          />
+        </Suspense>
+      )}
     </div>
   );
 };

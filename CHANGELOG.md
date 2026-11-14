@@ -33,6 +33,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Same numbers everywhere**: the Dashboard now counts Shopee and TikTok Shop orders too and uses the same rules as Sales & Reports, so both pages show the same totals for the same period.
 - **Sales & Reports**: same content and controls on the new design: range tabs, channel toggles, KPI cards with change against the previous period, a cleaner sales chart, one card per channel with fee lines on demand, and the orders ledger in the Orders table style. CSV export and the Shopee history sync work as before.
 
+### Products and Configurator Studio
+- **One product list**: Products and Configurator Studio use the same list on the new design, with search, category, status, configurator and sort filters and a Configurator column (Clean, issues, Unaudited, Excluded or No configurator). Products keeps its Shopee and TikTok tabs.
+- **Product panel**: click a product to edit its name, regular and sale price, status and categories, manage images and SEO, see its configurator summary with Open in Configurator Studio, and find its Shopee and TikTok listings.
+- **One place for prices**: prices are edited only in the Products panel. Studio shows them read-only with a link to the panel, and saving a configurator no longer changes the product price. Changing the regular price also updates the configurator's base price, so the webstore configurator shows the same price.
+- **Fix**: changing a price from Studio used to end a running sale price. The plugin now keeps the sale (install the new plugin zip).
+- **Studio catalog**: checks, family sync, webstore revalidation and migration are in the Studio header; duplicate, publish and include or exclude are in each row's menu, each with a confirmation. Sync device families is back on the screen.
+- **No old copies**: the manager no longer falls back to a built-in list of finishes, price tiers or guessed configurator data. When something cannot load, the screen says so and offers Retry, and nothing can be saved over the real data.
+- **Faster first load**: the marketplace image injector now loads when it is first opened.
+
 ### Design: Finishes & Stock
 - **One place for finishes**: Materials & Stock is now Finishes & Stock and is the only editor for finishes. The Master Textures pop-up in Configurator Studio is gone; Studio's Finishes button opens this screen (in a new tab while a device is open, so device edits are kept).
 - **Screen**: finishes listed by storefront group with stock, Active and order controls on each row, filters (All, Active, Inactive, Out of stock, Coming soon), group filter and search. Edit opens a side panel with every field, the three image slots with the Media Library, shading tone, badge, custom per device and logo cutout. Groups (order, add, rename, delete when empty, display style) and price tiers have their own pop-ups.

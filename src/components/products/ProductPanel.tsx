@@ -558,7 +558,7 @@ function ConfiguratorSection({
     ? [
         ['Status', <ConfiguratorChip key="s" summary={summary} />],
         ['Engine', summary.configurator_version === 'v2' ? 'v2 (modern)' : summary.configurator_version ? 'v1 (legacy)' : 'Unknown'],
-        ['Family', `${summary.family} (${summary.size_multiplier}x surcharge)`],
+        ['Family', `${summary.family.charAt(0).toUpperCase()}${summary.family.slice(1)} (${summary.size_multiplier}x finish surcharge)`],
         ['Views', String(summary.views_count)],
         ['Layers', String(summary.layers_count)],
         ['Looks', String(summary.presets_count || 0)],
