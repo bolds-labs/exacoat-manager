@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { roleFromWpUser, isSessionUsable } from './authRoles';
+import { roleFromWpUser, isSessionUsable, hasAdminRights } from './authRoles';
 
 describe('roleFromWpUser', () => {
   it('maps administrators to super_admin', () => {
@@ -47,5 +47,26 @@ describe('isSessionUsable', () => {
   it('rejects null and malformed input', () => {
     expect(isSessionUsable(null, now)).toBe(false);
     expect(isSessionUsable({ token: 'not-a-wp-token', email: 'a@b.c' }, now)).toBe(false);
+  });
+});
+
+describe('hasAdminRights', () => {
+  it('never grants admin rights from an email address', () => {
+    expect(hasAdminRights({ role: 'shop_manager', email: 'admin@exacoat.com' } as any)).toBe(false);
+    expect(hasAdminRights({ role: 'affiliate', email: 'superadmin@example.com' } as any)).toBe(false);
+  });
+
+  it('grants admin rights to super admins and WordPress administrators', () => {
+    expect(hasAdminRights({ role: 'super_admin' })).toBe(true);
+    expect(hasAdminRights({ role: 'shop_manager', roles: ['administrator'] })).toBe(true);
+  });
+
+  it('keeps admin rights for a super admin previewing another role', () => {
+    expect(hasAdminRights({ role: 'shop_manager', actualRole: 'super_admin' }, 'shop_manager')).toBe(true);
+  });
+
+  it('denies other staff roles and signed-out users', () => {
+    expect(hasAdminRights({ role: 'manager' })).toBe(false);
+    expect(hasAdminRights(null)).toBe(false);
   });
 });

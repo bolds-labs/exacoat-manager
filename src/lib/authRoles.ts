@@ -33,3 +33,18 @@ export function isSessionUsable(
   if (typeof session.expiresAt === 'number' && session.expiresAt * 1000 <= nowMs) return false;
   return true;
 }
+
+/**
+ * Whether the signed-in staff member holds administrator rights. Reads only
+ * the role resolved by roleFromWpUser (and the real role while an admin
+ * previews another role) plus WordPress roles; never the email address.
+ */
+export function hasAdminRights(
+  user: { role?: ExacoatRole; actualRole?: ExacoatRole; roles?: unknown } | null | undefined,
+  simulatedRole?: ExacoatRole | null
+): boolean {
+  if (!user) return false;
+  const effectiveRole = simulatedRole || user.role;
+  if (effectiveRole === 'super_admin' || user.actualRole === 'super_admin') return true;
+  return Array.isArray(user.roles) && user.roles.includes('administrator');
+}

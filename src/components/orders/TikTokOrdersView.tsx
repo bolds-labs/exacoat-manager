@@ -48,6 +48,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { isCancelledMarketplaceStatus, tikTokOrderMatchesTab } from '../../lib/marketplaceStatus';
 
 interface TikTokOrdersViewProps {
   onClaimWarranty: (order: TikTokOrder) => void;
@@ -324,6 +325,8 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
       case 'COMPLETED':
         return { label: 'Selesai', bg: 'bg-emerald-500/10', text: 'text-emerald-300', border: 'border-emerald-500/20' };
       case 'CANCELLED':
+      case 'IN_CANCEL':
+      case 'TO_RETURN':
         return { label: 'Dibatalkan', bg: 'bg-rose-500/10', text: 'text-rose-300', border: 'border-rose-500/20' };
       default:
         return { label: status || 'N/A', bg: 'bg-neutral-800', text: 'text-neutral-300', border: 'border-white/10' };
@@ -332,23 +335,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
 
   // Orders matching current status tab
   const ordersInActiveTab = useMemo(() => {
-    return orders.filter((order) => {
-      const st = (order.order_status || '').toUpperCase();
-      if (activeTab === 'ALL') {
-        if (st === 'CANCELLED') return false;
-      } else if (activeTab === 'READY_TO_SHIP') {
-        if (!['AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'READY_TO_SHIP'].includes(st)) return false;
-      } else if (activeTab === 'SHIPPED') {
-        if (!['IN_TRANSIT', 'SHIPPED'].includes(st)) return false;
-      } else if (activeTab === 'COMPLETED') {
-        if (!['DELIVERED', 'COMPLETED'].includes(st)) return false;
-      } else if (activeTab === 'CLAIMED') {
-        if (!order.already_claimed) return false;
-      } else if (activeTab === 'CANCELLED') {
-        if (st !== 'CANCELLED') return false;
-      }
-      return true;
-    });
+    return orders.filter((order) => tikTokOrderMatchesTab(order, activeTab));
   }, [orders, activeTab]);
 
   const courierOptions = useMemo(() => buildGroupedCourierOptions(ordersInActiveTab), [ordersInActiveTab]);
@@ -464,9 +451,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
     ['AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'READY_TO_SHIP'].includes((o.order_status || '').toUpperCase())
   ).length;
 
-  const cancelledCount = orders.filter((o) =>
-    (o.order_status || '').toUpperCase() === 'CANCELLED'
-  ).length;
+  const cancelledCount = orders.filter((o) => isCancelledMarketplaceStatus(o.order_status)).length;
 
   // Selection handlers
   const isAllSelected = filteredOrders.length > 0 && filteredOrders.every((o) => selectedIds.has(o.order_id));
@@ -867,7 +852,7 @@ export const TikTokOrdersView: React.FC<TikTokOrdersViewProps> = ({
       ) : (
         <div className="space-y-3">
           {pagedOrders.map((order) => {
-            const isCancelled = (order.order_status || '').toUpperCase() === 'CANCELLED';
+            const isCancelled = isCancelledMarketplaceStatus(order.order_status);
             const badge = getStatusBadge(order.order_status);
             const isReadyToShip = ['AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'READY_TO_SHIP'].includes(
               (order.order_status || '').toUpperCase()

@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.226",
+  "version": "0.1.227",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.226.zip?v=0.1.226",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.227.zip?v=0.1.227",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-11-14T00:08:21.655Z",
+  "last_updated": "2026-11-14T09:22:02.901Z",
   "sections": {
-    "changelog": "### Version 0.1.226\n- Performance: order lists can skip order notes (exclude=notes); the order drawer loads notes on demand"
+    "changelog": "### Version 0.1.227\n- Fix: order drawer admin actions use WordPress roles only (never the email address); TikTok IN_CANCEL and TO_RETURN orders are treated as cancelled"
   }
 }

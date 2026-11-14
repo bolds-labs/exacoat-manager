@@ -163,6 +163,7 @@ Exacoat operations run across multiple admins using different physical PCs simul
 In both Shopee and TikTok views:
 - **Default View**: Cancelled orders (`CANCELLED`, `IN_CANCEL`, `TO_RETURN`) are strictly excluded from the `Semua` (`ALL`) filter tab.
 - **Dedicated Tab**: Cancelled orders are viewed only within the `Dibatalkan` tab.
+- **Single source**: both views use `isCancelledMarketplaceStatus()` from `src/lib/marketplaceStatus.ts` (`CANCELLED`, `IN_CANCEL`, `TO_RETURN`); TikTok tab filtering goes through `tikTokOrderMatchesTab()`. Never compare against `'CANCELLED'` alone.
 - **Card and Modal Hygiene**: Cancelled order cards do NOT display countdown timers, resi tracking numbers, print action pills, "Atur Pengiriman" buttons, or 3-dots menus (`⋮`). Only a clean rose `Dibatalkan` status badge is shown.
 
 ---
@@ -1858,7 +1859,7 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 ## 60. Manager Authentication & Secrets Invariants
 
 - **Staff sign-in only**: Exacoat Manager authenticates every WordPress request with the signed-in staff member's Bearer session token (`/auth/login`, resolved by `Exacoat_Customer_Auth::determine_current_user`). WooCommerce REST permissions then follow that user's WordPress role. The browser never holds WooCommerce consumer keys. `authenticatedFetch` (via `prepareWordPressRequest` in `src/lib/requestAuth.ts`) strips `consumer_key`/`consumer_secret` from any WordPress URL.
-- **No login fallbacks**: a failed or unreachable `/auth/login` is an error. Never add "offline", "dev admin" or OAuth stubs that create a session without a server token. Roles come only from `roleFromWpUser()` (`src/lib/authRoles.ts`): WordPress roles plus the server's `canManage` flag; never the email address.
+- **No login fallbacks**: a failed or unreachable `/auth/login` is an error. Never add "offline", "dev admin" or OAuth stubs that create a session without a server token. Roles come only from `roleFromWpUser()` (`src/lib/authRoles.ts`): WordPress roles plus the server's `canManage` flag; never the email address. UI gates for admin-only actions use `hasAdminRights(user, simulatedRole)` from the same file.
 - **Secrets live on the server**: third-party keys (WooCommerce, Biteship, Goorita, Telegram, Acumbamail, Shopee, TikTok, Midtrans, revalidation) belong in WordPress settings, `wp-config.php` constants or the storefront's environment variables. Never hardcode them as fallbacks in TypeScript, PHP, scripts or docs; this repository has been public. Browser features that need a third-party service call the exacoat-core proxy route.
 - **Webhooks without a verified signature never write payload data**: they may only trigger a fresh read from the provider's API.
 - **Tests**: `npm test` runs Vitest (`src/lib/*.test.ts`).

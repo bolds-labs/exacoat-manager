@@ -95,6 +95,7 @@ import { EditOrderItemModal } from './EditOrderItemModal';
 import { WhatsAppContactModal, WhatsAppIcon } from './WhatsAppContactModal';
 import { clsx } from 'clsx';
 import { formatCleanText, decodeHtmlEntities } from '../../lib/utils';
+import { hasAdminRights } from '../../lib/authRoles';
 
 interface OrderDetailDrawerProps {
   order: Order | null;
@@ -169,7 +170,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
   const { user, simulatedRole } = useAuth();
   const effectiveRole = simulatedRole || user?.role;
   const isShopManager = effectiveRole === 'shop_manager';
-  const isAdmin = effectiveRole === 'super_admin' || user?.actualRole === 'super_admin' || Boolean((user as any)?.roles?.includes('administrator')) || Boolean(user?.email?.toLowerCase().includes('admin'));
+  const isAdmin = hasAdminRights(user, simulatedRole);
 
   // Administrator Controls State (Cancel / Trash)
   const [showCancelModal, setShowCancelModal] = useState(false);

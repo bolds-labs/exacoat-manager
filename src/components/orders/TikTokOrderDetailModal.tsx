@@ -31,6 +31,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { isCancelledMarketplaceStatus } from '../../lib/marketplaceStatus';
 import { useToast } from '../../context/ToastContext';
 
 interface TikTokOrderDetailModalProps {
@@ -117,13 +118,15 @@ export const TikTokOrderDetailModal: React.FC<TikTokOrderDetailModalProps> = ({
       case 'COMPLETED':
         return { label: 'Selesai', bg: 'bg-emerald-500/10', text: 'text-emerald-300', border: 'border-emerald-500/20' };
       case 'CANCELLED':
+      case 'IN_CANCEL':
+      case 'TO_RETURN':
         return { label: 'Dibatalkan', bg: 'bg-rose-500/10', text: 'text-rose-300', border: 'border-rose-500/20' };
       default:
         return { label: status || 'N/A', bg: 'bg-neutral-800', text: 'text-neutral-300', border: 'border-white/10' };
     }
   };
 
-  const isCancelled = (order.order_status || '').toUpperCase() === 'CANCELLED';
+  const isCancelled = isCancelledMarketplaceStatus(order.order_status);
   const badge = getStatusBadge(order.order_status);
   const isReadyToShip = ['AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'READY_TO_SHIP'].includes(
     (order.order_status || '').toUpperCase()

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.227] - 2026-11-14
+
+### Fixes: Role Checks and TikTok Cancelled Orders
+- **Admin actions by role only**: the order drawer's Administrator actions (cancel, trash) no longer unlock for accounts whose email contains "admin". `hasAdminRights()` in `src/lib/authRoles.ts` reads only the role from `roleFromWpUser()`, the real role while an admin previews another role, and WordPress roles (AGENTS.md section 60).
+- **TikTok cancelled statuses**: `IN_CANCEL` and `TO_RETURN` TikTok orders now count as cancelled, same as Shopee. They are hidden from Semua, listed under Dibatalkan, show a Dibatalkan badge, and no longer show countdown, print or Atur Pengiriman actions (`src/lib/marketplaceStatus.ts`, AGENTS.md section 5).
+
+---
+
 ## [0.1.226] - 2026-11-14
 
 ### Performance: Faster Manager Load on Low-End Laptops
