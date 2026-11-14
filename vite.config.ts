@@ -16,25 +16,14 @@ export default defineConfig({
     chunkSizeWarningLimit: 800,
     rollupOptions: {
       output: {
+        // Only React gets a fixed shared chunk. Every other library is left to automatic
+        // splitting so it loads with the screen that imports it (a catch-all vendor chunk
+        // forced PDF, chart and email libraries onto the login and orders screens).
         manualChunks(id) {
-          if (id.includes('node_modules')) {
-            if (id.includes('three')) {
-              return 'vendor-three';
-            }
-            if (id.includes('xlsx')) {
-              return 'vendor-xlsx';
-            }
-            if (id.includes('@supabase')) {
-              return 'vendor-supabase';
-            }
-            if (id.includes('lucide-react')) {
-              return 'vendor-lucide';
-            }
-            if (id.includes('react') || id.includes('react-dom')) {
-              return 'vendor-react';
-            }
-            return 'vendor-libs';
+          if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) {
+            return 'vendor-react';
           }
+          return undefined;
         },
       },
     },

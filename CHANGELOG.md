@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.226] - 2026-11-14
+
+### Performance: Faster Manager Load on Low-End Laptops
+- **Recent-orders list on demand**: the 500-order list (about 7.4 MB) now loads only on the Dashboard and Skin Performance, never for shop managers (`tabNeedsOrderList` in `src/lib/workspaceTabs.ts`). The sidebar "processing" badge uses a count-only request (`status=processing&per_page=1`). Orders screen API traffic dropped from 8.6 MB to about 0.6 MB.
+- **Per-screen library loading**: removed the catch-all `vendor-libs` chunk in `vite.config.ts`. JavaScript needed before first render dropped from 3.2 MB (920 KB gzip) to 0.87 MB (223 KB gzip).
+- **Cheaper painting**: replaced the animated 120 to 140 px blur glows with static gradients, and the header and mobile bottom bar backdrop blur with solid fills.
+- **Smaller order lists**: `fetchOrdersDirect` sends `exclude=notes`; `get_orders` skips `get_formatted_order_notes()` per order (about 21% of the list payload and one query per order).
+- **Shared finishes request**: simultaneous `fetchGlobalFinishesDirect()` calls share one request.
+
+---
+
 ## [0.1.225] - 2026-11-14
 
 ### Security: Staff Sign-In Only, No Keys in the Browser

@@ -115,7 +115,7 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Security: manager signs in with each staff member's WordPress account only; no WooCommerce keys in the browser\n- Security: remove hardcoded third-party keys (Biteship, Telegram, Acumbamail, Shopee, TikTok, revalidation) from the plugin\n- Security: order cancel needs the order key, AWB and tracking sync need staff sign-in, unverified Shopee/TikTok pushes only trigger a fresh API read`,
+      changelog: `### Version ${version}\n- Performance: order lists can skip order notes (exclude=notes); the order drawer loads notes on demand`,
     },
   };
 

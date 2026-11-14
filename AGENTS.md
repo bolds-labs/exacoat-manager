@@ -1862,3 +1862,12 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 - **Secrets live on the server**: third-party keys (WooCommerce, Biteship, Goorita, Telegram, Acumbamail, Shopee, TikTok, Midtrans, revalidation) belong in WordPress settings, `wp-config.php` constants or the storefront's environment variables. Never hardcode them as fallbacks in TypeScript, PHP, scripts or docs; this repository has been public. Browser features that need a third-party service call the exacoat-core proxy route.
 - **Webhooks without a verified signature never write payload data**: they may only trigger a fresh read from the provider's API.
 - **Tests**: `npm test` runs Vitest (`src/lib/*.test.ts`).
+
+---
+
+## 61. Manager Load Performance Invariants
+
+- **No catch-all vendor chunk**: `vite.config.ts` pins only React into `vendor-react`; every other library is split automatically so it loads with the screen that imports it. Re-adding a catch-all `vendor-libs` chunk pushes PDF, chart and email libraries onto the login and orders screens (3.2 MB instead of 0.87 MB before first render).
+- **Big lists load where they are used**: the app-wide 500-order list loads only for tabs where `tabNeedsOrderList()` is true (dashboard, skin performance). Counts use count-only requests (`per_page=1`, read `total_orders`).
+- **Lists skip heavy fields**: order lists request `exclude=notes`; detail views load notes on demand. Do not add per-order queries to list formatting.
+- **No animated or large blur filters** on always-visible layout (background glows, sticky header, bottom bar). They repaint on every frame or scroll on integrated GPUs. Use static gradients and solid fills.

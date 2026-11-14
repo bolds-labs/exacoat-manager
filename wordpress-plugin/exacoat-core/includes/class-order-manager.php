@@ -769,6 +769,8 @@ class Exacoat_Order_Manager {
 				}
 			}
 
+			$exclude       = array_map( 'trim', explode( ',', (string) $request->get_param( 'exclude' ) ) );
+			$include_notes = ! in_array( 'notes', $exclude, true );
 			$results = wc_get_orders( $args );
 			$orders_data = [];
 
@@ -776,7 +778,7 @@ class Exacoat_Order_Manager {
 				foreach ( $results->orders as $order ) {
 					if ( $order && is_a( $order, 'WC_Order' ) ) {
 						try {
-							$orders_data[] = self::format_order_for_manager( $order );
+							$orders_data[] = self::format_order_for_manager( $order, $include_notes );
 						} catch ( Throwable $err ) {
 							if ( class_exists( 'Exacoat_Logger' ) ) {
 								Exacoat_Logger::error( 'orders', "Error formatting Order #{$order->get_id()}: " . $err->getMessage(), [
@@ -794,7 +796,7 @@ class Exacoat_Order_Manager {
 				foreach ( $results as $order ) {
 					if ( $order && is_a( $order, 'WC_Order' ) ) {
 						try {
-							$orders_data[] = self::format_order_for_manager( $order );
+							$orders_data[] = self::format_order_for_manager( $order, $include_notes );
 						} catch ( Throwable $err ) {
 							if ( class_exists( 'Exacoat_Logger' ) ) {
 								Exacoat_Logger::error( 'orders', "Error formatting Order #{$order->get_id()}: " . $err->getMessage(), [
@@ -1894,7 +1896,7 @@ class Exacoat_Order_Manager {
 	/**
 	 * Helper: Format WooCommerce Order object into rich ERP JSON structure
 	 */
-	public static function format_order_for_manager( $order ): array {
+	public static function format_order_for_manager( $order, bool $include_notes = true ): array {
 		$order_id = $order->get_id();
 
 		// 1. Resolve tracking info from WooCommerce Order Meta / ACF / HPOS
@@ -2548,7 +2550,8 @@ class Exacoat_Order_Manager {
 		}
 
 		// Order Notes & Timeline history
-		$notes_data = self::get_formatted_order_notes( $order_id );
+		// List views pass $include_notes = false; the order drawer loads notes on demand
+		$notes_data = $include_notes ? self::get_formatted_order_notes( $order_id ) : null;
 
 		// Shipping Lines Data
 		$shipping_lines_data = [];

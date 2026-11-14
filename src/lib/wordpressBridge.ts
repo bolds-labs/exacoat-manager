@@ -3200,6 +3200,8 @@ export async function fetchOrdersDirect(params?: {
   if (params?.customer) url.searchParams.set('customer', String(params.customer));
   if (params?.page) url.searchParams.set('page', String(params.page));
   if (params?.per_page) url.searchParams.set('per_page', String(params.per_page));
+  // Lists never show order notes; the order drawer loads them on demand (much smaller response)
+  url.searchParams.set('exclude', 'notes');
   if (params?.date_after) url.searchParams.set('date_after', params.date_after);
   if (params?.date_before) url.searchParams.set('date_before', params.date_before);
   url.searchParams.set('_t', String(Date.now()));
