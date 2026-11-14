@@ -64,9 +64,9 @@ export const Layout: React.FC<LayoutProps> = ({
         className="fixed inset-0 pointer-events-none -z-10"
         style={{
           background:
-            'radial-gradient(600px 500px at 30% 0%, rgba(243, 170, 24, 0.05), transparent 70%),' +
-            'radial-gradient(500px 400px at 70% 100%, rgba(161, 161, 170, 0.05), transparent 70%),' +
-            'radial-gradient(400px 400px at 100% 55%, rgba(113, 113, 122, 0.05), transparent 70%)',
+            'radial-gradient(600px 500px at 30% 0%, rgba(243, 170, 24, 0.025), transparent 70%),' +
+            'radial-gradient(500px 400px at 70% 100%, rgba(161, 161, 170, 0.025), transparent 70%),' +
+            'radial-gradient(400px 400px at 100% 55%, rgba(113, 113, 122, 0.025), transparent 70%)',
         }}
       />
 

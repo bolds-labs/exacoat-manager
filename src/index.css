@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@300;400;500;600;700&family=Montserrat:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,6 +6,30 @@
 
 @layer base {
   :root {
+    --bg: #f4f4f1;
+    --panel: #f8f8f6;
+    --card: #ffffff;
+    --card-border: rgba(24, 24, 27, 0.08);
+    --field: #fafaf9;
+    --field-border: rgba(24, 24, 27, 0.11);
+    --fg: #18181b;
+    --muted: #5b5b63;
+    --faint: #9a9aa2;
+    --line: rgba(24, 24, 27, 0.07);
+    --chip: rgba(24, 24, 27, 0.05);
+    --accent-soft: rgba(243, 170, 24, 0.16);
+    --accent-fg: #b45309;
+    --st-act-fg: #b45309;
+    --st-act-bg: rgba(217, 119, 6, 0.10);
+    --st-wait-fg: #6d28d9;
+    --st-wait-bg: rgba(124, 58, 237, 0.09);
+    --st-prog-fg: #0369a1;
+    --st-prog-bg: rgba(2, 132, 199, 0.09);
+    --st-done-fg: #15803d;
+    --st-done-bg: rgba(22, 163, 74, 0.09);
+    --st-stop-fg: #be123c;
+    --st-stop-bg: rgba(225, 29, 72, 0.08);
+
     --bg-primary: #070709;
     --bg-surface: #0e0e12;
     --bg-surface-raised: #141418;
@@ -22,6 +46,33 @@
     --shadow-panel: 0 18px 50px -24px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   }
 
+  .dark {
+    --bg: #09090b;
+    --panel: #0e0e11;
+    --card: rgba(255, 255, 255, 0.025);
+    --card-border: rgba(255, 255, 255, 0.065);
+    --field: rgba(255, 255, 255, 0.04);
+    --field-border: rgba(255, 255, 255, 0.085);
+    --fg: #e8e8eb;
+    --muted: #a1a1aa;
+    --faint: #6e6e78;
+    --line: rgba(255, 255, 255, 0.07);
+    --chip: rgba(255, 255, 255, 0.06);
+    --accent: #f3aa18;
+    --accent-soft: rgba(243, 170, 24, 0.13);
+    --accent-fg: #f3aa18;
+    --st-act-fg: #fbbf24;
+    --st-act-bg: rgba(251, 191, 36, 0.10);
+    --st-wait-fg: #c4b5fd;
+    --st-wait-bg: rgba(167, 139, 250, 0.11);
+    --st-prog-fg: #7dd3fc;
+    --st-prog-bg: rgba(56, 189, 248, 0.10);
+    --st-done-fg: #4ade80;
+    --st-done-bg: rgba(74, 222, 128, 0.09);
+    --st-stop-fg: #fb7185;
+    --st-stop-bg: rgba(251, 113, 133, 0.09);
+  }
+
   * {
     border-color: var(--border-subtle);
   }
@@ -31,9 +82,9 @@
   }
 
   body {
-    background-color: var(--bg-primary);
-    color: var(--text-primary);
-    font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+    background-color: var(--bg);
+    color: var(--fg);
+    font-family: Geist, ui-sans-serif, system-ui, sans-serif;
     letter-spacing: -0.01em;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;

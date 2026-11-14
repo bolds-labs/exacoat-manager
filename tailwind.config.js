@@ -8,6 +8,25 @@ export default {
   theme: {
     extend: {
       colors: {
+        'bg': 'var(--bg)',
+        'panel': 'var(--panel)',
+        'card': 'var(--card)',
+        'card-border': 'var(--card-border)',
+        'field': 'var(--field)',
+        'field-border': 'var(--field-border)',
+        'fg': 'var(--fg)',
+        'muted': 'var(--muted)',
+        'faint': 'var(--faint)',
+        'line': 'var(--line)',
+        'chip': 'var(--chip)',
+        'accent': 'var(--accent)',
+        'accent-soft': 'var(--accent-soft)',
+        'accent-fg': 'var(--accent-fg)',
+        'st-act': { fg: 'var(--st-act-fg)', bg: 'var(--st-act-bg)' },
+        'st-wait': { fg: 'var(--st-wait-fg)', bg: 'var(--st-wait-bg)' },
+        'st-prog': { fg: 'var(--st-prog-fg)', bg: 'var(--st-prog-bg)' },
+        'st-done': { fg: 'var(--st-done-fg)', bg: 'var(--st-done-bg)' },
+        'st-stop': { fg: 'var(--st-stop-fg)', bg: 'var(--st-stop-bg)' },
         brand: {
           300: '#ffd37a',
           400: '#f5b838',
@@ -28,12 +47,12 @@ export default {
         },
       },
       fontFamily: {
-        heading: ['"Chakra Petch"', 'sans-serif'],
+        heading: ['Geist', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         chakra: ['"Chakra Petch"', 'sans-serif'],
         montserrat: ['Montserrat', 'sans-serif'],
         bebas: ['"Bebas Neue"', 'sans-serif'],
-        mono: ['"JetBrains Mono"', 'monospace'],
-        sans: ['"Plus Jakarta Sans"', 'Inter', 'sans-serif'],
+        mono: ['"Geist Mono"', 'ui-monospace', 'monospace'],
+        sans: ['Geist', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
         glass: '0 18px 50px -24px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
