@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Edit configuration**: the item pop-up now offers exactly what exacoat.com offers for the product (layers, finishes in Studio group order, stock, coverage, logo and custom cutouts, variants) and recalculates the price the webstore way. Staff can still change the price; warranty, redeem and marketplace items keep theirs unless staff use the webstore price. Saved item details keep their wording.
 - Printed labels, packing slips and invoices are unchanged.
 
+### Design: Dashboard and Sales & Reports
+- **Dashboard**: now a one-screen summary of Sales, Orders, Avg order value, Payout after fees and Items sold for Today, 7 days, 30 days or This month, each compared with the period before (or "Not enough history" when older orders are not loaded). Adds a sales trend against the previous period, sales by channel, top products, Needs attention and quick links. The recent orders list and the status ring are gone.
+- **Same numbers everywhere**: the Dashboard now counts Shopee and TikTok Shop orders too and uses the same rules as Sales & Reports, so both pages show the same totals for the same period.
+- **Sales & Reports**: same content and controls on the new design: range tabs, channel toggles, KPI cards with change against the previous period, a cleaner sales chart, one card per channel with fee lines on demand, and the orders ledger in the Orders table style. CSV export and the Shopee history sync work as before.
+
 ---
 
 ## [0.1.227] - 2026-11-14
