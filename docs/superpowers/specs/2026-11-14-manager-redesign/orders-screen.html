@@ -1,0 +1,413 @@
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Manrope:wght@400;500;600&display=swap');
+.label2 { font-size: 13px; opacity: .7; margin: 0 0 10px; }
+.wrap { overflow-x: auto; padding: 4px 4px 12px; margin-bottom: 36px; }
+.mk { --bg:#09090b; --side:rgba(18,18,22,.72); --glass:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.02)); --glassBorder:rgba(255,255,255,.09); --glassHi:rgba(255,255,255,.07); --shadow:0 10px 30px rgba(0,0,0,.35);
+  --text:#ededf0; --muted:#a1a1aa; --faint:#71717a; --line:rgba(255,255,255,.07); --accent:#f3aa18; --accentSoft:rgba(243,170,24,.13); --hover:rgba(255,255,255,.035); --chipBg:rgba(255,255,255,.06);
+  --glow:radial-gradient(700px 420px at 28% -5%,rgba(243,170,24,.10),transparent 70%),radial-gradient(600px 400px at 95% 100%,rgba(120,120,140,.10),transparent 70%);
+  width: 1880px; height: 900px; display: grid; grid-template-columns: 248px 1fr; border-radius: 14px; overflow: hidden; border: 1px solid var(--glassBorder);
+  background: var(--glow), var(--bg); color: var(--text); font: 14px/1.45 Inter, ui-sans-serif, system-ui, sans-serif; }
+.mk.light { --bg:#f4f4f1; --side:rgba(255,255,255,.62); --glass:linear-gradient(180deg,rgba(255,255,255,.88),rgba(255,255,255,.68)); --glassBorder:rgba(24,24,27,.08); --glassHi:rgba(255,255,255,.9); --shadow:0 10px 30px rgba(24,24,27,.06);
+  --text:#18181b; --muted:#52525b; --faint:#8a8a93; --line:rgba(24,24,27,.07); --accentSoft:rgba(243,170,24,.16); --hover:rgba(24,24,27,.025); --chipBg:rgba(24,24,27,.05);
+  --glow:radial-gradient(700px 420px at 28% -5%,rgba(243,170,24,.14),transparent 70%),radial-gradient(600px 400px at 95% 100%,rgba(160,160,175,.16),transparent 70%); }
+.i { width: 16px; height: 16px; flex: none; } .i.tiny { width: 13px; height: 13px; }
+.glass { background: var(--glass); border: 1px solid var(--glassBorder); box-shadow: inset 0 1px 0 var(--glassHi), var(--shadow); border-radius: 14px; }
+.side { background: var(--side); border-right: 1px solid var(--line); padding: 18px 14px; display: flex; flex-direction: column; gap: 2px; }
+.brand { display: flex; align-items: center; gap: 8px; padding: 2px 10px 14px; }
+.logo { font-family: 'Chakra Petch', sans-serif; font-weight: 600; font-size: 21px; letter-spacing: -.01em; } .logo i { color: var(--accent); font-style: normal; }
+.erp { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; background: var(--accentSoft); color: var(--accent); }
+.navlabel { font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--faint); padding: 16px 10px 6px; }
+.nav { display: flex; align-items: center; gap: 11px; padding: 8px 10px; border-radius: 9px; color: var(--muted); font-weight: 500; }
+.nav .i { color: var(--faint); }
+.nav.active { background: var(--accentSoft); color: var(--text); } .nav.active .i { color: var(--accent); }
+.nav .count { margin-left: auto; min-width: 20px; text-align: center; font-size: 12px; font-weight: 600; padding: 1px 6px; border-radius: 999px; background: var(--accent); color: #111; }
+.subnav { margin: 2px 0 6px 21px; padding-left: 16px; border-left: 1px solid var(--line); display: flex; flex-direction: column; }
+.subnav div { padding: 5px 8px; font-size: 13px; color: var(--faint); border-radius: 7px; } .subnav .on { color: var(--text); background: var(--hover); }
+.me { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 12px 10px 4px; border-top: 1px solid var(--line); }
+.av { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-weight: 600; font-size: 13px; background: var(--accentSoft); color: var(--accent); }
+.who { flex: 1; font-weight: 500; font-size: 13px; } .who small { display: block; color: var(--faint); font-size: 12px; font-weight: 400; } .me .i { color: var(--faint); }
+.main { display: flex; flex-direction: column; min-width: 0; }
+.topbar { height: 58px; display: flex; align-items: center; gap: 16px; padding: 0 28px; border-bottom: 1px solid var(--line); }
+.crumbs { color: var(--faint); font-size: 13px; } .crumbs span { margin: 0 4px; } .crumbs b { color: var(--text); font-weight: 500; }
+.cmd { margin: 0 auto; width: 520px; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 10px; background: var(--chipBg); border: 1px solid var(--line); color: var(--faint); font-size: 13px; }
+.cmd span { flex: 1; } kbd { font: 500 11px 'JetBrains Mono', monospace; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--line); }
+.toggle { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); padding: 7px 11px; border-radius: 9px; border: 1px solid var(--line); }
+.content { padding: 22px 28px; display: flex; flex-direction: column; gap: 16px; overflow: hidden; }
+.titlerow { display: flex; align-items: flex-end; gap: 16px; }
+h1 { font-family: 'Chakra Petch', sans-serif; font-weight: 600; font-size: 28px; margin: 0; letter-spacing: -.01em; }
+.lead { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+.actions { margin-left: auto; display: flex; gap: 8px; }
+.btn { display: inline-flex; align-items: center; gap: 8px; padding: 8px 13px; border-radius: 10px; font-size: 13px; font-weight: 500; color: var(--text); background: var(--glass); border: 1px solid var(--glassBorder); box-shadow: inset 0 1px 0 var(--glassHi); }
+.btn .i { color: var(--muted); } .btn.sm { padding: 6px 10px; font-size: 12.5px; }
+.btn.primary { background: var(--accent); color: #111; border-color: transparent; font-weight: 600; box-shadow: 0 6px 18px rgba(243,170,24,.25); } .btn.primary .i { color: #111; }
+.channels { display: inline-flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--chipBg); border: 1px solid var(--line); align-self: flex-start; }
+.channels span { padding: 7px 14px; border-radius: 9px; font-size: 13px; font-weight: 500; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+.channels span.on { background: var(--glass); color: var(--text); box-shadow: inset 0 1px 0 var(--glassHi), 0 2px 8px rgba(0,0,0,.15); border: 1px solid var(--glassBorder); }
+.channels em, .tabs em { font-style: normal; font-size: 12px; font-weight: 600; color: var(--faint); }
+.channels .on em { color: var(--accent); }
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.kpi { display: flex; align-items: center; gap: 14px; padding: 14px 16px; }
+.kpi b { display: block; font-size: 22px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; } .kpi span { color: var(--muted); font-size: 13px; }
+.kic { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; } .kic .i { width: 18px; height: 18px; }
+.kic.amber { background: rgba(243,170,24,.14); color: #f3aa18; } .kic.violet { background: rgba(167,139,250,.15); color: #a78bfa; } .kic.blue { background: rgba(96,165,250,.15); color: #60a5fa; } .kic.sky { background: rgba(56,189,248,.14); color: #38bdf8; }
+.tablecard { padding: 0; overflow: hidden; }
+.tabs { display: flex; align-items: center; gap: 2px; padding: 8px 12px 0; border-bottom: 1px solid var(--line); }
+.tabs > span { padding: 9px 11px 11px; font-size: 13px; font-weight: 500; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; display: flex; gap: 6px; align-items: center; white-space: nowrap; }
+.tabs > span.on { color: var(--text); border-color: var(--accent); }
+.tabs .filters { margin-left: auto; border: 0 !important; display: flex; gap: 6px; padding-bottom: 8px !important; }
+table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+col.c-order{width:236px} col.c-cust{width:250px} col.c-total{width:140px} col.c-status{width:250px} col.c-cour{width:240px} col.c-act{width:104px}
+td { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+td > div, td .sub { overflow: hidden; text-overflow: ellipsis; }
+th { text-align: left; font-size: 12px; font-weight: 500; color: var(--faint); padding: 10px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+.num { text-align: right; } .strong { font-weight: 600; }
+.idline { display: flex; align-items: center; gap: 8px; } .idline b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.sub { color: var(--muted); font-size: 13px; margin-top: 3px; } .sub.ico { display: flex; align-items: center; gap: 5px; } .sub.ico .i { width: 13px; height: 13px; color: var(--faint); } .sub.right { justify-content: flex-end; }
+.chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; }
+.chip-green { color: #34d399; background: rgba(52,211,153,.12); } .light .chip-green { color: #047857; background: rgba(16,185,129,.12); }
+.pickup { max-width: 100%; margin-top: 5px; display: inline-flex; align-items: center; gap: 7px; padding: 4px 9px 4px 7px; border-radius: 8px; font-size: 12.5px; color: var(--text); background: var(--accentSoft); border: 1px solid rgba(243,170,24,.35); }
+.pickup .i { width: 14px; height: 14px; color: var(--accent); } .pickup b { font-weight: 600; }
+.pickup-mini { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; } .pickup-mini .i { color: var(--accent); width: 15px; height: 15px; }
+.stack { display: flex; flex-direction: column; gap: 5px; }
+.kv { display: flex; align-items: center; gap: 8px; } .kv .k { width: 54px; flex: none; font-size: 12px; color: var(--faint); }
+.st { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 500; }
+.dot { width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 0 3px rgba(255,255,255,.04); }
+.amber { background: #f3aa18; } .green { background: #22c55e; } .violet { background: #a78bfa; } .blue { background: #60a5fa; } .sky { background: #38bdf8; }
+.muted { color: var(--faint); } .mono { font: 500 12.5px 'JetBrains Mono', monospace; color: var(--text); } .sub .tiny { color: var(--faint); margin-left: 4px; }
+.acts { white-space: nowrap; text-align: right; } .iconbtn { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; border: 1px solid var(--line); color: var(--muted); margin-left: 6px; }
+.iconbtn.warn { color: #f59e0b; border-color: rgba(245,158,11,.4); background: rgba(245,158,11,.1); } .iconbtn.accent { color: #a78bfa; border-color: rgba(167,139,250,.4); background: rgba(167,139,250,.1); }
+tr:hover td { background: var(--hover); }
+/* round 3: calmer glass, weights, hierarchy, tabs */
+.mk { --glass:linear-gradient(180deg,rgba(255,255,255,.032),rgba(255,255,255,.014)); --glassBorder:rgba(255,255,255,.065); --glassHi:rgba(255,255,255,.035); --shadow:0 1px 2px rgba(0,0,0,.25);
+  --text:#e8e8eb; --muted:#a1a1aa; --faint:#6e6e78;
+  --glow:radial-gradient(700px 420px at 28% -5%,rgba(243,170,24,.06),transparent 70%),radial-gradient(600px 400px at 95% 100%,rgba(120,120,140,.06),transparent 70%); }
+.mk.light { --glass:linear-gradient(180deg,rgba(255,255,255,.92),rgba(255,255,255,.80)); --glassBorder:rgba(24,24,27,.07); --glassHi:rgba(255,255,255,.95); --shadow:0 1px 2px rgba(24,24,27,.05);
+  --text:#18181b; --muted:#5b5b63; --faint:#9a9aa2;
+  --glow:radial-gradient(700px 420px at 28% -5%,rgba(243,170,24,.08),transparent 70%),radial-gradient(600px 400px at 95% 100%,rgba(160,160,175,.10),transparent 70%); }
+h1 { font-weight: 500; font-size: 26px; }
+.logo { font-weight: 500; }
+.nav { font-weight: 450; }
+.nav.active { background: var(--hover); color: var(--text); box-shadow: inset 2px 0 0 var(--accent); border-radius: 4px 9px 9px 4px; }
+.nav .count { background: var(--chipBg); color: var(--muted); font-weight: 500; }
+.nav.active .count { background: var(--accent); color: #111; }
+.kpi b { font-weight: 500; font-size: 22px; }
+.kic { background: var(--chipBg) !important; color: var(--muted) !important; }
+.kpi:first-child .kic { background: var(--accentSoft) !important; color: var(--accent) !important; }
+.btn { font-weight: 450; box-shadow: none; }
+.btn.primary { font-weight: 600; box-shadow: none; }
+.channels span { font-weight: 450; }
+.tabs { gap: 4px; padding: 10px 12px; }
+.tabs > span { padding: 6px 11px; border: 1px solid transparent; border-radius: 8px; margin: 0; font-weight: 450; }
+.tabs > span.on { background: var(--chipBg); border-color: var(--glassBorder); color: var(--text); }
+.tabs em { font-weight: 500; font-size: 11.5px; padding: 1px 6px; border-radius: 999px; background: var(--chipBg); color: var(--muted); }
+.tabs em.hot { background: var(--accentSoft); color: var(--accent); }
+.tabs .filters { padding: 0 !important; }
+col.c-cb { width: 44px; }
+th, td { padding-left: 12px; padding-right: 12px; }
+th { font-weight: 450; color: var(--faint); }
+td { vertical-align: middle; padding-top: 13px; padding-bottom: 13px; }
+td.cb, th.cb { padding-right: 0; }
+.box { display: inline-block; width: 15px; height: 15px; border-radius: 4px; border: 1.5px solid var(--faint); opacity: .7; }
+.idline { display: flex; align-items: baseline; gap: 10px; } .idline b { font-weight: 500; } .idline .sub { margin: 0; font-size: 12.5px; }
+.tags { display: flex; gap: 6px; margin-top: 6px; }
+.chip { font-weight: 500; font-size: 11.5px; padding: 1px 8px; border: 1px solid transparent; }
+.chip-green { color: #4ade80; background: rgba(74,222,128,.08); border-color: rgba(74,222,128,.22); }
+.chip-amber { color: #fbbf24; background: rgba(251,191,36,.08); border-color: rgba(251,191,36,.25); }
+.light .chip-green { color: #15803d; background: rgba(22,163,74,.07); border-color: rgba(22,163,74,.22); }
+.light .chip-amber { color: #b45309; background: rgba(217,119,6,.07); border-color: rgba(217,119,6,.25); }
+.name { font-weight: 500; }
+.qty { display: flex; align-items: center; gap: 6px; color: var(--text); } .qty .i { color: var(--faint); }
+.amount { font-weight: 500; font-variant-numeric: tabular-nums; }
+.strong { font-weight: 500; }
+.st { font-weight: 450; }
+.dot { width: 7px; height: 7px; box-shadow: none; }
+.pickup { background: transparent; border-color: rgba(243,170,24,.35); color: var(--accent); font-weight: 500; }
+.light .pickup { color: #b45309; border-color: rgba(217,119,6,.35); }
+.iconbtn { border-color: var(--glassBorder); }
+/* round 4 */
+.mk { font-family: Geist, Inter, ui-sans-serif, system-ui, sans-serif; letter-spacing: -0.005em; }
+h1 { font-family: Geist, sans-serif; font-weight: 600; font-size: 26px; letter-spacing: -0.025em; }
+.idline b, .amount, .kpi b, .mono { font-family: 'Geist Mono', ui-monospace, monospace; font-weight: 500; letter-spacing: -0.01em; }
+.idline b { font-size: 13.5px; }
+.amount { font-size: 13.5px; }
+kbd { font-family: 'Geist Mono', monospace; }
+.idline { display: block; }
+
+/* sidebar active: soft background + small separate amber bar at the left edge (as today) */
+.nav { position: relative; }
+.nav.active { background: var(--hover); box-shadow: none; border-radius: 9px; }
+.nav.active::before { content: ''; position: absolute; left: -14px; top: 50%; transform: translateY(-50%); width: 4px; height: 14px; border-radius: 999px; background: var(--accent); }
+
+/* header actions */
+.btn.icon { padding: 8px; }
+.btn.icon .i { margin: 0; }
+.dd { position: relative; display: inline-flex; }
+.btn.primary .i:last-child { width: 14px; height: 14px; margin-left: 2px; opacity: .75; }
+.menu { position: absolute; right: 0; top: calc(100% + 8px); width: 300px; padding: 6px; z-index: 5; border-radius: 12px;
+  background: rgba(22,22,26,.96); border: 1px solid rgba(255,255,255,.09); box-shadow: 0 16px 40px rgba(0,0,0,.45); }
+.mi { display: flex; gap: 12px; align-items: flex-start; padding: 9px 10px; border-radius: 8px; }
+.mi:first-child { background: rgba(255,255,255,.05); }
+.mi .i { margin-top: 2px; color: var(--muted); }
+.mi:first-child .i { color: var(--accent); }
+.mi b { display: block; font-weight: 500; font-size: 13.5px; }
+.mi span { display: block; color: var(--faint); font-size: 12.5px; margin-top: 1px; }
+.menu .sep { height: 1px; background: var(--line); margin: 5px 4px; }
+
+
+/* round 5: status style C + warranty claim chip */
+.stc { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 8px; border-radius: 7px; font-size: 12.5px; font-weight: 500; }
+.stc .i { width: 14px; height: 14px; }
+.stc.act  { color: #fbbf24; background: rgba(251,191,36,.10); }
+.stc.wait { color: #c4b5fd; background: rgba(167,139,250,.11); }
+.stc.prog { color: #7dd3fc; background: rgba(56,189,248,.10); }
+.stc.done { color: #4ade80; background: rgba(74,222,128,.09); }
+.stc.stop { color: #fb7185; background: rgba(251,113,133,.09); }
+.light .stc.act  { color: #b45309; background: rgba(217,119,6,.10); }
+.light .stc.wait { color: #6d28d9; background: rgba(124,58,237,.09); }
+.light .stc.prog { color: #0369a1; background: rgba(2,132,199,.09); }
+.light .stc.done { color: #15803d; background: rgba(22,163,74,.09); }
+.light .stc.stop { color: #be123c; background: rgba(225,29,72,.08); }
+.wchip { display: inline-flex; align-items: stretch; border-radius: 999px; overflow: hidden; font-size: 11.5px; font-weight: 500; border: 1px solid rgba(74,222,128,.25); }
+.wchip .w { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; color: #4ade80; background: rgba(74,222,128,.08); }
+.wchip .w .i { width: 12px; height: 12px; }
+.wchip .c { padding: 1px 8px; border-left: 1px solid rgba(255,255,255,.08); }
+.wchip.pend .c { color: #fbbf24; background: rgba(251,191,36,.10); }
+.wchip.ok .c { color: #4ade80; background: rgba(74,222,128,.14); }
+.light .wchip { border-color: rgba(22,163,74,.25); }
+.light .wchip .w { color: #15803d; background: rgba(22,163,74,.07); }
+.light .wchip .c { border-left-color: rgba(24,24,27,.08); }
+.light .wchip.pend .c { color: #b45309; background: rgba(217,119,6,.10); }
+.light .wchip.ok .c { color: #15803d; background: rgba(22,163,74,.12); }
+
+/* font specimens (page only) */
+.specimens { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 6px 0 26px; }
+.spec { padding: 16px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.03); font-size: 14px; }
+.spec .fname { display: block; font-family: Geist, sans-serif; font-size: 12px; opacity: .6; margin-bottom: 8px; }
+.spec .big { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 6px; }
+</style>
+<h2>Refined dark, round 5</h2>
+<p class="subtitle">Warranty orders show the claim review state in the chip under the order number (Warranty | Pending, Warranty | Approved). The status column carries payment and order progress, drawn in style C: a tint for the group (amber needs action, violet waiting, blue in progress, green done, red stopped) and an icon for the exact status.</p>
+
+<p class="label2"><b>Dark mode</b></p>
+<div class="wrap">
+<div class="mk dark">
+  <aside class="side">
+    <div class="brand"><div class="logo">exacoat<i>.</i></div><span class="erp">Manager</span></div>
+    <div class="navlabel">Operations</div>
+    <div class="nav"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg><span>Dashboard</span></div>
+    <div class="nav active"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><span>Orders</span><span class="count">1</span></div><div class="subnav"><div class="on">All orders</div><div class="">Custom label</div><div class="">Export shipments</div><div class="">Tracking pool</div></div>
+    <div class="nav"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg><span>Warranty &amp; RMA</span><span class="count">2</span></div>
+    <div class="nav"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 2.3a.53.53 0 0 1 .95 0l2.31 4.68a2.1 2.1 0 0 0 1.6 1.16l5.16.76a.53.53 0 0 1 .3.9l-3.74 3.64a2.1 2.1 0 0 0-.61 1.88l.88 5.14a.53.53 0 0 1-.77.56l-4.62-2.43a2.1 2.1 0 0 0-1.97 0L6.4 21a.53.53 0 0 1-.77-.56l.88-5.14a2.1 2.1 0 0 0-.61-1.88L2.16 9.8a.53.53 0 0 1 .3-.9l5.16-.76a2.1 2.1 0 0 0 1.6-1.16z"/></svg><span>Reviews</span></div>
+    <div class="navlabel">Catalog</div>
+    <div class="nav"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.7 4.73a2 2 0 0 0 2 0L20.7 7"/></svg><span>Products</span></div>
+    <div class="nav"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg><span>Configurator Studio</span></div>
+    <div class="nav"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.59 2.59A2 2 0 0 0 11.17 2H4a2 2 0 0 0-2 2v7.17a2 2 0 0 0 .59 1.42l8.7 8.7a2.43 2.43 0 0 0 3.42 0l6.58-6.58a2.43 2.43 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5"/></svg><span>Materials &amp; stock</span></div>
+    <div class="navlabel">Growth</div>
+    <div class="nav"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Customers</span></div>
+    <div class="nav"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/></svg><span>Affiliates</span></div>
+    <div class="nav"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/></svg><span>Reports</span></div>
+    <div class="me"><span class="av">E</span><span class="who">exacoat.cs<small>Shop Manager</small></span><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></div>
+  </aside>
+  <section class="main">
+    <header class="topbar">
+      <div class="crumbs">Operations <span>/</span> <b>Orders</b></div>
+      <div class="cmd"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span>Search orders, customers, resi</span><kbd>Ctrl K</kbd></div>
+      <div class="toggle"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg><span>Dark</span></div>
+    </header>
+    <div class="content">
+      <div class="titlerow">
+        <div><h1>Orders</h1><p class="lead">Webstore, Shopee and TikTok orders, production and delivery.</p></div>
+        <div class="actions">
+          <span class="btn icon" title="Refresh"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></span>
+          <span class="dd">
+            <span class="btn primary"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Create<svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+            <div class="menu glass">
+              <div class="mi"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg><div><b>Warranty claim</b><span>Replace a faulty skin for a customer</span></div></div>
+              <div class="mi"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"/></svg><div><b>Redeem</b><span>Redeem a gift or voucher code</span></div></div>
+              <div class="mi"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 2.3a.53.53 0 0 1 .95 0l2.31 4.68a2.1 2.1 0 0 0 1.6 1.16l5.16.76a.53.53 0 0 1 .3.9l-3.74 3.64a2.1 2.1 0 0 0-.61 1.88l.88 5.14a.53.53 0 0 1-.77.56l-4.62-2.43a2.1 2.1 0 0 0-1.97 0L6.4 21a.53.53 0 0 1-.77-.56l.88-5.14a2.1 2.1 0 0 0-.61-1.88L2.16 9.8a.53.53 0 0 1 .3-.9l5.16-.76a2.1 2.1 0 0 0 1.6-1.16z"/></svg><div><b>Endorsement</b><span>Free order for a creator or partner</span></div></div>
+              <div class="sep"></div>
+              <div class="mi"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.59 2.59A2 2 0 0 0 11.17 2H4a2 2 0 0 0-2 2v7.17a2 2 0 0 0 .59 1.42l8.7 8.7a2.43 2.43 0 0 0 3.42 0l6.58-6.58a2.43 2.43 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5"/></svg><div><b>Custom label</b><span>Print a shipping label without an order</span></div></div>
+            </div>
+          </span>
+        </div>
+      </div>
+      <div class="channels"><span class="on">Exacoat webstore<em>51</em></span><span>Shopee Indonesia<em>12</em></span><span>TikTok Shop<em>4</em></span></div>
+      <div class="kpis">
+        <div class="kpi glass"><span class="kic amber"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.7 4.73a2 2 0 0 0 2 0L20.7 7"/></svg></span><div><b>1</b><span>To prepare</span></div></div>
+        <div class="kpi glass"><span class="kic violet"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span><div><b>2</b><span>Awaiting payment</span></div></div>
+        <div class="kpi glass"><span class="kic blue"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/></svg></span><div><b>1</b><span>Ready for pickup</span></div></div>
+        <div class="kpi glass"><span class="kic sky"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg></span><div><b>30</b><span>Shipped, last 7 days</span></div></div>
+      </div>
+      <div class="glass tablecard">
+        <div class="tabs">
+          <span class="on">All<em>51</em></span><span>Awaiting payment<em class="hot">2</em></span><span>To prepare<em class="hot">1</em></span><span>Preparing</span><span>Ready for pickup<em>1</em></span><span>Shipped<em>30</em></span><span>Completed</span><span>Warranty claims<em class="hot">2</em></span>
+          <span class="filters"><span class="btn sm"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>All couriers</span><span class="btn sm"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>All labels</span></span>
+        </div>
+        <table>
+          <colgroup><col class="c-cb"><col class="c-order"><col class="c-cust"><col><col class="c-total"><col class="c-status"><col class="c-cour"><col class="c-act"></colgroup><tr><th class="cb"><span class="box"></span></th><th>Order</th><th>Customer &amp; destination</th><th>Items</th><th class="num">Total</th><th>Status</th><th>Courier &amp; resi</th><th></th></tr>
+          
+<tr>
+  <td class="cb"><span class="box"></span></td>
+  <td><div class="idline"><b>#542888</b></div><div class="sub">Nov 13, 18:32</div><div class="tags"><span class="wchip pend"><span class="w"><svg class="i tiny" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>Warranty</span><span class="c">Pending</span></span></div></td>
+  <td><div class="name">Yenny</div><div class="sub">Jakarta Utara, DKI Jakarta</div></td>
+  <td><div class="qty"><svg class="i tiny" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.7 4.73a2 2 0 0 0 2 0L20.7 7"/></svg>1 item</div><div class="sub">[Warranty replacement] iPhone 15 Pro Skins</div></td>
+  <td class="num"><div class="amount">Rp 10.836</div><div class="sub">BCA transfer</div></td>
+  <td><span class="stc wait"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Awaiting payment</span></td>
+  <td><div>JNE · REG</div><div class="sub ico"><span class="muted">Resi not assigned yet</span></div></td>
+  <td class="acts"><span class="iconbtn accent" title="Review claim"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg></span><span class="iconbtn"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></svg></span></td>
+</tr>
+<tr>
+  <td class="cb"><span class="box"></span></td>
+  <td><div class="idline"><b>#542887</b></div><div class="sub">Nov 13, 17:25</div></td>
+  <td><div class="name">Angel André Flores Tejada</div><div class="sub">Châtillon, France</div></td>
+  <td><div class="qty"><svg class="i tiny" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.7 4.73a2 2 0 0 0 2 0L20.7 7"/></svg>1 item</div><div class="sub">iPhone 17 Skins</div></td>
+  <td class="num"><div class="amount">€31,80</div><div class="sub">PayPal</div></td>
+  <td><span class="stc act"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.7 4.73a2 2 0 0 0 2 0L20.7 7"/></svg>To prepare</span></td>
+  <td><div>POS · Tracked Shipment</div><div class="sub ico"><span class="muted">Resi not assigned yet</span></div></td>
+  <td class="acts"><span class="iconbtn warn" title="Label not printed"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg></span><span class="iconbtn"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></svg></span></td>
+</tr>
+<tr>
+  <td class="cb"><span class="box"></span></td>
+  <td><div class="idline"><b>#542886</b></div><div class="sub">Nov 13, 15:06</div></td>
+  <td><div class="name">Onggo Wijoyo</div><div class="sub">Store Pickup</div></td>
+  <td><div class="qty"><svg class="i tiny" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.7 4.73a2 2 0 0 0 2 0L20.7 7"/></svg>1 item</div><div class="sub">MacBook Pro 14" (M4) Skins</div></td>
+  <td class="num"><div class="amount">Rp 405.000</div><div class="sub">QRIS</div></td>
+  <td><span class="stc prog"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/></svg>Ready for pickup</span></td>
+  <td><div><span class="pickup-mini"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/></svg>Store pickup</span></div><div class="sub ico"><span class="muted">Collect at Ruby Commercial TB12</span></div></td>
+  <td class="acts"><span class="iconbtn"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></svg></span></td>
+</tr>
+<tr>
+  <td class="cb"><span class="box"></span></td>
+  <td><div class="idline"><b>#542885</b></div><div class="sub">Nov 13, 12:31</div><div class="tags"><span class="wchip ok"><span class="w"><svg class="i tiny" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>Warranty</span><span class="c">Approved</span></span></div></td>
+  <td><div class="name">Rizki</div><div class="sub">Probolinggo, Jawa Timur</div></td>
+  <td><div class="qty"><svg class="i tiny" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.7 4.73a2 2 0 0 0 2 0L20.7 7"/></svg>1 item</div><div class="sub">[Warranty replacement] Galaxy Z Fold 7 Skins</div></td>
+  <td class="num"><div class="amount">Rp 29.818</div><div class="sub">BCA transfer</div></td>
+  <td><span class="stc wait"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Awaiting payment</span></td>
+  <td><div>JNE · REG</div><div class="sub ico"><span class="muted">Resi not assigned yet</span></div></td>
+  <td class="acts"><span class="iconbtn"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></svg></span></td>
+</tr>
+<tr>
+  <td class="cb"><span class="box"></span></td>
+  <td><div class="idline"><b>#542882</b></div><div class="sub">Nov 12, 22:41</div></td>
+  <td><div class="name">Fitriadi Pradana</div><div class="sub">Tangerang Selatan, Banten</div></td>
+  <td><div class="qty"><svg class="i tiny" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.7 4.73a2 2 0 0 0 2 0L20.7 7"/></svg>2 items</div><div class="sub">Galaxy Z Fold 7 Skins, Camera Skin</div></td>
+  <td class="num"><div class="amount">Rp 256.000</div><div class="sub">QRIS</div></td>
+  <td><span class="stc prog"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Shipped</span></td>
+  <td><div>JNE · YES</div><div class="sub ico"><span class="mono">0703622100000421</span><svg class="i tiny" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></div></td>
+  <td class="acts"><span class="iconbtn"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></svg></span></td>
+</tr>
+        </table>
+      </div>
+    </div>
+  </section>
+</div></div>
+<p class="label2"><b>Light mode</b> (same screen, switched with the toggle in the top bar)</p>
+<div class="wrap">
+<div class="mk light">
+  <aside class="side">
+    <div class="brand"><div class="logo">exacoat<i>.</i></div><span class="erp">Manager</span></div>
+    <div class="navlabel">Operations</div>
+    <div class="nav"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg><span>Dashboard</span></div>
+    <div class="nav active"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><span>Orders</span><span class="count">1</span></div><div class="subnav"><div class="on">All orders</div><div class="">Custom label</div><div class="">Export shipments</div><div class="">Tracking pool</div></div>
+    <div class="nav"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg><span>Warranty &amp; RMA</span><span class="count">2</span></div>
+    <div class="nav"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 2.3a.53.53 0 0 1 .95 0l2.31 4.68a2.1 2.1 0 0 0 1.6 1.16l5.16.76a.53.53 0 0 1 .3.9l-3.74 3.64a2.1 2.1 0 0 0-.61 1.88l.88 5.14a.53.53 0 0 1-.77.56l-4.62-2.43a2.1 2.1 0 0 0-1.97 0L6.4 21a.53.53 0 0 1-.77-.56l.88-5.14a2.1 2.1 0 0 0-.61-1.88L2.16 9.8a.53.53 0 0 1 .3-.9l5.16-.76a2.1 2.1 0 0 0 1.6-1.16z"/></svg><span>Reviews</span></div>
+    <div class="navlabel">Catalog</div>
+    <div class="nav"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.7 4.73a2 2 0 0 0 2 0L20.7 7"/></svg><span>Products</span></div>
+    <div class="nav"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg><span>Configurator Studio</span></div>
+    <div class="nav"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.59 2.59A2 2 0 0 0 11.17 2H4a2 2 0 0 0-2 2v7.17a2 2 0 0 0 .59 1.42l8.7 8.7a2.43 2.43 0 0 0 3.42 0l6.58-6.58a2.43 2.43 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5"/></svg><span>Materials &amp; stock</span></div>
+    <div class="navlabel">Growth</div>
+    <div class="nav"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Customers</span></div>
+    <div class="nav"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/></svg><span>Affiliates</span></div>
+    <div class="nav"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/></svg><span>Reports</span></div>
+    <div class="me"><span class="av">E</span><span class="who">exacoat.cs<small>Shop Manager</small></span><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></div>
+  </aside>
+  <section class="main">
+    <header class="topbar">
+      <div class="crumbs">Operations <span>/</span> <b>Orders</b></div>
+      <div class="cmd"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span>Search orders, customers, resi</span><kbd>Ctrl K</kbd></div>
+      <div class="toggle"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg><span>Light</span></div>
+    </header>
+    <div class="content">
+      <div class="titlerow">
+        <div><h1>Orders</h1><p class="lead">Webstore, Shopee and TikTok orders, production and delivery.</p></div>
+        <div class="actions">
+          <span class="btn icon" title="Refresh"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></span>
+          <span class="dd">
+            <span class="btn primary"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Create<svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+            
+          </span>
+        </div>
+      </div>
+      <div class="channels"><span class="on">Exacoat webstore<em>51</em></span><span>Shopee Indonesia<em>12</em></span><span>TikTok Shop<em>4</em></span></div>
+      <div class="kpis">
+        <div class="kpi glass"><span class="kic amber"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.7 4.73a2 2 0 0 0 2 0L20.7 7"/></svg></span><div><b>1</b><span>To prepare</span></div></div>
+        <div class="kpi glass"><span class="kic violet"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span><div><b>2</b><span>Awaiting payment</span></div></div>
+        <div class="kpi glass"><span class="kic blue"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/></svg></span><div><b>1</b><span>Ready for pickup</span></div></div>
+        <div class="kpi glass"><span class="kic sky"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg></span><div><b>30</b><span>Shipped, last 7 days</span></div></div>
+      </div>
+      <div class="glass tablecard">
+        <div class="tabs">
+          <span class="on">All<em>51</em></span><span>Awaiting payment<em class="hot">2</em></span><span>To prepare<em class="hot">1</em></span><span>Preparing</span><span>Ready for pickup<em>1</em></span><span>Shipped<em>30</em></span><span>Completed</span><span>Warranty claims<em class="hot">2</em></span>
+          <span class="filters"><span class="btn sm"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>All couriers</span><span class="btn sm"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>All labels</span></span>
+        </div>
+        <table>
+          <colgroup><col class="c-cb"><col class="c-order"><col class="c-cust"><col><col class="c-total"><col class="c-status"><col class="c-cour"><col class="c-act"></colgroup><tr><th class="cb"><span class="box"></span></th><th>Order</th><th>Customer &amp; destination</th><th>Items</th><th class="num">Total</th><th>Status</th><th>Courier &amp; resi</th><th></th></tr>
+          
+<tr>
+  <td class="cb"><span class="box"></span></td>
+  <td><div class="idline"><b>#542888</b></div><div class="sub">Nov 13, 18:32</div><div class="tags"><span class="wchip pend"><span class="w"><svg class="i tiny" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>Warranty</span><span class="c">Pending</span></span></div></td>
+  <td><div class="name">Yenny</div><div class="sub">Jakarta Utara, DKI Jakarta</div></td>
+  <td><div class="qty"><svg class="i tiny" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.7 4.73a2 2 0 0 0 2 0L20.7 7"/></svg>1 item</div><div class="sub">[Warranty replacement] iPhone 15 Pro Skins</div></td>
+  <td class="num"><div class="amount">Rp 10.836</div><div class="sub">BCA transfer</div></td>
+  <td><span class="stc wait"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Awaiting payment</span></td>
+  <td><div>JNE · REG</div><div class="sub ico"><span class="muted">Resi not assigned yet</span></div></td>
+  <td class="acts"><span class="iconbtn accent" title="Review claim"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg></span><span class="iconbtn"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></svg></span></td>
+</tr>
+<tr>
+  <td class="cb"><span class="box"></span></td>
+  <td><div class="idline"><b>#542887</b></div><div class="sub">Nov 13, 17:25</div></td>
+  <td><div class="name">Angel André Flores Tejada</div><div class="sub">Châtillon, France</div></td>
+  <td><div class="qty"><svg class="i tiny" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.7 4.73a2 2 0 0 0 2 0L20.7 7"/></svg>1 item</div><div class="sub">iPhone 17 Skins</div></td>
+  <td class="num"><div class="amount">€31,80</div><div class="sub">PayPal</div></td>
+  <td><span class="stc act"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.7 4.73a2 2 0 0 0 2 0L20.7 7"/></svg>To prepare</span></td>
+  <td><div>POS · Tracked Shipment</div><div class="sub ico"><span class="muted">Resi not assigned yet</span></div></td>
+  <td class="acts"><span class="iconbtn warn" title="Label not printed"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg></span><span class="iconbtn"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></svg></span></td>
+</tr>
+<tr>
+  <td class="cb"><span class="box"></span></td>
+  <td><div class="idline"><b>#542886</b></div><div class="sub">Nov 13, 15:06</div></td>
+  <td><div class="name">Onggo Wijoyo</div><div class="sub">Store Pickup</div></td>
+  <td><div class="qty"><svg class="i tiny" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.7 4.73a2 2 0 0 0 2 0L20.7 7"/></svg>1 item</div><div class="sub">MacBook Pro 14" (M4) Skins</div></td>
+  <td class="num"><div class="amount">Rp 405.000</div><div class="sub">QRIS</div></td>
+  <td><span class="stc prog"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/></svg>Ready for pickup</span></td>
+  <td><div><span class="pickup-mini"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/></svg>Store pickup</span></div><div class="sub ico"><span class="muted">Collect at Ruby Commercial TB12</span></div></td>
+  <td class="acts"><span class="iconbtn"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></svg></span></td>
+</tr>
+<tr>
+  <td class="cb"><span class="box"></span></td>
+  <td><div class="idline"><b>#542885</b></div><div class="sub">Nov 13, 12:31</div><div class="tags"><span class="wchip ok"><span class="w"><svg class="i tiny" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>Warranty</span><span class="c">Approved</span></span></div></td>
+  <td><div class="name">Rizki</div><div class="sub">Probolinggo, Jawa Timur</div></td>
+  <td><div class="qty"><svg class="i tiny" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.7 4.73a2 2 0 0 0 2 0L20.7 7"/></svg>1 item</div><div class="sub">[Warranty replacement] Galaxy Z Fold 7 Skins</div></td>
+  <td class="num"><div class="amount">Rp 29.818</div><div class="sub">BCA transfer</div></td>
+  <td><span class="stc wait"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Awaiting payment</span></td>
+  <td><div>JNE · REG</div><div class="sub ico"><span class="muted">Resi not assigned yet</span></div></td>
+  <td class="acts"><span class="iconbtn"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></svg></span></td>
+</tr>
+<tr>
+  <td class="cb"><span class="box"></span></td>
+  <td><div class="idline"><b>#542882</b></div><div class="sub">Nov 12, 22:41</div></td>
+  <td><div class="name">Fitriadi Pradana</div><div class="sub">Tangerang Selatan, Banten</div></td>
+  <td><div class="qty"><svg class="i tiny" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.7 4.73a2 2 0 0 0 2 0L20.7 7"/></svg>2 items</div><div class="sub">Galaxy Z Fold 7 Skins, Camera Skin</div></td>
+  <td class="num"><div class="amount">Rp 256.000</div><div class="sub">QRIS</div></td>
+  <td><span class="stc prog"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Shipped</span></td>
+  <td><div>JNE · YES</div><div class="sub ico"><span class="mono">0703622100000421</span><svg class="i tiny" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></div></td>
+  <td class="acts"><span class="iconbtn"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></svg></span></td>
+</tr>
+        </table>
+      </div>
+    </div>
+  </section>
+</div></div>

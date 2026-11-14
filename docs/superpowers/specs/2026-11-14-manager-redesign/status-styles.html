@@ -1,0 +1,96 @@
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@500&display=swap');
+.ss { font-family: Geist, Inter, sans-serif; }
+.legend { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 8px 0 28px; }
+.fam { padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,.08); background: rgba(255,255,255,.025); font-size: 13px; }
+.fam b { display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 14px; margin-bottom: 4px; }
+.fam span { opacity: .65; }
+.sw { width: 10px; height: 10px; border-radius: 3px; }
+.variants { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.var { cursor: pointer; border-radius: 14px; border: 1px solid rgba(255,255,255,.08); background: #0d0d10; padding: 16px; outline: 2px solid transparent; outline-offset: 4px; }
+.var.selected { outline-color: #f3aa18; }
+.var h3 { margin: 0 0 4px; font-size: 16px; font-weight: 600; }
+.var p { margin: 0 0 14px; font-size: 13px; opacity: .7; }
+.rows { display: flex; flex-direction: column; }
+.r { display: flex; align-items: center; justify-content: space-between; padding: 10px 4px; border-top: 1px solid rgba(255,255,255,.06); font-size: 13.5px; color: #e8e8eb; }
+.r .oid { font-family: 'Geist Mono', monospace; font-size: 12.5px; color: #8a8a93; }
+.i { width: 14px; height: 14px; flex: none; }
+/* A: dot + coloured text */
+.a { display: inline-flex; align-items: center; gap: 7px; font-weight: 500; }
+.a::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+/* B: soft tinted pill */
+.b { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 8px; border-radius: 999px; font-size: 12.5px; font-weight: 500; border: 1px solid; }
+.b::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+/* C: icon + coloured text in tinted pill */
+.c { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 8px; border-radius: 7px; font-size: 12.5px; font-weight: 500; }
+/* families */
+.act  { color: #fbbf24; } .b.act, .c.act { background: rgba(251,191,36,.10); border-color: rgba(251,191,36,.28); }
+.wait { color: #c4b5fd; } .b.wait, .c.wait { background: rgba(167,139,250,.10); border-color: rgba(167,139,250,.28); }
+.prog { color: #7dd3fc; } .b.prog, .c.prog { background: rgba(56,189,248,.10); border-color: rgba(56,189,248,.28); }
+.done { color: #4ade80; } .b.done, .c.done { background: rgba(74,222,128,.09); border-color: rgba(74,222,128,.26); }
+.stop { color: #fb7185; } .b.stop, .c.stop { background: rgba(251,113,133,.09); border-color: rgba(251,113,133,.26); }
+.c { border: 0; }
+</style>
+
+<div class="ss">
+<h2>Making statuses easy to tell apart</h2>
+<p class="subtitle">The trick is not more colours, it is giving each colour one meaning: what the status asks you to do. Nine statuses fall into five groups, so you can scan a column and see at a glance which orders need you. Below, the same statuses in three styles. Pick the one you like.</p>
+
+<div class="legend">
+  <div class="fam"><b><span class="sw" style="background:#fbbf24"></span>Needs action</b><span>You must do something: to prepare, pending review</span></div>
+  <div class="fam"><b><span class="sw" style="background:#a78bfa"></span>Waiting</b><span>Waiting on the customer: awaiting payment</span></div>
+  <div class="fam"><b><span class="sw" style="background:#38bdf8"></span>In progress</b><span>Moving along: preparing, ready for pickup, shipped</span></div>
+  <div class="fam"><b><span class="sw" style="background:#4ade80"></span>Done</b><span>Finished: completed, claim approved</span></div>
+  <div class="fam"><b><span class="sw" style="background:#fb7185"></span>Stopped</b><span>Cancelled, refunded, claim rejected</span></div>
+</div>
+
+<div class="variants">
+  <div class="var" data-choice="a" onclick="toggleSelect(this)">
+    <h3>A. Dot and coloured text</h3>
+    <p>Quietest. Colour does all the work, so it is the hardest to scan.</p>
+    <div class="rows">
+      <div class="r"><span class="oid">#542887</span><span class="a act">To prepare</span></div>
+      <div class="r"><span class="oid">#542888</span><span class="a act">Pending review</span></div>
+      <div class="r"><span class="oid">#542890</span><span class="a wait">Awaiting payment</span></div>
+      <div class="r"><span class="oid">#542889</span><span class="a prog">Preparing</span></div>
+      <div class="r"><span class="oid">#542886</span><span class="a prog">Ready for pickup</span></div>
+      <div class="r"><span class="oid">#542882</span><span class="a prog">Shipped</span></div>
+      <div class="r"><span class="oid">#542870</span><span class="a done">Completed</span></div>
+      <div class="r"><span class="oid">#542885</span><span class="a done">Claim approved</span></div>
+      <div class="r"><span class="oid">#542883</span><span class="a stop">Cancelled</span></div>
+    </div>
+  </div>
+
+  <div class="var" data-choice="b" onclick="toggleSelect(this)">
+    <h3>B. Soft tinted pill</h3>
+    <p>Each status gets a faint coloured background, so the colour shows even from a distance.</p>
+    <div class="rows">
+      <div class="r"><span class="oid">#542887</span><span class="b act">To prepare</span></div>
+      <div class="r"><span class="oid">#542888</span><span class="b act">Pending review</span></div>
+      <div class="r"><span class="oid">#542890</span><span class="b wait">Awaiting payment</span></div>
+      <div class="r"><span class="oid">#542889</span><span class="b prog">Preparing</span></div>
+      <div class="r"><span class="oid">#542886</span><span class="b prog">Ready for pickup</span></div>
+      <div class="r"><span class="oid">#542882</span><span class="b prog">Shipped</span></div>
+      <div class="r"><span class="oid">#542870</span><span class="b done">Completed</span></div>
+      <div class="r"><span class="oid">#542885</span><span class="b done">Claim approved</span></div>
+      <div class="r"><span class="oid">#542883</span><span class="b stop">Cancelled</span></div>
+    </div>
+  </div>
+
+  <div class="var" data-choice="c" onclick="toggleSelect(this)">
+    <h3>C. Icon and tint (my pick)</h3>
+    <p>Colour shows the group, the icon tells statuses inside a group apart (preparing, pickup and shipped are all blue). Also readable for colour-blind staff.</p>
+    <div class="rows">
+      <div class="r"><span class="oid">#542887</span><span class="c act"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/></svg>To prepare</span></div>
+      <div class="r"><span class="oid">#542888</span><span class="c act"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>Pending review</span></div>
+      <div class="r"><span class="oid">#542890</span><span class="c wait"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Awaiting payment</span></div>
+      <div class="r"><span class="oid">#542889</span><span class="c prog"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14.7 6.3 3 3"/><path d="M3 21l7.5-7.5"/><path d="M12 3 21 12l-4 4-9-9z"/></svg>Preparing</span></div>
+      <div class="r"><span class="oid">#542886</span><span class="c prog"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M2 7h20"/></svg>Ready for pickup</span></div>
+      <div class="r"><span class="oid">#542882</span><span class="c prog"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Shipped</span></div>
+      <div class="r"><span class="oid">#542870</span><span class="c done"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>Completed</span></div>
+      <div class="r"><span class="oid">#542885</span><span class="c done"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>Claim approved</span></div>
+      <div class="r"><span class="oid">#542883</span><span class="c stop"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>Cancelled</span></div>
+    </div>
+  </div>
+</div>
+</div>

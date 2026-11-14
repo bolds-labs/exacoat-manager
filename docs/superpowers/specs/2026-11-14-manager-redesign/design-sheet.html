@@ -1,0 +1,247 @@
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap');
+.board { --bg:#09090b; --panel:#0e0e11; --card:#141418; --cardBorder:rgba(255,255,255,.07); --field:rgba(255,255,255,.04); --fieldBorder:rgba(255,255,255,.09);
+  --text:#e8e8eb; --muted:#a1a1aa; --faint:#6e6e78; --line:rgba(255,255,255,.07); --accent:#f3aa18; --accentSoft:rgba(243,170,24,.13); --chip:rgba(255,255,255,.06); --hover:rgba(255,255,255,.04);
+  display: grid; grid-template-columns: 1fr 1fr 1.05fr; gap: 28px; padding: 28px; border-radius: 16px; background: var(--bg); color: var(--text); border: 1px solid var(--cardBorder);
+  font: 14px/1.5 Geist, Inter, sans-serif; letter-spacing: -0.005em; margin-bottom: 32px; }
+.board.light { --bg:#f4f4f1; --panel:#f8f8f6; --card:#ffffff; --cardBorder:rgba(24,24,27,.08); --field:#fafaf9; --fieldBorder:rgba(24,24,27,.11);
+  --text:#18181b; --muted:#5b5b63; --faint:#9a9aa2; --line:rgba(24,24,27,.07); --accentSoft:rgba(243,170,24,.16); --chip:rgba(24,24,27,.05); --hover:rgba(24,24,27,.03); }
+.bcol { min-width: 0; }
+h4 { margin: 0 0 12px; font-size: 12px; font-weight: 500; color: var(--faint); text-transform: none; letter-spacing: 0; } h4:not(:first-child) { margin-top: 26px; }
+.i { width: 16px; height: 16px; flex: none; }
+.mono { font-family: 'Geist Mono', monospace; font-weight: 500; letter-spacing: -0.01em; }
+.sw-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; } .sw i { display: block; height: 44px; border-radius: 10px; border: 1px solid var(--cardBorder); } .sw span { display: block; font-size: 12px; color: var(--muted); margin-top: 6px; }
+.txt-row { display: flex; gap: 18px; margin-top: 12px; font-size: 13.5px; }
+.wrapline { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; } .wrapline + .wrapline { margin-top: 10px; }
+.stc { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 8px; border-radius: 7px; font-size: 12.5px; font-weight: 500; } .stc .i { width: 14px; height: 14px; }
+.stc.act { color: #fbbf24; background: rgba(251,191,36,.10); } .stc.wait { color: #c4b5fd; background: rgba(167,139,250,.11); } .stc.prog { color: #7dd3fc; background: rgba(56,189,248,.10); } .stc.done { color: #4ade80; background: rgba(74,222,128,.09); } .stc.stop { color: #fb7185; background: rgba(251,113,133,.09); }
+.light .stc.act { color: #b45309; background: rgba(217,119,6,.10); } .light .stc.wait { color: #6d28d9; background: rgba(124,58,237,.09); } .light .stc.prog { color: #0369a1; background: rgba(2,132,199,.09); } .light .stc.done { color: #15803d; background: rgba(22,163,74,.09); } .light .stc.stop { color: #be123c; background: rgba(225,29,72,.08); }
+.wchip { display: inline-flex; align-items: stretch; border-radius: 999px; overflow: hidden; font-size: 12px; font-weight: 500; border: 1px solid rgba(74,222,128,.25); }
+.wchip .w { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; color: #4ade80; background: rgba(74,222,128,.08); } .wchip .w .i { width: 13px; height: 13px; }
+.wchip .c { padding: 2px 9px; border-left: 1px solid rgba(255,255,255,.08); } .wchip.pend .c { color: #fbbf24; background: rgba(251,191,36,.10); } .wchip.ok .c { color: #4ade80; background: rgba(74,222,128,.14); }
+.light .wchip { border-color: rgba(22,163,74,.25); } .light .wchip .w { color: #15803d; background: rgba(22,163,74,.07); } .light .wchip.pend .c { color: #b45309; background: rgba(217,119,6,.10); } .light .wchip.ok .c { color: #15803d; background: rgba(22,163,74,.12); }
+.type > div { padding: 4px 0; } .t1 { font-size: 26px; font-weight: 600; letter-spacing: -0.025em; } .t2 { font-size: 14px; font-weight: 600; } .t3 { font-size: 14px; } .t4 { font-size: 13px; color: var(--muted); } .t5 { font-size: 12px; color: var(--faint); } .t6 { font-size: 13.5px; }
+.spacing { display: flex; gap: 10px; align-items: flex-end; } .spacing span { display: block; height: 28px; border-radius: 4px; background: var(--accentSoft); border: 1px solid rgba(243,170,24,.35); }
+.note { font-size: 12.5px; color: var(--muted); margin: 10px 0 0; }
+.btn, .ctl { height: 36px; box-sizing: border-box; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 13px; border-radius: 9px; font-size: 13px; font-weight: 450; color: var(--text); background: var(--field); border: 1px solid var(--fieldBorder); white-space: nowrap; }
+.btn .i { width: 15px; height: 15px; color: var(--muted); } .btn.sm { height: 30px; padding: 0 10px; font-size: 12.5px; border-radius: 8px; } .btn.icon { width: 36px; padding: 0; } .btn.ghost { background: transparent; border-color: transparent; }
+.btn.primary { background: var(--accent); color: #111; border-color: transparent; font-weight: 600; } .btn.primary .i { color: #111; }
+.btn.danger { color: #fb7185; border-color: rgba(251,113,133,.3); background: rgba(251,113,133,.06); } .btn.danger .i { color: #fb7185; } .light .btn.danger, .light .btn.danger .i { color: #be123c; }
+.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; } .fields .full { grid-column: 1 / -1; }
+.fl { display: block; font-size: 12px; color: var(--faint); margin-bottom: 6px; }
+.ctl { display: flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 9px; background: var(--field); border: 1px solid var(--fieldBorder); font-size: 13.5px; }
+.ctl > .i:last-child { margin-left: auto; width: 15px; height: 15px; color: var(--faint); } .ctl .lead { color: var(--faint); width: 15px; height: 15px; } .ctl.ph, .ph2 { color: var(--faint); } .ph2 { flex: 1; }
+kbd { font: 500 11px 'Geist Mono', monospace; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--line); color: var(--faint); }
+.svc { font-style: normal; font-size: 12px; color: var(--muted); padding: 1px 7px; border-radius: 6px; background: var(--chip); }
+.tabs { display: flex; gap: 4px; } .tabs span { display: flex; align-items: center; gap: 6px; padding: 6px 11px; border-radius: 8px; font-size: 13px; color: var(--muted); border: 1px solid transparent; }
+.tabs .on { background: var(--chip); border-color: var(--cardBorder); color: var(--text); }
+.tabs em { font-style: normal; font-size: 11.5px; font-weight: 500; padding: 1px 6px; border-radius: 999px; background: var(--chip); color: var(--muted); } .tabs em.hot { background: var(--accentSoft); color: var(--accent); }
+.toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); } .toggle i { width: 30px; height: 18px; border-radius: 999px; background: var(--chip); border: 1px solid var(--fieldBorder); position: relative; }
+.toggle i::after { content: ''; position: absolute; left: 2px; top: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--faint); } .toggle.on i { background: var(--accent); border-color: transparent; } .toggle.on i::after { left: 14px; background: #111; }
+.navdemo { margin-top: 14px; width: 220px; padding: 0 0 0 14px; } .nav { position: relative; display: flex; align-items: center; gap: 11px; padding: 8px 10px; border-radius: 9px; color: var(--muted); font-weight: 450; } .nav .i { color: var(--faint); }
+.nav.active { background: var(--hover); color: var(--text); } .nav.active .i { color: var(--accent); } .nav.active::before { content: ''; position: absolute; left: -14px; top: 50%; transform: translateY(-50%); width: 4px; height: 14px; border-radius: 999px; background: var(--accent); }
+.nav .count { margin-left: auto; font-size: 12px; font-weight: 500; padding: 1px 7px; border-radius: 999px; background: var(--accent); color: #111; }
+.menu { width: 300px; padding: 6px; border-radius: 12px; background: var(--card); border: 1px solid var(--cardBorder); box-shadow: 0 16px 40px rgba(0,0,0,.35); } .light .menu { box-shadow: 0 16px 40px rgba(24,24,27,.12); }
+.mi { display: flex; gap: 12px; align-items: flex-start; padding: 9px 10px; border-radius: 8px; } .mi.on { background: var(--hover); } .mi .i { margin-top: 2px; color: var(--muted); } .mi.on .i { color: var(--accent); }
+.mi b { display: block; font-weight: 500; font-size: 13.5px; } .mi span { display: block; font-size: 12.5px; color: var(--faint); } .mi.danger b, .mi.danger .i { color: #fb7185; } .light .mi.danger b, .light .mi.danger .i { color: #be123c; }
+.sep { height: 1px; background: var(--line); margin: 5px 4px; }
+.modal { border-radius: 16px; background: var(--card); border: 1px solid var(--cardBorder); box-shadow: 0 24px 60px rgba(0,0,0,.45); overflow: hidden; } .light .modal { box-shadow: 0 24px 60px rgba(24,24,27,.14); }
+.modal header { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; border-bottom: 1px solid var(--line); } .modal header b { font-size: 16px; font-weight: 600; margin-right: 10px; } .modal header .mono { color: var(--faint); font-size: 13px; }
+.mbody { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+.kvbox { padding: 12px 14px; border-radius: 10px; background: var(--chip); display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; } .kvbox div { display: flex; justify-content: space-between; color: var(--muted); } .kvbox .strong { color: var(--text); font-weight: 500; }
+.mbody > .fl { margin: 0 0 -6px; }
+.choice { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.opt { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 10px; border: 1px solid var(--fieldBorder); } .opt b { display: block; font-weight: 500; font-size: 13.5px; } .opt span { font-size: 12px; color: var(--faint); } .opt > .i { color: var(--muted); }
+.opt.on { border-color: rgba(243,170,24,.55); background: rgba(243,170,24,.06); }
+.radio { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--faint); flex: none; } .opt.on .radio { border: 5px solid var(--accent); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.checkrow { display: flex; align-items: center; gap: 10px; font-size: 13.5px; } .check { width: 16px; height: 16px; border-radius: 5px; border: 1.5px solid var(--faint); } .check.on { background: var(--accent); border-color: var(--accent); }
+.hint { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); } .hint .i { width: 14px; height: 14px; color: var(--faint); }
+.modal footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--line); background: var(--chip); }
+.toast { display: flex; align-items: center; gap: 12px; width: 320px; padding: 12px 14px; border-radius: 12px; background: var(--card); border: 1px solid var(--cardBorder); box-shadow: 0 12px 30px rgba(0,0,0,.3); }
+.tic { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: #4ade80; background: rgba(74,222,128,.12); } .light .tic { color: #15803d; }
+.toast b { display: block; font-weight: 500; font-size: 13.5px; } .toast span { font-size: 12.5px; color: var(--faint); }
+</style>
+<h2>Shared design sheet</h2>
+<p class="subtitle">Every screen (Orders, order panel, Warranty, Products, Configurator Studio, Settings, pop-ups) will be built from these same pieces, so the whole app looks and behaves the same. Same colours, same status chips and words, same fonts and sizes, same 36px controls, same cards, menus and pop-ups, in dark and light mode. The Refund pop-up is a real example with everything today's version has.</p>
+<p class="label2"><b>Dark mode</b></p>
+
+<div class="board dark">
+  <div class="bcol">
+    <h4>Colour</h4>
+    <div class="sw-row">
+      <div class="sw"><i style="background:var(--bg)"></i><span>Background</span></div>
+      <div class="sw"><i style="background:var(--panel)"></i><span>Panel</span></div>
+      <div class="sw"><i style="background:var(--card);"></i><span>Card</span></div>
+      <div class="sw"><i style="background:#f3aa18"></i><span>Accent (amber)</span></div>
+    </div>
+    <div class="txt-row"><span style="color:var(--text)">Main text</span><span style="color:var(--muted)">Secondary text</span><span style="color:var(--faint)">Labels and hints</span></div>
+
+    <h4>Status (one meaning per colour)</h4>
+    <div class="wrapline">
+      <span class="stc act"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/></svg>To prepare</span><span class="stc act"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>Pending review</span><span class="stc wait"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Awaiting payment</span>
+      <span class="stc prog"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>Preparing</span><span class="stc prog"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M2 7h20"/></svg>Ready for pickup</span><span class="stc prog"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Shipped</span>
+      <span class="stc done"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>Completed</span><span class="stc stop"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>Cancelled</span>
+    </div>
+    <div class="wrapline"><span class="wchip pend"><span class="w"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>Warranty</span><span class="c">Pending</span></span><span class="wchip ok"><span class="w"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>Warranty</span><span class="c">Approved</span></span></div>
+
+    <h4>Type (Geist, Geist Mono for numbers)</h4>
+    <div class="type">
+      <div class="t1">Page title 26</div>
+      <div class="t2">Card title 14 · 600</div>
+      <div class="t3">Body text 14 · 400, names 500</div>
+      <div class="t4">Secondary 13</div>
+      <div class="t5">Label 12</div>
+      <div class="t6 mono">#542887 · Rp 405.000 · 0703622100000421</div>
+    </div>
+
+    <h4>Spacing and shape</h4>
+    <div class="spacing"><span style="width:4px"></span><span style="width:8px"></span><span style="width:12px"></span><span style="width:16px"></span><span style="width:20px"></span><span style="width:24px"></span><span style="width:28px"></span></div>
+    <p class="note">Steps of 4px. Cards: 18 to 20px padding, 14px radius, 16px gap. Controls 36px tall (30px in card headers), 9px radius.</p>
+  </div>
+
+  <div class="bcol">
+    <h4>Buttons</h4>
+    <div class="wrapline"><span class="btn primary"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>Print label</span><span class="btn"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>Invoice</span><span class="btn ghost">Cancel</span><span class="btn danger"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>Cancel order</span><span class="btn icon"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></span></div>
+    <div class="wrapline"><span class="btn sm"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Add item</span><span class="btn sm"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Refund</span><span class="btn primary">Create<svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span></div>
+
+    <h4>Fields</h4>
+    <div class="fields">
+      <label><span class="fl">Courier</span><div class="ctl">JNE Express<em class="svc">REG</em><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div></label>
+      <label><span class="fl">Tracking number (resi)</span><div class="ctl ph">Paste resi here</div></label>
+      <label class="full"><span class="fl">Search</span><div class="ctl"><svg class="i lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span class="ph2">Search orders, customers, resi</span><kbd>Ctrl K</kbd></div></label>
+    </div>
+
+    <h4>Tabs, switch, navigation</h4>
+    <div class="tabs"><span class="on">All<em>51</em></span><span>Awaiting payment<em class="hot">2</em></span><span>To prepare<em class="hot">1</em></span><span>Shipped<em>30</em></span></div>
+    <div class="wrapline" style="margin-top:12px"><span class="toggle on"><i></i>Store pickup</span><span class="toggle"><i></i>Notify customer</span></div>
+    <div class="navdemo">
+      <div class="nav"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg><span>Dashboard</span></div>
+      <div class="nav active"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><span>Orders</span><span class="count">1</span></div>
+    </div>
+
+    <h4>Menu</h4>
+    <div class="menu">
+      <div class="mi on"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg><div><b>Warranty claim</b><span>Replace a faulty skin for a customer</span></div></div>
+      <div class="mi"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"/></svg><div><b>Redeem</b><span>Redeem a gift or voucher code</span></div></div>
+      <div class="sep"></div>
+      <div class="mi danger"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg><div><b>Move to trash</b><span>Admin only</span></div></div>
+    </div>
+  </div>
+
+  <div class="bcol">
+    <h4>Pop-up: Refund</h4>
+    <div class="modal">
+      <header><div><b>Issue refund</b><span class="mono">#542887</span></div><span class="btn icon ghost"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span></header>
+      <div class="mbody">
+        <div class="kvbox"><div><span>Order total</span><span class="mono">31,00 €</span></div><div><span>Already refunded</span><span class="mono">0,00 €</span></div><div class="strong"><span>Available to refund</span><span class="mono">31,00 €</span></div></div>
+        <span class="fl">Refund to</span>
+        <div class="choice">
+          <div class="opt on"><span class="radio"></span><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg><div><b>Original payment</b><span>Back to PayPal</span></div></div>
+          <div class="opt"><span class="radio"></span><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg><div><b>Store credit</b><span>Customer account balance</span></div></div>
+        </div>
+        <div class="grid2">
+          <label><span class="fl">Amount</span><div class="ctl mono">31,00 €</div></label>
+          <label><span class="fl">Reason</span><div class="ctl ph">e.g. Customer request</div></label>
+        </div>
+        <div class="checkrow"><span class="check on"></span>Restock items</div>
+        <div class="hint"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>A full refund marks the order as Refunded.</div>
+      </div>
+      <footer><span class="btn ghost">Cancel</span><span class="btn primary"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Refund 31,00 €</span></footer>
+    </div>
+
+    <h4>Toast</h4>
+    <div class="toast"><span class="tic"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span><div><b>Tracking saved</b><span>#542882 marked as shipped</span></div></div>
+  </div>
+</div>
+<p class="label2"><b>Light mode</b></p>
+
+<div class="board light">
+  <div class="bcol">
+    <h4>Colour</h4>
+    <div class="sw-row">
+      <div class="sw"><i style="background:var(--bg)"></i><span>Background</span></div>
+      <div class="sw"><i style="background:var(--panel)"></i><span>Panel</span></div>
+      <div class="sw"><i style="background:var(--card);"></i><span>Card</span></div>
+      <div class="sw"><i style="background:#f3aa18"></i><span>Accent (amber)</span></div>
+    </div>
+    <div class="txt-row"><span style="color:var(--text)">Main text</span><span style="color:var(--muted)">Secondary text</span><span style="color:var(--faint)">Labels and hints</span></div>
+
+    <h4>Status (one meaning per colour)</h4>
+    <div class="wrapline">
+      <span class="stc act"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/></svg>To prepare</span><span class="stc act"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>Pending review</span><span class="stc wait"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Awaiting payment</span>
+      <span class="stc prog"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>Preparing</span><span class="stc prog"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M2 7h20"/></svg>Ready for pickup</span><span class="stc prog"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Shipped</span>
+      <span class="stc done"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>Completed</span><span class="stc stop"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>Cancelled</span>
+    </div>
+    <div class="wrapline"><span class="wchip pend"><span class="w"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>Warranty</span><span class="c">Pending</span></span><span class="wchip ok"><span class="w"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>Warranty</span><span class="c">Approved</span></span></div>
+
+    <h4>Type (Geist, Geist Mono for numbers)</h4>
+    <div class="type">
+      <div class="t1">Page title 26</div>
+      <div class="t2">Card title 14 · 600</div>
+      <div class="t3">Body text 14 · 400, names 500</div>
+      <div class="t4">Secondary 13</div>
+      <div class="t5">Label 12</div>
+      <div class="t6 mono">#542887 · Rp 405.000 · 0703622100000421</div>
+    </div>
+
+    <h4>Spacing and shape</h4>
+    <div class="spacing"><span style="width:4px"></span><span style="width:8px"></span><span style="width:12px"></span><span style="width:16px"></span><span style="width:20px"></span><span style="width:24px"></span><span style="width:28px"></span></div>
+    <p class="note">Steps of 4px. Cards: 18 to 20px padding, 14px radius, 16px gap. Controls 36px tall (30px in card headers), 9px radius.</p>
+  </div>
+
+  <div class="bcol">
+    <h4>Buttons</h4>
+    <div class="wrapline"><span class="btn primary"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>Print label</span><span class="btn"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>Invoice</span><span class="btn ghost">Cancel</span><span class="btn danger"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>Cancel order</span><span class="btn icon"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg></span></div>
+    <div class="wrapline"><span class="btn sm"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Add item</span><span class="btn sm"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Refund</span><span class="btn primary">Create<svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span></div>
+
+    <h4>Fields</h4>
+    <div class="fields">
+      <label><span class="fl">Courier</span><div class="ctl">JNE Express<em class="svc">REG</em><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div></label>
+      <label><span class="fl">Tracking number (resi)</span><div class="ctl ph">Paste resi here</div></label>
+      <label class="full"><span class="fl">Search</span><div class="ctl"><svg class="i lead" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span class="ph2">Search orders, customers, resi</span><kbd>Ctrl K</kbd></div></label>
+    </div>
+
+    <h4>Tabs, switch, navigation</h4>
+    <div class="tabs"><span class="on">All<em>51</em></span><span>Awaiting payment<em class="hot">2</em></span><span>To prepare<em class="hot">1</em></span><span>Shipped<em>30</em></span></div>
+    <div class="wrapline" style="margin-top:12px"><span class="toggle on"><i></i>Store pickup</span><span class="toggle"><i></i>Notify customer</span></div>
+    <div class="navdemo">
+      <div class="nav"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg><span>Dashboard</span></div>
+      <div class="nav active"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><span>Orders</span><span class="count">1</span></div>
+    </div>
+
+    <h4>Menu</h4>
+    <div class="menu">
+      <div class="mi on"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg><div><b>Warranty claim</b><span>Replace a faulty skin for a customer</span></div></div>
+      <div class="mi"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"/></svg><div><b>Redeem</b><span>Redeem a gift or voucher code</span></div></div>
+      <div class="sep"></div>
+      <div class="mi danger"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg><div><b>Move to trash</b><span>Admin only</span></div></div>
+    </div>
+  </div>
+
+  <div class="bcol">
+    <h4>Pop-up: Refund</h4>
+    <div class="modal">
+      <header><div><b>Issue refund</b><span class="mono">#542887</span></div><span class="btn icon ghost"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span></header>
+      <div class="mbody">
+        <div class="kvbox"><div><span>Order total</span><span class="mono">31,00 €</span></div><div><span>Already refunded</span><span class="mono">0,00 €</span></div><div class="strong"><span>Available to refund</span><span class="mono">31,00 €</span></div></div>
+        <span class="fl">Refund to</span>
+        <div class="choice">
+          <div class="opt on"><span class="radio"></span><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg><div><b>Original payment</b><span>Back to PayPal</span></div></div>
+          <div class="opt"><span class="radio"></span><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg><div><b>Store credit</b><span>Customer account balance</span></div></div>
+        </div>
+        <div class="grid2">
+          <label><span class="fl">Amount</span><div class="ctl mono">31,00 €</div></label>
+          <label><span class="fl">Reason</span><div class="ctl ph">e.g. Customer request</div></label>
+        </div>
+        <div class="checkrow"><span class="check on"></span>Restock items</div>
+        <div class="hint"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>A full refund marks the order as Refunded.</div>
+      </div>
+      <footer><span class="btn ghost">Cancel</span><span class="btn primary"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Refund 31,00 €</span></footer>
+    </div>
+
+    <h4>Toast</h4>
+    <div class="toast"><span class="tic"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></span><div><b>Tracking saved</b><span>#542882 marked as shipped</span></div></div>
+  </div>
+</div>

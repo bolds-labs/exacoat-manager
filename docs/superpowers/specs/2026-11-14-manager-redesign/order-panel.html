@@ -1,0 +1,351 @@
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap');
+.label2 { font-size: 13px; opacity: .7; margin: 0 0 10px; }
+.fit { width: 100%; margin-bottom: 36px; }
+.fit .frame { transform-origin: top left; }
+.frame { --bg:#09090b; --panel:#0e0e11; --card:rgba(255,255,255,.025); --cardBorder:rgba(255,255,255,.065); --field:rgba(255,255,255,.04); --fieldBorder:rgba(255,255,255,.08);
+  --text:#e8e8eb; --muted:#a1a1aa; --faint:#6e6e78; --line:rgba(255,255,255,.07); --accent:#f3aa18; --accentSoft:rgba(243,170,24,.13); --chip:rgba(255,255,255,.06);
+  position: relative; width: 1880px; height: 950px; border-radius: 14px; overflow: hidden; border: 1px solid var(--cardBorder); background: var(--bg); color: var(--text);
+  font: 14px/1.5 Geist, Inter, ui-sans-serif, system-ui, sans-serif; letter-spacing: -0.005em; }
+.frame.light { --bg:#f4f4f1; --panel:#f8f8f6; --card:#ffffff; --cardBorder:rgba(24,24,27,.08); --field:#fafaf9; --fieldBorder:rgba(24,24,27,.10);
+  --text:#18181b; --muted:#5b5b63; --faint:#9a9aa2; --line:rgba(24,24,27,.07); --accentSoft:rgba(243,170,24,.16); --chip:rgba(24,24,27,.05); }
+.i { width: 16px; height: 16px; flex: none; }
+.mono { font-family: 'Geist Mono', ui-monospace, monospace; font-weight: 500; letter-spacing: -0.01em; }
+.muted { color: var(--muted); } .small { font-size: 12.5px; }
+.behind { position: absolute; inset: 0; display: grid; grid-template-columns: 248px 1fr; }
+.bside { border-right: 1px solid var(--line); padding: 22px 24px; display: flex; gap: 8px; align-items: flex-start; }
+.logo-svg { width: 112px; height: 20px; }
+.erp { font: 600 9px 'Geist Mono', monospace; padding: 1px 5px; border-radius: 4px; color: var(--accent); background: var(--chip); border: 1px solid var(--line); margin-top: 2px; }
+.bmain { padding: 30px; } .bh { width: 260px; height: 26px; border-radius: 6px; background: var(--chip); margin-bottom: 30px; } .brow { height: 56px; border-bottom: 1px solid var(--line); }
+.scrim { position: absolute; inset: 0; background: rgba(0,0,0,.55); } .light .scrim { background: rgba(24,24,27,.28); }
+.drawer { position: absolute; top: 0; right: 0; bottom: 0; width: 1180px; background: var(--panel); border-left: 1px solid var(--cardBorder); display: flex; flex-direction: column; box-shadow: -20px 0 50px rgba(0,0,0,.3); }
+.light .drawer { box-shadow: -20px 0 50px rgba(24,24,27,.08); }
+
+/* controls: one height everywhere */
+.btn, .ctl { height: 36px; box-sizing: border-box; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 13px; border-radius: 9px; font-size: 13px; font-weight: 450; color: var(--text); background: var(--field); border: 1px solid var(--fieldBorder); white-space: nowrap; }
+.btn .i { width: 15px; height: 15px; color: var(--muted); }
+.btn.sm { height: 30px; padding: 0 10px; font-size: 12.5px; border-radius: 8px; } .btn.sm .i { width: 14px; height: 14px; }
+.btn.icon { width: 36px; padding: 0; } .btn.ghost { background: transparent; border-color: transparent; }
+.btn.primary { background: var(--accent); color: #111; border-color: transparent; font-weight: 600; } .btn.primary .i { color: #111; }
+.btn.danger { color: #fb7185; border-color: rgba(251,113,133,.3); background: rgba(251,113,133,.06); } .btn.danger .i { color: #fb7185; }
+.light .btn.danger { color: #be123c; } .light .btn.danger .i { color: #be123c; }
+.btn.disabled { opacity: .4; }
+.iconbtn { width: 28px; height: 28px; border-radius: 7px; display: inline-grid; place-items: center; color: var(--faint); } .iconbtn .i { width: 15px; height: 15px; }
+.ctl { display: flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 9px; background: var(--field); border: 1px solid var(--fieldBorder); font-size: 13.5px; }
+.ctl .i { margin-left: auto; width: 15px; height: 15px; color: var(--faint); } .ctl.placeholder { color: var(--faint); }
+.svc { font-style: normal; font-size: 12px; color: var(--muted); padding: 1px 7px; border-radius: 6px; background: var(--chip); }
+.fl { display: block; font-size: 12px; color: var(--faint); margin-bottom: 6px; }
+.frow { display: flex; gap: 10px; align-items: flex-end; } .frow.tight { margin-top: 10px; } .fcol { display: flex; flex-direction: column; } .grow { flex: 1; }
+.ctlbtn { min-width: 0; }
+
+/* header */
+.dh { padding: 18px 24px 16px; border-bottom: 1px solid var(--line); }
+.dh-top { display: flex; align-items: flex-start; gap: 16px; }
+.titleline { display: flex; align-items: center; gap: 8px; }
+.oid { margin: 0; font: 600 22px 'Geist Mono', monospace; letter-spacing: -0.03em; }
+.meta { display: flex; gap: 0; margin-top: 4px; font-size: 13px; color: var(--muted); }
+.meta span + span::before { content: '·'; margin: 0 8px; color: var(--faint); }
+.dh-actions { margin-left: auto; display: flex; gap: 8px; }
+.dh-actions .btn .i:last-child:not(:first-child) { width: 14px; height: 14px; opacity: .7; }
+.banner { display: flex; align-items: center; gap: 12px; margin-top: 14px; padding: 10px 12px; border-radius: 10px; background: rgba(251,191,36,.06); border: 1px solid rgba(251,191,36,.2); }
+.light .banner { background: rgba(217,119,6,.05); border-color: rgba(217,119,6,.2); }
+.bicon { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; background: rgba(251,191,36,.12); color: #fbbf24; } .light .bicon { color: #b45309; }
+.btext { flex: 1; } .btext b { display: block; font-weight: 500; font-size: 13.5px; } .btext span { color: var(--muted); font-size: 12.5px; }
+
+/* status navigator */
+.snav { margin-top: 16px; }
+.snav-track { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; margin-bottom: 12px; }
+.snav-track i { height: 4px; border-radius: 4px; background: var(--chip); } .snav-track i.done { background: #22c55e; } .snav-track i.cur { background: var(--accent); }
+.snav-row { display: flex; align-items: center; gap: 10px; }
+.snav-cur { flex: 1; display: flex; align-items: center; justify-content: center; gap: 12px; height: 36px; border-radius: 9px; border: 1px solid rgba(243,170,24,.35); background: rgba(243,170,24,.06); }
+.snav-cur .lbl { font-size: 12px; color: var(--faint); }
+.sbtn { min-width: 150px; justify-content: space-between; } .sbtn.next { color: var(--text); }
+
+/* body */
+.dbody { flex: 1; overflow: hidden; display: grid; grid-template-columns: 1fr 380px; gap: 16px; padding: 16px 24px 20px; }
+.col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.card { padding: 14px 16px; border-radius: 12px; background: var(--card); border: 1px solid var(--cardBorder); }
+.ch { display: flex; align-items: center; gap: 10px; height: 30px; margin-bottom: 10px; }
+.ch h3 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; } .ch h3 .i { width: 15px; height: 15px; color: var(--faint); }
+.ch h3 em { font-style: normal; font-weight: 500; color: var(--faint); }
+.chr { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.fgrid { display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 12px 16px; }
+.fld.full { grid-column: 1 / -1; }
+.fv { display: flex; align-items: center; gap: 6px; min-height: 22px; font-size: 13.5px; }
+.fld.full .fv { align-items: flex-start; line-height: 1.5; }
+.mini { margin-left: 2px; width: 24px; height: 24px; display: inline-grid; place-items: center; border-radius: 6px; color: var(--faint); flex: none; } .mini .i { width: 14px; height: 14px; } .mini.green { color: #22c55e; }
+.fld.full .mini { margin-left: auto; }
+.toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); } .toggle i { width: 28px; height: 16px; border-radius: 999px; background: var(--chip); border: 1px solid var(--fieldBorder); position: relative; } .toggle i::after { content: ''; position: absolute; left: 2px; top: 2px; width: 10px; height: 10px; border-radius: 50%; background: var(--faint); }
+.item { display: flex; gap: 14px; align-items: center; }
+.thumb { width: 56px; height: 56px; border-radius: 10px; background: var(--chip); display: grid; place-items: center; flex: none; }
+.ph { width: 26px; height: 44px; border-radius: 6px; background: linear-gradient(135deg,#3f3f46,#18181b); border: 1px solid rgba(255,255,255,.15); } .light .ph { background: linear-gradient(135deg,#d4d4d8,#a1a1aa); }
+.itxt { flex: 1; min-width: 0; }
+.iname { display: flex; gap: 8px; align-items: baseline; } .iname b { font-weight: 500; } .qty { color: var(--faint); font-family: 'Geist Mono', monospace; font-size: 13px; }
+.specs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; } .specs span { font-size: 12.5px; padding: 2px 8px; border-radius: 6px; background: var(--chip); } .specs em { font-style: normal; color: var(--faint); margin-right: 5px; }
+.iright { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.warnline { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: #fbbf24; } .light .warnline { color: #b45309; } .warnline .i { width: 14px; height: 14px; }
+.seg2 { display: inline-flex; gap: 2px; padding: 2px; height: 30px; box-sizing: border-box; border-radius: 8px; background: var(--chip); } .seg2 span { display: grid; place-items: center; padding: 0 10px; border-radius: 6px; font-size: 12px; color: var(--muted); } .seg2 .on { background: var(--card); color: var(--text); box-shadow: 0 0 0 1px var(--cardBorder); }
+.feed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.feed li { display: flex; gap: 10px; } .feed p { margin: 0; font-size: 13.5px; line-height: 1.5; } .feed span { font-size: 12px; color: var(--faint); }
+.fi { width: 26px; height: 26px; border-radius: 7px; background: var(--chip); display: grid; place-items: center; color: var(--muted); flex: none; } .fi .i { width: 13px; height: 13px; }
+.rows { display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; } .rows div { display: flex; justify-content: space-between; color: var(--muted); }
+.rows .total { color: var(--text); font-weight: 600; padding-top: 8px; margin-top: 2px; border-top: 1px solid var(--line); }
+.payline { display: flex; align-items: center; gap: 10px; margin-top: 12px; } .ref { margin-top: 4px; }
+.empty { margin: 0; font-size: 13px; color: var(--faint); }
+.pill { font-size: 11.5px; padding: 2px 8px; border-radius: 999px; background: var(--chip); color: var(--muted); } .pill.amber { color: #fbbf24; background: rgba(251,191,36,.10); } .light .pill.amber { color: #b45309; }
+.linkrow { display: flex; justify-content: space-between; margin-top: 10px; }
+.link { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); font-weight: 500; } .light .link { color: #b45309; } .link .i { width: 13px; height: 13px; }
+.stc { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 8px; border-radius: 7px; font-size: 12.5px; font-weight: 500; } .stc .i { width: 14px; height: 14px; } .stc.small { padding: 2px 8px 2px 6px; font-size: 12px; }
+.stc.act { color: #fbbf24; background: rgba(251,191,36,.10); } .stc.wait { color: #c4b5fd; background: rgba(167,139,250,.11); } .stc.prog { color: #7dd3fc; background: rgba(56,189,248,.10); } .stc.done { color: #4ade80; background: rgba(74,222,128,.09); }
+.light .stc.act { color: #b45309; background: rgba(217,119,6,.10); } .light .stc.wait { color: #6d28d9; background: rgba(124,58,237,.09); } .light .stc.prog { color: #0369a1; background: rgba(2,132,199,.09); } .light .stc.done { color: #15803d; background: rgba(22,163,74,.09); }
+.wchip { display: inline-flex; align-items: stretch; border-radius: 999px; overflow: hidden; font-size: 12px; font-weight: 500; border: 1px solid rgba(74,222,128,.25); margin-left: 4px; }
+.wchip .w { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; color: #4ade80; background: rgba(74,222,128,.08); } .wchip .w .i { width: 13px; height: 13px; }
+.wchip .c { padding: 2px 9px; border-left: 1px solid rgba(255,255,255,.08); } .wchip.pend .c { color: #fbbf24; background: rgba(251,191,36,.10); }
+.light .wchip { border-color: rgba(22,163,74,.25); } .light .wchip .w { color: #15803d; background: rgba(22,163,74,.07); } .light .wchip.pend .c { color: #b45309; background: rgba(217,119,6,.10); }
+
+/* round 2 of panel: spacing, status block, customer grid */
+.dh { padding: 22px 28px 20px; }
+.meta { margin-top: 6px; }
+.snav { margin-top: 20px; }
+.snav-row { display: flex; align-items: stretch; gap: 12px; }
+.snav-side { display: flex; align-items: center; gap: 10px; min-width: 210px; padding: 0 14px; height: 52px; box-sizing: border-box; border-radius: 10px; border: 1px solid var(--fieldBorder); background: var(--field); }
+.snav-side.next { justify-content: flex-end; text-align: right; }
+.snav-side .arr { width: 15px; height: 15px; color: var(--faint); }
+.sico { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; background: var(--chip); color: var(--faint); flex: none; } .sico .i { width: 14px; height: 14px; }
+.stxt { display: flex; flex-direction: column; font-size: 13px; color: var(--muted); line-height: 1.3; } .stxt em { font-style: normal; font-size: 11.5px; color: var(--faint); }
+.snav-side.next .stxt { color: var(--text); }
+.snav-side.disabled { opacity: .45; }
+.snav-cur { flex: 1; display: flex; align-items: center; gap: 12px; height: 52px; box-sizing: border-box; padding: 0 16px; border-radius: 10px; border: 1px solid rgba(243,170,24,.35); background: rgba(243,170,24,.05); }
+.light .snav-cur { background: rgba(243,170,24,.07); }
+.cico { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; flex: none; } .cico .i { width: 16px; height: 16px; }
+.cico.act { color: #fbbf24; background: rgba(251,191,36,.14); } .cico.wait { color: #c4b5fd; background: rgba(167,139,250,.14); } .cico.prog { color: #7dd3fc; background: rgba(56,189,248,.12); } .cico.done { color: #4ade80; background: rgba(74,222,128,.12); }
+.light .cico.act { color: #b45309; } .light .cico.wait { color: #6d28d9; } .light .cico.prog { color: #0369a1; } .light .cico.done { color: #15803d; }
+.ctxt { display: flex; flex-direction: column; line-height: 1.3; } .ctxt b { font-weight: 500; font-size: 14.5px; } .ctxt span { font-size: 12px; color: var(--faint); }
+.ctrack { margin-left: auto; display: grid; grid-auto-flow: column; gap: 4px; width: 180px; } .ctrack i { height: 4px; border-radius: 4px; background: var(--chip); } .ctrack i.done { background: #22c55e; } .ctrack i.cur { background: var(--accent); }
+.snav-row > .btn { height: 52px; }
+.dbody { gap: 20px; padding: 20px 28px 24px; grid-template-columns: 1fr 390px; overflow-y: auto; align-items: start; }
+.col { gap: 16px; }
+.card { padding: 18px 20px; border-radius: 14px; }
+.ch { margin-bottom: 14px; }
+.cgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.cleft { display: flex; flex-direction: column; gap: 12px; }
+.cright { padding-left: 24px; border-left: 1px solid var(--line); }
+.addrhead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; } .addrhead .fl { margin: 0; }
+.addr { margin: 0; font-size: 13.5px; line-height: 1.6; }
+.fl { margin-bottom: 4px; }
+.specs { gap: 8px; margin-top: 10px; } .specs span { padding: 3px 9px; }
+.item { gap: 16px; }
+.feed { gap: 14px; }
+.rows { gap: 9px; } .rows .total { padding-top: 11px; margin-top: 3px; }
+.payline { margin-top: 14px; }
+.frow.tight { margin-top: 12px; }
+.linkrow { margin-top: 12px; }
+</style>
+<h2>Order detail panel, v4</h2>
+<p class="subtitle">Status: previous and next steps now show their icons (subtle), the current step is a single block with its icon, name, "Step 2 of 6" as a caption and a small progress track. Spacing is more generous throughout. Customer and delivery: recipient, email and phone on the left, address on the right. The header (order number, actions, status) stays pinned while the panel body scrolls; scroll inside the panel to see the rest.</p>
+<p class="label2"><b>Courier order #542887, dark mode</b></p>
+<div class="fit">
+<div class="frame dark">
+  <div class="behind"><div class="bside"><svg class="logo-svg" viewBox="-10000 -10000 1388000 261000" fill-rule="evenodd" aria-label="Exacoat"><path fill="#F3AA18" d="M1281000 218000l0 -40000 22000 -23000 43000 0 22000 23000 0 40000 -22000 23000 -43000 0 -22000 -23000zm59000 10000l14000 -14000 0 -32000 -14000 -14000 -31000 0 -14000 14000 0 32000 14000 14000 31000 0zm-33000 -52000l28000 0 8000 8000 0 13000 -5000 5000 6000 6000 0 10000 -12000 0 0 -7000 -4000 -5000 -9000 0 0 12000 -12000 0 0 -42000zm22000 20000l3000 -2000 0 -5000 -3000 -3000 -10000 0 0 10000 10000 0z"/><path fill="currentColor" d="M0 202000l0 -108000 36000 -36000 97000 0 37000 36000 0 67000 -129000 0 0 29000 13000 14000 62000 0 13000 -13000 0 -11000 40000 0 0 23000 -35000 35000 -99000 0 -35000 -36000zm129000 -70000l0 -25000 -14000 -15000 -60000 0 -14000 15000 0 25000 88000 0zm180000 106000l-43000 -60000 -44000 60000 -45000 0 66000 -91000 -65000 -89000 46000 0 42000 58000 41000 -58000 46000 0 -64000 89000 66000 91000 -46000 0zm51000 -32000l0 -43000 32000 -31000 93000 0 0 -27000 -14000 -13000 -56000 0 -14000 13000 0 11000 -40000 0 0 -20000 37000 -38000 90000 0 37000 38000 0 142000 -37000 0 0 -28000 -29000 28000 -67000 0 -32000 -32000zm95000 0l30000 -29000 0 -15000 -74000 0 -11000 11000 0 22000 11000 11000 44000 0zm102000 -4000l0 -108000 35000 -36000 95000 0 35000 36000 0 30000 -40000 0 0 -17000 -15000 -14000 -55000 0 -15000 14000 0 82000 15000 14000 55000 0 15000 -14000 0 -17000 40000 0 0 30000 -35000 36000 -95000 0 -35000 -36000zm188000 0l0 -108000 36000 -36000 100000 0 36000 36000 0 108000 -36000 36000 -100000 0 -36000 -36000zm116000 2000l15000 -15000 0 -82000 -15000 -14000 -60000 0 -15000 14000 0 82000 15000 15000 60000 0zm84000 2000l0 -43000 32000 -31000 93000 0 0 -27000 -14000 -13000 -56000 0 -14000 13000 0 11000 -40000 0 0 -20000 37000 -38000 90000 0 37000 38000 0 142000 -37000 0 0 -28000 -29000 28000 -67000 0 -32000 -32000zm95000 0l30000 -29000 0 -15000 -73000 0 -12000 11000 0 22000 11000 11000 44000 0zm118000 -4000l0 -109000 -33000 0 0 -35000 34000 0 0 -58000 40000 0 0 58000 55000 0 0 35000 -55000 0 0 96000 14000 14000 41000 0 0 35000 -60000 0 -36000 -36000z"/></svg><span class="erp">ERP</span></div><div class="bmain"><div class="bh"></div><div class="brow"></div><div class="brow"></div><div class="brow"></div><div class="brow"></div><div class="brow"></div><div class="brow"></div><div class="brow"></div><div class="brow"></div><div class="brow"></div><div class="brow"></div><div class="brow"></div></div></div>
+  <div class="scrim"></div>
+  <aside class="drawer">
+    <header class="dh">
+      <div class="dh-top">
+        <div>
+          <div class="titleline"><h2 class="oid">#542887</h2><span class="iconbtn"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></span></div>
+          <div class="meta"><span>Nov 13, 2026, 17:25</span><span>PayPal</span><span>IP 46.193.56.28</span></div>
+        </div>
+        <div class="dh-actions">
+          <span class="btn primary"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>Print label</span>
+          <span class="btn"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>Invoice</span>
+          <span class="btn"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg>Packing slip</span>
+          <span class="btn">More<svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+          <span class="btn icon ghost"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span>
+        </div>
+      </div>
+      
+      <div class="snav">
+    <div class="snav-row">
+      <span class="snav-side prev"><svg class="i arr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg><span class="sico"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span><span class="stxt"><em>Previous</em>Awaiting payment</span></span>
+      <div class="snav-cur">
+        <span class="cico act"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/></svg></span>
+        <span class="ctxt"><b>To prepare</b><span>Step 2 of 6</span></span>
+        <span class="ctrack"><i class="done"></i><i class="cur"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i></span>
+      </div>
+      <span class="snav-side next"><span class="sico"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span><span class="stxt"><em>Next step</em>Preparing</span><svg class="i arr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+      <span class="btn">All steps<svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+    </div>
+  </div>
+    </header>
+
+    <div class="dbody">
+      <div class="col">
+        <section class="card "><header class="ch"><h3><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Customer &amp; delivery</h3><div class="chr"><span class="toggle"><i></i>Store pickup</span></div></header>
+          <div class="cgrid">
+            <div class="cleft">
+              <div class="fld"><span class="fl">Recipient</span><div class="fv">Angel André Flores Tejada</div></div>
+              <div class="fld"><span class="fl">Email</span><div class="fv">andreft•••@gmail.com<span class="mini"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></span></div></div>
+              <div class="fld"><span class="fl">Phone</span><div class="fv">+33 7 52 •• •• 21<span class="mini"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></span><span class="mini green"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg></span></div></div>
+            </div>
+            <div class="cright">
+              <div class="addrhead"><span class="fl">Destination address</span><span class="link small"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.38 3.62a1 1 0 0 1 3 3L7.37 18.64a2 2 0 0 1-.86.5l-2.87.84a.5.5 0 0 1-.62-.62l.84-2.87a2 2 0 0 1 .5-.86z"/></svg>Edit</span></div>
+              <p class="addr">4 Allée Edgar Brandt, Apartment 303<br>Châtillon 92320<br>France</p>
+            </div>
+          </div></section>
+
+        <section class="card "><header class="ch"><h3><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/></svg>Items <em>1</em></h3><div class="chr"><span class="muted small">Total units 1</span><span class="btn sm"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Add item</span></div></header>
+          <div class="item">
+            <div class="thumb"><div class="ph"></div></div>
+            <div class="itxt">
+              <div class="iname"><span class="qty">1×</span><b>Xiaomi 17 Skins</b><span class="muted small mono">#540705</span></div>
+              <div class="specs"><span><em>Back</em>Titanium Black</span><span><em>Accents</em>Glacial Green</span><span><em>Coverage</em>Model Cut</span></div>
+            </div>
+            <div class="iright"><b class="mono">17,90 €</b><span class="btn sm"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.38 3.62a1 1 0 0 1 3 3L7.37 18.64a2 2 0 0 1-.86.5l-2.87.84a.5.5 0 0 1-.62-.62l.84-2.87a2 2 0 0 1 .5-.86z"/></svg>Edit configuration</span></div>
+          </div></section>
+
+        <section class="card "><header class="ch"><h3><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Shipping &amp; tracking</h3><div class="chr"><span class="warnline"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>Label not printed</span></div></header>
+          <div class="frow">
+            <div class="fcol"><span class="fl">Courier</span><div class="ctl select">POS Indonesia<em class="svc">Tracked Shipment</em><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div></div>
+            <div class="fcol grow"><span class="fl">Tracking number (resi)</span><div class="ctl input placeholder">Paste resi here</div></div>
+            <div class="fcol"><span class="fl">&nbsp;</span><span class="btn ctlbtn">Save tracking</span></div>
+          </div></section>
+
+        <section class="card "><header class="ch"><h3><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg>Activity &amp; notes <em>2</em></h3><div class="chr"><span class="seg2"><span class="on">All</span><span>Customer notes</span></span><span class="btn sm"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Add note</span></div></header>
+          <ul class="feed"><li><span class="fi"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg></span><div><p>Payment via PayPal (485906778F251144H).</p><span>System · Nov 13, 17:27</span></div></li><li><span class="fi"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg></span><div><p>PayPal order 7TX94093LC745262T created. Capture ID 485906778F251144H.</p><span>System · Nov 13, 17:27</span></div></li></ul></section>
+      </div>
+
+      <div class="col side">
+        <section class="card "><header class="ch"><h3><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>Order summary</h3><div class="chr"><span class="btn sm"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Refund</span></div></header>
+          <div class="rows">
+            <div><span>Currency</span><span class="mono">EUR</span></div>
+            <div><span>Items subtotal</span><span class="mono">17,90 €</span></div><div><span>Shipping (POS Tracked Shipment)</span><span class="mono">13,00 €</span></div>
+            <div class="total"><span>Order total</span><span class="mono">31,00 €</span></div>
+          </div>
+          <div class="payline"><span class="stc done small"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>Paid</span><span class="muted small">Paid Nov 13, 2026 via PayPal</span></div>
+          <div class="muted small mono ref">Ref 485906778F251144H</div></section>
+
+        <section class="card "><header class="ch"><h3><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.59 2.59A2 2 0 0 0 11.17 2H4a2 2 0 0 0-2 2v7.17a2 2 0 0 0 .59 1.42l8.7 8.7a2.43 2.43 0 0 0 3.42 0l6.58-6.58a2.43 2.43 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5"/></svg>Coupons &amp; adjustments</h3><div class="chr"></div></header><p class="empty">No coupons or adjustments</p></section>
+
+        <section class="card "><header class="ch"><h3><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 2.3a.53.53 0 0 1 .95 0l2.31 4.68a2.1 2.1 0 0 0 1.6 1.16l5.16.76a.53.53 0 0 1 .3.9l-3.74 3.64a2.1 2.1 0 0 0-.61 1.88l.88 5.14a.53.53 0 0 1-.77.56l-4.62-2.43a2.1 2.1 0 0 0-1.97 0L6.4 21a.53.53 0 0 1-.77-.56l.88-5.14a2.1 2.1 0 0 0-.61-1.88L2.16 9.8a.53.53 0 0 1 .3-.9l5.16-.76a2.1 2.1 0 0 0 1.6-1.16z"/></svg>Review &amp; feedback</h3><div class="chr"><span class="pill">Pre-delivery</span></div></header><p class="empty">No review yet. The invite is sent 36 hours after delivery.</p></section>
+
+        <section class="card "><header class="ch"><h3><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>Resend transactional email</h3><div class="chr"></div></header>
+          <div class="fcol"><span class="fl">Template</span><div class="ctl select">Order confirmation (processing)<svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div></div>
+          <div class="frow tight"><div class="ctl input grow">andreft•••@gmail.com</div><span class="btn ctlbtn"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.54 21.69a.5.5 0 0 0 .94-.03l6.5-19a.5.5 0 0 0-.64-.64l-19 6.5a.5.5 0 0 0-.03.94l7.93 3.18a2 2 0 0 1 1.11 1.11z"/><path d="m21.85 2.15-10.94 10.94"/></svg>Send</span></div>
+          <div class="linkrow"><span class="link small">Delivery logs</span><span class="link small"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3"/></svg>Open store order</span></div></section>
+
+        <section class="card admin"><header class="ch"><h3><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Administrator actions</h3><div class="chr"><span class="pill amber">Admin only</span></div></header>
+          <div class="frow tight"><span class="btn ctlbtn danger grow"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>Cancel order</span><span class="btn ctlbtn grow"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>Move to trash</span></div></section>
+      </div>
+    </div>
+  </aside>
+</div></div>
+<p class="label2"><b>Warranty order #542888, light mode</b></p>
+<div class="fit">
+<div class="frame light">
+  <div class="behind"><div class="bside"><svg class="logo-svg" viewBox="-10000 -10000 1388000 261000" fill-rule="evenodd" aria-label="Exacoat"><path fill="#F3AA18" d="M1281000 218000l0 -40000 22000 -23000 43000 0 22000 23000 0 40000 -22000 23000 -43000 0 -22000 -23000zm59000 10000l14000 -14000 0 -32000 -14000 -14000 -31000 0 -14000 14000 0 32000 14000 14000 31000 0zm-33000 -52000l28000 0 8000 8000 0 13000 -5000 5000 6000 6000 0 10000 -12000 0 0 -7000 -4000 -5000 -9000 0 0 12000 -12000 0 0 -42000zm22000 20000l3000 -2000 0 -5000 -3000 -3000 -10000 0 0 10000 10000 0z"/><path fill="currentColor" d="M0 202000l0 -108000 36000 -36000 97000 0 37000 36000 0 67000 -129000 0 0 29000 13000 14000 62000 0 13000 -13000 0 -11000 40000 0 0 23000 -35000 35000 -99000 0 -35000 -36000zm129000 -70000l0 -25000 -14000 -15000 -60000 0 -14000 15000 0 25000 88000 0zm180000 106000l-43000 -60000 -44000 60000 -45000 0 66000 -91000 -65000 -89000 46000 0 42000 58000 41000 -58000 46000 0 -64000 89000 66000 91000 -46000 0zm51000 -32000l0 -43000 32000 -31000 93000 0 0 -27000 -14000 -13000 -56000 0 -14000 13000 0 11000 -40000 0 0 -20000 37000 -38000 90000 0 37000 38000 0 142000 -37000 0 0 -28000 -29000 28000 -67000 0 -32000 -32000zm95000 0l30000 -29000 0 -15000 -74000 0 -11000 11000 0 22000 11000 11000 44000 0zm102000 -4000l0 -108000 35000 -36000 95000 0 35000 36000 0 30000 -40000 0 0 -17000 -15000 -14000 -55000 0 -15000 14000 0 82000 15000 14000 55000 0 15000 -14000 0 -17000 40000 0 0 30000 -35000 36000 -95000 0 -35000 -36000zm188000 0l0 -108000 36000 -36000 100000 0 36000 36000 0 108000 -36000 36000 -100000 0 -36000 -36000zm116000 2000l15000 -15000 0 -82000 -15000 -14000 -60000 0 -15000 14000 0 82000 15000 15000 60000 0zm84000 2000l0 -43000 32000 -31000 93000 0 0 -27000 -14000 -13000 -56000 0 -14000 13000 0 11000 -40000 0 0 -20000 37000 -38000 90000 0 37000 38000 0 142000 -37000 0 0 -28000 -29000 28000 -67000 0 -32000 -32000zm95000 0l30000 -29000 0 -15000 -73000 0 -12000 11000 0 22000 11000 11000 44000 0zm118000 -4000l0 -109000 -33000 0 0 -35000 34000 0 0 -58000 40000 0 0 58000 55000 0 0 35000 -55000 0 0 96000 14000 14000 41000 0 0 35000 -60000 0 -36000 -36000z"/></svg><span class="erp">ERP</span></div><div class="bmain"><div class="bh"></div><div class="brow"></div><div class="brow"></div><div class="brow"></div><div class="brow"></div><div class="brow"></div><div class="brow"></div><div class="brow"></div><div class="brow"></div><div class="brow"></div><div class="brow"></div><div class="brow"></div></div></div>
+  <div class="scrim"></div>
+  <aside class="drawer">
+    <header class="dh">
+      <div class="dh-top">
+        <div>
+          <div class="titleline"><h2 class="oid">#542888</h2><span class="iconbtn"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></span><span class="wchip pend"><span class="w"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>Warranty</span><span class="c">Pending review</span></span></div>
+          <div class="meta"><span>Nov 13, 2026, 18:32</span><span>BCA transfer</span></div>
+        </div>
+        <div class="dh-actions">
+          <span class="btn primary"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>Print label</span>
+          <span class="btn"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>Invoice</span>
+          <span class="btn"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg>Packing slip</span>
+          <span class="btn">More<svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+          <span class="btn icon ghost"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span>
+        </div>
+      </div>
+      <div class="banner"><span class="bicon"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg></span><div class="btext"><b>48-hour installation warranty replacement</b><span>Original <span class="mono">#2611124PTMK51A</span> on Shopee · Reason: wrinkled</span></div><span class="btn"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></svg>Review claim proof</span></div>
+      <div class="snav">
+    <div class="snav-row">
+      <span class="snav-side prev disabled"><span class="stxt"><em>Previous</em>None</span></span>
+      <div class="snav-cur">
+        <span class="cico wait"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span>
+        <span class="ctxt"><b>Awaiting payment</b><span>Step 1 of 6</span></span>
+        <span class="ctrack"><i class="cur"></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i><i class=""></i></span>
+      </div>
+      <span class="snav-side next"><span class="sico"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/></svg></span><span class="stxt"><em>Next step</em>To prepare</span><svg class="i arr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+      <span class="btn">All steps<svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+    </div>
+  </div>
+    </header>
+
+    <div class="dbody">
+      <div class="col">
+        <section class="card "><header class="ch"><h3><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Customer &amp; delivery</h3><div class="chr"><span class="toggle"><i></i>Store pickup</span></div></header>
+          <div class="cgrid">
+            <div class="cleft">
+              <div class="fld"><span class="fl">Recipient</span><div class="fv">Yenny</div></div>
+              <div class="fld"><span class="fl">Email</span><div class="fv">yen•••@gmail.com<span class="mini"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></span></div></div>
+              <div class="fld"><span class="fl">Phone</span><div class="fv">+62 812 •••• 4410<span class="mini"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></span><span class="mini green"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg></span></div></div>
+            </div>
+            <div class="cright">
+              <div class="addrhead"><span class="fl">Destination address</span><span class="link small"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.38 3.62a1 1 0 0 1 3 3L7.37 18.64a2 2 0 0 1-.86.5l-2.87.84a.5.5 0 0 1-.62-.62l.84-2.87a2 2 0 0 1 .5-.86z"/></svg>Edit</span></div>
+              <p class="addr">PT. Maritim Nusantara Perkasa, Kawasan Pelabuhan Perikanan Samudera Nizam Zachman, Jl. Muara Baru Ujung Blok T No.8, RT 020 RW 017, Penjaringan<br>Jakarta Utara, DKI Jakarta 14440<br>Indonesia</p>
+            </div>
+          </div></section>
+
+        <section class="card "><header class="ch"><h3><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/></svg>Items <em>1</em></h3><div class="chr"><span class="muted small">Total units 1</span><span class="btn sm"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Add item</span></div></header>
+          <div class="item">
+            <div class="thumb"><div class="ph"></div></div>
+            <div class="itxt">
+              <div class="iname"><span class="qty">1×</span><b>[Warranty replacement] Ark Invisible Camera Protector Skin, iPhone 17/18 Pro Max (2pcs)</b><span class="muted small mono">#507022</span></div>
+              <div class="specs"><span><em>Claimed part</em>Full skin</span><span><em>Variation</em>Camera + Back Glass</span><span><em>Original invoice</em>2611124PTMK51A</span><span><em>Original channel</em>Shopee</span></div>
+            </div>
+            <div class="iright"><b class="mono">Rp 0</b><span class="btn sm"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.38 3.62a1 1 0 0 1 3 3L7.37 18.64a2 2 0 0 1-.86.5l-2.87.84a.5.5 0 0 1-.62-.62l.84-2.87a2 2 0 0 1 .5-.86z"/></svg>Edit configuration</span></div>
+          </div></section>
+
+        <section class="card "><header class="ch"><h3><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>Shipping &amp; tracking</h3><div class="chr"></div></header>
+          <div class="frow">
+            <div class="fcol"><span class="fl">Courier</span><div class="ctl select">JNE Express<em class="svc">REG</em><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div></div>
+            <div class="fcol grow"><span class="fl">Tracking number (resi)</span><div class="ctl input placeholder">Paste resi here</div></div>
+            <div class="fcol"><span class="fl">&nbsp;</span><span class="btn ctlbtn">Save tracking</span></div>
+          </div></section>
+
+        <section class="card "><header class="ch"><h3><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg>Activity &amp; notes <em>1</em></h3><div class="chr"><span class="seg2"><span class="on">All</span><span>Customer notes</span></span><span class="btn sm"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Add note</span></div></header>
+          <ul class="feed"><li><span class="fi"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg></span><div><p>Installation warranty replacement for Shopee #2611124PTMK51A. Reason: wrinkled. Part to produce: full skin. Courier JNE REG (Rp 10.000). Awaiting QC video review.</p><span>System · Nov 13, 18:32</span></div></li></ul></section>
+      </div>
+
+      <div class="col side">
+        <section class="card "><header class="ch"><h3><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>Order summary</h3><div class="chr"><span class="btn sm"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Refund</span></div></header>
+          <div class="rows">
+            <div><span>Currency</span><span class="mono">IDR</span></div>
+            <div><span>Items subtotal</span><span class="mono">Rp 0</span></div><div><span>Shipping (JNE REG)</span><span class="mono">Rp 10.000</span></div><div><span>Unique payment code</span><span class="mono">+Rp 36</span></div>
+            <div class="total"><span>Order total</span><span class="mono">Rp 10.036</span></div>
+          </div>
+          <div class="payline"><span class="stc wait small"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Awaiting payment</span><span class="muted small">Waiting for BCA transfer of exactly Rp 10.036</span></div>
+          </section>
+
+        <section class="card "><header class="ch"><h3><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.59 2.59A2 2 0 0 0 11.17 2H4a2 2 0 0 0-2 2v7.17a2 2 0 0 0 .59 1.42l8.7 8.7a2.43 2.43 0 0 0 3.42 0l6.58-6.58a2.43 2.43 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5"/></svg>Coupons &amp; adjustments</h3><div class="chr"></div></header><div class="rows"><div><span>Unique payment code</span><span class="mono">+Rp 36</span></div></div></section>
+
+        <section class="card "><header class="ch"><h3><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 2.3a.53.53 0 0 1 .95 0l2.31 4.68a2.1 2.1 0 0 0 1.6 1.16l5.16.76a.53.53 0 0 1 .3.9l-3.74 3.64a2.1 2.1 0 0 0-.61 1.88l.88 5.14a.53.53 0 0 1-.77.56l-4.62-2.43a2.1 2.1 0 0 0-1.97 0L6.4 21a.53.53 0 0 1-.77-.56l.88-5.14a2.1 2.1 0 0 0-.61-1.88L2.16 9.8a.53.53 0 0 1 .3-.9l5.16-.76a2.1 2.1 0 0 0 1.6-1.16z"/></svg>Review &amp; feedback</h3><div class="chr"><span class="pill">Pre-delivery</span></div></header><p class="empty">No review yet. The invite is sent 36 hours after delivery.</p></section>
+
+        <section class="card "><header class="ch"><h3><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>Resend transactional email</h3><div class="chr"></div></header>
+          <div class="fcol"><span class="fl">Template</span><div class="ctl select">Order confirmation (processing)<svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div></div>
+          <div class="frow tight"><div class="ctl input grow">yen•••@gmail.com</div><span class="btn ctlbtn"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.54 21.69a.5.5 0 0 0 .94-.03l6.5-19a.5.5 0 0 0-.64-.64l-19 6.5a.5.5 0 0 0-.03.94l7.93 3.18a2 2 0 0 1 1.11 1.11z"/><path d="m21.85 2.15-10.94 10.94"/></svg>Send</span></div>
+          <div class="linkrow"><span class="link small">Delivery logs</span><span class="link small"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3"/></svg>Open store order</span></div></section>
+
+        <section class="card admin"><header class="ch"><h3><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Administrator actions</h3><div class="chr"><span class="pill amber">Admin only</span></div></header>
+          <div class="frow tight"><span class="btn ctlbtn danger grow"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>Cancel order</span><span class="btn ctlbtn grow"><svg class="i " viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>Move to trash</span></div></section>
+      </div>
+    </div>
+  </aside>
+</div></div>
+<script>
+(function () {
+  function fit() {
+    document.querySelectorAll('.fit').forEach(function (box) {
+      var f = box.querySelector('.frame'); if (!f) return;
+      var s = Math.min(1, box.clientWidth / 1880);
+      f.style.transform = 'scale(' + s + ')';
+      box.style.height = (950 * s) + 'px';
+    });
+  }
+  window.addEventListener('resize', fit); fit(); setTimeout(fit, 300);
+})();
+</script>
