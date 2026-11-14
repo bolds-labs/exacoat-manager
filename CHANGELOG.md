@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.228] - 2026-11-14
+
+### Design: Orders Redesign
+- **Orders screen**: new header with a Create menu, store-wide counts on every tab, the channel switcher and four summary cards (To prepare, Awaiting payment, Ready for pickup, Shipped last 7 days).
+- **Order panel**: new header with the order status steps, and the body rebuilt as cards for customer, items, shipping, notes, payment, refunds, coupons, review and email.
+- **Pop-ups**: refund, cancel, address, item, warranty and other order pop-ups share one look. Dropdowns are now styled lists instead of the browser default.
+- **Shopee and TikTok**: lists and detail panels restyled with the same status colours. Behaviour is unchanged.
+- **Plugin**: new read-only order counts endpoint, so tab numbers are exact across all orders. Install the new plugin zip to see them; until then tabs show no number.
+- Printed labels, packing slips and invoices are unchanged.
+
+---
+
 ## [0.1.227] - 2026-11-14
 
 ### Design: Manager Design System Foundation

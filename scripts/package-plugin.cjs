@@ -115,7 +115,8 @@ async function createPluginZip() {
     homepage: 'https://manager.exacoat.com',
     last_updated: new Date().toISOString(),
     sections: {
-      changelog: `### Version ${version}\n- Design: manager design system foundation (tokens, Geist, shared kit, new app shell)`,
+      changelog: `### Version ${version}
+- Orders redesign: new orders screen with store-wide counts, rebuilt order panel, kit pop-ups and styled dropdowns, restyled Shopee and TikTok views, read-only order counts endpoint`,
     },
   };
 

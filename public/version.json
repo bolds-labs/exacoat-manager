@@ -1,16 +1,16 @@
 {
   "name": "Exacoat Core Engine",
   "slug": "exacoat-core",
-  "version": "0.1.227",
+  "version": "0.1.228",
   "author": "Exacoat Engineering",
   "author_profile": "https://exacoat.com",
   "requires": "6.0",
   "tested": "6.7",
   "requires_php": "7.4",
-  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.227.zip?v=0.1.227",
+  "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.228.zip?v=0.1.228",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-11-14T03:45:01.315Z",
+  "last_updated": "2026-11-14T09:04:20.764Z",
   "sections": {
-    "changelog": "### Version 0.1.227\n- Design: manager design system foundation (tokens, Geist, shared kit, new app shell)"
+    "changelog": "### Version 0.1.228\n- Orders redesign: new orders screen with store-wide counts, rebuilt order panel, kit pop-ups and styled dropdowns, restyled Shopee and TikTok views, read-only order counts endpoint"
   }
 }
