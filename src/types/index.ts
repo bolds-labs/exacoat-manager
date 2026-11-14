@@ -662,6 +662,8 @@ export interface DeviceConfiguratorProfile {
   variants?: ConfiguratorVariant[];
   coverage_and_cutouts?: DeviceCoverageAndCutouts;
   presets?: ConfiguratorPreset[];
+  /** Part bundle prices (Camera & Back Glass). See src/lib/bundlePricing.ts. */
+  bundle_pricing?: import('../lib/bundlePricing').BundlePricing | null;
   marketplace_image_settings?: MarketplaceDeviceImageSettings;
   status?: 'publish' | 'draft' | string;
   updated_at?: string;

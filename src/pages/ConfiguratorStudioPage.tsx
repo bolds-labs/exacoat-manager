@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useToast } from '../context/ToastContext';
 import { lockBodyScroll } from '../lib/bodyScrollLock';
+import { bundlePricingParts, hasBundlePricingParts, setBundleAllPartsPrice, setBundlePartSurcharge } from '../lib/bundlePricing';
 import {
   fetchConfiguratorProfilesDirect,
   fetchProductConfiguratorProfileDirect,
@@ -9100,6 +9101,66 @@ export const ConfiguratorStudioPage: React.FC = () => {
                                 </div>
                               </div>
                             </div>
+
+                            {/* Part Bundle Prices (Camera & Back Glass) */}
+                            {hasBundlePricingParts(editingProfile) && (() => {
+                              const bundle = editingProfile.bundle_pricing || null;
+                              const parseIdr = (raw: string): number | null => (raw.trim() === '' ? null : Number(raw));
+                              return (
+                                <div className="p-3.5 rounded-xl bg-zinc-900/60 border border-white/5 space-y-3">
+                                  <div className="flex items-center gap-1.5">
+                                    <Coins className="w-3.5 h-3.5 text-amber-400" />
+                                    <span className="text-xs font-bold text-white">Part Bundle Prices</span>
+                                    <InfoTooltip text="Used by the Camera & Back Glass page and by the cart price check. One part alone costs the product price (first part) or the part's own price. When every part is chosen, the price is All Parts Price. A finish with a surcharge adds the flat part surcharge below instead of the bracket surcharge; on the camera a finish accent price wins. Without these values the page shows as unavailable." />
+                                  </div>
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-[11px] text-zinc-400 font-medium">All Parts Price</span>
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-zinc-500 font-mono text-[11px]">IDR</span>
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        step="5000"
+                                        aria-label="All parts price in IDR"
+                                        value={bundle?.all_parts_price ?? ''}
+                                        onChange={(e) =>
+                                          setEditingProfile({
+                                            ...editingProfile,
+                                            bundle_pricing: setBundleAllPartsPrice(bundle, parseIdr(e.target.value)),
+                                          })
+                                        }
+                                        className="w-24 px-2 py-0.5 text-xs font-mono text-right rounded bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    <span className="text-[11px] text-zinc-400 font-medium">Finish Surcharge per Part</span>
+                                    {bundlePricingParts(editingProfile).map((part) => (
+                                      <div key={part.id} className="flex items-center justify-between gap-2">
+                                        <span className="text-[11px] text-zinc-300 truncate">{part.name}</span>
+                                        <div className="flex items-center gap-1">
+                                          <span className="text-zinc-500 font-mono text-[11px]">+IDR</span>
+                                          <input
+                                            type="number"
+                                            min={0}
+                                            step="5000"
+                                            aria-label={`${part.name} finish surcharge in IDR`}
+                                            value={part.surcharge ?? ''}
+                                            onChange={(e) =>
+                                              setEditingProfile({
+                                                ...editingProfile,
+                                                bundle_pricing: setBundlePartSurcharge(bundle, part.id, parseIdr(e.target.value)),
+                                              })
+                                            }
+                                            className="w-24 px-2 py-0.5 text-xs font-mono text-right rounded bg-zinc-900 border border-white/10 text-white focus:outline-none focus:border-[#f3aa18]"
+                                          />
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })()}
 
                             {/* Device Production Variants */}
                             {(() => {
