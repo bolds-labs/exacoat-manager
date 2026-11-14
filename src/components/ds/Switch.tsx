@@ -1,11 +1,14 @@
 import { forwardRef, type ButtonHTMLAttributes } from 'react';
 
-export interface SwitchProps
-  extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onChange' | 'role'> {
+interface SwitchBaseProps
+  extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onChange' | 'role' | 'aria-label'> {
   checked: boolean;
   onCheckedChange(v: boolean): void;
-  label?: string;
 }
+
+/** A switch needs an accessible name: a visible `label`, or `aria-label` when there is none. */
+export type SwitchProps = SwitchBaseProps &
+  ({ label: string; 'aria-label'?: string } | { label?: undefined; 'aria-label': string });
 
 export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(function Switch(
   { checked, onCheckedChange, label, className = '', ...rest },

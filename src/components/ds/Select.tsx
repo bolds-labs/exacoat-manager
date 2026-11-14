@@ -24,6 +24,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
         <select
           ref={ref}
           id={selectId}
+          data-ds=""
           value={value}
           onChange={(e) => onChange(e.target.value)}
           className="min-w-0 flex-1 cursor-pointer appearance-none bg-transparent pr-6 outline-none"

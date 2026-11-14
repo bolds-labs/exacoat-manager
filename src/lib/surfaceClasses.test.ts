@@ -16,3 +16,14 @@ describe('stripLegacySurfaceClasses', () => {
     expect(stripLegacySurfaceClasses(undefined)).toBe('');
   });
 });
+
+describe('stripLegacySurfaceClasses hex colours', () => {
+  it('keeps non-neutral (brand) hex colours', () => {
+    expect(
+      stripLegacySurfaceClasses('border-[#f3aa18]/25 bg-[#f3aa18]/[0.02] hover:border-[#f3aa18]/30'),
+    ).toBe('border-[#f3aa18]/25 bg-[#f3aa18]/[0.02] hover:border-[#f3aa18]/30');
+  });
+  it('strips neutral grey hex colours', () => {
+    expect(stripLegacySurfaceClasses('bg-[#0d0f12] bg-[#111111] bg-[#fff] p-2')).toBe('p-2');
+  });
+});

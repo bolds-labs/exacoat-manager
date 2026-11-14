@@ -23,6 +23,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
         <input
           ref={ref}
           id={inputId}
+          data-ds=""
           className={`min-w-0 flex-1 bg-transparent outline-none placeholder:text-faint ${mono ? 'font-mono' : ''}`}
           {...rest}
         />

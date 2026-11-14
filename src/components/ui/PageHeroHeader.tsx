@@ -28,11 +28,11 @@ export const PageHeroHeader: React.FC<PageHeroHeaderProps> = ({
       case 'lime':
         return 'bg-accent-soft text-accent-fg border-accent-border';
       case 'amber':
-        return 'bg-st-wait-bg text-st-wait-fg border-st-wait-border';
+        return 'bg-st-act-bg text-st-act-fg border-st-act-border';
       case 'cyan':
         return 'bg-st-prog-bg text-st-prog-fg border-st-prog-border';
       case 'purple':
-        return 'bg-st-act-bg text-st-act-fg border-st-act-border';
+        return 'bg-st-wait-bg text-st-wait-fg border-st-wait-border';
       default:
         return 'bg-chip text-muted border-card-border';
     }

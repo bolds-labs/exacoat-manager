@@ -9,7 +9,7 @@
   "requires_php": "7.4",
   "download_url": "https://manager.exacoat.com/exacoat-core-v0.1.227.zip?v=0.1.227",
   "homepage": "https://manager.exacoat.com",
-  "last_updated": "2026-11-14T03:28:02.946Z",
+  "last_updated": "2026-11-14T03:45:01.315Z",
   "sections": {
     "changelog": "### Version 0.1.227\n- Design: manager design system foundation (tokens, Geist, shared kit, new app shell)"
   }

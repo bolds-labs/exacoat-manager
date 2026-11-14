@@ -10,10 +10,10 @@ export const buttonSizeClass: Record<ControlSize, string> = {
 };
 
 export const buttonVariantClass: Record<ButtonVariant, string> = {
-  primary: 'bg-accent text-accent-on border-transparent font-semibold',
-  secondary: 'bg-field text-fg border-field-border font-[450]',
-  ghost: 'bg-transparent text-fg border-transparent font-[450]',
-  danger: 'text-st-stop-fg bg-st-stop-bg border-st-stop-border font-[450]',
+  primary: 'bg-accent text-accent-on border-transparent font-semibold hover:brightness-95',
+  secondary: 'bg-field text-fg border-field-border font-[450] hover:bg-chip',
+  ghost: 'bg-transparent text-fg border-transparent font-[450] hover:bg-chip',
+  danger: 'text-st-stop-fg bg-st-stop-bg border-st-stop-border font-[450] hover:brightness-95',
 };
 
 export const buttonBaseClass =

@@ -25,6 +25,7 @@ import {
   CornerDownLeft
 } from 'lucide-react';
 import { NavItemKey } from './Sidebar';
+import { SHOP_MANAGER_ALLOWED_TABS } from './sidebarNav';
 import { useAuth } from '../../context/AuthContext';
 import { lockBodyScroll } from '../../lib/bodyScrollLock';
 
@@ -252,16 +253,6 @@ const WORKSPACE_PAGES: WorkspaceAction[] = [
   },
 ];
 
-const SHOP_MANAGER_ALLOWED_TABS: NavItemKey[] = [
-  'orders', 
-  'custom_label',
-  'reviews', 
-  'rma', 
-  'warranty', 
-  'export', 
-  'tracking_pool'
-];
-
 export const CommandPalette: React.FC<CommandPaletteProps> = ({
   isOpen,
   onClose,
@@ -369,7 +360,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[6vh] sm:pt-16 p-3 sm:p-4 select-none"
+      className="fixed inset-0 z-[400] flex items-start justify-center pt-[6vh] sm:pt-16 p-3 sm:p-4 select-none"
       onClick={onClose}
     >
       {/* Backdrop */}

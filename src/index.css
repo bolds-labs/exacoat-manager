@@ -14,7 +14,7 @@
     --field-border: rgba(24, 24, 27, 0.11);
     --fg: #18181b;
     --muted: #5b5b63;
-    --faint: #9a9aa2;
+    --faint: #6e6e74;
     --line: rgba(24, 24, 27, 0.07);
     --chip: rgba(24, 24, 27, 0.05);
     --pop: #ffffff;
@@ -63,7 +63,7 @@
     --field-border: rgba(255, 255, 255, 0.085);
     --fg: #e8e8eb;
     --muted: #a1a1aa;
-    --faint: #6e6e78;
+    --faint: #7c7c86;
     --line: rgba(255, 255, 255, 0.07);
     --chip: rgba(255, 255, 255, 0.06);
     --pop: #151518;
@@ -118,9 +118,9 @@
 
   button:focus-visible,
   a:focus-visible,
-  input:focus-visible,
-  select:focus-visible,
-  textarea:focus-visible,
+  input:not([data-ds]):focus-visible,
+  select:not([data-ds]):focus-visible,
+  textarea:not([data-ds]):focus-visible,
   [role="button"]:focus-visible {
     outline: 2px solid rgba(243, 170, 24, 0.7);
     outline-offset: 2px;
@@ -222,7 +222,6 @@ html:not(.dark) {
   --border-subtle: #e4e4e7;
   --border-medium: #d4d4d8;
   --border-strong: #a1a1aa;
-  --accent: #d97706; /* WCAG AA compliant amber-700 on white (4.8:1) */
   --accent-hover: #b45309;
   --text-primary: #09090b; /* zinc-950 */
   --text-secondary: #3f3f46; /* zinc-700 */
@@ -516,22 +515,22 @@ html:not(.dark) button.bg-\[\#141414\]:hover {
 }
 
 /* Form inputs & controls in light mode: un-skips bg-zinc/bg-neutral dark inputs */
-html:not(.dark) input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([class*="bg-orange"]):not([class*="bg-amber"]),
-html:not(.dark) select,
-html:not(.dark) textarea {
+html:not(.dark) input:not([data-ds]):not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([class*="bg-orange"]):not([class*="bg-amber"]),
+html:not(.dark) select:not([data-ds]),
+html:not(.dark) textarea:not([data-ds]) {
   background-color: #ffffff !important;
   color: #09090b !important;
   border-color: #d4d4d8 !important;
 }
 
-html:not(.dark) input::placeholder,
-html:not(.dark) textarea::placeholder {
+html:not(.dark) input:not([data-ds])::placeholder,
+html:not(.dark) textarea:not([data-ds])::placeholder {
   color: #71717a !important;
 }
 
-html:not(.dark) input:focus,
-html:not(.dark) textarea:focus,
-html:not(.dark) select:focus {
+html:not(.dark) input:not([data-ds]):focus,
+html:not(.dark) textarea:not([data-ds]):focus,
+html:not(.dark) select:not([data-ds]):focus {
   border-color: #f3aa18 !important;
   box-shadow: 0 0 0 1px rgba(243, 170, 24, 0.4) !important;
 }
@@ -679,9 +678,9 @@ html:not(.dark) :is(button, a):not([class*="bg-black"]):not([class*="bg-zinc-9"]
     @apply w-full max-w-[1680px] mx-auto px-3 py-4 sm:px-5 sm:py-5 md:px-6 md:py-7 xl:px-8;
   }
 
-  .manager-workspace input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
-  .manager-workspace select,
-  .manager-workspace textarea {
+  .manager-workspace input:not([data-ds]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  .manager-workspace select:not([data-ds]),
+  .manager-workspace textarea:not([data-ds]) {
     min-height: 40px;
     border-radius: var(--radius-control);
   }

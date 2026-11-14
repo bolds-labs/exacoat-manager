@@ -112,7 +112,7 @@ export function FilterSelect<T extends string | number = string>({
       {isOpen && (
         <div
           className={clsx(
-            'absolute z-50 min-w-[200px] max-w-[320px] max-h-80 overflow-y-auto rounded-[10px] p-1',
+            'absolute z-[300] min-w-[200px] max-w-[320px] max-h-80 overflow-y-auto rounded-[10px] p-1',
             dropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5',
             align === 'right' ? 'right-0' : 'left-0',
             'bg-pop border border-card-border shadow-[0_12px_30px_rgba(0,0,0,0.3)]',

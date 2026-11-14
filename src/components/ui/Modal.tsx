@@ -27,7 +27,7 @@ export const Modal: React.FC<ModalProps> = ({
   children,
   maxWidth = 'lg',
   className,
-  zIndex = 'z-50',
+  zIndex = 'z-[220]',
 }) => {
   const [isMounted, setIsMounted] = useState(isOpen);
   const [isVisible, setIsVisible] = useState(false);

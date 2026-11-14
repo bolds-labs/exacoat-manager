@@ -113,7 +113,7 @@ describe('token classes', () => {
   });
   it('callers cannot override the internal handlers', () => {
     const onCheckedChange = vi.fn();
-    render(<Switch checked={false} onCheckedChange={onCheckedChange} onClick={() => {}} />);
+    render(<Switch aria-label="Sync" checked={false} onCheckedChange={onCheckedChange} onClick={() => {}} />);
     fireEvent.click(screen.getByRole('switch'));
     expect(onCheckedChange).toHaveBeenCalledWith(true);
   });

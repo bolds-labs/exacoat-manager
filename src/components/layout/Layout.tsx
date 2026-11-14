@@ -26,6 +26,18 @@ interface LayoutProps {
   dbStatus?: 'healthy' | 'warning' | 'error';
 }
 
+/**
+ * Ambient background glow: the three static radial gradients from before the redesign at half
+ * strength, layered over the `.manager-workspace` gradients. Static only: no blur, no animation (section 61).
+ */
+const WORKSPACE_GLOW = [
+  'radial-gradient(600px 500px at 30% 0%, rgba(243, 170, 24, 0.025), transparent 70%)',
+  'radial-gradient(500px 400px at 70% 100%, rgba(161, 161, 170, 0.025), transparent 70%)',
+  'radial-gradient(400px 400px at 100% 55%, rgba(113, 113, 122, 0.025), transparent 70%)',
+  'radial-gradient(circle at 18% -10%, rgba(243, 170, 24, 0.055), transparent 30rem)',
+  'linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 12rem)',
+].join(', ');
+
 export const Layout: React.FC<LayoutProps> = ({
   children,
   currentTab,
@@ -57,7 +69,10 @@ export const Layout: React.FC<LayoutProps> = ({
   const isShopManager = user?.role === 'shop_manager';
 
   return (
-    <div className="manager-workspace h-screen w-screen bg-bg text-fg flex relative overflow-hidden font-sans">
+    <div
+      className="manager-workspace h-screen w-screen bg-bg text-fg flex relative overflow-hidden font-sans"
+      style={{ backgroundImage: WORKSPACE_GLOW }}
+    >
       {/* Sidebar with Desktop Fixed & Mobile Drawer Modes */}
       <Sidebar
         currentTab={currentTab}
