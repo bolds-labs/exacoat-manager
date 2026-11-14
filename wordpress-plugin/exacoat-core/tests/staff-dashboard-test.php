@@ -78,6 +78,56 @@ $check( $S::can_delete_note( $note, 8, false ), false, 'other staff' );
 $check( $S::can_delete_note( $note, 8, true ), true, 'administrator' );
 $check( $S::can_delete_note( [ 'author_id' => 0 ], 0, false ), false, 'anonymous' );
 
+// Notes lock.
+$check( $S::lock_is_stale( ( $now - 5 ) . ':abc', $now ), false, 'fresh lock' );
+$check( $S::lock_is_stale( ( $now - 10 ) . ':abc', $now ), false, 'lock at 10s is kept' );
+$check( $S::lock_is_stale( ( $now - 11 ) . ':abc', $now ), true, 'lock over 10s is stale' );
+$check( $S::lock_is_stale( 'garbage', $now ), true, 'unreadable lock is stale' );
+
+$log  = [];
+$held = false;
+$acq  = function () use ( &$held, &$log ) {
+	$log[] = 'try';
+	if ( $held ) {
+		return false;
+	}
+	$held = true;
+	return true;
+};
+$rel  = function () use ( &$held, &$log ) {
+	$log[] = 'release';
+	$held  = false;
+};
+$busy = fn() => 'busy';
+$check( $S::with_lock( $acq, $rel, fn() => 'done', $busy ), 'done', 'free lock runs the work' );
+$check( $log, [ 'try', 'release' ], 'released after work' );
+$check( $held, false, 'not held after work' );
+
+$log    = [];
+$held   = true;
+$pauses = 0;
+$check( $S::with_lock( $acq, $rel, fn() => 'done', $busy, 3, function () use ( &$pauses ) { $pauses++; } ), 'busy', 'held lock gives busy' );
+$check( $log, [ 'try', 'try', 'try' ], 'retries then gives up without releasing another request lock' );
+$check( $pauses, 2, 'pauses only between tries' );
+
+$tries = 0;
+$late  = function () use ( &$tries ) {
+	return ++$tries >= 2;
+};
+$check( $S::with_lock( $late, fn() => null, fn() => 'done', $busy, 3 ), 'done', 'lock taken on a later try' );
+
+$log   = [];
+$held  = false;
+$threw = false;
+try {
+	$S::with_lock( $acq, $rel, function () {
+		throw new RuntimeException( 'boom' );
+	}, $busy );
+} catch ( RuntimeException $e ) {
+	$threw = true;
+}
+$check( $threw && ! $held && 'release' === end( $log ), true, 'released when the work throws' );
+
 if ( $fails ) {
 	echo $fails . " failure(s)\n";
 	exit( 1 );

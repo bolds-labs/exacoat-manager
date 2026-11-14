@@ -9,7 +9,11 @@ import {
 } from './staffDashboard';
 
 /** missing: the plugin on the store is older and has no staff routes yet (WordPress answers rest_no_route). */
-export type StaffResult<T> = { ok: true; data: T } | { ok: false; missing: boolean; error: string };
+export type StaffResult<T> = { ok: true; data: T } | { ok: false; missing: boolean; error: string; code?: string };
+
+/** Error codes the staff routes send that the screen reacts to. */
+export const NOTE_MISSING = 'exacoat_staff_note_missing';
+export const NOTES_BUSY = 'exacoat_staff_notes_busy';
 
 const NOTE_ID = /^[a-z0-9]{1,32}$/;
 const base = () => `${getWordPressBaseUrl()}/wp-json/exacoat-core/v1/staff`;
@@ -30,7 +34,8 @@ async function request<T>(url: string, init: RequestInit, parse: (data: unknown)
     if (!res.ok) {
       const missing = res.status === 404 && (data === null || body.code === 'rest_no_route');
       const message = typeof body.message === 'string' && body.message ? body.message : `Request failed (${res.status})`;
-      return { ok: false, missing, error: missing ? 'Install the latest plugin' : message };
+      const code = typeof body.code === 'string' ? body.code : undefined;
+      return { ok: false, missing, error: missing ? 'Install the latest plugin' : message, ...(code && !missing ? { code } : {}) };
     }
     const parsed = parse(data);
     if (parsed === null) return { ok: false, missing: false, error: 'Unexpected response from the store' };

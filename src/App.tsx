@@ -8,6 +8,7 @@ import { LoginPage } from './pages/LoginPage';
 import { useOrderCounts } from './hooks/useOrderCounts';
 import { fetchOrdersDirect, handleShopeeCallbackDirect, handleTikTokCallbackDirect } from './lib/wordpressBridge';
 import { refreshPlan, tabNeedsOrderList } from './lib/workspaceTabs';
+import { paymentConfirmedFallback } from './lib/countsFallback';
 import { emitWorkspaceRefresh } from './lib/workspaceRefresh';
 import { Order, AuditLog } from './types';
 import { Loader2 } from 'lucide-react';
@@ -305,7 +306,8 @@ export const App: React.FC = () => {
   // The recent-orders list is several MB, so it loads only on the screen that uses it (skin performance)
   const needsOrderList = tabNeedsOrderList(currentTab, isShopManager);
   const [ordersLoaded, setOrdersLoaded] = useState(false);
-  const [processingCount, setProcessingCount] = useState(0);
+  // null until the fallback request succeeds, so a failed fallback never shows as 0
+  const [processingCount, setProcessingCount] = useState<number | null>(null);
   const { counts: orderCounts, loaded: countsLoaded, refresh: refreshOrderCounts } = useOrderCounts(Boolean(user) && !isAffiliatePortal);
 
   const loadWorkspaceData = useCallback(async (quiet = false) => {
@@ -391,7 +393,7 @@ export const App: React.FC = () => {
 
   const renderActiveTab = () => {
     const staffDashboard = (
-      <StaffDashboardPage onNavigate={handleTabChange} orderCounts={orderCounts} countsLoaded={countsLoaded} fallbackPaymentConfirmed={countsLoaded && !orderCounts ? processingCount : undefined} onRefreshCounts={refreshOrderCounts} />
+      <StaffDashboardPage onNavigate={handleTabChange} orderCounts={orderCounts} countsLoaded={countsLoaded} fallbackPaymentConfirmed={paymentConfirmedFallback(countsLoaded, Boolean(orderCounts), processingCount)} onRefreshCounts={refreshOrderCounts} />
     );
     if (isShopManager) {
       if (currentTab === 'staff') {
@@ -415,12 +417,12 @@ export const App: React.FC = () => {
       return <OrdersView initialStatus="all" onNavigateToCustomer={undefined} orderCounts={orderCounts} onRefreshCounts={refreshOrderCounts} />;
     }
     const fallbackDashboard = (
-      <DashboardPage onNavigate={handleTabChange} orderCounts={orderCounts} fallbackPaymentConfirmed={countsLoaded && !orderCounts ? processingCount : undefined} onRefreshCounts={refreshOrderCounts} />
+      <DashboardPage onNavigate={handleTabChange} orderCounts={orderCounts} fallbackPaymentConfirmed={paymentConfirmedFallback(countsLoaded, Boolean(orderCounts), processingCount)} onRefreshCounts={refreshOrderCounts} />
     );
     switch (currentTab) {
       case 'dashboard':
         return (
-          <DashboardPage onNavigate={handleTabChange} orderCounts={orderCounts} fallbackPaymentConfirmed={countsLoaded && !orderCounts ? processingCount : undefined} onRefreshCounts={refreshOrderCounts} />
+          <DashboardPage onNavigate={handleTabChange} orderCounts={orderCounts} fallbackPaymentConfirmed={paymentConfirmedFallback(countsLoaded, Boolean(orderCounts), processingCount)} onRefreshCounts={refreshOrderCounts} />
         );
       case 'staff':
         return staffDashboard;
@@ -506,7 +508,7 @@ export const App: React.FC = () => {
       onTabChange={handleTabChange}
       onRefreshData={refreshAll}
       isRefreshing={isRefreshing}
-      pendingOrdersCount={orderCounts ? orderCounts.webstore.to_prepare : processingCount}
+      pendingOrdersCount={orderCounts ? orderCounts.webstore.to_prepare : processingCount ?? 0}
       navCounts={orderCounts ? { orders: orderCounts.webstore.to_prepare, rma: orderCounts.webstore.warranty_pending } : undefined}
       pendingReviewsCount={0}
     >

@@ -34,7 +34,7 @@ function openOrderPanel(onNavigate: (tab: NavItemKey) => void, id: number) {
 export const StaffDashboardPage: React.FC<StaffDashboardPageProps> = ({ onNavigate, orderCounts = null, countsLoaded = false, fallbackPaymentConfirmed, onRefreshCounts }) => {
   const [reloadKey, setReloadKey] = useState(0);
   const [overdue, setOverdue] = useState<LoadState<{ orders: OverdueOrder[]; truncated: boolean }>>({ status: 'loading' });
-  const [reviews, setReviews] = useState<LoadState<{ reviews: OrderReview[]; pending: number }>>({ status: 'loading' });
+  const [reviews, setReviews] = useState<Exclude<LoadState<{ reviews: OrderReview[]; pending: number }>, { status: 'missing' }>>({ status: 'loading' });
   const [busy, setBusy] = useState(false);
   const firstLoad = useRef(true);
 

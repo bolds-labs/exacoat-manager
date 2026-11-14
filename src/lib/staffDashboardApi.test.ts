@@ -53,7 +53,22 @@ describe('staff notes requests', () => {
 
   it('keeps a missing note apart from a missing plugin', async () => {
     fetchMock.mockResolvedValue(json(404, { code: 'exacoat_staff_note_missing', message: 'This note no longer exists.' }));
-    expect(await deleteStaffNoteDirect('nabc')).toEqual({ ok: false, missing: false, error: 'This note no longer exists.' });
+    expect(await deleteStaffNoteDirect('nabc')).toEqual({
+      ok: false,
+      missing: false,
+      error: 'This note no longer exists.',
+      code: 'exacoat_staff_note_missing',
+    });
+  });
+
+  it('passes the busy lock error through with its message', async () => {
+    fetchMock.mockResolvedValue(json(409, { code: 'exacoat_staff_notes_busy', message: 'Notes are busy, try again.' }));
+    expect(await createStaffNoteDirect('Hi')).toEqual({
+      ok: false,
+      missing: false,
+      error: 'Notes are busy, try again.',
+      code: 'exacoat_staff_notes_busy',
+    });
   });
 
   it('rejects a malformed success response', async () => {

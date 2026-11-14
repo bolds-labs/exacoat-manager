@@ -22,6 +22,11 @@ if ( ! class_exists( 'Exacoat_Staff_Dashboard' ) ) {
 class Exacoat_Staff_Dashboard {
 
 	const OPTION_NOTES   = 'exacoat_staff_notes';
+	/** Row used as a mutex around note writes (value: "{unix time}:{token}"). */
+	const OPTION_LOCK    = 'exacoat_staff_notes_lock';
+	/** A lock older than this many seconds is treated as left behind by a crashed request. */
+	const LOCK_STALE     = 10;
+	const LOCK_ATTEMPTS  = 5;
 	const NOTES_CAP      = 300;
 	const NOTE_MAX_CHARS = 2000;
 	/** Overdue after more than this many seconds since pickup (2 full days). */
@@ -202,6 +207,32 @@ class Exacoat_Staff_Dashboard {
 		return $kept;
 	}
 
+	/** Whether a lock value ("{unix time}:{token}") is old enough to break. */
+	public static function lock_is_stale( string $value, int $now ): bool {
+		$ts = (int) strtok( $value, ':' );
+		return $ts <= 0 || ( $now - $ts ) > self::LOCK_STALE;
+	}
+
+	/**
+	 * Run $work while holding a lock. $try_acquire is called up to $attempts times ($pause between tries);
+	 * the lock is always released after $work. When it cannot be taken, $on_busy's result is returned.
+	 */
+	public static function with_lock( callable $try_acquire, callable $release, callable $work, callable $on_busy, int $attempts = self::LOCK_ATTEMPTS, ?callable $pause = null ) {
+		for ( $i = 0; $i < $attempts; $i++ ) {
+			if ( $try_acquire() ) {
+				try {
+					return $work();
+				} finally {
+					$release();
+				}
+			}
+			if ( $pause && $i < $attempts - 1 ) {
+				$pause( $i );
+			}
+		}
+		return $on_busy();
+	}
+
 	/** wp_strip_all_tags when WordPress is loaded, strip_tags otherwise (standalone tests). */
 	private static function strip_tags_safe( string $s ): string {
 		return function_exists( 'wp_strip_all_tags' ) ? wp_strip_all_tags( $s ) : strip_tags( $s );
@@ -219,7 +250,55 @@ class Exacoat_Staff_Dashboard {
 	// Notes storage
 	// ------------------------------------------------------------------
 
-	private static function read_notes(): array {
+	/**
+	 * Take the notes lock with INSERT IGNORE on the options table: atomic on the unique option_name
+	 * (add_option() is not, it uses ON DUPLICATE KEY UPDATE). A stale lock is removed only while it
+	 * still holds the value read, so two requests cannot both break it.
+	 */
+	private static function try_acquire_notes_lock( string $token ): bool {
+		global $wpdb;
+		$inserted = $wpdb->query( $wpdb->prepare(
+			"INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'no')",
+			self::OPTION_LOCK,
+			$token
+		) );
+		if ( 1 === (int) $inserted ) {
+			return true;
+		}
+		$held = (string) $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", self::OPTION_LOCK ) );
+		if ( '' !== $held && self::lock_is_stale( $held, time() ) ) {
+			$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s", self::OPTION_LOCK, $held ) );
+		}
+		return false;
+	}
+
+	private static function release_notes_lock( string $token ): void {
+		global $wpdb;
+		$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s", self::OPTION_LOCK, $token ) );
+	}
+
+	/** Read-change-write of the notes under the lock; HTTP 409 when another write keeps holding it. */
+	private static function locked( callable $work ) {
+		$token = time() . ':' . bin2hex( random_bytes( 8 ) );
+		return self::with_lock(
+			static fn() => self::try_acquire_notes_lock( $token ),
+			static function () use ( $token ) {
+				self::release_notes_lock( $token );
+			},
+			$work,
+			static fn() => new WP_Error( 'exacoat_staff_notes_busy', 'Notes are busy, try again.', [ 'status' => 409 ] ),
+			self::LOCK_ATTEMPTS,
+			static function () {
+				usleep( 150000 );
+			}
+		);
+	}
+
+	private static function read_notes( bool $fresh = false ): array {
+		if ( $fresh && function_exists( 'wp_cache_delete' ) ) {
+			// Inside the lock, never trust an object-cached copy from before another request's save.
+			wp_cache_delete( self::OPTION_NOTES, 'options' );
+		}
 		$raw = get_option( self::OPTION_NOTES, [] );
 		if ( ! is_array( $raw ) ) {
 			return [];
@@ -298,10 +377,12 @@ class Exacoat_Staff_Dashboard {
 			'pinned'      => false,
 			'done'        => false,
 		];
-		$notes   = self::read_notes();
-		$notes[] = $note;
-		self::write_notes( $notes );
-		return rest_ensure_response( [ 'success' => true, 'note' => self::format_note( $note ) ] );
+		return self::locked( static function () use ( $note ) {
+			$notes   = self::read_notes( true );
+			$notes[] = $note;
+			self::write_notes( $notes );
+			return rest_ensure_response( [ 'success' => true, 'note' => self::format_note( $note ) ] );
+		} );
 	}
 
 	public static function rest_update_note( WP_REST_Request $request ) {
@@ -311,23 +392,25 @@ class Exacoat_Staff_Dashboard {
 		}
 		$id     = (string) $request->get_param( 'id' );
 		$params = $request->get_json_params() ?: $request->get_params();
-		$notes  = self::read_notes();
-		foreach ( $notes as $i => $n ) {
-			if ( (string) $n['id'] !== $id ) {
-				continue;
+		return self::locked( static function () use ( $id, $params ) {
+			$notes = self::read_notes( true );
+			foreach ( $notes as $i => $n ) {
+				if ( (string) $n['id'] !== $id ) {
+					continue;
+				}
+				if ( array_key_exists( 'pinned', $params ) ) {
+					$n['pinned'] = rest_sanitize_boolean( $params['pinned'] );
+				}
+				if ( array_key_exists( 'done', $params ) ) {
+					$n['done'] = rest_sanitize_boolean( $params['done'] );
+				}
+				$n['updated_at'] = time();
+				$notes[ $i ]     = $n;
+				self::write_notes( $notes );
+				return rest_ensure_response( [ 'success' => true, 'note' => self::format_note( $n ) ] );
 			}
-			if ( array_key_exists( 'pinned', $params ) ) {
-				$n['pinned'] = rest_sanitize_boolean( $params['pinned'] );
-			}
-			if ( array_key_exists( 'done', $params ) ) {
-				$n['done'] = rest_sanitize_boolean( $params['done'] );
-			}
-			$n['updated_at'] = time();
-			$notes[ $i ]     = $n;
-			self::write_notes( $notes );
-			return rest_ensure_response( [ 'success' => true, 'note' => self::format_note( $n ) ] );
-		}
-		return new WP_Error( 'exacoat_staff_note_missing', 'This note no longer exists.', [ 'status' => 404 ] );
+			return new WP_Error( 'exacoat_staff_note_missing', 'This note no longer exists.', [ 'status' => 404 ] );
+		} );
 	}
 
 	public static function rest_delete_note( WP_REST_Request $request ) {
@@ -336,19 +419,22 @@ class Exacoat_Staff_Dashboard {
 			return $uid;
 		}
 		$id    = (string) $request->get_param( 'id' );
-		$notes = self::read_notes();
-		foreach ( $notes as $i => $n ) {
-			if ( (string) $n['id'] !== $id ) {
-				continue;
+		$is_admin = self::current_is_admin();
+		return self::locked( static function () use ( $id, $uid, $is_admin ) {
+			$notes = self::read_notes( true );
+			foreach ( $notes as $i => $n ) {
+				if ( (string) $n['id'] !== $id ) {
+					continue;
+				}
+				if ( ! self::can_delete_note( $n, $uid, $is_admin ) ) {
+					return new WP_Error( 'exacoat_staff_note_forbidden', 'Only the author or an administrator can delete this note.', [ 'status' => 403 ] );
+				}
+				unset( $notes[ $i ] );
+				self::write_notes( array_values( $notes ) );
+				return rest_ensure_response( [ 'success' => true, 'id' => $id ] );
 			}
-			if ( ! self::can_delete_note( $n, $uid, self::current_is_admin() ) ) {
-				return new WP_Error( 'exacoat_staff_note_forbidden', 'Only the author or an administrator can delete this note.', [ 'status' => 403 ] );
-			}
-			unset( $notes[ $i ] );
-			self::write_notes( array_values( $notes ) );
-			return rest_ensure_response( [ 'success' => true, 'id' => $id ] );
-		}
-		return new WP_Error( 'exacoat_staff_note_missing', 'This note no longer exists.', [ 'status' => 404 ] );
+			return new WP_Error( 'exacoat_staff_note_missing', 'This note no longer exists.', [ 'status' => 404 ] );
+		} );
 	}
 
 	// ------------------------------------------------------------------

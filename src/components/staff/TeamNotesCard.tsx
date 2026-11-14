@@ -12,6 +12,7 @@ import {
   createStaffNoteDirect,
   deleteStaffNoteDirect,
   fetchStaffNotesDirect,
+  NOTE_MISSING,
   updateStaffNoteDirect,
 } from '../../lib/staffDashboardApi';
 import { CardEmpty, CardError, CardLoading, PluginMissingNote } from './StaffCardStates';
@@ -33,6 +34,7 @@ export function TeamNotesCard({ reloadKey }: Props) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [showDone, setShowDone] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<StaffNote | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const loadSeq = useRef(0);
 
   const load = useCallback(async (quiet: boolean) => {
@@ -73,6 +75,7 @@ export function TeamNotesCard({ reloadKey }: Props) {
     } else if (res.missing) {
       setStatus('missing');
     } else {
+      // The draft stays in the field so nothing typed is lost (for example when notes are busy).
       toast.error('Could not add the note', res.error);
     }
   };
@@ -84,6 +87,9 @@ export function TeamNotesCard({ reloadKey }: Props) {
     setBusyId(null);
     if (res.ok) {
       dispatch({ type: 'upsert', note: res.data });
+    } else if (res.code === NOTE_MISSING) {
+      dispatch({ type: 'removed', id: note.id });
+      toast.error('Note removed', 'Someone else deleted this note.');
     } else {
       dispatch({ type: 'upsert', note });
       toast.error('Could not update the note', res.error);
@@ -94,10 +100,12 @@ export function TeamNotesCard({ reloadKey }: Props) {
     const note = confirmDelete;
     if (!note) return;
     setBusyId(note.id);
+    setDeleting(true);
     const res = await deleteStaffNoteDirect(note.id);
+    setDeleting(false);
     setBusyId(null);
     setConfirmDelete(null);
-    if (res.ok) {
+    if (res.ok || res.code === NOTE_MISSING) {
       dispatch({ type: 'removed', id: note.id });
     } else {
       toast.error('Could not delete the note', res.error);
@@ -186,18 +194,18 @@ export function TeamNotesCard({ reloadKey }: Props) {
       <Modal
         open={confirmDelete !== null}
         onOpenChange={(o) => {
-          if (!o) setConfirmDelete(null);
+          if (!o && !deleting) setConfirmDelete(null);
         }}
         title="Delete this note?"
         description="It is removed for the whole team. This cannot be undone."
         width={440}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setConfirmDelete(null)}>
+            <Button variant="secondary" onClick={() => setConfirmDelete(null)} disabled={deleting}>
               Cancel
             </Button>
-            <Button variant="danger" icon={Trash2} onClick={() => void remove()} disabled={busyId !== null}>
-              Delete note
+            <Button variant="danger" icon={Trash2} onClick={() => void remove()} disabled={deleting || busyId !== null}>
+              {deleting ? 'Deleting...' : 'Delete note'}
             </Button>
           </>
         }

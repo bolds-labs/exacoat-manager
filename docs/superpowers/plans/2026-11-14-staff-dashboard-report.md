@@ -38,3 +38,15 @@ Spec: `docs/superpowers/specs/2026-11-14-staff-dashboard-design.md`. Branch `des
 - Overdue uses the latest status change note into Waiting for Courier Pickup and matches the label `Waiting for Courier Pickup`, `Ready to ship` and the slug; a renamed status label in WooCommerce is picked up through `wc_get_order_status_name`.
 - Orders whose country is empty are not treated as international.
 - The endpoints are not live until the 0.1.228 zip is installed; nothing was installed or pushed.
+
+## Fix round 1
+
+1. **Notes write lock**: create, update and delete now hold a lock row `exacoat_staff_notes_lock` around the read-change-write. The lock is taken with `INSERT IGNORE` on the options table instead of `add_option()`, because `add_option()` uses `ON DUPLICATE KEY UPDATE` and is not an atomic mutex. It tries 5 times, 150 ms apart, and is released in `finally` by deleting only its own token. A lock older than 10 s is broken with a conditional delete on the exact value read. When the lock cannot be taken the route returns HTTP 409 `exacoat_staff_notes_busy` ("Notes are busy, try again."). The notes option cache is dropped before reading inside the lock. The manager passes the error code through, shows the message and keeps the typed text. PHP tests cover stale detection, retries, pauses, busy result, release after work and release when the work throws.
+2. **Payment confirmed fallback**: App keeps the processing count as `null` until its request succeeds. `paymentConfirmedFallback` (`src/lib/countsFallback.ts`, tested) shows no number when both the counts endpoint and the fallback are unavailable, on both the Dashboard and the Staff dashboard. The sidebar badge still uses 0 as before.
+3. **Note deleted elsewhere**: an update or delete that returns 404 `exacoat_staff_note_missing` removes the note with a "Note removed" notice instead of restoring it (component test).
+4. **Review thumbnails**: videos without `poster_url` show a video icon tile (component test). The unreachable `missing` state was removed from the reviews card type and its render branch.
+5. **Delete note pop-up**: Cancel is disabled and Escape and outside clicks are ignored while the delete runs (component test).
+
+Left as they are, as asked: the overdue query cost and the Rayspeed time precision.
+
+Checks: `php -l` clean; both PHP tests OK; `npx tsc --noEmit` clean; `npm test` 45 files, 449 tests passed; `npm run build` passed at 0.1.228 with rebuilt zips; initial JS 892,075 bytes. The dev server reload still renders the screen with Payment confirmed from the fallback.

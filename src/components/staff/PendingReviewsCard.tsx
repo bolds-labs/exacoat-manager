@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowRight, Check, Play, Star, X } from 'lucide-react';
+import { ArrowRight, Check, Play, Star, Video, X } from 'lucide-react';
 import type { OrderReview } from '../../types';
 import { Card } from '../ds/Card';
 import { Button } from '../ds/Button';
@@ -11,7 +11,8 @@ import { CardEmpty, CardError, CardLoading } from './StaffCardStates';
 import type { LoadState } from './OverdueOrdersCard';
 
 interface Props {
-  state: LoadState<{ reviews: OrderReview[]; pending: number }>;
+  /** The reviews endpoint is part of every plugin version, so there is no missing-plugin state here. */
+  state: Exclude<LoadState<{ reviews: OrderReview[]; pending: number }>, { status: 'missing' }>;
   onRetry: () => void;
   onChanged: (reviewId: number) => void;
   onViewAll: () => void;
@@ -74,7 +75,6 @@ export function PendingReviewsCard({ state, onRetry, onChanged, onViewAll }: Pro
     >
       {state.status === 'loading' && <CardLoading label="Loading reviews..." />}
       {state.status === 'error' && <CardError message={`Could not load reviews: ${state.error}`} onRetry={onRetry} />}
-      {state.status === 'missing' && <CardError message="The reviews endpoint is not available on the store." onRetry={onRetry} />}
       {state.status === 'ready' && state.data.reviews.length === 0 && <CardEmpty>No reviews are waiting for approval.</CardEmpty>}
       {state.status === 'ready' && state.data.reviews.length > 0 && (
         <ul className="flex flex-col divide-y divide-line">
@@ -102,8 +102,14 @@ export function PendingReviewsCard({ state, onRetry, onChanged, onViewAll }: Pro
                           className="relative block h-12 w-12 overflow-hidden rounded-[8px] border border-line bg-chip focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                           aria-label={m.type === 'video' ? 'Open review video' : 'Open review photo'}
                         >
-                          <img src={m.poster_url || m.url} alt="" className="h-full w-full object-cover" loading="lazy" />
-                          {m.type === 'video' && (
+                          {m.type === 'video' && !m.poster_url ? (
+                            <span className="grid h-full w-full place-items-center text-muted">
+                              <Video className="h-5 w-5" strokeWidth={1.8} aria-hidden />
+                            </span>
+                          ) : (
+                            <img src={m.poster_url || m.url} alt="" className="h-full w-full object-cover" loading="lazy" />
+                          )}
+                          {m.type === 'video' && m.poster_url && (
                             <span className="absolute inset-0 grid place-items-center text-fg">
                               <span className="grid h-5 w-5 place-items-center rounded-full bg-pop">
                                 <Play className="h-3 w-3" strokeWidth={2} aria-hidden />
