@@ -337,7 +337,7 @@ export const EndorsementOrderModal: React.FC<EndorsementOrderModalProps> = ({
           <Button variant="ghost" onClick={onClose} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button variant="primary" icon={isSubmitting ? Loader2 : Megaphone} onClick={handleSubmit} disabled={isSubmitting}>
+          <Button variant="primary" icon={Megaphone} onClick={handleSubmit} disabled={isSubmitting}>
             {isSubmitting ? 'Dispatching order...' : 'Dispatch endorsement order (Rp 0)'}
           </Button>
         </>

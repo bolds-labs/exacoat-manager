@@ -1040,7 +1040,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
           </Button>
           <Button
             variant="primary"
-            icon={isSubmitting ? Loader2 : CheckCircle2}
+            icon={CheckCircle2}
             onClick={handleSubmit}
             disabled={
               isSubmitting ||

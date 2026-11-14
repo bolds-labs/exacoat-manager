@@ -826,3 +826,8 @@ html:not(.dark) :is(button, a):not([class*="bg-black"]):not([class*="bg-zinc-9"]
     scroll-behavior: auto !important;
   }
 }
+
+/* A modal Radix dialog sets pointer-events: none on body; toasts must stay clickable above it. */
+[data-sonner-toaster] {
+  pointer-events: auto;
+}

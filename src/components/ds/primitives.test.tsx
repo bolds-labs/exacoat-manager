@@ -87,6 +87,16 @@ describe('RadioCard', () => {
     fireEvent.click(r);
     expect(onSelect).toHaveBeenCalled();
   });
+  it('disabled card is styled as disabled and does not select', () => {
+    const onSelect = vi.fn();
+    render(<RadioCard selected={false} disabled icon={Plus} title="Store credit" onSelect={onSelect} />);
+    const r = screen.getByRole('radio') as HTMLButtonElement;
+    expect(r.disabled).toBe(true);
+    expect(r.className).toContain('disabled:opacity-50');
+    expect(r.className).toContain('disabled:cursor-not-allowed');
+    fireEvent.click(r);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
 });
 
 describe('token classes', () => {

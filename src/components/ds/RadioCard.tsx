@@ -27,7 +27,7 @@ export const RadioCard = forwardRef<HTMLButtonElement, RadioCardProps>(function 
       aria-checked={selected}
       {...rest}
       onClick={onSelect}
-      className={`flex items-center gap-2.5 rounded-[10px] border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+      className={`flex items-center gap-2.5 rounded-[10px] border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50 ${
         selected ? 'border-accent-border bg-accent-soft' : 'border-field-border bg-transparent'
       } ${className}`}
     >

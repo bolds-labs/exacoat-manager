@@ -389,8 +389,8 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
                 <Button variant="danger" icon={XCircle} onClick={() => setShowRejectInput(true)} disabled={isProcessing}>
                   Reject claim
                 </Button>
-                <Button variant="primary" icon={isProcessing ? Loader2 : CheckCircle2} onClick={handleApprove} disabled={isProcessing}>
-                  Approve claim
+                <Button variant="primary" icon={CheckCircle2} onClick={handleApprove} disabled={isProcessing}>
+                  {isProcessing ? 'Approving...' : 'Approve claim'}
                 </Button>
               </>
             ) : (
