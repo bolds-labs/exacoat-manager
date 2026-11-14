@@ -32,6 +32,10 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useToast } from '../../context/ToastContext';
+import { Button } from '../ds/Button';
+import { StatusChip } from '../ds/StatusChip';
+import { getTikTokStatusMeta, marketplaceChip } from '../../lib/marketplaceStatus';
+import { channelTagClass, copyBtnClass, fieldLabelClass, sectionTitleClass } from './marketplaceClasses';
 
 interface TikTokOrderDetailModalProps {
   order: TikTokOrder | null;
@@ -102,32 +106,14 @@ export const TikTokOrderDetailModal: React.FC<TikTokOrderDetailModalProps> = ({
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  const getStatusBadge = (status: string) => {
-    const s = (status || '').toUpperCase();
-    switch (s) {
-      case 'AWAITING_SHIPMENT':
-      case 'READY_TO_SHIP':
-        return { label: 'Perlu Dikirim', bg: 'bg-amber-500/10', text: 'text-amber-300', border: 'border-amber-500/20' };
-      case 'AWAITING_COLLECTION':
-        return { label: 'Menunggu Pickup', bg: 'bg-sky-500/10', text: 'text-sky-300', border: 'border-sky-500/20' };
-      case 'IN_TRANSIT':
-      case 'SHIPPED':
-        return { label: 'Dikirim', bg: 'bg-indigo-500/10', text: 'text-indigo-300', border: 'border-indigo-500/20' };
-      case 'DELIVERED':
-      case 'COMPLETED':
-        return { label: 'Selesai', bg: 'bg-emerald-500/10', text: 'text-emerald-300', border: 'border-emerald-500/20' };
-      case 'CANCELLED':
-        return { label: 'Dibatalkan', bg: 'bg-rose-500/10', text: 'text-rose-300', border: 'border-rose-500/20' };
-      default:
-        return { label: status || 'N/A', bg: 'bg-neutral-800', text: 'text-neutral-300', border: 'border-white/10' };
-    }
-  };
-
   const isCancelled = (order.order_status || '').toUpperCase() === 'CANCELLED';
-  const badge = getStatusBadge(order.order_status);
+  const statusMeta = getTikTokStatusMeta(order);
   const isReadyToShip = ['AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'READY_TO_SHIP'].includes(
     (order.order_status || '').toUpperCase()
   );
+
+  const copyIcon = (key: string) =>
+    copiedKey === key ? <Check className="h-3.5 w-3.5 text-st-done-fg" /> : <Copy className="h-3.5 w-3.5" />;
 
   return (
     <SlideDrawer
@@ -136,10 +122,8 @@ export const TikTokOrderDetailModal: React.FC<TikTokOrderDetailModalProps> = ({
       width="2xl"
       title={
         <div className="flex items-center gap-2.5 flex-wrap">
-          <span className="text-[11px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider bg-rose-500/20 text-rose-400 border border-rose-500/30 font-mono">
-            TikTok Shop
-          </span>
-          <span className="font-mono font-bold text-white text-base">
+          <span className={channelTagClass}>TikTok Shop</span>
+          <span className="font-mono text-[15px] font-semibold text-fg">
             #{order.order_id}
           </span>
           {!isCancelled && (
@@ -151,101 +135,57 @@ export const TikTokOrderDetailModal: React.FC<TikTokOrderDetailModalProps> = ({
           <button
             type="button"
             onClick={() => handleCopy(order.order_id, 'order_id')}
-            className="p-1 rounded-md hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+            className={copyBtnClass}
             title="Salin No. Pesanan"
+            aria-label="Salin No. Pesanan"
           >
-            {copiedKey === 'order_id' ? (
-              <Check className="w-3.5 h-3.5 text-emerald-400" />
-            ) : (
-              <Copy className="w-3.5 h-3.5" />
-            )}
+            {copyIcon('order_id')}
           </button>
         </div>
       }
       subtitle={`Dibuat pada ${order.create_time} | Pembeli: @${order.buyer_username}`}
       headerActions={
         <div className="flex items-center gap-2">
-          <span
-            className={clsx(
-              'text-[11px] px-2.5 py-0.5 rounded-full font-semibold border',
-              badge.bg,
-              badge.text,
-              badge.border
-            )}
-          >
-            {badge.label}
-          </span>
+          <StatusChip meta={statusMeta} size="sm" />
         </div>
       }
     >
-      <div className="p-5 sm:p-6 space-y-6 text-neutral-200 font-sans">
+      <div className="space-y-6 text-fg font-sans">
         {/* Quick Actions Bar */}
-        <div className="p-3 rounded-xl bg-neutral-900/80 border border-white/10 flex flex-wrap items-center justify-between gap-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2.5 rounded-[14px] border border-card-border bg-card p-3">
           {!isCancelled && (
             <div className="flex items-center gap-2 flex-wrap">
-              <button
-                type="button"
-                onClick={() => onPrintAwb(order)}
-                className="px-3.5 py-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm shadow-rose-500/20"
-              >
-                <Printer className="w-4 h-4" />
-                <span>Cetak Label Thermal</span>
-              </button>
+              <Button variant="primary" icon={Printer} onClick={() => onPrintAwb(order)}>
+                Cetak Label Thermal
+              </Button>
 
               {isReadyToShip && !order.tracking_number && onArrangeShipment && (
-                <button
-                  type="button"
-                  onClick={() => onArrangeShipment(order)}
-                  className="px-3.5 py-2 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <Truck className="w-4 h-4" />
-                  <span>Atur Pengiriman</span>
-                </button>
+                <Button icon={Truck} onClick={() => onArrangeShipment(order)}>
+                  Atur Pengiriman
+                </Button>
               )}
             </div>
           )}
 
           <div className="flex items-center gap-2 flex-wrap">
             {onClaimWarranty && (
-              <button
-                type="button"
-                disabled={order.already_claimed}
-                onClick={() => onClaimWarranty(order)}
-                className={clsx(
-                  'px-3 py-2 rounded-xl border text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer',
-                  order.already_claimed
-                    ? 'bg-neutral-800 text-neutral-500 border-white/5 cursor-not-allowed'
-                    : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                )}
-              >
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span>{order.already_claimed ? 'Claimed' : 'Claim Warranty'}</span>
-              </button>
+              <Button icon={ShieldCheck} disabled={order.already_claimed} onClick={() => onClaimWarranty(order)}>
+                {order.already_claimed ? 'Claimed' : 'Claim Warranty'}
+              </Button>
             )}
 
             {onClaimRedeem && (
-              <button
-                type="button"
-                disabled={order.already_claimed}
-                onClick={() => onClaimRedeem(order)}
-                className={clsx(
-                  'px-3 py-2 rounded-xl border text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer',
-                  order.already_claimed
-                    ? 'bg-neutral-800 text-neutral-500 border-white/5 cursor-not-allowed'
-                    : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30'
-                )}
-              >
-                <RotateCcw className="w-4 h-4 text-amber-400" />
-                <span>{order.already_claimed ? 'Claimed' : 'Claim Redeem (Defect)'}</span>
-              </button>
+              <Button icon={RotateCcw} disabled={order.already_claimed} onClick={() => onClaimRedeem(order)}>
+                {order.already_claimed ? 'Claimed' : 'Claim Redeem (Defect)'}
+              </Button>
             )}
           </div>
         </div>
 
         {/* Existing Claim Banner if any */}
         {order.already_claimed && (
-          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+          <div className="flex items-center gap-2 rounded-[11px] border border-st-act-border bg-st-act-bg p-3 text-[13px] text-st-act-fg">
+            <AlertCircle className="h-4 w-4 shrink-0" />
             <span>
               This TikTok order has already been recorded in RMA claim system
               {order.existing_claim?.existing_order_num ? ` under replacement order #${order.existing_claim.existing_order_num}` : ''}.
@@ -256,11 +196,11 @@ export const TikTokOrderDetailModal: React.FC<TikTokOrderDetailModalProps> = ({
         {/* Order Items Section */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
-              <Package className="w-4 h-4 text-rose-400" />
+            <h3 className={sectionTitleClass}>
+              <Package className="h-[15px] w-[15px] text-faint" />
               <span>Rincian Produk ({order.items?.length || 0})</span>
             </h3>
-            <span className="text-xs text-neutral-400 font-mono">
+            <span className="font-mono text-[12px] text-faint">
               Total Unit: {order.items?.reduce((acc, i) => acc + (i.quantity || 1), 0) || 0}
             </span>
           </div>
@@ -269,46 +209,46 @@ export const TikTokOrderDetailModal: React.FC<TikTokOrderDetailModalProps> = ({
             {(order.items || []).map((item, idx) => (
               <div
                 key={idx}
-                className="p-3 rounded-xl bg-neutral-900/60 border border-white/10 flex items-center justify-between gap-3"
+                className="flex items-center justify-between gap-3 rounded-[14px] border border-card-border bg-card p-3"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   {item.image_url ? (
                     <img
                       src={item.image_url}
                       alt={item.item_name}
-                      className="w-12 h-12 rounded-lg object-cover bg-neutral-800 border border-white/10 shrink-0"
+                      className="h-12 w-12 shrink-0 rounded-[9px] border border-line bg-chip object-cover"
                     />
                   ) : (
-                    <div className="w-12 h-12 rounded-lg bg-neutral-800 flex items-center justify-center shrink-0 border border-white/10">
-                      <Tag className="w-5 h-5 text-neutral-500" />
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[9px] border border-line bg-chip">
+                      <Tag className="h-5 w-5 text-faint" />
                     </div>
                   )}
 
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold text-white truncate">
+                    <p className="truncate text-[13px] font-medium text-fg">
                       {item.item_name}
                     </p>
                     {item.sku_name && (
-                      <p className="text-[11px] font-mono text-neutral-400 mt-0.5">
-                        Varian: <span className="text-neutral-200">{item.sku_name}</span>
+                      <p className="mt-0.5 font-mono text-[12px] text-faint">
+                        Varian: <span className="text-muted">{item.sku_name}</span>
                       </p>
                     )}
                     {item.sku_id && (
-                      <p className="text-[10px] font-mono text-neutral-500 mt-0.5">
+                      <p className="mt-0.5 font-mono text-[11.5px] text-faint">
                         SKU ID: {item.sku_id}
                       </p>
                     )}
                   </div>
                 </div>
 
-                <div className="text-right shrink-0">
-                  <div className="text-xs font-mono font-bold text-white">
+                <div className="shrink-0 text-right">
+                  <div className="font-mono text-[13px] font-semibold text-fg">
                     {formatCurrency(item.price, order.currency || 'IDR')}
                   </div>
-                  <span className="text-[11px] font-mono text-neutral-400">
+                  <span className="font-mono text-[12px] text-faint">
                     Jml: {item.quantity}
                   </span>
-                  <div className="text-[11px] font-mono text-rose-400 font-semibold mt-0.5">
+                  <div className="mt-0.5 font-mono text-[12px] font-medium text-muted">
                     = {formatCurrency(item.price * (item.quantity || 1), order.currency || 'IDR')}
                   </div>
                 </div>
@@ -317,8 +257,8 @@ export const TikTokOrderDetailModal: React.FC<TikTokOrderDetailModalProps> = ({
           </div>
 
           {order.buyer_note && (
-            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-200 text-xs">
-              <span className="font-bold uppercase tracking-wider text-[10px] text-amber-400 block mb-1">
+            <div className="rounded-[11px] border border-st-act-border bg-st-act-bg p-3 text-[13px] text-st-act-fg">
+              <span className="mb-1 block text-[12px] font-semibold">
                 Catatan Pembeli
               </span>
               <p className="italic">{order.buyer_note}</p>
@@ -328,59 +268,54 @@ export const TikTokOrderDetailModal: React.FC<TikTokOrderDetailModalProps> = ({
 
         {/* Logistics & Delivery Details */}
         <div className="space-y-3">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
-            <Truck className="w-4 h-4 text-sky-400" />
+          <h3 className={sectionTitleClass}>
+            <Truck className="h-[15px] w-[15px] text-faint" />
             <span>Pengiriman & Logistik</span>
           </h3>
 
-          <div className="p-4 rounded-xl bg-neutral-900/60 border border-white/10 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+          <div className="grid grid-cols-1 gap-4 rounded-[14px] border border-card-border bg-card p-4 text-[13px] sm:grid-cols-2">
             <div>
-              <span className="text-[10px] uppercase font-mono text-neutral-500 block">Jasa Kirim</span>
-              <span className="font-semibold text-white mt-0.5 block">{order.shipping_carrier || 'N/A'}</span>
+              <span className={fieldLabelClass}>Jasa Kirim</span>
+              <span className="mt-0.5 block font-medium text-fg">{order.shipping_carrier || 'N/A'}</span>
             </div>
 
             <div>
-              <span className="text-[10px] uppercase font-mono text-neutral-500 block">Status Pengiriman</span>
-              {isCancelled ? (
-                <span className="text-rose-400 font-semibold mt-0.5 flex items-center gap-1 text-xs">
-                  <XCircle className="w-3.5 h-3.5" />
-                  <span>Pesanan Dibatalkan</span>
-                </span>
-              ) : (
-                <span className="text-neutral-300 mt-0.5 block font-medium">{badge.label}</span>
-              )}
+              <span className={fieldLabelClass}>Status Pengiriman</span>
+              <div className="mt-1">
+                <StatusChip
+                  meta={isCancelled ? marketplaceChip('Pesanan Dibatalkan', 'stop', XCircle) : statusMeta}
+                  size="sm"
+                />
+              </div>
             </div>
 
             {!isCancelled && (
               <div>
-                <span className="text-[10px] uppercase font-mono text-neutral-500 block">No. Resi</span>
+                <span className={fieldLabelClass}>No. Resi</span>
                 {order.tracking_number ? (
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="font-mono font-bold text-rose-400">{order.tracking_number}</span>
+                  <div className="mt-0.5 flex items-center gap-1.5">
+                    <span className="font-mono font-semibold text-fg">{order.tracking_number}</span>
                     <button
                       type="button"
                       onClick={() => handleCopy(order.tracking_number, 'resi')}
-                      className="p-1 rounded hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                      className={copyBtnClass}
                       title="Salin No. Resi"
+                      aria-label="Salin No. Resi"
                     >
-                      {copiedKey === 'resi' ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5" />
-                      )}
+                      {copyIcon('resi')}
                     </button>
                   </div>
                 ) : (
-                  <span className="text-neutral-500 font-mono mt-0.5 block">N/A</span>
+                  <span className="mt-0.5 block font-mono text-faint">N/A</span>
                 )}
               </div>
             )}
 
             {!isCancelled && (
               <div>
-                <span className="text-[10px] uppercase font-mono text-neutral-500 block">Batas Waktu Pengiriman</span>
-                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                  <span className="font-mono text-white font-medium">{order.ship_by_date || 'N/A'}</span>
+                <span className={fieldLabelClass}>Batas Waktu Pengiriman</span>
+                <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                  <span className="font-mono font-medium text-fg">{order.ship_by_date || 'N/A'}</span>
                   <ShipCountdownBadge
                     shipByDate={order.ship_by_date}
                     shipByTimestamp={order.ship_by_timestamp}
@@ -391,25 +326,25 @@ export const TikTokOrderDetailModal: React.FC<TikTokOrderDetailModalProps> = ({
 
             {order.package_id && (
               <div>
-                <span className="text-[10px] uppercase font-mono text-neutral-500 block">TikTok Package ID</span>
-                <span className="font-mono text-neutral-300 mt-0.5 block">{order.package_id}</span>
+                <span className={fieldLabelClass}>TikTok Package ID</span>
+                <span className="mt-0.5 block font-mono text-muted">{order.package_id}</span>
               </div>
             )}
 
             <div>
-              <span className="text-[10px] uppercase font-mono text-neutral-500 block">Metode Penyerahan</span>
-              <span className="text-neutral-300 mt-0.5 block font-medium">Cashless Dropoff / Direct Handover</span>
+              <span className={fieldLabelClass}>Metode Penyerahan</span>
+              <span className="mt-0.5 block font-medium text-muted">Cashless Dropoff / Direct Handover</span>
             </div>
           </div>
 
           {/* Delivered Status Banner for 48h Warranty */}
           {isOrderDelivered && (
-            <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex items-start gap-3">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-              <div className="space-y-0.5 text-xs">
-                <span className="font-bold text-emerald-300 block">Paket Telah Terkirim</span>
-                <p className="text-emerald-400/90 text-[11px] leading-relaxed">
-                  Terkirim pada <span className="font-semibold text-emerald-200">{deliveredTime || 'pembaruan kurir'}</span>.
+            <div className="flex items-start gap-3 rounded-[11px] border border-st-done-border bg-st-done-bg p-3.5 text-st-done-fg">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+              <div className="space-y-0.5 text-[13px]">
+                <span className="block font-semibold">Paket Telah Terkirim</span>
+                <p className="text-[12px] leading-relaxed">
+                  Terkirim pada <span className="font-semibold">{deliveredTime || 'pembaruan kurir'}</span>.
                   Batas hitung garansi 48 jam dimulai dari waktu penerimaan ini.
                 </p>
               </div>
@@ -417,31 +352,32 @@ export const TikTokOrderDetailModal: React.FC<TikTokOrderDetailModalProps> = ({
           )}
 
           {/* Carrier Checkpoints Timeline */}
-          <div className="p-4 rounded-xl bg-neutral-900/60 border border-white/10 space-y-3">
+          <div className="space-y-3 rounded-[14px] border border-card-border bg-card p-4">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase font-mono tracking-wider text-neutral-400 flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-rose-400" />
+              <span className="flex items-center gap-1.5 text-[12.5px] font-medium text-muted">
+                <Clock className="h-3.5 w-3.5 text-faint" />
                 <span>Lacak Pengiriman ({trackingCheckpoints.length})</span>
               </span>
-              <button
-                type="button"
+              <Button
+                size="sm"
+                variant="ghost"
+                icon={isLoadingTracking ? Loader2 : RefreshCw}
                 onClick={() => loadTracking(order.order_id)}
                 disabled={isLoadingTracking}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono text-neutral-400 hover:text-white hover:bg-white/5 transition-colors disabled:opacity-50 cursor-pointer"
                 title="Perbarui Pelacakan"
+                className={isLoadingTracking ? '[&>svg]:animate-spin' : ''}
               >
-                <RefreshCw className={clsx('w-3 h-3', isLoadingTracking && 'animate-spin')} />
-                <span>Perbarui</span>
-              </button>
+                Perbarui
+              </Button>
             </div>
 
             {isLoadingTracking && trackingCheckpoints.length === 0 ? (
-              <div className="py-4 flex items-center justify-center gap-2 text-xs text-neutral-400">
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-400" />
+              <div className="flex items-center justify-center gap-2 py-4 text-[13px] text-muted">
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-faint" />
                 <span>Memuat riwayat pelacakan...</span>
               </div>
             ) : trackingCheckpoints.length === 0 ? (
-              <div className="py-2 text-neutral-500 text-xs italic">
+              <div className="py-2 text-[13px] italic text-faint">
                 {trackingLoaded
                   ? 'Belum ada riwayat pelacakan kurir yang tercatat.'
                   : 'Riwayat pelacakan akan tampil setelah kurir melakukan pemindaian.'}
@@ -449,18 +385,18 @@ export const TikTokOrderDetailModal: React.FC<TikTokOrderDetailModalProps> = ({
             ) : (
               <div className="space-y-2 pt-1">
                 {/* Latest Checkpoint */}
-                <div className="relative pl-5 border-l-2 border-rose-500/40 pb-2">
+                <div className="relative border-l-2 border-accent-border pb-2 pl-5">
                   <span
                     className={clsx(
-                      'absolute -left-[5px] top-1.5 w-2 h-2 rounded-full ring-4 ring-neutral-900',
-                      isOrderDelivered ? 'bg-emerald-400' : 'bg-rose-400'
+                      'absolute -left-[5px] top-1.5 h-2 w-2 rounded-full',
+                      isOrderDelivered ? 'bg-st-done-fg' : 'bg-accent'
                     )}
                   />
-                  <div className="text-xs">
-                    <p className="font-semibold text-white leading-snug">
+                  <div className="text-[13px]">
+                    <p className="font-medium leading-snug text-fg">
                       {trackingCheckpoints[0].description}
                     </p>
-                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-neutral-400 font-mono">
+                    <div className="mt-0.5 flex items-center gap-2 font-mono text-[11.5px] text-faint">
                       <span>{trackingCheckpoints[0].time}</span>
                       {trackingCheckpoints[0].location && (
                         <span>• {trackingCheckpoints[0].location}</span>
@@ -477,12 +413,12 @@ export const TikTokOrderDetailModal: React.FC<TikTokOrderDetailModalProps> = ({
                         {trackingCheckpoints.slice(1).map((cp, idx) => (
                           <div
                             key={idx}
-                            className="relative pl-5 border-l-2 border-white/10 pb-2 last:border-transparent last:pb-0"
+                            className="relative border-l-2 border-line pb-2 pl-5 last:border-transparent last:pb-0"
                           >
-                            <span className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-neutral-600 ring-4 ring-neutral-900" />
-                            <div className="text-xs">
-                              <p className="text-neutral-300 leading-snug">{cp.description}</p>
-                              <div className="flex items-center gap-2 mt-0.5 text-[10px] text-neutral-500 font-mono">
+                            <span className="absolute -left-[5px] top-1.5 h-2 w-2 rounded-full bg-faint" />
+                            <div className="text-[13px]">
+                              <p className="leading-snug text-muted">{cp.description}</p>
+                              <div className="mt-0.5 flex items-center gap-2 font-mono text-[11.5px] text-faint">
                                 <span>{cp.time}</span>
                                 {cp.location && <span>• {cp.location}</span>}
                               </div>
@@ -495,16 +431,16 @@ export const TikTokOrderDetailModal: React.FC<TikTokOrderDetailModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setShowAllCheckpoints(!showAllCheckpoints)}
-                      className="inline-flex items-center gap-1 text-[11px] font-mono text-rose-400 hover:text-rose-300 transition-colors pt-1 cursor-pointer"
+                      className="inline-flex cursor-pointer items-center gap-1 pt-1 text-[12px] font-medium text-accent-fg transition-colors hover:text-fg"
                     >
                       {showAllCheckpoints ? (
                         <>
-                          <ChevronUp className="w-3.5 h-3.5" />
+                          <ChevronUp className="h-3.5 w-3.5" />
                           <span>Sembunyikan riwayat sebelumnya</span>
                         </>
                       ) : (
                         <>
-                          <ChevronDown className="w-3.5 h-3.5" />
+                          <ChevronDown className="h-3.5 w-3.5" />
                           <span>Lihat riwayat sebelumnya ({trackingCheckpoints.length - 1} lainnya)</span>
                         </>
                       )}
@@ -518,55 +454,52 @@ export const TikTokOrderDetailModal: React.FC<TikTokOrderDetailModalProps> = ({
 
         {/* Recipient & Buyer Details */}
         <div className="space-y-3">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
-            <User className="w-4 h-4 text-indigo-400" />
+          <h3 className={sectionTitleClass}>
+            <User className="h-[15px] w-[15px] text-faint" />
             <span>Informasi Penerima & Pembeli</span>
           </h3>
 
-          <div className="p-4 rounded-xl bg-neutral-900/60 border border-white/10 space-y-3 text-xs">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-[10px] uppercase font-mono text-neutral-500 block">Nama Penerima</span>
-                <span className="font-semibold text-white text-sm mt-0.5 block">
+          <div className="space-y-3 rounded-[14px] border border-card-border bg-card p-4 text-[13px]">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <span className={fieldLabelClass}>Nama Penerima</span>
+                <span className="mt-0.5 block break-all text-[14px] font-medium text-fg">
                   {order.recipient_name || order.buyer_username || 'N/A'}
                 </span>
               </div>
-              <div className="text-right">
-                <span className="text-[10px] uppercase font-mono text-neutral-500 block">Username Pembeli</span>
-                <span className="text-neutral-300 font-mono mt-0.5 block">@{order.buyer_username || 'N/A'}</span>
+              <div className="min-w-0 text-right">
+                <span className={fieldLabelClass}>Username Pembeli</span>
+                <span className="mt-0.5 block break-all font-mono text-muted">@{order.buyer_username || 'N/A'}</span>
               </div>
             </div>
 
             {order.recipient_phone && (
               <div>
-                <span className="text-[10px] uppercase font-mono text-neutral-500 block">Nomor Telepon</span>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="font-mono text-neutral-300">{order.recipient_phone}</span>
+                <span className={fieldLabelClass}>Nomor Telepon</span>
+                <div className="mt-0.5 flex items-center gap-1.5">
+                  <span className="font-mono text-muted">{order.recipient_phone}</span>
                   <button
                     type="button"
                     onClick={() => handleCopy(order.recipient_phone, 'phone')}
-                    className="p-1 rounded hover:bg-white/10 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                    className={copyBtnClass}
                     title="Salin Nomor HP"
+                    aria-label="Salin Nomor HP"
                   >
-                    {copiedKey === 'phone' ? (
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                    ) : (
-                      <Copy className="w-3.5 h-3.5" />
-                    )}
+                    {copyIcon('phone')}
                   </button>
                 </div>
               </div>
             )}
 
-            <div className="pt-2 border-t border-white/5">
-              <span className="text-[10px] uppercase font-mono text-neutral-500 block flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5 text-neutral-400" />
+            <div className="border-t border-line pt-2">
+              <span className={`${fieldLabelClass} flex items-center gap-1`}>
+                <MapPin className="h-3.5 w-3.5" />
                 <span>Alamat Pengiriman</span>
               </span>
-              <p className="text-neutral-200 mt-1 leading-relaxed">
+              <p className="mt-1 leading-relaxed text-fg">
                 {order.recipient_address || 'N/A'}
               </p>
-              <p className="text-neutral-400 font-mono text-[11px] mt-1">
+              <p className="mt-1 font-mono text-[12px] text-faint">
                 {order.recipient_city || ''} {order.recipient_postcode || ''}
               </p>
             </div>
@@ -575,25 +508,25 @@ export const TikTokOrderDetailModal: React.FC<TikTokOrderDetailModalProps> = ({
 
         {/* Financial Breakdown */}
         <div className="space-y-3">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
-            <CreditCard className="w-4 h-4 text-emerald-400" />
+          <h3 className={sectionTitleClass}>
+            <CreditCard className="h-[15px] w-[15px] text-faint" />
             <span>Rincian Pembayaran</span>
           </h3>
 
-          <div className="p-4 rounded-xl bg-neutral-900/60 border border-white/10 space-y-2 text-xs">
-            <div className="flex items-center justify-between text-neutral-400">
+          <div className="space-y-2 rounded-[14px] border border-card-border bg-card p-4 text-[13px]">
+            <div className="flex items-center justify-between text-muted">
               <span>Subtotal Produk ({order.items?.length || 0} jenis produk)</span>
-              <span className="font-mono text-neutral-200">
+              <span className="font-mono text-fg">
                 {formatCurrency(order.total_amount, order.currency || 'IDR')}
               </span>
             </div>
-            <div className="flex items-center justify-between text-neutral-400">
+            <div className="flex items-center justify-between text-muted">
               <span>Ongkos Kirim</span>
-              <span className="font-mono text-neutral-200">Rp 0 (Cashless)</span>
+              <span className="font-mono text-fg">Rp 0 (Cashless)</span>
             </div>
-            <div className="pt-2 border-t border-white/10 flex items-center justify-between text-sm">
-              <span className="font-bold text-white">Total Pesanan</span>
-              <span className="font-mono font-bold text-rose-400 text-base">
+            <div className="flex items-center justify-between border-t border-line pt-2 text-[14px]">
+              <span className="font-semibold text-fg">Total Pesanan</span>
+              <span className="font-mono text-[15px] font-semibold text-fg">
                 {formatCurrency(order.total_amount, order.currency || 'IDR')}
               </span>
             </div>

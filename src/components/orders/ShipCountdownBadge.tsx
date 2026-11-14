@@ -45,11 +45,11 @@ export const ShipCountdownBadge: React.FC<ShipCountdownBadgeProps> = ({
       <span
         title="Batas waktu kirim tidak tersedia dari API marketplace"
         className={clsx(
-          'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border bg-neutral-800/70 text-neutral-400 border-white/10',
+          'inline-flex items-center gap-1 rounded-[7px] px-2 py-[2px] text-[12px] font-medium bg-chip text-muted',
           className
         )}
       >
-        {showIcon && <Clock className="w-3 h-3 text-neutral-500 shrink-0" />}
+        {showIcon && <Clock className="h-3 w-3 shrink-0" />}
         <span>Batas Kirim: N/A</span>
       </span>
     );
@@ -72,11 +72,11 @@ export const ShipCountdownBadge: React.FC<ShipCountdownBadgeProps> = ({
       <span
         title={`Batas pengiriman telah terlewat pada ${new Date(effectiveTimestamp * 1000).toLocaleString('id-ID')}`}
         className={clsx(
-          'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold border bg-rose-500/15 text-rose-300 border-rose-500/30',
+          'inline-flex items-center gap-1 rounded-[7px] px-2 py-[2px] text-[12px] font-medium bg-st-stop-bg text-st-stop-fg',
           className
         )}
       >
-        {showIcon && <AlertTriangle className="w-3 h-3 text-rose-400 shrink-0" />}
+        {showIcon && <AlertTriangle className="h-3 w-3 shrink-0" />}
         <span>{text}</span>
       </span>
     );
@@ -91,11 +91,11 @@ export const ShipCountdownBadge: React.FC<ShipCountdownBadgeProps> = ({
       <span
         title={`Batas pengiriman: ${new Date(effectiveTimestamp * 1000).toLocaleString('id-ID')}`}
         className={clsx(
-          'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold border bg-rose-500/10 text-rose-300 border-rose-500/25',
+          'inline-flex items-center gap-1 rounded-[7px] px-2 py-[2px] text-[12px] font-medium bg-st-stop-bg text-st-stop-fg',
           className
         )}
       >
-        {showIcon && <Clock className="w-3 h-3 text-rose-400 shrink-0" />}
+        {showIcon && <Clock className="h-3 w-3 shrink-0" />}
         <span>Kirim dlm {hours}j {minutes}m</span>
       </span>
     );
@@ -110,11 +110,11 @@ export const ShipCountdownBadge: React.FC<ShipCountdownBadgeProps> = ({
       <span
         title={`Batas pengiriman: ${new Date(effectiveTimestamp * 1000).toLocaleString('id-ID')}`}
         className={clsx(
-          'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border bg-amber-500/10 text-amber-300 border-amber-500/25',
+          'inline-flex items-center gap-1 rounded-[7px] px-2 py-[2px] text-[12px] font-medium bg-st-act-bg text-st-act-fg',
           className
         )}
       >
-        {showIcon && <Clock className="w-3 h-3 text-amber-400 shrink-0" />}
+        {showIcon && <Clock className="h-3 w-3 shrink-0" />}
         <span>Kirim dlm {hours}j {minutes}m</span>
       </span>
     );
@@ -128,11 +128,11 @@ export const ShipCountdownBadge: React.FC<ShipCountdownBadgeProps> = ({
     <span
       title={`Batas pengiriman: ${new Date(effectiveTimestamp * 1000).toLocaleString('id-ID')}`}
       className={clsx(
-        'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border bg-neutral-800/80 text-neutral-300 border-white/10',
+        'inline-flex items-center gap-1 rounded-[7px] px-2 py-[2px] text-[12px] font-medium bg-chip text-muted',
         className
       )}
     >
-      {showIcon && <Clock className="w-3 h-3 text-neutral-400 shrink-0" />}
+      {showIcon && <Clock className="h-3 w-3 shrink-0" />}
       <span>Kirim dlm {days}h {hours}j</span>
     </span>
   );

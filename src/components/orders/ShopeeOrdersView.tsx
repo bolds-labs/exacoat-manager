@@ -50,6 +50,22 @@ import {
   Loader2,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { Button } from '../ds/Button';
+import { IconButton } from '../ds/IconButton';
+import { Checkbox } from '../ds/Checkbox';
+import { Tabs } from '../ds/Tabs';
+import { StatusChip } from '../ds/StatusChip';
+import type { StatusMeta } from '../../lib/orderStatus';
+import { getShopeeStatusMeta, marketplaceChip } from '../../lib/marketplaceStatus';
+import {
+  channelTagClass,
+  copyBtnClass,
+  fieldInputClass,
+  menuItemClass,
+  menuPanelClass,
+  noteClass,
+  wellClass,
+} from './marketplaceClasses';
 
 interface ShopeeOrdersViewProps {
   onClaimWarranty: (order: ShopeeOrder) => void;
@@ -325,82 +341,16 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
     }
   };
 
-  // Status mapping and badge helper (Indonesian marketplace terminology)
-  const getStatusBadge = (status: string, _order?: ShopeeOrder) => {
-    const s = (status || '').toUpperCase();
-    switch (s) {
-      case 'READY_TO_SHIP':
-        return { label: 'Perlu Diproses', bg: 'bg-amber-500/10', text: 'text-amber-300', border: 'border-amber-500/20' };
-      case 'PROCESSED':
-        return { label: 'Telah Diproses', bg: 'bg-sky-500/10', text: 'text-sky-300', border: 'border-sky-500/20' };
-      case 'SHIPPED':
-        return { label: 'Dikirim', bg: 'bg-blue-500/10', text: 'text-blue-300', border: 'border-blue-500/20' };
-      case 'TO_CONFIRM_RECEIVE':
-        return { label: 'Telah Sampai', bg: 'bg-emerald-500/10', text: 'text-emerald-300', border: 'border-emerald-500/20' };
-      case 'COMPLETED':
-        return { label: 'Selesai', bg: 'bg-emerald-500/10', text: 'text-emerald-300', border: 'border-emerald-500/20' };
-      case 'CANCELLED':
-      case 'IN_CANCEL':
-        return { label: 'Dibatalkan', bg: 'bg-rose-500/10', text: 'text-rose-300', border: 'border-rose-500/20' };
-      case 'TO_RETURN':
-        return { label: 'Pengembalian', bg: 'bg-amber-500/10', text: 'text-amber-300', border: 'border-amber-500/20' };
-      case 'UNPAID':
-        return { label: 'Belum Bayar', bg: 'bg-neutral-800', text: 'text-neutral-400', border: 'border-white/10' };
-      default:
-        return { label: status || 'N/A', bg: 'bg-neutral-800', text: 'text-neutral-300', border: 'border-white/10' };
-    }
-  };
-
-  // Shipping status badge helper based on actual fulfillment progression
-  const getShippingStatusBadge = (order: ShopeeOrder) => {
+  // Shipping status chip based on actual fulfillment progression
+  const getShippingStatusMeta = (order: ShopeeOrder): StatusMeta => {
     const isCancelled = ['CANCELLED', 'IN_CANCEL', 'TO_RETURN'].includes(order.order_status);
     const st = (order.order_status || '').toUpperCase();
-    if (isCancelled) {
-      return (
-        <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium bg-rose-500/15 text-rose-300 border border-rose-500/30 flex items-center gap-1">
-          <XCircle className="w-2.5 h-2.5" />
-          <span>Dibatalkan</span>
-        </span>
-      );
-    }
-    if (order.is_delivered || ['COMPLETED', 'DELIVERED'].includes(st)) {
-      return (
-        <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-          <CheckCircle2 className="w-2.5 h-2.5" />
-          <span>Telah Sampai</span>
-        </span>
-      );
-    }
-    if (st === 'TO_CONFIRM_RECEIVE') {
-      return (
-        <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-          <Truck className="w-2.5 h-2.5" />
-          <span>Dalam Pengiriman</span>
-        </span>
-      );
-    }
-    if (st === 'SHIPPED') {
-      return (
-        <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium bg-blue-500/15 text-blue-300 border border-blue-500/30 flex items-center gap-1">
-          <Truck className="w-2.5 h-2.5" />
-          <span>Sedang Dikirim</span>
-        </span>
-      );
-    }
-    if (st === 'PROCESSED' || order.is_arranged) {
-      return (
-        <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium bg-sky-500/15 text-sky-300 border border-sky-500/30 flex items-center gap-1">
-          <Truck className="w-2.5 h-2.5" />
-          <span>Telah Diatur</span>
-        </span>
-      );
-    }
-    return (
-      <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1">
-        <AlertTriangle className="w-2.5 h-2.5" />
-        <span>Perlu Diatur</span>
-      </span>
-    );
+    if (isCancelled) return marketplaceChip('Dibatalkan', 'stop', XCircle);
+    if (order.is_delivered || ['COMPLETED', 'DELIVERED'].includes(st)) return marketplaceChip('Telah Sampai', 'done', CheckCircle2);
+    if (st === 'TO_CONFIRM_RECEIVE') return marketplaceChip('Dalam Pengiriman', 'prog', Truck);
+    if (st === 'SHIPPED') return marketplaceChip('Sedang Dikirim', 'prog', Truck);
+    if (st === 'PROCESSED' || order.is_arranged) return marketplaceChip('Telah Diatur', 'prog', Truck);
+    return marketplaceChip('Perlu Diatur', 'act', AlertTriangle);
   };
 
   // Orders matching current status tab
@@ -702,40 +652,38 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
   return (
     <div className="space-y-5 font-sans">
       {/* Shopee Integration Sub-Header */}
-      <div className="p-4 sm:p-5 rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-neutral-900/60 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col justify-between gap-4 rounded-[14px] border border-card-border bg-card p-4 sm:p-5 md:flex-row md:items-center">
         <div className="flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-xl bg-orange-500/15 border border-orange-500/25 text-orange-400 flex items-center justify-center shrink-0">
-            <Store className="w-5 h-5" />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] border border-line bg-chip text-muted">
+            <Store className="h-5 w-5" strokeWidth={1.8} />
           </div>
           <div>
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h2 className="text-base font-bold text-zinc-900 dark:text-white tracking-tight">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-fg">
                 {settings?.shop_name || 'Toko Shopee Indonesia'}
               </h2>
-              <span
-                className={clsx(
-                  'text-[10px] px-2 py-0.5 rounded-full font-semibold border',
+              <StatusChip
+                size="sm"
+                meta={
                   settings?.environment === 'sandbox'
-                    ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
-                    : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
-                )}
-              >
-                {settings?.environment === 'sandbox' ? 'Mode Sandbox' : 'Toko Aktif (Live)'}
-              </span>
-              <span className="text-[11px] text-zinc-500 dark:text-neutral-400 font-mono">
+                    ? marketplaceChip('Mode Sandbox', 'act', AlertTriangle)
+                    : marketplaceChip('Toko Aktif (Live)', 'done', CheckCircle2)
+                }
+              />
+              <span className="font-mono text-[12px] text-faint">
                 Shop ID: {settings?.shop_id || 227918647}
               </span>
-              <span className="text-[11px] text-orange-600 dark:text-orange-400/90 font-mono">
+              <span className="font-mono text-[12px] text-muted">
                 • {orders.length} pesanan tersimpan
               </span>
             </div>
-            <p className="text-xs text-zinc-500 dark:text-neutral-400 mt-1">
+            <p className="mt-1 text-[12.5px] text-muted">
               Kanal integrasi Shopee Indonesia. Menampilkan pesanan, batas waktu kirim, status pickup/dropoff, no. resi resmi, dan Claim Warranty.
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0 self-start md:self-auto">
+        <div className="flex shrink-0 items-center gap-2.5 self-start md:self-auto">
           <MarketplaceSyncButton
             brand="shopee"
             isSyncing={isSyncing}
@@ -744,62 +692,43 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
             onSyncDaysChange={setSyncDays}
           />
 
-          <button
-            type="button"
-            onClick={() => setIsSettingsOpen(true)}
-            className="px-3.5 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-900 dark:hover:bg-neutral-800 text-zinc-700 dark:text-neutral-300 border border-zinc-200 dark:border-white/10 text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer"
-          >
-            <Settings className="w-3.5 h-3.5 text-zinc-500 dark:text-neutral-400" />
-            <span>Pengaturan API</span>
-          </button>
+          <Button icon={Settings} onClick={() => setIsSettingsOpen(true)}>
+            Pengaturan API
+          </Button>
         </div>
       </div>
 
       {/* Filter Tabs & Search Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
-        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-zinc-100 dark:bg-neutral-900 border border-zinc-200 dark:border-white/10 overflow-x-auto">
-          {(
-            [
-              { id: 'ALL', label: 'Semua' },
-              { id: 'READY_TO_SHIP', label: 'Perlu Dikirim', count: readyToShipCount },
-              { id: 'TO_PROCESS', label: 'Perlu Diproses', count: toProcessCount },
-              { id: 'PROCESSED', label: 'Telah Diproses', count: processedCount },
-              { id: 'SHIPPED', label: 'Dikirim' },
-              { id: 'COMPLETED', label: 'Selesai' },
-              { id: 'CLAIMED', label: 'Claim Warranty' },
-              { id: 'CANCELLED', label: 'Dibatalkan', count: cancelledCount },
-            ] as Array<{ id: StatusTab; label: string; count?: number }>
-          ).map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => handleTabChange(tab.id)}
-              className={clsx(
-                'px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer',
-                activeTab === tab.id
-                  ? 'bg-white text-zinc-950 font-bold shadow-sm border border-zinc-200/60 dark:border-transparent'
-                  : 'text-zinc-600 dark:text-neutral-400 hover:text-zinc-950 dark:hover:text-white hover:bg-zinc-200/60 dark:hover:bg-white/5'
-              )}
-            >
-              <span>{tab.label}</span>
-              {typeof tab.count === 'number' && tab.count > 0 && (
-                <span
-                  className={clsx(
-                    'text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold',
-                    activeTab === tab.id ? 'bg-zinc-200 dark:bg-black/20 text-zinc-900 dark:text-neutral-950' : 'bg-orange-500/20 text-orange-600 dark:text-orange-400'
-                  )}
-                >
-                  {tab.count}
-                </span>
-              )}
-            </button>
-          ))}
+      <div className="flex flex-col justify-between gap-3 pt-1 sm:flex-row sm:items-center">
+        <div className="overflow-x-auto">
+          <Tabs
+            value={activeTab}
+            onChange={(key) => handleTabChange(key as StatusTab)}
+            items={(
+              [
+                { id: 'ALL', label: 'Semua' },
+                { id: 'READY_TO_SHIP', label: 'Perlu Dikirim', count: readyToShipCount },
+                { id: 'TO_PROCESS', label: 'Perlu Diproses', count: toProcessCount },
+                { id: 'PROCESSED', label: 'Telah Diproses', count: processedCount },
+                { id: 'SHIPPED', label: 'Dikirim' },
+                { id: 'COMPLETED', label: 'Selesai' },
+                { id: 'CLAIMED', label: 'Claim Warranty' },
+                { id: 'CANCELLED', label: 'Dibatalkan', count: cancelledCount },
+              ] as Array<{ id: StatusTab; label: string; count?: number }>
+            ).map((tab) => ({
+              key: tab.id,
+              label: tab.label,
+              count: typeof tab.count === 'number' && tab.count > 0 ? tab.count : undefined,
+              hot: tab.id !== 'CANCELLED',
+            }))}
+          />
         </div>
 
         <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 text-zinc-400 dark:text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-[15px] w-[15px] -translate-y-1/2 text-faint" />
           <input
             type="text"
+            data-ds=""
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -809,17 +738,19 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
               }
             }}
             placeholder="Cari No. Pesanan, Pembeli, Resi, No. HP..."
-            className="w-full pl-9 pr-20 py-1.5 rounded-xl bg-white dark:bg-neutral-900 border border-zinc-200 dark:border-white/10 text-xs text-zinc-900 dark:text-neutral-100 placeholder-zinc-400 dark:placeholder-neutral-500 focus:outline-none focus:border-orange-500 shadow-xs"
+            aria-label="Cari No. Pesanan, Pembeli, Resi, No. HP"
+            className={`${fieldInputClass} pl-9 pr-20`}
           />
-          <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+          <div className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-1">
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
-                className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-neutral-200 rounded-md cursor-pointer"
+                className={copyBtnClass}
                 title="Hapus pencarian"
+                aria-label="Hapus pencarian"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="h-3.5 w-3.5" />
               </button>
             )}
             <button
@@ -827,15 +758,13 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
               disabled={isLiveSearching || !searchQuery.trim()}
               onClick={handleLiveSearch}
               className={clsx(
-                "px-2 py-0.5 rounded-md text-[11px] font-medium transition-colors flex items-center gap-1 cursor-pointer",
-                searchQuery.trim()
-                  ? "bg-orange-500 text-white hover:bg-orange-600 shadow-xs"
-                  : "bg-zinc-100 dark:bg-neutral-800 text-zinc-400 dark:text-neutral-500 cursor-not-allowed"
+                'flex h-[26px] cursor-pointer items-center gap-1 rounded-[7px] px-2 text-[12px] font-semibold transition-colors disabled:cursor-not-allowed',
+                searchQuery.trim() ? 'bg-accent text-accent-on hover:brightness-95' : 'bg-chip text-faint'
               )}
               title="Cari langsung ke API Shopee"
             >
               {isLiveSearching ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
+                <Loader2 className="h-3 w-3 animate-spin" />
               ) : (
                 <span>Cari</span>
               )}
@@ -845,7 +774,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
       </div>
 
       {/* Row 2: Secondary Filter Bar (Grouped Courier & Printed Resi) */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-zinc-50 dark:bg-neutral-900/50 border border-zinc-200 dark:border-white/10 text-xs relative z-20">
+      <div className="relative z-20 flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-card-border bg-card px-4 py-2.5 text-[13px]">
         <div className="flex flex-wrap items-center gap-3">
           {/* Courier Filter with Instant, Same Day, and Reguler/YES Groups */}
           <FilterSelect
@@ -875,7 +804,7 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                 setActiveTab('ALL');
                 setSearchQuery('');
               }}
-              className="text-xs text-zinc-500 dark:text-neutral-400 hover:text-zinc-900 dark:hover:text-white underline cursor-pointer"
+              className="cursor-pointer text-[13px] text-muted underline hover:text-fg"
             >
               Reset filter
             </button>
@@ -884,104 +813,83 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
 
         {/* Select-All Toggle on right */}
         {filteredOrders.length > 0 && (
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={isAllSelected}
-              ref={(input) => {
-                if (input) {
-                  input.indeterminate = !isAllSelected && isSomeSelected;
-                }
-              }}
-              onChange={handleToggleSelectAll}
-              className="w-4 h-4 rounded border-zinc-300 dark:border-white/20 bg-white dark:bg-neutral-800 text-orange-500 focus:ring-orange-500 focus:ring-offset-0 cursor-pointer"
-            />
-            <span className="text-zinc-700 dark:text-neutral-300 font-medium">
-              Pilih semua ({filteredOrders.length})
-            </span>
-          </label>
+          <Checkbox
+            checked={isAllSelected}
+            ref={(input) => {
+              if (input) {
+                input.indeterminate = !isAllSelected && isSomeSelected;
+              }
+            }}
+            onChange={handleToggleSelectAll}
+            label={`Pilih semua (${filteredOrders.length})`}
+            className="select-none font-medium"
+          />
         )}
       </div>
 
       {/* Row 3: Multiselect Bulk Action Bar (Rendered directly under filters/pills when items are selected) */}
       {selectedSns.size > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-orange-500/10 border border-orange-500/30 text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-accent-border bg-accent-soft px-4 py-2.5 text-[13px]">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-            <span className="font-bold text-white">
+            <span className="h-2 w-2 rounded-full bg-accent" />
+            <span className="font-semibold text-fg">
               {selectedSns.size} pesanan dipilih
             </span>
-            <span className="text-neutral-600">|</span>
+            <span className="text-faint">|</span>
             <button
               type="button"
               onClick={() => setSelectedSns(new Set())}
-              className="text-neutral-400 hover:text-white underline cursor-pointer"
+              className="cursor-pointer text-muted underline hover:text-fg"
             >
               Batalkan Pilihan
             </button>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={handleBulkPrint}
-              className="px-3 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs whitespace-nowrap"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Cetak Label Massal</span>
-            </button>
+            <Button size="sm" variant="primary" icon={Printer} onClick={handleBulkPrint}>
+              Cetak Label Massal
+            </Button>
 
-            <button
-              type="button"
-              onClick={handleBulkArrange}
-              className="px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-600 text-white font-bold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
-            >
-              <Truck className="w-3.5 h-3.5" />
-              <span>Atur Pengiriman Massal</span>
-            </button>
+            <Button size="sm" icon={Truck} onClick={handleBulkArrange}>
+              Atur Pengiriman Massal
+            </Button>
 
-            <button
-              type="button"
-              onClick={handleBulkExport}
-              className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-white/10 font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
-            >
-              <Download className="w-3.5 h-3.5 text-neutral-400" />
-              <span>Ekspor CSV</span>
-            </button>
+            <Button size="sm" icon={Download} onClick={handleBulkExport}>
+              Ekspor CSV
+            </Button>
           </div>
         </div>
       )}
 
       {/* Orders List */}
       {isLoading ? (
-        <div className="p-12 text-center rounded-2xl bg-neutral-900/40 border border-white/5 space-y-3">
-          <RefreshCw className="w-6 h-6 text-orange-400 animate-spin mx-auto" />
-          <p className="text-xs text-neutral-400">Memuat pesanan Shopee...</p>
+        <div className="space-y-3 rounded-[14px] border border-card-border bg-card p-12 text-center">
+          <RefreshCw className="mx-auto h-6 w-6 animate-spin text-faint" />
+          <p className="text-[13px] text-muted">Memuat pesanan Shopee...</p>
         </div>
       ) : filteredOrders.length === 0 ? (
-        <div className="p-12 text-center rounded-2xl bg-neutral-900/40 border border-white/5 space-y-3">
-          <Package className="w-8 h-8 text-neutral-600 mx-auto" />
-          <p className="text-sm font-semibold text-neutral-300">Tidak ada pesanan Shopee yang sesuai</p>
-          <p className="text-xs text-neutral-500">
+        <div className="space-y-3 rounded-[14px] border border-card-border bg-card p-12 text-center">
+          <Package className="mx-auto h-8 w-8 text-faint" />
+          <p className="text-[14px] font-semibold text-fg">Tidak ada pesanan Shopee yang sesuai</p>
+          <p className="text-[13px] text-muted">
             {searchQuery ? 'Coba ubah kata kunci pencarian atau cari langsung ke API Shopee.' : 'Sinkronisasikan pesanan dari Shopee atau sesuaikan filter tab.'}
           </p>
           {searchQuery.trim().length >= 6 && (
-            <button
-              type="button"
+            <Button
+              icon={Search}
               onClick={handleLiveSearch}
               disabled={isLiveSearching}
-              className="mt-2 px-4 py-2 rounded-xl bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/40 text-xs font-semibold inline-flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+              className={clsx('mt-2', isLiveSearching && '[&>svg]:animate-spin')}
             >
-              <Search className={clsx('w-3.5 h-3.5', isLiveSearching && 'animate-spin')} />
-              <span>{isLiveSearching ? 'Mencari di API Shopee...' : `Cari langsung di API Shopee untuk "${searchQuery.trim()}"`}</span>
-            </button>
+              {isLiveSearching ? 'Mencari di API Shopee...' : `Cari langsung di API Shopee untuk "${searchQuery.trim()}"`}
+            </Button>
           )}
         </div>
       ) : (
         <div className="space-y-3">
           {pagedOrders.map((order) => {
             const isCancelled = ['CANCELLED', 'IN_CANCEL', 'TO_RETURN'].includes(order.order_status);
-            const statusBadge = getStatusBadge(order.order_status, order);
+            const statusMeta = getShopeeStatusMeta(order);
             const isClaimed = order.already_claimed;
             const isPrinted = isOrderLabelPrinted(order);
             const isArranged = ['PROCESSED', 'SHIPPED', 'TO_CONFIRM_RECEIVE', 'COMPLETED'].includes(order.order_status) || Boolean(order.is_arranged);
@@ -994,31 +902,29 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                 key={order.order_sn}
                 onClick={() => setSelectedDetailOrder(order)}
                 className={clsx(
-                  'p-4 sm:p-5 rounded-2xl bg-white dark:bg-neutral-900/70 border transition-all cursor-pointer shadow-sm hover:border-zinc-300 dark:hover:border-white/25 active:scale-[0.999]',
+                  'cursor-pointer rounded-[14px] border bg-card p-4 transition-colors sm:p-5',
                   isSelected
-                    ? 'border-orange-500/50 bg-orange-500/[0.03]'
+                    ? 'border-accent-border'
                     : isClaimed
-                    ? 'border-amber-500/20 bg-amber-500/[0.02]'
-                    : 'border-zinc-200 dark:border-white/10'
+                    ? 'border-st-act-border'
+                    : 'border-card-border hover:border-field-border'
                 )}
               >
                 {/* Top Header Bar */}
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-zinc-100 dark:border-white/5 pb-3 mb-3">
+                <div className="mb-3 flex flex-col justify-between gap-4 border-b border-line pb-3 lg:flex-row lg:items-center">
                   {/* Left: Checkbox, Channel tag, Order SN, Buyer, Countdown */}
                   <div className="flex flex-wrap items-center gap-2.5">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={isSelected}
                       onClick={(e) => e.stopPropagation()}
                       onChange={(e) => handleToggleSelect(order.order_sn, e as any)}
-                      className="w-4 h-4 rounded border-zinc-300 dark:border-white/20 bg-white dark:bg-neutral-800 text-orange-500 focus:ring-orange-500 focus:ring-offset-0 cursor-pointer shrink-0"
+                      aria-label={`Pilih pesanan ${order.order_sn}`}
+                      className="shrink-0"
                     />
 
-                    <span className="text-[10px] px-2 py-0.5 rounded-md font-mono font-bold uppercase bg-orange-500/20 text-orange-600 dark:text-orange-400 border border-orange-500/30">
-                      Shopee
-                    </span>
+                    <span className={channelTagClass}>Shopee</span>
 
-                    <span className="text-xs font-mono font-bold text-zinc-900 dark:text-white">
+                    <span className="font-mono text-[13px] font-semibold text-fg">
                       #{order.order_sn}
                     </span>
 
@@ -1028,25 +934,26 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                         e.stopPropagation();
                         handleCopy(order.order_sn, `sn_${order.order_sn}`);
                       }}
-                      className="text-zinc-400 hover:text-zinc-600 dark:text-neutral-500 dark:hover:text-neutral-300 transition-colors cursor-pointer"
+                      className={copyBtnClass}
                       title="Salin No. Pesanan"
+                      aria-label="Salin No. Pesanan"
                     >
                       {copiedId === `sn_${order.order_sn}` ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <Check className="h-3.5 w-3.5 text-st-done-fg" />
                       ) : (
-                        <Copy className="w-3.5 h-3.5" />
+                        <Copy className="h-3.5 w-3.5" />
                       )}
                     </button>
 
-                    <span className="text-zinc-300 dark:text-neutral-600">•</span>
-                    <div className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-neutral-400">
-                      <Clock className="w-3.5 h-3.5 text-zinc-400 dark:text-neutral-500" />
+                    <span className="text-faint">•</span>
+                    <div className="flex items-center gap-1.5 text-[12.5px] text-muted">
+                      <Clock className="h-3.5 w-3.5 text-faint" />
                       <span>{formatDateTime(order.create_time)}</span>
                     </div>
 
-                    <span className="text-zinc-300 dark:text-neutral-600">•</span>
-                    <div className="flex items-center gap-1.5 text-xs text-zinc-700 dark:text-neutral-300 font-medium">
-                      <User className="w-3.5 h-3.5 text-zinc-400 dark:text-neutral-500" />
+                    <span className="text-faint">•</span>
+                    <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-fg">
+                      <User className="h-3.5 w-3.5 text-faint" />
                       <span>@{order.buyer_username}</span>
                     </div>
 
@@ -1058,80 +965,67 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                     )}
 
                     {isClaimed && (
-                      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
-                        <ShieldCheck className="w-3 h-3" />
-                        <span>Claimed: {formatOrderNumber(order.existing_claim?.existing_order_num)}</span>
-                      </span>
+                      <StatusChip
+                        size="sm"
+                        meta={marketplaceChip(`Claimed: ${formatOrderNumber(order.existing_claim?.existing_order_num)}`, 'act', ShieldCheck)}
+                      />
                     )}
                   </div>
 
                   {/* Right: Status badge, Label Pengiriman, Arrange Ship, Menu */}
                   <div className="flex items-center gap-2 self-start lg:self-auto" onClick={(e) => e.stopPropagation()}>
                     {/* Status badge: Perlu Diproses, Telah Diproses, Dikirim, Selesai, etc. */}
-                    <span
-                      className={clsx(
-                        'text-[10px] px-2.5 py-1 rounded-full font-semibold border',
-                        statusBadge.bg,
-                        statusBadge.text,
-                        statusBadge.border
-                      )}
-                    >
-                      {statusBadge.label}
-                    </span>
+                    <StatusChip meta={statusMeta} size="sm" />
 
                     {/* Arrange Shipment Button if ready and unscheduled */}
                     {!isCancelled && isReadyToShip && (
-                      <button
-                        type="button"
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        icon={Truck}
                         onClick={() => {
                           setSelectedArrangeOrder(order);
                           setIsArrangeModalOpen(true);
                         }}
-                        className="px-3 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm shadow-orange-500/20 active:scale-95"
                       >
-                        <Truck className="w-3.5 h-3.5" />
-                        <span>Atur Pengiriman</span>
-                      </button>
+                        Atur Pengiriman
+                      </Button>
                     )}
 
                     {/* Quick Print Button or Printed Badge */}
                     {!isCancelled && (
                       isPrinted ? (
-                        <span
-                          className="text-[10px] px-2.5 py-1 rounded-full font-semibold border flex items-center gap-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border-emerald-500/25"
-                          title="Label pengiriman resmi telah dicetak (Cetak ulang tersedia di menu ⋮)"
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
-                          <span>Telah Dicetak</span>
+                        <span title="Label pengiriman resmi telah dicetak (Cetak ulang tersedia di menu ⋮)">
+                          <StatusChip size="sm" meta={marketplaceChip('Telah Dicetak', 'done', CheckCircle2)} />
                         </span>
                       ) : order.order_status === 'PROCESSED' ? (
-                        <button
-                          type="button"
+                        <Button
+                          size="sm"
+                          icon={Printer}
                           onClick={() => handlePrintShopeeLabel(order)}
-                          className="px-2.5 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-700 dark:text-neutral-200 border border-zinc-200 dark:border-white/10 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer active:scale-95"
                           title="Klik untuk mengunduh & mencetak label resmi Shopee"
                         >
-                          <Printer className="w-3.5 h-3.5 text-zinc-500 dark:text-neutral-400" />
-                          <span className="text-[10px]">Cetak Label</span>
-                        </button>
+                          Cetak Label
+                        </Button>
                       ) : null
                     )}
 
                     {/* Dropdown Menu for Warranty / Redeem / Print (Hidden for cancelled orders) */}
                     {!isCancelled && (
                       <div className="relative" data-action-menu>
-                        <button
-                        type="button"
-                        onClick={() =>
-                          setActiveActionMenuSn(activeActionMenuSn === order.order_sn ? null : order.order_sn)
-                        }
-                        className="p-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-zinc-600 dark:text-neutral-300 border border-zinc-200 dark:border-white/10 cursor-pointer"
-                      >
-                        <MoreVertical className="w-4 h-4" />
-                      </button>
+                        <IconButton
+                          size="sm"
+                          icon={MoreVertical}
+                          label="Aksi lainnya"
+                          aria-haspopup="menu"
+                          aria-expanded={activeActionMenuSn === order.order_sn}
+                          onClick={() =>
+                            setActiveActionMenuSn(activeActionMenuSn === order.order_sn ? null : order.order_sn)
+                          }
+                        />
 
                       {activeActionMenuSn === order.order_sn && (
-                        <div className="absolute right-0 top-full mt-1 w-52 rounded-xl bg-white dark:bg-neutral-900 border border-zinc-200 dark:border-white/10 shadow-xl py-1 z-30 font-sans">
+                        <div className={menuPanelClass}>
                           {canPrint && (
                             <button
                               type="button"
@@ -1139,9 +1033,9 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                                 setActiveActionMenuSn(null);
                                 handlePrintShopeeLabel(order);
                               }}
-                              className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 cursor-pointer font-medium text-zinc-700 dark:text-neutral-300 hover:bg-zinc-100 dark:hover:bg-white/5"
+                              className={menuItemClass}
                             >
-                              <Printer className="w-3.5 h-3.5 text-zinc-500 dark:text-neutral-400" />
+                              <Printer className="h-3.5 w-3.5 text-muted" />
                               <span>{isPrinted ? 'Cetak Ulang Label' : 'Cetak Label Shopee'}</span>
                             </button>
                           )}
@@ -1154,9 +1048,9 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                                 setSelectedArrangeOrder(order);
                                 setIsArrangeModalOpen(true);
                               }}
-                              className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 cursor-pointer font-medium text-orange-600 dark:text-orange-400 hover:bg-zinc-100 dark:hover:bg-white/5"
+                              className={clsx(menuItemClass, 'text-accent-fg')}
                             >
-                              <Truck className="w-3.5 h-3.5 text-orange-600 dark:text-orange-400" />
+                              <Truck className="h-3.5 w-3.5 text-accent-fg" />
                               <span>Atur Pengiriman</span>
                             </button>
                           )}
@@ -1167,13 +1061,13 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                               setActiveActionMenuSn(null);
                               handleTogglePrintStatus(order, !isPrinted);
                             }}
-                            className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 cursor-pointer font-medium text-zinc-700 dark:text-neutral-300 hover:bg-zinc-100 dark:hover:bg-white/5"
+                            className={menuItemClass}
                           >
-                            <Printer className="w-3.5 h-3.5 text-zinc-500 dark:text-neutral-400" />
+                            <Printer className="h-3.5 w-3.5 text-muted" />
                             <span>{isPrinted ? 'Tandai Perlu Dicetak' : 'Tandai Telah Dicetak'}</span>
                           </button>
 
-                          <div className="my-1 border-t border-zinc-100 dark:border-white/10" />
+                          <div className="mx-1 my-[5px] h-px bg-line" />
 
                           <button
                             type="button"
@@ -1182,14 +1076,9 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                               setActiveActionMenuSn(null);
                               onClaimWarranty(order);
                             }}
-                            className={clsx(
-                              'w-full px-3 py-2 text-left text-xs flex items-center gap-2 cursor-pointer font-medium',
-                              isClaimed
-                                ? 'opacity-40 cursor-not-allowed text-zinc-400 dark:text-neutral-500'
-                                : 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10'
-                            )}
+                            className={menuItemClass}
                           >
-                            <ShieldCheck className="w-3.5 h-3.5" />
+                            <ShieldCheck className="h-3.5 w-3.5 text-muted" />
                             <span>Claim Warranty</span>
                           </button>
 
@@ -1200,18 +1089,13 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                               setActiveActionMenuSn(null);
                               onClaimRedeem(order);
                             }}
-                            className={clsx(
-                              'w-full px-3 py-2 text-left text-xs flex items-center gap-2 cursor-pointer font-medium',
-                              isClaimed
-                                ? 'opacity-40 cursor-not-allowed text-zinc-400 dark:text-neutral-500'
-                                : 'text-amber-600 dark:text-amber-400 hover:bg-amber-500/10'
-                            )}
+                            className={menuItemClass}
                           >
-                            <RotateCcw className="w-3.5 h-3.5" />
+                            <RotateCcw className="h-3.5 w-3.5 text-muted" />
                             <span>Claim Redeem (Defect)</span>
                           </button>
 
-                          <div className="my-1 border-t border-zinc-100 dark:border-white/10" />
+                          <div className="mx-1 my-[5px] h-px bg-line" />
 
                           <button
                             type="button"
@@ -1219,9 +1103,9 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                               setActiveActionMenuSn(null);
                               handleCopy(order.order_sn, `sn_${order.order_sn}`);
                             }}
-                            className="w-full px-3 py-2 text-left text-xs text-zinc-700 dark:text-neutral-300 hover:bg-zinc-100 dark:hover:bg-white/5 flex items-center gap-2 cursor-pointer"
+                            className={menuItemClass}
                           >
-                            <Copy className="w-3.5 h-3.5 text-zinc-400 dark:text-neutral-500" />
+                            <Copy className="h-3.5 w-3.5 text-muted" />
                             <span>Salin No. Pesanan</span>
                           </button>
 
@@ -1232,9 +1116,9 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                                 setActiveActionMenuSn(null);
                                 handleCopy(order.tracking_number, `resi_${order.order_sn}`);
                               }}
-                              className="w-full px-3 py-2 text-left text-xs text-zinc-700 dark:text-neutral-300 hover:bg-zinc-100 dark:hover:bg-white/5 flex items-center gap-2 cursor-pointer"
+                              className={menuItemClass}
                             >
-                              <Copy className="w-3.5 h-3.5 text-zinc-400 dark:text-neutral-500" />
+                              <Copy className="h-3.5 w-3.5 text-muted" />
                               <span>Salin No. Resi</span>
                             </button>
                           )}
@@ -1243,140 +1127,134 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
                     </div>
                   )}
 
-                    <div className="pl-1 text-zinc-400 hover:text-zinc-900 dark:text-neutral-500 dark:hover:text-white transition-colors">
-                      <ChevronRight className="w-4 h-4" />
+                    <div className="pl-1 text-faint transition-colors hover:text-fg">
+                      <ChevronRight className="h-4 w-4" />
                     </div>
                   </div>
                 </div>
 
                 {/* Items and Delivery Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                   {/* Column 1 & 2: Items List */}
-                  <div className="md:col-span-2 space-y-2">
+                  <div className="space-y-2 md:col-span-2">
                     {(order.items || []).map((item, idx) => (
                       <div
                         key={idx}
-                        className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-zinc-50 dark:bg-neutral-950/40 border border-zinc-200/80 dark:border-white/5"
+                        className={`flex items-center justify-between gap-3 p-2.5 ${wellClass}`}
                       >
-                        <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex min-w-0 items-center gap-3">
                           {item.image_url ? (
                             <img
                               src={item.image_url}
                               alt={item.item_name}
-                              className="w-10 h-10 rounded-lg object-cover bg-zinc-100 dark:bg-neutral-800 shrink-0 border border-zinc-200/60 dark:border-white/5"
+                              className="h-10 w-10 shrink-0 rounded-[9px] border border-line bg-chip object-cover"
                             />
                           ) : (
-                            <div className="w-10 h-10 rounded-lg bg-zinc-100 dark:bg-neutral-800 flex items-center justify-center shrink-0 border border-zinc-200/60 dark:border-white/5">
-                              <Tag className="w-4 h-4 text-zinc-400 dark:text-neutral-500" />
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[9px] border border-line bg-chip">
+                              <Tag className="h-4 w-4 text-faint" />
                             </div>
                           )}
                           <div className="min-w-0">
-                            <p className="text-xs font-semibold text-zinc-900 dark:text-white leading-tight truncate">
+                            <p className="truncate text-[13px] font-medium leading-tight text-fg">
                               {item.item_name}
                             </p>
                             {item.model_name && (
-                              <p className="text-[11px] font-mono text-zinc-500 dark:text-neutral-400 mt-0.5 truncate">
-                                Varian: <span className="text-zinc-700 dark:text-neutral-200">{item.model_name}</span>
+                              <p className="mt-0.5 truncate font-mono text-[12px] text-faint">
+                                Varian: <span className="text-muted">{item.model_name}</span>
                               </p>
                             )}
                             {Boolean(item.note || item.item_note || item.order_item_note || item.buyer_note) && (
-                              <div className="mt-1 flex items-start gap-1.5 text-[11px] text-amber-800 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md font-sans">
-                                <span className="font-bold text-amber-700 dark:text-amber-400 shrink-0">Catatan:</span>
+                              <div className={`mt-1 ${noteClass}`}>
+                                <span className="shrink-0 font-semibold">Catatan:</span>
                                 <span className="break-words">{item.note || item.item_note || item.order_item_note || item.buyer_note}</span>
                               </div>
                             )}
                           </div>
                         </div>
 
-                        <div className="text-right shrink-0">
-                          <span className="text-xs font-mono font-bold text-zinc-900 dark:text-white">
+                        <div className="shrink-0 text-right">
+                          <span className="font-mono text-[13px] font-semibold text-fg">
                             x{item.quantity}
                           </span>
-                          <p className="text-[11px] font-mono text-zinc-500 dark:text-neutral-400">
+                          <p className="font-mono text-[12px] text-faint">
                             {formatCurrency(item.price, 'IDR')}
                           </p>
                         </div>
                       </div>
                     ))}
 
-                    <div className="flex items-center justify-between pt-1 text-xs">
-                      <span className="text-zinc-500 dark:text-neutral-500 font-mono text-[11px]">
+                    <div className="flex items-center justify-between pt-1 text-[13px]">
+                      <span className="font-mono text-[12px] text-faint">
                         {order.items?.length || 0} produk
                       </span>
-                      <div className="font-mono text-xs font-bold text-zinc-900 dark:text-white">
-                        Total: <span className="text-orange-600 dark:text-orange-400">{formatCurrency(order.total_amount, 'IDR')}</span>
+                      <div className="font-mono text-[13px] text-muted">
+                        Total: <span className="font-semibold text-fg">{formatCurrency(order.total_amount, 'IDR')}</span>
                       </div>
                     </div>
 
                     {order.buyer_note && (
-                      <div className="text-xs p-2 rounded-lg bg-amber-500/5 border border-amber-500/10 text-amber-800 dark:text-amber-300/90 italic">
+                      <div className={`${noteClass} italic`}>
                         Catatan: {order.buyer_note}
                       </div>
                     )}
                   </div>
 
                   {/* Column 3: Logistics and Destination */}
-                  <div className="p-3.5 rounded-xl bg-zinc-50 dark:bg-neutral-950/40 border border-zinc-200/80 dark:border-white/5 space-y-2 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-mono uppercase text-zinc-500 dark:text-neutral-500">Jasa Kirim</span>
-                      <span className="font-semibold text-zinc-800 dark:text-neutral-200">{order.shipping_carrier || 'Jasa Kirim Standar'}</span>
+                  <div className={`space-y-2 p-3.5 text-[12.5px] ${wellClass}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[12px] text-faint">Jasa Kirim</span>
+                      <span className="text-right font-medium text-fg">{order.shipping_carrier || 'Jasa Kirim Standar'}</span>
                     </div>
 
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-mono uppercase text-zinc-500 dark:text-neutral-500">Status Pengiriman</span>
-                      {getShippingStatusBadge(order)}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[12px] text-faint">Status Pengiriman</span>
+                      <StatusChip size="sm" meta={getShippingStatusMeta(order)} />
                     </div>
 
                     {!isCancelled && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-mono uppercase text-zinc-500 dark:text-neutral-500">No. Resi</span>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[12px] text-faint">No. Resi</span>
                         {order.tracking_number ? (
-                          <span className="font-mono font-bold text-orange-600 dark:text-orange-400">{order.tracking_number}</span>
+                          <span className="font-mono font-semibold text-fg">{order.tracking_number}</span>
                         ) : (
-                          <span className="text-zinc-400 dark:text-neutral-500 font-mono text-[11px]">N/A</span>
+                          <span className="font-mono text-[12px] text-faint">N/A</span>
                         )}
                       </div>
                     )}
 
                     {!isCancelled && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-mono uppercase text-zinc-500 dark:text-neutral-500">Label Pengiriman</span>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[12px] text-faint">Label Pengiriman</span>
                         {isPrinted || ['SHIPPED', 'TO_CONFIRM_RECEIVE', 'COMPLETED'].includes(order.order_status) || order.is_delivered ? (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded font-mono font-medium bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                            <CheckCircle2 className="w-2.5 h-2.5" />
-                            <span>Tercetak</span>
-                          </span>
+                          <StatusChip size="sm" meta={marketplaceChip('Tercetak', 'done', CheckCircle2)} />
                         ) : order.order_status === 'PROCESSED' ? (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded font-mono font-medium bg-sky-500/15 text-sky-700 dark:text-sky-400 border border-sky-500/30 flex items-center gap-1">
-                            <Printer className="w-2.5 h-2.5" />
-                            <span>Siap Cetak</span>
-                          </span>
+                          <StatusChip size="sm" meta={marketplaceChip('Siap Cetak', 'act', Printer)} />
                         ) : (
-                          <span className="text-zinc-400 dark:text-neutral-500 font-mono text-[10px]">Atur pengiriman dahulu</span>
+                          <span className="text-[12px] text-faint">Atur pengiriman dahulu</span>
                         )}
                       </div>
                     )}
 
                     {!isCancelled && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-mono uppercase text-zinc-500 dark:text-neutral-500">Batas Kirim</span>
-                        <span className="font-mono text-[11px] text-zinc-700 dark:text-neutral-300">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[12px] text-faint">Batas Kirim</span>
+                        <span className="font-mono text-[12px] text-muted">
                           {order.ship_by_date || 'N/A'}
                         </span>
                       </div>
                     )}
 
-                    <div className="flex items-start gap-2 pt-2 border-t border-zinc-200/80 dark:border-white/5">
-                      <MapPin className="w-3.5 h-3.5 text-zinc-400 dark:text-neutral-500 shrink-0 mt-0.5" />
+                    <div className="flex items-start gap-2 border-t border-line pt-2">
+                      <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-faint" />
                       <div className="min-w-0">
-                        <p className="font-medium text-zinc-800 dark:text-neutral-200">{order.recipient_name || order.buyer_username}</p>
+                        <p className="font-medium text-fg">{order.recipient_name || order.buyer_username}</p>
                         {order.recipient_phone && (
-                          <p className="text-[10px] font-mono text-zinc-500 dark:text-neutral-400">{formatDisplayPhone(order.recipient_phone)}</p>
+                          <p className="font-mono text-[12px] text-faint">{formatDisplayPhone(order.recipient_phone)}</p>
                         )}
-                        <p className="text-[11px] text-zinc-600 dark:text-neutral-400 leading-tight truncate max-w-[200px]" title={order.recipient_address}>
+                        <p className="max-w-[200px] truncate text-[12px] leading-tight text-muted" title={order.recipient_address}>
                           {order.recipient_address}
                         </p>
-                        <p className="text-[10px] text-zinc-500 dark:text-neutral-500 font-mono mt-0.5">
+                        <p className="mt-0.5 font-mono text-[11.5px] text-faint">
                           {order.recipient_city} {order.recipient_postcode ? `(${order.recipient_postcode})` : ''}
                         </p>
                       </div>
@@ -1391,13 +1269,13 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
 
       {/* Pagination Footer */}
       {filteredOrders.length > 0 && (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 rounded-xl bg-white dark:bg-neutral-900/60 border border-zinc-200 dark:border-white/10 text-xs text-zinc-600 dark:text-neutral-400 shadow-xs">
+        <div className="flex flex-col items-center justify-between gap-3 rounded-[14px] border border-card-border bg-card px-4 py-3 text-[13px] text-muted sm:flex-row">
           <div>
-            Menampilkan <span className="font-mono font-bold text-zinc-900 dark:text-white">{(currentPage - 1) * pageSize + 1}</span> hingga{' '}
-            <span className="font-mono font-bold text-zinc-900 dark:text-white">
+            Menampilkan <span className="font-mono font-semibold text-fg">{(currentPage - 1) * pageSize + 1}</span> hingga{' '}
+            <span className="font-mono font-semibold text-fg">
               {Math.min(currentPage * pageSize, filteredOrders.length)}
             </span>{' '}
-            dari <span className="font-mono font-bold text-zinc-900 dark:text-white">{filteredOrders.length}</span> pesanan
+            dari <span className="font-mono font-semibold text-fg">{filteredOrders.length}</span> pesanan
           </div>
 
           <div className="flex items-center gap-3">
@@ -1417,25 +1295,23 @@ export const ShopeeOrdersView: React.FC<ShopeeOrdersViewProps> = ({
 
             {/* Page Navigation */}
             <div className="flex items-center gap-1">
-              <button
-                type="button"
+              <Button
+                size="sm"
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage <= 1}
-                className="px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-white/10 bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-900 dark:hover:bg-white/5 text-zinc-700 dark:text-neutral-300 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
               >
                 Sebelumnya
-              </button>
-              <span className="px-2 py-1 font-mono text-[11px] text-zinc-600 dark:text-neutral-300">
+              </Button>
+              <span className="px-2 font-mono text-[12px] text-muted">
                 Hal {currentPage} dari {totalPages}
               </span>
-              <button
-                type="button"
+              <Button
+                size="sm"
                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                 disabled={currentPage >= totalPages}
-                className="px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-white/10 bg-zinc-100 hover:bg-zinc-200 dark:bg-neutral-900 dark:hover:bg-white/5 text-zinc-700 dark:text-neutral-300 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
               >
                 Berikutnya
-              </button>
+              </Button>
             </div>
           </div>
         </div>

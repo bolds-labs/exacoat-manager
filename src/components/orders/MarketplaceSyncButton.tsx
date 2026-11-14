@@ -29,7 +29,6 @@ export const MarketplaceSyncButton: React.FC<MarketplaceSyncButtonProps> = ({
   onSync,
   syncDays,
   onSyncDaysChange,
-  brand,
   options = DEFAULT_OPTIONS,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -56,38 +55,15 @@ export const MarketplaceSyncButton: React.FC<MarketplaceSyncButtonProps> = ({
     };
   }, [isOpen]);
 
-  const isShopee = brand === 'shopee';
-
-  const brandStyles = isShopee
-    ? {
-        container: 'shadow-orange-500/15 ring-orange-500/30',
-        mainBtn: 'bg-gradient-to-r from-orange-500 via-orange-600 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white',
-        splitBorder: 'border-orange-400/30',
-        toggleBtn: 'bg-amber-600 hover:bg-amber-700 text-white',
-        activeOption: 'text-orange-400 bg-orange-500/15 font-semibold',
-        checkIcon: 'text-orange-400',
-        badge: 'bg-orange-500/20 text-orange-200 border-orange-500/30',
-      }
-    : {
-        container: 'shadow-rose-500/15 ring-rose-500/30',
-        mainBtn: 'bg-gradient-to-r from-rose-500 via-rose-600 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white',
-        splitBorder: 'border-rose-400/30',
-        toggleBtn: 'bg-pink-600 hover:bg-pink-700 text-white',
-        activeOption: 'text-rose-400 bg-rose-500/15 font-semibold',
-        checkIcon: 'text-rose-400',
-        badge: 'bg-rose-500/20 text-rose-200 border-rose-500/30',
-      };
-
   return (
-    <div ref={containerRef} className="relative inline-flex items-stretch rounded-xl shadow-lg font-sans">
+    <div ref={containerRef} className="relative inline-flex items-stretch font-sans">
       {/* Primary Sync Action */}
       <button
         type="button"
         onClick={() => onSync(syncDays)}
         disabled={isSyncing}
         className={clsx(
-          'px-4 py-2 text-xs font-bold flex items-center gap-2 rounded-l-xl transition-all disabled:opacity-50 cursor-pointer active:scale-[0.99] select-none shadow-sm',
-          brandStyles.mainBtn
+          'flex h-9 cursor-pointer select-none items-center gap-2 rounded-l-[9px] bg-accent px-[13px] text-[13px] font-semibold text-accent-on transition-colors hover:brightness-95 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent'
         )}
       >
         <RefreshCw className={clsx('w-3.5 h-3.5', isSyncing && 'animate-spin')} />
@@ -100,24 +76,22 @@ export const MarketplaceSyncButton: React.FC<MarketplaceSyncButtonProps> = ({
         onClick={() => setIsOpen(!isOpen)}
         disabled={isSyncing}
         className={clsx(
-          'px-3 py-2 text-xs font-semibold flex items-center gap-1.5 rounded-r-xl border-l transition-all cursor-pointer disabled:opacity-50 select-none shadow-sm',
-          brandStyles.splitBorder,
-          brandStyles.toggleBtn
+          'flex h-9 cursor-pointer select-none items-center gap-1.5 rounded-r-[9px] border-l border-accent-border bg-accent px-2.5 text-[13px] font-semibold text-accent-on transition-colors hover:brightness-95 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent'
         )}
         title="Pilih rentang hari sinkronisasi"
         aria-haspopup="true"
         aria-expanded={isOpen}
       >
-        <span className="font-mono text-[11px] font-bold">{syncDays} hari</span>
+        <span className="font-mono text-[12px] font-semibold">{syncDays} hari</span>
         <ChevronDown className={clsx('w-3.5 h-3.5 transition-transform duration-200', isOpen && 'rotate-180')} />
       </button>
 
       {/* Custom Dropdown Menu */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-52 rounded-2xl bg-neutral-900 border border-white/10 shadow-2xl p-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 backdrop-blur-md">
-          <div className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-neutral-400 border-b border-white/10 mb-1 flex items-center justify-between">
+        <div className="absolute right-0 top-full z-50 mt-2 w-52 rounded-xl border border-card-border bg-pop p-1.5 shadow-[0_16px_40px_rgba(0,0,0,0.35)]">
+          <div className="mb-1 flex items-center justify-between border-b border-line px-2.5 py-1.5 text-[12px] font-medium text-faint">
             <span>Rentang Waktu</span>
-            <span className={clsx('text-[10px] px-1.5 py-0.2 rounded border font-mono', brandStyles.badge)}>
+            <span className="rounded-[6px] bg-st-done-bg px-1.5 py-px text-[11px] font-medium text-st-done-fg">
               API Live
             </span>
           </div>
@@ -133,19 +107,19 @@ export const MarketplaceSyncButton: React.FC<MarketplaceSyncButtonProps> = ({
                     setIsOpen(false);
                   }}
                   className={clsx(
-                    'w-full px-3 py-2 rounded-xl text-left text-xs flex items-center justify-between transition-colors cursor-pointer',
-                    isSelected ? brandStyles.activeOption : 'text-neutral-300 hover:bg-white/5 hover:text-white'
+                    'flex w-full cursor-pointer items-center justify-between rounded-lg px-2.5 py-2 text-left text-[13px] text-fg transition-colors hover:bg-chip',
+                    isSelected && 'bg-chip'
                   )}
                 >
                   <div>
-                    <div className="font-bold text-xs">{opt.label}</div>
+                    <div className="font-medium">{opt.label}</div>
                     {opt.desc && (
-                      <div className="text-[10px] text-neutral-400 font-normal mt-0.5">
+                      <div className="mt-0.5 text-[12px] text-faint">
                         {opt.desc}
                       </div>
                     )}
                   </div>
-                  {isSelected && <Check className={clsx('w-3.5 h-3.5 shrink-0', brandStyles.checkIcon)} />}
+                  {isSelected && <Check className="h-3.5 w-3.5 shrink-0 text-accent-fg" />}
                 </button>
               );
             })}
