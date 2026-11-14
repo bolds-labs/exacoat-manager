@@ -11,7 +11,7 @@ describe('tabNeedsOrderList', () => {
   });
 
   it('does not load it for screens that fetch their own data', () => {
-    for (const tab of ['orders', 'rma', 'warranty', 'export', 'reports', 'settings', 'configurator', 'products']) {
+    for (const tab of ['staff', 'orders', 'rma', 'warranty', 'export', 'reports', 'settings', 'configurator', 'products']) {
       expect(tabNeedsOrderList(tab, false)).toBe(false);
     }
   });
@@ -23,6 +23,7 @@ describe('tabNeedsOrderList', () => {
   it('never loads it for shop managers, who cannot open those screens', () => {
     expect(tabNeedsOrderList('dashboard', true)).toBe(false);
     expect(tabNeedsOrderList('skin_performance', true)).toBe(false);
+    expect(tabNeedsOrderList('staff', true)).toBe(false);
   });
 
   it('does not load it for unknown tabs, which fall back to the dashboard', () => {

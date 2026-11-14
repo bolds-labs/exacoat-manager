@@ -13,6 +13,7 @@ import { Order, AuditLog } from './types';
 import { Loader2 } from 'lucide-react';
 
 // Lazy-loaded routes for ultra-fast initial chunk delivery
+const StaffDashboardPage = React.lazy(() => import('./pages/StaffDashboardPage').then(m => ({ default: m.StaffDashboardPage })));
 const DashboardPage = React.lazy(() => import('./pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
 const OrdersView = React.lazy(() => import('./components/orders/OrdersView').then(m => ({ default: m.OrdersView })));
 const ConfiguratorStudioPage = React.lazy(() => import('./pages/ConfiguratorStudioPage').then(m => ({ default: m.ConfiguratorStudioPage })));
@@ -77,6 +78,9 @@ const getTabFromUrl = (): NavItemKey => {
     'design-system': 'design_system',
     'design_system': 'design_system',
     'dashboard': 'dashboard',
+    'staff': 'staff',
+    'staff-dashboard': 'staff',
+    'staff_dashboard': 'staff',
     'affiliates': 'affiliates',
     'affiliate': 'affiliates',
     'creators': 'affiliates',
@@ -215,12 +219,12 @@ export const App: React.FC = () => {
   const [targetCustomerId, setTargetCustomerId] = useState<number | null>(null);
   const [targetCustomerEmail, setTargetCustomerEmail] = useState<string | null>(null);
 
-  // Keep shop_manager strictly locked to allowed tabs (orders, rma, warranty, export, tracking pool, reviews)
+  // Keep shop_manager strictly locked to allowed tabs; they land on the Staff dashboard
   useEffect(() => {
     if (isShopManager && !SHOP_MANAGER_ALLOWED_TABS.includes(currentTab)) {
-      setCurrentTab('orders');
-      if (window.location.hash !== '#orders') {
-        window.history.replaceState(null, '', '#orders');
+      setCurrentTab('staff');
+      if (window.location.hash !== '#staff') {
+        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#staff`);
       }
     }
   }, [isShopManager, currentTab]);
@@ -230,7 +234,7 @@ export const App: React.FC = () => {
     const handlePopState = () => {
       const tab = getTabFromUrl();
       if (isShopManager && !SHOP_MANAGER_ALLOWED_TABS.includes(tab)) {
-        setCurrentTab('orders');
+        setCurrentTab('staff');
         return;
       }
       setCurrentTab(tab);
@@ -386,7 +390,13 @@ export const App: React.FC = () => {
   }
 
   const renderActiveTab = () => {
+    const staffDashboard = (
+      <StaffDashboardPage onNavigate={handleTabChange} orderCounts={orderCounts} countsLoaded={countsLoaded} fallbackPaymentConfirmed={countsLoaded && !orderCounts ? processingCount : undefined} onRefreshCounts={refreshOrderCounts} />
+    );
     if (isShopManager) {
+      if (currentTab === 'staff') {
+        return staffDashboard;
+      }
       if (currentTab === 'custom_label') {
         return <CustomLabelPage />;
       }
@@ -412,6 +422,8 @@ export const App: React.FC = () => {
         return (
           <DashboardPage onNavigate={handleTabChange} orderCounts={orderCounts} fallbackPaymentConfirmed={countsLoaded && !orderCounts ? processingCount : undefined} onRefreshCounts={refreshOrderCounts} />
         );
+      case 'staff':
+        return staffDashboard;
       case 'orders':
         return (
           <OrdersView

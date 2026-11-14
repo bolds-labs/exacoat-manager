@@ -1,12 +1,13 @@
 import {
   LayoutDashboard, FileText, Activity, Settings, ShieldCheck, Bot, Mail, FlaskConical, ShoppingBag,
-  Star, Layers, Sliders, FileSpreadsheet, Package, UserCog, Share2, Tag, Users,
+  Star, Layers, Sliders, FileSpreadsheet, Package, UserCog, Share2, Tag, Users, ClipboardList,
   type LucideIcon,
 } from 'lucide-react';
 import type { ExacoatRole } from '../../types';
 
 export type NavItemKey =
   | 'dashboard'
+  | 'staff'
   | 'orders'
   | 'custom_label'
   | 'customers'
@@ -43,13 +44,14 @@ export interface NavGroup {
   items: NavItem[];
 }
 
-export const SHOP_MANAGER_ALLOWED_TABS: NavItemKey[] = ['orders', 'custom_label', 'reviews', 'rma', 'warranty', 'export', 'tracking_pool'];
+export const SHOP_MANAGER_ALLOWED_TABS: NavItemKey[] = ['staff', 'orders', 'custom_label', 'reviews', 'rma', 'warranty', 'export', 'tracking_pool'];
 
 export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Operations',
     items: [
       { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { key: 'staff', label: 'Staff dashboard', icon: ClipboardList },
       {
         key: 'orders',
         label: 'Orders',

@@ -7,6 +7,7 @@ import { TopBarInjectionWidget } from './TopBarInjectionWidget';
 
 const pageTitles: Record<NavItemKey, string> = {
   dashboard: 'Dashboard',
+  staff: 'Staff dashboard',
   orders: 'Orders',
   custom_label: 'Custom Label',
   customers: 'Customers',

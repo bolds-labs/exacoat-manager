@@ -23,6 +23,13 @@ describe('navForRole', () => {
     expect(keys).toContain('orders');
     expect(keys).toContain('reviews');
   });
+  it('shows the Staff dashboard first in Operations for shop managers and admins', () => {
+    const shop = navForRole('shop_manager');
+    expect(shop[0].label).toBe('Operations');
+    expect(shop[0].items[0].key).toBe('staff');
+    const admin = navForRole('super_admin');
+    expect(admin[0].items.map((i) => i.key).slice(0, 2)).toEqual(['dashboard', 'staff']);
+  });
   it('super_admin sees every legacy key', () => {
     const keys = keysOf(navForRole('super_admin'));
     LEGACY_FULL_KEYS.forEach((k) => expect(keys).toContain(k));

@@ -22,6 +22,7 @@ import {
   Share2,
   UserCog,
   Tag,
+  ClipboardList,
   CornerDownLeft
 } from 'lucide-react';
 import { NavItemKey } from './Sidebar';
@@ -55,6 +56,15 @@ const WORKSPACE_PAGES: WorkspaceAction[] = [
     tab: 'dashboard', 
     icon: LayoutDashboard,
     keywords: ['metrics', 'overview', 'stats', 'analytics', 'revenue', 'home'] 
+  },
+  {
+    id: 'staff',
+    label: 'Staff dashboard',
+    category: 'Workspace',
+    description: 'Team notes, overdue international orders and reviews to approve',
+    tab: 'staff',
+    icon: ClipboardList,
+    keywords: ['staff', 'team', 'notes', 'today', 'overdue', 'international', 'reviews', 'approve'],
   },
   { 
     id: 'orders', 
