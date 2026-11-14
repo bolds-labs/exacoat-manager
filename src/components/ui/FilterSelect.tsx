@@ -69,42 +69,41 @@ export function FilterSelect<T extends string | number = string>({
   }, [isOpen]);
 
   return (
-    <div className={clsx('relative inline-block font-sans text-xs', className)} ref={containerRef}>
+    <div className={clsx('relative inline-block font-sans text-[12.5px]', className)} ref={containerRef}>
       {/* Trigger Button */}
       <button
         type="button"
         disabled={disabled}
         onClick={() => !disabled && setIsOpen(!isOpen)}
         className={clsx(
-          'h-8 px-2.5 rounded-xl text-xs flex items-center gap-1.5 transition-all select-none cursor-pointer border font-sans',
-          'bg-zinc-100 hover:bg-zinc-200/80 dark:bg-[#141414] dark:hover:bg-zinc-800/80',
-          'text-zinc-900 dark:text-zinc-100 border-zinc-200/80 dark:border-white/10 shadow-2xs',
-          isOpen && 'border-[#f3aa18] dark:border-[#f3aa18] ring-2 ring-[#f3aa18]/20',
+          'h-[30px] px-2.5 rounded-[8px] text-[12.5px] flex items-center gap-1.5 transition-colors select-none cursor-pointer border font-sans',
+          'bg-field hover:bg-chip text-fg border-field-border',
+          isOpen && 'border-accent',
           disabled && 'opacity-50 cursor-not-allowed'
         )}
       >
         {label && (
-          <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium whitespace-nowrap">
+          <span className="text-[12px] text-faint whitespace-nowrap">
             {label}:
           </span>
         )}
-        {icon && <span className="shrink-0 text-zinc-500 dark:text-zinc-400">{icon}</span>}
+        {icon && <span className="shrink-0 text-muted">{icon}</span>}
         {selectedOption?.icon && <span className="shrink-0">{selectedOption.icon}</span>}
         
-        <span className="font-semibold truncate max-w-[150px]">
+        <span className="font-[450] truncate max-w-[150px]">
           {selectedOption ? selectedOption.label : placeholder}
         </span>
 
         {selectedOption?.count !== undefined && (
-          <span className="text-[10px] font-mono px-1 py-0.2 rounded bg-zinc-200 dark:bg-white/10 text-zinc-700 dark:text-zinc-300 font-bold">
+          <span className="text-[11.5px] px-1.5 py-px rounded-full bg-chip text-muted font-medium tabular-nums">
             {selectedOption.count}
           </span>
         )}
 
         <ChevronDown
           className={clsx(
-            'w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 transition-transform duration-150 shrink-0 ml-0.5',
-            isOpen && 'rotate-180 text-zinc-900 dark:text-white'
+            'w-3.5 h-3.5 text-faint transition-transform duration-150 shrink-0 ml-0.5',
+            isOpen && 'rotate-180 text-fg'
           )}
         />
       </button>
@@ -113,16 +112,16 @@ export function FilterSelect<T extends string | number = string>({
       {isOpen && (
         <div
           className={clsx(
-            'absolute z-50 min-w-[200px] max-w-[320px] max-h-80 overflow-y-auto rounded-xl p-1',
+            'absolute z-50 min-w-[200px] max-w-[320px] max-h-80 overflow-y-auto rounded-[10px] p-1',
             dropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5',
             align === 'right' ? 'right-0' : 'left-0',
-            'bg-white dark:bg-[#141417] border border-zinc-200 dark:border-white/15 shadow-2xl backdrop-blur-xl',
+            'bg-card border border-card-border shadow-[0_12px_30px_rgba(0,0,0,0.3)]',
             'animate-in fade-in zoom-in-95 duration-100 select-none',
             dropdownClassName
           )}
         >
           {options.length === 0 ? (
-            <div className="px-3 py-2 text-center text-[11px] text-zinc-400">
+            <div className="px-3 py-2 text-center text-[12px] text-faint">
               No options available
             </div>
           ) : (
@@ -131,7 +130,7 @@ export function FilterSelect<T extends string | number = string>({
                 return (
                   <div
                     key={`header-${idx}-${String(opt.value)}`}
-                    className="px-2.5 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 border-t border-zinc-200/50 dark:border-white/5 first:border-0 first:pt-1 select-none"
+                    className="px-2.5 pt-2 pb-1 text-[12px] text-faint border-t border-line first:border-0 first:pt-1 select-none"
                   >
                     {opt.label}
                   </div>
@@ -148,39 +147,39 @@ export function FilterSelect<T extends string | number = string>({
                     setIsOpen(false);
                   }}
                   className={clsx(
-                    'w-full px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between gap-2 text-left transition-colors cursor-pointer',
+                    'w-full px-2.5 py-1.5 rounded-[7px] text-[13px] flex items-center justify-between gap-2 text-left transition-colors cursor-pointer',
                     opt.indent && 'pl-5',
                     isSelected
-                      ? 'bg-[#f3aa18]/15 text-[#f3aa18] font-bold dark:bg-[#f3aa18]/20 dark:text-[#f3aa18]'
-                      : 'text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-white/10'
+                      ? 'bg-accent-soft text-accent-fg font-medium'
+                      : 'text-fg hover:bg-chip'
                   )}
                 >
                   <div className="flex items-center gap-2 truncate">
                     {opt.icon && <span className="shrink-0">{opt.icon}</span>}
-                    <span className={clsx('truncate', opt.indent && 'text-[11px] text-zinc-600 dark:text-neutral-300')}>{opt.label}</span>
+                    <span className={clsx('truncate', opt.indent && 'text-[12.5px] text-muted')}>{opt.label}</span>
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
                     {opt.badge && (
                       <span className={clsx(
-                        'text-[9px] px-1.5 py-0.2 rounded font-mono font-bold uppercase',
-                        opt.badgeVariant === 'emerald' && 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30',
-                        opt.badgeVariant === 'amber' && 'bg-amber-500/15 text-amber-500 dark:text-amber-400 border border-amber-500/30',
-                        opt.badgeVariant === 'sky' && 'bg-sky-500/15 text-sky-500 dark:text-sky-400 border border-sky-500/30',
-                        opt.badgeVariant === 'orange' && 'bg-orange-500/15 text-orange-500 dark:text-orange-400 border border-orange-500/30',
-                        opt.badgeVariant === 'rose' && 'bg-rose-500/15 text-rose-500 dark:text-rose-400 border border-rose-500/30',
-                        (!opt.badgeVariant || opt.badgeVariant === 'zinc') && 'bg-zinc-200 dark:bg-white/10 text-zinc-600 dark:text-zinc-400'
+                        'text-[11px] px-1.5 py-px rounded-[6px] font-medium border',
+                        opt.badgeVariant === 'emerald' && 'bg-st-done-bg text-st-done-fg border-st-done-border',
+                        opt.badgeVariant === 'amber' && 'bg-st-wait-bg text-st-wait-fg border-st-wait-border',
+                        opt.badgeVariant === 'sky' && 'bg-st-prog-bg text-st-prog-fg border-st-prog-border',
+                        opt.badgeVariant === 'orange' && 'bg-accent-soft text-accent-fg border-accent-border',
+                        opt.badgeVariant === 'rose' && 'bg-st-stop-bg text-st-stop-fg border-st-stop-border',
+                        (!opt.badgeVariant || opt.badgeVariant === 'zinc') && 'bg-chip text-muted border-card-border'
                       )}>
                         {opt.badge}
                       </span>
                     )}
                     {opt.count !== undefined && (
-                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-zinc-200 dark:bg-white/10 text-zinc-600 dark:text-zinc-400 font-semibold">
+                      <span className="text-[11.5px] px-1.5 py-px rounded-full bg-chip text-muted font-medium tabular-nums">
                         {opt.count}
                       </span>
                     )}
                     {isSelected && (
-                      <Check className="w-3.5 h-3.5 text-[#f3aa18] shrink-0" />
+                      <Check className="w-3.5 h-3.5 text-accent-fg shrink-0" />
                     )}
                   </div>
                 </button>

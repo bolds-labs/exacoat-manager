@@ -26,15 +26,15 @@ export const PageHeroHeader: React.FC<PageHeroHeaderProps> = ({
   const getBadgeStyle = (variant: string = 'default') => {
     switch (variant) {
       case 'lime':
-        return 'bg-[#f3aa18]/10 text-[#f3aa18] border-[#f3aa18]/30';
+        return 'bg-accent-soft text-accent-fg border-accent-border';
       case 'amber':
-        return 'bg-amber-500/10 text-amber-300 border-amber-500/30';
+        return 'bg-st-wait-bg text-st-wait-fg border-st-wait-border';
       case 'cyan':
-        return 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30';
+        return 'bg-st-prog-bg text-st-prog-fg border-st-prog-border';
       case 'purple':
-        return 'bg-purple-500/10 text-purple-300 border-purple-500/30';
+        return 'bg-st-act-bg text-st-act-fg border-st-act-border';
       default:
-        return 'bg-zinc-800 text-zinc-300 border-zinc-700';
+        return 'bg-chip text-muted border-card-border';
     }
   };
 
@@ -43,7 +43,7 @@ export const PageHeroHeader: React.FC<PageHeroHeaderProps> = ({
       <div className="min-w-0">
         <div className="flex items-center gap-3">
           <h1 className={clsx(
-            "text-xl sm:text-2xl font-semibold text-zinc-950 dark:text-white tracking-tight font-sans flex flex-wrap items-center gap-2.5 leading-tight",
+            "text-[26px] font-semibold text-fg tracking-[-0.02em] font-heading flex flex-wrap items-center gap-2.5 leading-tight",
             titleClassName
           )}>
             {title}
@@ -58,7 +58,7 @@ export const PageHeroHeader: React.FC<PageHeroHeaderProps> = ({
           </h1>
         </div>
         {subtitle && (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 font-sans mt-1.5 max-w-3xl leading-relaxed">
+          <p className="text-sm text-muted font-sans mt-1.5 max-w-3xl leading-relaxed">
             {subtitle}
           </p>
         )}

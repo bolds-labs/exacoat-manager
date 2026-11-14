@@ -37,7 +37,7 @@ export const StatCard: React.FC<StatCardProps> = ({
       hoverEffect={!!onClick}
       className={clsx(
         'p-4 sm:p-5 flex flex-col justify-between font-sans group transition-all min-h-[132px]',
-        onClick && 'cursor-pointer hover:border-zinc-300 dark:hover:border-white/20',
+        onClick && 'cursor-pointer',
         className
       )}
     >
@@ -46,7 +46,7 @@ export const StatCard: React.FC<StatCardProps> = ({
         <CardEyebrow>{title}</CardEyebrow>
 
         {trend && (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-zinc-100 dark:bg-white/[0.04] text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-white/[0.06] shrink-0">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11.5px] font-mono font-medium bg-chip text-muted border border-card-border shrink-0">
             {trend.value}
           </span>
         )}
@@ -54,11 +54,11 @@ export const StatCard: React.FC<StatCardProps> = ({
 
       {/* Main Metric Value & Full-Width Subtitle (No Truncation) */}
       <div className="my-1 space-y-1">
-        <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-900 dark:text-white font-mono tabular-nums group-hover:text-zinc-950 dark:group-hover:text-white transition-colors">
+        <h3 className="text-[22px] font-medium leading-tight tracking-[-0.01em] text-fg font-mono tabular-nums">
           {value}
         </h3>
         {subtitle && (
-          <p className={clsx('text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed line-clamp-1', !refined && 'font-mono')}>{subtitle}</p>
+          <p className={clsx('text-[12.5px] text-muted leading-relaxed line-clamp-1', !refined && 'font-mono')}>{subtitle}</p>
         )}
       </div>
 
@@ -88,7 +88,7 @@ export const StatCard: React.FC<StatCardProps> = ({
 
       {/* Supporting metric context */}
       {trend?.label && (
-        <div className={clsx('pt-2 border-t border-zinc-100 dark:border-white/[0.04] flex items-center text-[10px] text-zinc-400 dark:text-zinc-500', refined ? 'justify-end' : 'justify-between font-mono')}>
+        <div className={clsx('pt-2 border-t border-line flex items-center text-[11.5px] text-faint', refined ? 'justify-end' : 'justify-between font-mono')}>
           {!refined && <span>Activity</span>}
           <span className="truncate">{trend.label}</span>
         </div>

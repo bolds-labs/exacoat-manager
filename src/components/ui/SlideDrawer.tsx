@@ -72,7 +72,7 @@ export const SlideDrawer: React.FC<SlideDrawerProps> = ({
       {/* Backdrop */}
       <div
         className={clsx(
-          'fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ease-out pointer-events-auto',
+          'fixed inset-0 bg-black/45 transition-opacity duration-300 ease-out pointer-events-auto',
           isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
         )}
         onClick={onClose}
@@ -87,28 +87,28 @@ export const SlideDrawer: React.FC<SlideDrawerProps> = ({
             transitionTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)',
           }}
           className={clsx(
-            'pointer-events-auto h-full max-h-screen bg-white dark:bg-[#0a0a0a] text-zinc-900 dark:text-zinc-100 border-l border-zinc-200 dark:border-white/[0.08] shadow-[-25px_0_60px_rgba(0,0,0,0.65)] flex flex-col transform transition-transform duration-300 ease-out',
+            'pointer-events-auto h-full max-h-screen bg-panel text-fg border-l border-card-border shadow-[-20px_0_50px_rgba(0,0,0,0.3)] flex flex-col transform transition-transform duration-300 ease-out',
             isVisible ? 'translate-x-0' : 'translate-x-full',
             widthStyles[width] || widthStyles['2xl'],
             className
           )}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-zinc-200 dark:border-white/[0.08] bg-zinc-50/90 dark:bg-[#0f0f0f]/80 backdrop-blur-xl shrink-0 gap-3">
+          <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-line bg-panel shrink-0 gap-3">
             <div className="flex-1 min-w-0 pr-2 sm:pr-4">
               {typeof title === 'string' ? (
-                <h3 className="text-base sm:text-lg font-semibold text-zinc-950 dark:text-white leading-tight font-sans tracking-tight truncate">{title}</h3>
+                <h3 className="text-base font-semibold text-fg leading-tight font-sans tracking-tight truncate">{title}</h3>
               ) : (
                 title
               )}
-              {subtitle && <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 truncate">{subtitle}</p>}
+              {subtitle && <p className="text-xs text-faint mt-1 truncate">{subtitle}</p>}
             </div>
             
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               {headerActions}
               <button
                 onClick={onClose}
-                className="p-1.5 sm:p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-white/[0.08] transition-colors border border-transparent hover:border-white/[0.08] cursor-pointer"
+                className="p-1.5 sm:p-2 rounded-[9px] text-faint hover:text-fg hover:bg-chip transition-colors border border-transparent cursor-pointer"
                 title="Close details"
                 aria-label="Close details"
               >
@@ -118,7 +118,7 @@ export const SlideDrawer: React.FC<SlideDrawerProps> = ({
           </div>
 
           {/* Drawer Body */}
-          <div className="record-detail flex-1 overflow-y-auto p-4 sm:p-5 md:p-6 scrollbar-thin scrollbar-thumb-zinc-800">{children}</div>
+          <div className="record-detail flex-1 overflow-y-auto p-4 sm:p-5 md:p-6 scrollbar-thin">{children}</div>
         </div>
       </div>
     </div>

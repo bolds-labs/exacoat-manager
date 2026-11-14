@@ -29,7 +29,7 @@ const TabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      "inline-flex h-10 items-center justify-center rounded-xl bg-zinc-100 dark:bg-black/35 p-1 text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-white/[0.08] font-sans",
+      "inline-flex h-9 items-center justify-center gap-1 rounded-[10px] bg-field p-[3px] text-muted border border-field-border font-sans",
       className
     )}
     {...props}
@@ -44,7 +44,7 @@ const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      "inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f3aa18]/50 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-white dark:data-[state=active]:bg-white/10 data-[state=active]:text-zinc-950 dark:data-[state=active]:text-white data-[state=active]:shadow-sm cursor-pointer",
+      "inline-flex items-center justify-center whitespace-nowrap rounded-[8px] border border-transparent px-[11px] py-1.5 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-50 hover:text-fg data-[state=active]:bg-chip data-[state=active]:border-card-border data-[state=active]:text-fg cursor-pointer",
       className
     )}
     {...props}
@@ -172,7 +172,7 @@ export const Tabs: React.FC<TabsProps> = ({
         ref={containerRef}
         style={maskStyle}
         className={cn(
-          "flex items-center gap-1 p-1 bg-zinc-100 dark:bg-black/35 border border-zinc-200 dark:border-white/[0.08] rounded-xl overflow-x-auto select-none no-scrollbar",
+          "flex items-center gap-1 p-[3px] bg-field border border-field-border rounded-[10px] overflow-x-auto select-none no-scrollbar",
           className
         )}
       >
@@ -186,21 +186,21 @@ export const Tabs: React.FC<TabsProps> = ({
               type="button"
               onClick={() => onChange?.(tab.id)}
               className={cn(
-                "flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium font-sans transition-all cursor-pointer whitespace-nowrap",
+                "flex items-center gap-1.5 px-[11px] py-1.5 rounded-[8px] border text-[13px] font-sans transition-colors cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                 isActive
-                  ? "bg-white dark:bg-white/15 text-zinc-950 dark:text-white shadow-sm"
-                  : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-200/50 dark:hover:bg-white/[0.04]"
+                  ? "border-card-border bg-chip text-fg"
+                  : "border-transparent text-muted hover:text-fg"
               )}
             >
-              {Icon && <Icon className={cn("w-3.5 h-3.5", isActive ? "text-zinc-950 dark:text-white" : "text-zinc-500")} />}
+              {Icon && <Icon className={cn("w-3.5 h-3.5", isActive ? "text-fg" : "text-faint")} />}
               <span>{tab.label}</span>
               {typeof tab.count === "number" && (
                 <span
                   className={cn(
-                    "px-1.5 py-0.5 rounded-full text-[10px] font-mono font-medium",
+                    "px-1.5 py-px rounded-full text-[11.5px] font-medium tabular-nums",
                     isActive
-                      ? "bg-zinc-900/10 dark:bg-white/20 text-zinc-950 dark:text-white font-semibold"
-                      : "bg-zinc-200 dark:bg-white/10 text-zinc-600 dark:text-zinc-400"
+                      ? "bg-card text-fg"
+                      : "bg-chip text-muted"
                   )}
                 >
                   {tab.count}

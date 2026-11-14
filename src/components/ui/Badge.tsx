@@ -12,37 +12,24 @@ import { BadgeType, AccountStatus, ApplicationStatus, IdentityStatus, OrderStatu
 import { ShieldCheck, Award, Sparkles, CheckCircle2, Clock, XCircle, AlertTriangle, Building2, UserPlus, Truck, Layers, Eye, Package } from "lucide-react"
 
 const badgeVariants = cva(
-  "inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-md border px-2 text-[10px] leading-none font-medium font-mono transition-colors focus:outline-none",
+  "inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-[7px] border px-2 text-[12px] leading-none font-medium font-sans transition-colors focus:outline-none",
   {
     variants: {
       variant: {
-        default:
-          "border-transparent bg-zinc-900 text-zinc-50 dark:bg-zinc-50 dark:text-zinc-900",
-        lime:
-          "border-[#f3aa18]/30 bg-[#f3aa18]/10 text-amber-700 dark:text-[#f3aa18]",
-        secondary:
-          "border-transparent bg-zinc-100 text-zinc-900 dark:bg-white/[0.06] dark:text-zinc-100",
-        subtle:
-          "border-zinc-200 dark:border-white/[0.08] bg-zinc-100 dark:bg-white/[0.04] text-zinc-600 dark:text-zinc-300",
-        destructive:
-          "border-transparent bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30",
-        outline: "text-zinc-950 dark:text-zinc-50 border-zinc-200 dark:border-white/10",
-        success:
-          "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-        warning:
-          "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400",
-        amber:
-          "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400",
-        indigo:
-          "border-indigo-500/30 bg-indigo-500/10 text-indigo-400",
-        cyan:
-          "border-cyan-500/30 bg-cyan-500/10 text-cyan-400",
-        rose:
-          "border-rose-500/30 bg-rose-500/10 text-rose-400",
-        emerald:
-          "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
-        slate:
-          "border-zinc-700/80 bg-zinc-800/80 text-zinc-300",
+        default: "border-card-border bg-chip text-fg",
+        lime: "border-accent-border bg-accent-soft text-accent-fg",
+        secondary: "border-transparent bg-chip text-fg",
+        subtle: "border-card-border bg-chip text-muted",
+        destructive: "border-st-stop-border bg-st-stop-bg text-st-stop-fg",
+        outline: "border-card-border bg-transparent text-fg",
+        success: "border-st-done-border bg-st-done-bg text-st-done-fg",
+        warning: "border-st-wait-border bg-st-wait-bg text-st-wait-fg",
+        amber: "border-st-wait-border bg-st-wait-bg text-st-wait-fg",
+        indigo: "border-st-prog-border bg-st-prog-bg text-st-prog-fg",
+        cyan: "border-st-prog-border bg-st-prog-bg text-st-prog-fg",
+        rose: "border-st-stop-border bg-st-stop-bg text-st-stop-fg",
+        emerald: "border-st-done-border bg-st-done-bg text-st-done-fg",
+        slate: "border-card-border bg-chip text-muted",
       },
     },
     defaultVariants: {
@@ -84,9 +71,9 @@ export const Badge: React.FC<BadgeProps> = ({
   }
 
   let displayLabel = label || String(value || '');
-  let colorClass = 'text-zinc-300';
-  let bgClass = 'bg-zinc-800/80';
-  let borderClass = 'border-zinc-700/80';
+  let colorClass = 'text-muted';
+  let bgClass = 'bg-chip';
+  let borderClass = 'border-card-border';
   let IconComponent: React.ComponentType<{ className?: string }> | null = null;
 
   if (type === 'badge' || type === 'badgeType') {
@@ -139,35 +126,38 @@ export const Badge: React.FC<BadgeProps> = ({
     else if (clean === 'cancelled' || clean === 'refunded') IconComponent = XCircle;
   } else if (variant) {
     const variantMap: Record<string, { color: string; bg: string }> = {
-      lime: { color: 'text-[#f3aa18]', bg: 'bg-[#f3aa18]/10 border-[#f3aa18]/30' },
-      emerald: { color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/30' },
-      cyan: { color: 'text-cyan-400', bg: 'bg-cyan-500/10 border-cyan-500/30' },
-      indigo: { color: 'text-indigo-400', bg: 'bg-indigo-500/10 border-indigo-500/30' },
-      amber: { color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' },
-      warning: { color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' },
-      rose: { color: 'text-rose-400', bg: 'bg-rose-500/10 border-rose-500/30' },
-      destructive: { color: 'text-rose-400', bg: 'bg-rose-500/10 border-rose-500/30' },
-      slate: { color: 'text-zinc-300', bg: 'bg-zinc-800/80 border-zinc-700/80' },
-      secondary: { color: 'text-zinc-300', bg: 'bg-zinc-800/80 border-zinc-700/80' },
-      subtle: { color: 'text-zinc-600 dark:text-zinc-300', bg: 'bg-zinc-100 dark:bg-white/[0.04] border-zinc-200 dark:border-white/[0.08]' },
-      default: { color: 'text-zinc-300', bg: 'bg-zinc-900 border-zinc-800' },
+      lime: { color: 'text-accent-fg', bg: 'bg-accent-soft border-accent-border' },
+      emerald: { color: 'text-st-done-fg', bg: 'bg-st-done-bg border-st-done-border' },
+      success: { color: 'text-st-done-fg', bg: 'bg-st-done-bg border-st-done-border' },
+      cyan: { color: 'text-st-prog-fg', bg: 'bg-st-prog-bg border-st-prog-border' },
+      indigo: { color: 'text-st-prog-fg', bg: 'bg-st-prog-bg border-st-prog-border' },
+      amber: { color: 'text-st-wait-fg', bg: 'bg-st-wait-bg border-st-wait-border' },
+      warning: { color: 'text-st-wait-fg', bg: 'bg-st-wait-bg border-st-wait-border' },
+      rose: { color: 'text-st-stop-fg', bg: 'bg-st-stop-bg border-st-stop-border' },
+      destructive: { color: 'text-st-stop-fg', bg: 'bg-st-stop-bg border-st-stop-border' },
+      slate: { color: 'text-muted', bg: 'bg-chip border-card-border' },
+      secondary: { color: 'text-fg', bg: 'bg-chip border-card-border' },
+      subtle: { color: 'text-muted', bg: 'bg-chip border-card-border' },
+      outline: { color: 'text-fg', bg: 'bg-transparent border-card-border' },
+      default: { color: 'text-fg', bg: 'bg-chip border-card-border' },
     };
     if (variantMap[variant]) {
       colorClass = variantMap[variant].color;
       bgClass = variantMap[variant].bg;
+      borderClass = '';
     }
   }
 
   const sizeStyles = {
-    xs: 'h-5 px-2 text-[10px] leading-none',
-    sm: 'h-6 px-2.5 text-[11px] leading-none',
-    md: 'h-7 px-3 text-xs leading-none font-medium',
+    xs: 'h-5 px-2 text-[11.5px] leading-none',
+    sm: 'h-6 px-2.5 text-[12px] leading-none',
+    md: 'h-7 px-3 text-[12.5px] leading-none font-medium',
   };
 
   return (
     <span
       className={clsx(
-        'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md font-mono font-medium border backdrop-blur-md transition-colors',
+        'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[7px] font-sans font-medium border transition-colors',
         sizeStyles[size],
         colorClass,
         bgClass,

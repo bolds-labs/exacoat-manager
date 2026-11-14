@@ -26,22 +26,22 @@ export const ModalCard: React.FC<ModalCardProps> = ({
     <div
       onClick={onClick}
       className={clsx(
-        'p-4 sm:p-5 rounded-2xl bg-zinc-50 dark:bg-white/[0.025] border border-zinc-200 dark:border-white/[0.07] space-y-4 hover:border-zinc-300 dark:hover:border-white/[0.12] transition-all font-sans text-zinc-900 dark:text-zinc-100',
-        onClick && 'cursor-pointer hover:bg-zinc-100 dark:hover:bg-white/[0.045]',
+        'p-4 sm:p-5 rounded-[14px] bg-card border border-card-border space-y-4 transition-colors font-sans text-fg',
+        onClick && 'cursor-pointer hover:bg-chip',
         className
       )}
     >
       {(title || Icon || badge || headerAction) && (
-        <div className="flex items-center justify-between gap-3 border-b border-zinc-200 dark:border-white/[0.06] pb-3">
+        <div className="flex items-center justify-between gap-3 border-b border-line pb-3">
           <div className="flex items-center gap-2">
-            {Icon && <Icon className="w-4 h-4 text-[#f3aa18]" />}
+            {Icon && <Icon className="w-[15px] h-[15px] text-faint" />}
             <div>
               {typeof title === 'string' ? (
-                <h4 className="text-xs font-semibold text-zinc-700 dark:text-zinc-200 font-sans">{title}</h4>
+                <h4 className="text-[14px] font-semibold tracking-[-0.01em] text-fg font-sans">{title}</h4>
               ) : (
                 title
               )}
-              {subtitle && <p className="text-xs text-zinc-500 dark:text-zinc-400 font-sans mt-0.5 leading-relaxed">{subtitle}</p>}
+              {subtitle && <p className="text-xs text-faint font-sans mt-0.5 leading-relaxed">{subtitle}</p>}
             </div>
           </div>
 

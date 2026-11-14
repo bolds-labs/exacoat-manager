@@ -51,17 +51,13 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       <Toaster
         theme={theme}
         position="bottom-right"
-        richColors
         closeButton
         toastOptions={{
-          style: {
-            background: theme === 'dark' ? 'rgba(18, 18, 22, 0.95)' : 'rgba(255, 255, 255, 0.96)',
-            backdropFilter: 'blur(16px)',
-            border: theme === 'dark' ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid rgba(24, 24, 27, 0.1)',
-            borderRadius: '14px',
-            color: theme === 'dark' ? '#ffffff' : '#18181b',
-            boxShadow: '0 20px 45px rgba(0, 0, 0, 0.28)',
-            padding: '14px 16px',
+          classNames: {
+            toast: '!rounded-xl !border !border-card-border !bg-card !text-fg !font-sans !shadow-[0_12px_30px_rgba(0,0,0,0.3)] !px-3.5 !py-3 data-[type=success]:!bg-st-done-bg data-[type=success]:!border-st-done-border data-[type=success]:!text-st-done-fg data-[type=error]:!bg-st-stop-bg data-[type=error]:!border-st-stop-border data-[type=error]:!text-st-stop-fg data-[type=warning]:!bg-st-wait-bg data-[type=warning]:!border-st-wait-border data-[type=warning]:!text-st-wait-fg data-[type=info]:!bg-st-prog-bg data-[type=info]:!border-st-prog-border data-[type=info]:!text-st-prog-fg',
+            title: '!text-[13.5px] !font-medium',
+            description: '!text-[12.5px] !text-faint',
+            closeButton: '!bg-card !border-card-border !text-muted',
           },
         }}
       />

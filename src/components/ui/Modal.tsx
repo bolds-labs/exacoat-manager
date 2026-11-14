@@ -89,7 +89,7 @@ export const Modal: React.FC<ModalProps> = ({
       {/* Pure Monochrome Dark Backdrop with Blur & Transition */}
       <div
         className={clsx(
-          "fixed inset-0 bg-black/80 backdrop-blur-xl transition-opacity duration-280 ease-out cursor-pointer",
+          "fixed inset-0 bg-black/55 transition-opacity duration-280 ease-out cursor-pointer",
           isVisible ? "opacity-100" : "opacity-0 pointer-events-none"
         )}
         onClick={onClose}
@@ -104,7 +104,7 @@ export const Modal: React.FC<ModalProps> = ({
           transitionTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)',
         }}
         className={clsx(
-          'relative w-full rounded-3xl glass-panel border border-zinc-200 dark:border-white/15 bg-white/95 dark:bg-[#0d0f12]/95 backdrop-blur-2xl shadow-[0_25px_80px_rgba(0,0,0,0.75)] z-10 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh] transition-all duration-280 transform overscroll-contain cursor-default',
+          'relative w-full rounded-2xl border border-card-border bg-card text-fg shadow-[0_24px_60px_rgba(0,0,0,0.45)] z-10 overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh] transition-all duration-280 transform overscroll-contain cursor-default',
           isVisible ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 translate-y-3',
           maxWidthStyles[maxWidth],
           className
@@ -113,15 +113,15 @@ export const Modal: React.FC<ModalProps> = ({
       >
         {/* Modal Header with Standardized Responsive Spacing & Subtle Glass Tint */}
         {(title || subtitle || headerActions) && (
-          <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-zinc-200 dark:border-white/[0.08] bg-zinc-50/70 dark:bg-white/[0.02] shrink-0">
+          <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-line shrink-0">
             <div className="flex-1 min-w-0 pr-3 sm:pr-6 space-y-1">
               {typeof title === 'string' ? (
-                <h3 className="text-base sm:text-lg font-semibold text-zinc-950 dark:text-white font-sans tracking-tight leading-snug truncate sm:whitespace-normal">{title}</h3>
+                <h3 className="text-base font-semibold text-fg font-sans tracking-tight leading-snug truncate sm:whitespace-normal">{title}</h3>
               ) : (
                 title
               )}
               {subtitle && (
-                <p className="text-[11px] sm:text-xs text-neutral-400 font-sans leading-normal line-clamp-1 sm:line-clamp-none">
+                <p className="text-[12px] text-faint font-sans leading-normal line-clamp-1 sm:line-clamp-none">
                   {subtitle}
                 </p>
               )}
@@ -131,7 +131,7 @@ export const Modal: React.FC<ModalProps> = ({
               {headerActions}
               <button
                 onClick={onClose}
-                className="p-2 sm:p-2.5 rounded-xl text-neutral-400 hover:text-white hover:bg-white/[0.08] border border-transparent hover:border-white/[0.1] transition-all cursor-pointer"
+                className="p-2 rounded-[9px] text-faint hover:text-fg hover:bg-chip border border-transparent transition-colors cursor-pointer"
                 title="Close modal"
                 aria-label="Close modal"
               >
@@ -142,11 +142,11 @@ export const Modal: React.FC<ModalProps> = ({
         )}
 
         {/* Modal Body with Standard Responsive Spacing */}
-        <div className="record-detail p-4 sm:p-5 md:p-6 overflow-y-auto flex-1 min-h-0 font-sans text-zinc-700 dark:text-zinc-200 bg-transparent custom-scrollbar">{children}</div>
+        <div className="record-detail p-4 sm:p-5 md:p-6 overflow-y-auto flex-1 min-h-0 font-sans text-fg bg-transparent custom-scrollbar">{children}</div>
 
         {/* Modal Footer with Standard Responsive Spacing */}
         {footer && (
-          <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-t border-zinc-200 dark:border-white/[0.08] bg-zinc-50/70 dark:bg-white/[0.02] flex flex-wrap items-center justify-between gap-3 shrink-0">
+          <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-t border-line bg-chip flex flex-wrap items-center justify-between gap-3 shrink-0">
             {footer}
           </div>
         )}

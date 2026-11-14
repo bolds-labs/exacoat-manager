@@ -20,9 +20,9 @@ export const GlassCard: React.FC<GlassCardProps> = ({
     <div
       className={twMerge(
         clsx(
-          'glass-panel exacoat-glass rounded-2xl relative transition-[background-color,border-color,box-shadow,transform] duration-200 animate-card-enter',
+          'rounded-[14px] border border-card-border bg-card text-fg relative transition-colors duration-150',
           !isOverflowSpecified && 'overflow-hidden',
-          hoverEffect && 'glass-panel-hover exacoat-glass-hover cursor-pointer',
+          hoverEffect && 'cursor-pointer hover:bg-chip',
           className
         )
       )}

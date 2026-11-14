@@ -16,7 +16,7 @@ export const CardEyebrow: React.FC<CardEyebrowProps> = ({
   return (
     <Component
       className={clsx(
-        'text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 truncate',
+        'text-[12px] font-sans text-faint truncate',
         className
       )}
       {...props}
