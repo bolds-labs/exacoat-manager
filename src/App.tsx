@@ -297,11 +297,7 @@ export const App: React.FC = () => {
     handleTabChange('customers');
   }, [handleTabChange, isShopManager]);
 
-  const handleSelectOrder = useCallback((_order: Order) => {
-    handleTabChange('orders');
-  }, [handleTabChange]);
-
-  // The recent-orders list is several MB, so it loads only on screens that use it (dashboard, skin performance)
+  // The recent-orders list is several MB, so it loads only on the screen that uses it (skin performance)
   const needsOrderList = tabNeedsOrderList(currentTab, isShopManager);
   const [ordersLoaded, setOrdersLoaded] = useState(false);
   const [processingCount, setProcessingCount] = useState(0);
@@ -405,24 +401,12 @@ export const App: React.FC = () => {
       return <OrdersView initialStatus="all" onNavigateToCustomer={undefined} orderCounts={orderCounts} onRefreshCounts={refreshOrderCounts} />;
     }
     const fallbackDashboard = (
-      <DashboardPage
-        orders={orders}
-        onNavigate={handleTabChange}
-        onSelectOrder={handleSelectOrder}
-        onRefresh={() => loadWorkspaceData(true)}
-        isLoading={isLoading}
-      />
+      <DashboardPage onNavigate={handleTabChange} orderCounts={orderCounts} fallbackPaymentConfirmed={countsLoaded && !orderCounts ? processingCount : undefined} onRefreshCounts={refreshOrderCounts} />
     );
     switch (currentTab) {
       case 'dashboard':
         return (
-          <DashboardPage
-            orders={orders}
-            onNavigate={handleTabChange}
-            onSelectOrder={handleSelectOrder}
-            onRefresh={() => loadWorkspaceData(true)}
-            isLoading={isLoading}
-          />
+          <DashboardPage onNavigate={handleTabChange} orderCounts={orderCounts} fallbackPaymentConfirmed={countsLoaded && !orderCounts ? processingCount : undefined} onRefreshCounts={refreshOrderCounts} />
         );
       case 'orders':
         return (

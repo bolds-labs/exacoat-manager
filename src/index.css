@@ -37,6 +37,9 @@
     --st-prog-border: rgba(3, 105, 161, 0.28);
     --st-done-border: rgba(21, 128, 61, 0.28);
     --st-stop-border: rgba(190, 18, 60, 0.28);
+    --viz-1: #2a78d6;
+    --viz-2: #eb6834;
+    --viz-3: #1baf7a;
 
     --bg-primary: #070709;
     --bg-surface: #0e0e12;
@@ -87,6 +90,9 @@
     --st-prog-border: rgba(125, 211, 252, 0.30);
     --st-done-border: rgba(74, 222, 128, 0.30);
     --st-stop-border: rgba(251, 113, 133, 0.30);
+    --viz-1: #3987e5;
+    --viz-2: #d95926;
+    --viz-3: #199e70;
   }
 
   * {

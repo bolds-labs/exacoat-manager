@@ -32,4 +32,8 @@ export const TOKEN_NAMES: readonly string[] = [
   'st-prog-border',
   'st-done-border',
   'st-stop-border',
+  // Chart series (channels): dataviz categorical slots 1-3, validated per mode
+  'viz-1',
+  'viz-2',
+  'viz-3',
 ];
