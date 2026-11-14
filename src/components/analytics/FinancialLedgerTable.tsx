@@ -1,18 +1,14 @@
-import React, { useState, useMemo } from 'react';
-import { UnifiedFinancialRecord, FinancialChannel } from '../../lib/financialAnalyticsService';
-import { GlassCard } from '../ui/GlassCard';
+import React, { useMemo, useState } from 'react';
+import { ChevronDown, ChevronRight, Download, FileSpreadsheet } from 'lucide-react';
+import type { FinancialChannel, UnifiedFinancialRecord } from '../../lib/financialAnalyticsService';
 import { formatCurrency } from '../../lib/formatters';
-import {
-  Search,
-  Download,
-  Globe,
-  ShoppingBag,
-  Store,
-  ChevronDown,
-  ChevronRight,
-  FileSpreadsheet,
-} from 'lucide-react';
-import { clsx } from 'clsx';
+import { cleanItemTitle } from '../../lib/orderItems';
+import { Button } from '../ds/Button';
+import { Select } from '../ds/Select';
+import { SearchField } from '../ds/SearchField';
+import { Tabs } from '../ds/Tabs';
+import { familyChipClass } from '../ds/StatusChip';
+import { CHANNEL_DOT } from '../dashboard/ChannelSalesList';
 
 interface FinancialLedgerTableProps {
   records: UnifiedFinancialRecord[];
@@ -21,589 +17,328 @@ interface FinancialLedgerTableProps {
   primaryCurrency?: string;
 }
 
-export const FinancialLedgerTable: React.FC<FinancialLedgerTableProps> = ({
-  records,
-  allWindowRecords,
-  onExportCsv,
-  primaryCurrency = 'IDR',
-}) => {
+const CHANNEL_NAME: Record<FinancialChannel, string> = { webstore: 'Webstore', shopee: 'Shopee', tiktok: 'TikTok Shop' };
+const PAGE_SIZE = 15;
+
+const th = 'border-b border-line px-3 py-2.5 text-left text-[12px] font-[450] text-faint whitespace-nowrap';
+const td = 'border-b border-line px-3 py-[11px] align-middle';
+
+function StatusPill({ rec }: { rec: UnifiedFinancialRecord }) {
+  const paid = rec.isPaid && rec.statusNormalized === 'paid';
+  const family = paid ? 'done' : rec.statusNormalized === 'cancelled' || rec.statusNormalized === 'refunded' ? 'stop' : 'wait';
+  const label = paid ? `Paid, ${rec.status.toLowerCase()}` : rec.statusNormalized === 'cancelled' ? 'Cancelled' : rec.status;
+  return (
+    <span className="flex flex-col items-start gap-0.5">
+      <span className={`inline-flex max-w-full items-center truncate rounded-[7px] px-2 py-[2px] text-[12px] font-medium ${familyChipClass[family]}`}>
+        {label}
+      </span>
+      {rec.statusNormalized === 'cancelled' && rec.hadPayTime && <span className="text-[11.5px] text-faint">Paid before cancel</span>}
+    </span>
+  );
+}
+
+const DetailLine = ({ label, value, tone = 'text-fg', strong = false }: { label: string; value: string; tone?: string; strong?: boolean }) => (
+  <div className={`flex items-center justify-between gap-3 py-[3px] ${strong ? 'font-medium' : ''}`}>
+    <span className="text-muted">{label}</span>
+    <span className={`font-mono tabular-nums ${tone}`}>{value}</span>
+  </div>
+);
+
+/** Every order in the period, in the Orders table style; a row opens its fee and checkout reconciliation. */
+export const FinancialLedgerTable: React.FC<FinancialLedgerTableProps> = ({ records, allWindowRecords, onExportCsv, primaryCurrency = 'IDR' }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [channelFilter, setChannelFilter] = useState<'all' | FinancialChannel>('all');
   const [statusScope, setStatusScope] = useState<'paid' | 'cancelled' | 'all'>('paid');
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 15;
+  const money = (v: number) => formatCurrency(v, primaryCurrency);
 
   const fullWindowList = allWindowRecords && allWindowRecords.length > 0 ? allWindowRecords : records;
-
-  const cancelledList = useMemo(
-    () => fullWindowList.filter(r => !r.isPaid || r.statusNormalized !== 'paid'),
-    [fullWindowList]
-  );
-
-  const activeSourceList = useMemo(() => {
-    if (statusScope === 'cancelled') return cancelledList;
-    if (statusScope === 'all') return fullWindowList;
-    return records;
-  }, [statusScope, records, cancelledList, fullWindowList]);
+  const cancelledList = useMemo(() => fullWindowList.filter((r) => !r.isPaid || r.statusNormalized !== 'paid'), [fullWindowList]);
+  const activeSourceList = statusScope === 'cancelled' ? cancelledList : statusScope === 'all' ? fullWindowList : records;
 
   const filteredRecords = useMemo(() => {
-    return activeSourceList.filter(rec => {
+    const q = searchQuery.trim().toLowerCase();
+    return activeSourceList.filter((rec) => {
       if (channelFilter !== 'all' && rec.channel !== channelFilter) return false;
-      if (!searchQuery) return true;
-      const q = searchQuery.toLowerCase();
-      const matchOrder = rec.orderNumber.toLowerCase().includes(q);
-      const matchCustomer = rec.customerName.toLowerCase().includes(q);
-      const matchCity = (rec.customerCity || '').toLowerCase().includes(q);
-      const matchStatus = rec.status.toLowerCase().includes(q);
-      const matchItem = rec.items.some(it => it.name.toLowerCase().includes(q));
-      return matchOrder || matchCustomer || matchCity || matchStatus || matchItem;
+      if (!q) return true;
+      return (
+        rec.orderNumber.toLowerCase().includes(q) ||
+        rec.customerName.toLowerCase().includes(q) ||
+        (rec.customerCity || '').toLowerCase().includes(q) ||
+        rec.status.toLowerCase().includes(q) ||
+        rec.items.some((it) => it.name.toLowerCase().includes(q))
+      );
     });
   }, [activeSourceList, channelFilter, searchQuery]);
 
-  const scopeTotals = useMemo(() => {
-    return filteredRecords.reduce(
-      (acc, rec) => {
-        const gross = rec.isPaid ? rec.grossRevenue : rec.potentialGrossRevenue;
-        const clean = rec.isPaid ? rec.cleanRevenue : rec.potentialCleanRevenue;
-        const paid = rec.isPaid ? rec.buyerPaidAmount : rec.potentialBuyerPaidAmount;
-        const fees = rec.platformFee + rec.sellerVoucher;
-        acc.gross += gross;
-        acc.clean += clean;
-        acc.fees += fees;
-        acc.paid += paid;
-        acc.vouchers += rec.platformSubsidy;
-        acc.shipping += rec.shippingAndFees;
-        acc.units += rec.itemsCount;
-        return acc;
-      },
-      { gross: 0, clean: 0, fees: 0, paid: 0, vouchers: 0, shipping: 0, units: 0 }
-    );
-  }, [filteredRecords]);
+  const totals = useMemo(
+    () =>
+      filteredRecords.reduce(
+        (acc, rec) => {
+          acc.gross += rec.isPaid ? rec.grossRevenue : rec.potentialGrossRevenue;
+          acc.clean += rec.isPaid ? rec.cleanRevenue : rec.potentialCleanRevenue;
+          acc.paid += rec.isPaid ? rec.buyerPaidAmount : rec.potentialBuyerPaidAmount;
+          acc.fees += rec.platformFee + rec.sellerVoucher;
+          acc.vouchers += rec.platformSubsidy;
+          acc.units += rec.itemsCount;
+          return acc;
+        },
+        { gross: 0, clean: 0, fees: 0, paid: 0, vouchers: 0, units: 0 },
+      ),
+    [filteredRecords],
+  );
 
-  const totalPages = Math.ceil(filteredRecords.length / pageSize) || 1;
-  const paginatedRecords = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return filteredRecords.slice(start, start + pageSize);
-  }, [filteredRecords, currentPage, pageSize]);
-
-  const getChannelBadge = (ch: FinancialChannel) => {
-    switch (ch) {
-      case 'webstore':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-[#f3aa18]/10 text-[#f3aa18] border border-[#f3aa18]/25">
-            <Globe className="w-2.5 h-2.5" />
-            <span>Webstore</span>
-          </span>
-        );
-      case 'shopee':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-[#ee4d2d]/10 text-[#ee4d2d] border border-[#ee4d2d]/25">
-            <ShoppingBag className="w-2.5 h-2.5" />
-            <span>Shopee</span>
-          </span>
-        );
-      case 'tiktok':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-[#06b6d4]/10 text-[#06b6d4] border border-[#06b6d4]/25">
-            <Store className="w-2.5 h-2.5" />
-            <span>TikTok</span>
-          </span>
-        );
-    }
-  };
-
-  const getStatusBadge = (rec: UnifiedFinancialRecord) => {
-    if (rec.isPaid && rec.statusNormalized === 'paid') {
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 whitespace-nowrap">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-          <span>PAID · {rec.status.toUpperCase()}</span>
-        </span>
-      );
-    }
-
-    if (rec.statusNormalized === 'cancelled') {
-      return (
-        <div className="flex flex-col items-start gap-0.5">
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20 whitespace-nowrap">
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />
-            <span>CANCELLED</span>
-          </span>
-          {rec.hadPayTime && (
-            <span className="text-[9px] font-mono text-amber-400">
-              Paid before cancel
-            </span>
-          )}
-        </div>
-      );
-    }
-
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 whitespace-nowrap">
-        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
-        <span>{rec.status.toUpperCase()}</span>
-      </span>
-    );
-  };
+  const totalPages = Math.max(1, Math.ceil(filteredRecords.length / PAGE_SIZE));
+  const page = Math.min(currentPage, totalPages);
+  const pageRows = filteredRecords.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const resetPage = () => setCurrentPage(1);
 
   return (
-    <GlassCard className="overflow-hidden font-sans">
-      <div className="p-4 sm:p-5 border-b border-white/[0.06] flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <FileSpreadsheet className="w-4 h-4 text-[#f3aa18]" />
-            <h3 className="text-sm font-bold uppercase tracking-wider text-white">
-              Financial Transactions Ledger
-            </h3>
-          </div>
-          <p className="text-xs text-neutral-400 mt-0.5">
-            Click any order to inspect seller fee deductions, clean withdrawable payout, and buyer checkout reconciliation.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2.5">
-          <div className="relative min-w-[200px] sm:min-w-[220px]">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => {
-                setSearchQuery(e.target.value);
-                setCurrentPage(1);
-              }}
-              placeholder="Filter order, buyer, item..."
-              className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-[#090a0d] border border-white/[0.08] text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-[#f3aa18]/50"
-            />
-          </div>
-
-          <div className="p-1 rounded-xl bg-[#090a0d] border border-white/[0.08] flex items-center gap-1 font-mono text-[10px]">
-            <button
-              type="button"
-              onClick={() => {
-                setStatusScope('paid');
-                setCurrentPage(1);
-              }}
-              className={clsx(
-                'px-2.5 py-1 rounded-md transition-all cursor-pointer font-semibold',
-                statusScope === 'paid'
-                  ? 'bg-emerald-500 text-zinc-950 shadow-xs font-bold'
-                  : 'text-neutral-400 hover:text-white'
-              )}
-            >
-              Paid ({records.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setStatusScope('cancelled');
-                setCurrentPage(1);
-              }}
-              className={clsx(
-                'px-2.5 py-1 rounded-md transition-all cursor-pointer font-semibold',
-                statusScope === 'cancelled'
-                  ? 'bg-rose-500 text-white shadow-xs font-bold'
-                  : 'text-neutral-400 hover:text-white'
-              )}
-            >
-              Cancelled ({cancelledList.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setStatusScope('all');
-                setCurrentPage(1);
-              }}
-              className={clsx(
-                'px-2.5 py-1 rounded-md transition-all cursor-pointer font-semibold',
-                statusScope === 'all'
-                  ? 'bg-white text-zinc-950 shadow-xs font-bold'
-                  : 'text-neutral-400 hover:text-white'
-              )}
-            >
-              All Placed ({fullWindowList.length})
-            </button>
-          </div>
-
-          <div className="p-1 rounded-xl bg-[#090a0d] border border-white/[0.08] flex items-center gap-1 font-mono text-[10px]">
-            {(['all', 'webstore', 'shopee', 'tiktok'] as const).map(tab => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => {
-                  setChannelFilter(tab);
-                  setCurrentPage(1);
-                }}
-                className={clsx(
-                  'px-2 py-1 rounded-md transition-all cursor-pointer font-semibold uppercase',
-                  channelFilter === tab
-                    ? 'bg-white text-zinc-950 shadow-xs'
-                    : 'text-neutral-400 hover:text-white'
-                )}
-              >
-                {tab === 'all' ? 'All' : tab}
-              </button>
-            ))}
-          </div>
-
-          <button
-            type="button"
-            onClick={onExportCsv}
-            className="px-3 py-1.5 rounded-xl bg-[#1a1b22] hover:bg-white/[0.08] border border-white/[0.08] text-xs font-semibold text-neutral-200 hover:text-white flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
-            title="Export CSV spreadsheet for accounting"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export CSV</span>
-          </button>
+    <section className="overflow-hidden rounded-[14px] border border-card-border bg-card font-sans text-[13.5px]" aria-label="Orders ledger">
+      {/* Title and filters */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-4 py-3">
+        <h3 className="flex items-center gap-2 text-[13.5px] font-semibold tracking-[-0.01em] text-fg">
+          <FileSpreadsheet className="h-[15px] w-[15px] text-faint" strokeWidth={1.8} aria-hidden />
+          Orders ledger
+        </h3>
+        <Tabs
+          items={[
+            { key: 'paid', label: 'Paid', count: records.length },
+            { key: 'cancelled', label: 'Cancelled or unpaid', count: cancelledList.length },
+            { key: 'all', label: 'All placed', count: fullWindowList.length },
+          ]}
+          value={statusScope}
+          onChange={(k) => {
+            setStatusScope(k as typeof statusScope);
+            resetPage();
+          }}
+        />
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <Select
+            aria-label="Channel"
+            className="w-[150px]"
+            value={channelFilter}
+            onChange={(v) => {
+              setChannelFilter(v as typeof channelFilter);
+              resetPage();
+            }}
+            options={[
+              { value: 'all', label: 'All channels' },
+              { value: 'webstore', label: 'Webstore' },
+              { value: 'shopee', label: 'Shopee' },
+              { value: 'tiktok', label: 'TikTok Shop' },
+            ]}
+          />
+          <SearchField
+            className="w-[230px]"
+            placeholder="Search order, buyer, item"
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              resetPage();
+            }}
+          />
+          <Button icon={Download} onClick={onExportCsv} title="Export the report as a CSV file for accounting">
+            Export CSV
+          </Button>
         </div>
       </div>
 
-      {/* Filtered Summary Strip */}
-      <div className="px-4 sm:px-5 py-2.5 bg-[#090a0d]/40 border-b border-white/[0.06] flex flex-wrap items-center justify-between gap-3 text-[11px] font-mono text-neutral-400">
-        <div className="flex items-center gap-4 flex-wrap">
-          <span>
-            Orders: <strong className="text-white">{filteredRecords.length}</strong> ({scopeTotals.units} units)
-          </span>
-          <span>
-            Gross: <strong className="text-white">{formatCurrency(scopeTotals.gross, primaryCurrency)}</strong>
-          </span>
-          {scopeTotals.fees > 0 && (
-            <span>
-              Platform Fees: <strong className="text-rose-400">-{formatCurrency(scopeTotals.fees, primaryCurrency)}</strong>
-            </span>
-          )}
-          <span>
-            Clean Withdrawable: <strong className="text-emerald-400 font-bold">{formatCurrency(scopeTotals.clean, primaryCurrency)}</strong>
-          </span>
-          <span>
-            Buyer Paid: <strong className="text-neutral-300">{formatCurrency(scopeTotals.paid, primaryCurrency)}</strong>
-          </span>
-          {scopeTotals.vouchers > 0 && (
-            <span className="text-amber-400/90">
-              Buyer Vouchers (Platform): -{formatCurrency(scopeTotals.vouchers, primaryCurrency)}
-            </span>
-          )}
-        </div>
-        <span className="text-[10px] text-neutral-500">
-          {statusScope === 'paid'
-            ? 'Showing verified paid orders'
-            : statusScope === 'cancelled'
-            ? 'Showing excluded cancelled/unpaid orders'
-            : 'Showing all placed orders in window'}
+      {/* Totals for the rows shown */}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-line bg-chip px-4 py-2 text-[12.5px] text-muted">
+        <span>
+          <span className="font-mono text-fg">{filteredRecords.length.toLocaleString('en-US')}</span> orders,{' '}
+          <span className="font-mono text-fg">{totals.units.toLocaleString('en-US')}</span> units
         </span>
+        <span>
+          Gross <span className="font-mono text-fg">{money(totals.gross)}</span>
+        </span>
+        {totals.fees > 0 && (
+          <span>
+            Fees <span className="font-mono text-st-stop-fg">-{money(totals.fees)}</span>
+          </span>
+        )}
+        <span>
+          Payout <span className="font-mono text-st-done-fg">{money(totals.clean)}</span>
+        </span>
+        <span>
+          Buyer paid <span className="font-mono text-fg">{money(totals.paid)}</span>
+        </span>
+        {totals.vouchers > 0 && (
+          <span>
+            Platform vouchers <span className="font-mono text-fg">-{money(totals.vouchers)}</span>
+          </span>
+        )}
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs text-neutral-300">
-          <thead className="bg-[#090a0d]/60 text-[10px] uppercase font-mono tracking-wider text-neutral-400 border-b border-white/[0.06]">
+        <table className="w-full min-w-[1080px] border-collapse">
+          <thead>
             <tr>
-              <th className="py-3 px-4">Order / ID</th>
-              <th className="py-3 px-4">Channel</th>
-              <th className="py-3 px-4">Date</th>
-              <th className="py-3 px-4">Buyer / City</th>
-              <th className="py-3 px-4">Status</th>
-              <th className="py-3 px-4 text-center">Units</th>
-              <th className="py-3 px-4 text-right">Gross Sales</th>
-              <th className="py-3 px-4 text-right">Platform Fees</th>
-              <th className="py-3 px-4 text-right">Clean Payout</th>
-              <th className="py-3 px-4 text-right">Buyer Paid</th>
+              <th className={th}>Order</th>
+              <th className={th}>Channel</th>
+              <th className={th}>Date</th>
+              <th className={th}>Buyer</th>
+              <th className={th}>Status</th>
+              <th className={`${th} text-right`}>Units</th>
+              <th className={`${th} text-right`}>Gross sales</th>
+              <th className={`${th} text-right`}>Fees</th>
+              <th className={`${th} text-right`}>Payout</th>
+              <th className={`${th} text-right`}>Buyer paid</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/[0.04]">
-            {paginatedRecords.map(rec => {
-              const isExpanded = expandedOrderId === rec.id;
-              const displayGross = rec.isPaid ? rec.grossRevenue : rec.potentialGrossRevenue;
-              const displayClean = rec.isPaid ? rec.cleanRevenue : rec.potentialCleanRevenue;
-              const displayPaid = rec.isPaid ? rec.buyerPaidAmount : rec.potentialBuyerPaidAmount;
-              const totalFeeDeductions = rec.platformFee + rec.sellerVoucher;
-
+          <tbody>
+            {pageRows.length === 0 && (
+              <tr>
+                <td colSpan={10} className="py-14 text-center text-[13px] text-muted">
+                  No orders match these filters.
+                </td>
+              </tr>
+            )}
+            {pageRows.map((rec) => {
+              const expanded = expandedOrderId === rec.id;
+              const gross = rec.isPaid ? rec.grossRevenue : rec.potentialGrossRevenue;
+              const clean = rec.isPaid ? rec.cleanRevenue : rec.potentialCleanRevenue;
+              const paid = rec.isPaid ? rec.buyerPaidAmount : rec.potentialBuyerPaidAmount;
+              const fees = rec.platformFee + rec.sellerVoucher;
+              const toggle = () => setExpandedOrderId(expanded ? null : rec.id);
               return (
                 <React.Fragment key={rec.id}>
                   <tr
-                    onClick={() => setExpandedOrderId(isExpanded ? null : rec.id)}
-                    className={clsx(
-                      'hover:bg-white/[0.03] transition-colors font-sans cursor-pointer',
-                      isExpanded && 'bg-white/[0.03]'
-                    )}
+                    onClick={toggle}
+                    className={`cursor-pointer whitespace-nowrap transition-colors ${expanded ? 'bg-chip' : 'hover:bg-chip'}`}
                   >
-                    <td className="py-3 px-4 font-mono font-bold text-white whitespace-nowrap">
-                      <div className="flex items-center gap-1.5">
-                        {isExpanded ? (
-                          <ChevronDown className="w-3.5 h-3.5 text-[#f3aa18] shrink-0" />
+                    <td className={td}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggle();
+                        }}
+                        aria-expanded={expanded}
+                        className="flex items-center gap-1.5 rounded-[6px] font-mono text-[13px] font-medium text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                      >
+                        {expanded ? (
+                          <ChevronDown className="h-3.5 w-3.5 text-faint" strokeWidth={1.8} aria-hidden />
                         ) : (
-                          <ChevronRight className="w-3.5 h-3.5 text-neutral-500 shrink-0" />
+                          <ChevronRight className="h-3.5 w-3.5 text-faint" strokeWidth={1.8} aria-hidden />
                         )}
-                        <span>{rec.orderNumber}</span>
-                      </div>
+                        {rec.orderNumber}
+                      </button>
                     </td>
-
-                    <td className="py-3 px-4 whitespace-nowrap">
-                      {getChannelBadge(rec.channel)}
+                    <td className={td}>
+                      <span className="flex items-center gap-1.5 text-[13px] text-fg">
+                        <span className={`h-2 w-2 rounded-full ${CHANNEL_DOT[rec.channel]}`} aria-hidden />
+                        {CHANNEL_NAME[rec.channel]}
+                      </span>
                     </td>
-
-                    <td className="py-3 px-4 font-mono text-neutral-400 whitespace-nowrap text-[11px]">
-                      <div>{rec.dateFormatted}</div>
-                      <div className="text-[10px] text-neutral-500">{rec.dateTimeFormatted.split(',').pop()?.trim()}</div>
+                    <td className={td}>
+                      <div className="text-[13px] text-fg">{rec.dateFormatted}</div>
+                      <div className="text-[12px] text-faint">{rec.dateTimeFormatted.split(',').pop()?.trim()}</div>
                     </td>
-
-                    <td className="py-3 px-4">
-                      <div className="font-semibold text-white truncate max-w-[170px]">
-                        {rec.customerName}
-                      </div>
-                      {rec.customerCity && (
-                        <div className="text-[10px] text-neutral-400 font-mono truncate max-w-[170px]">
-                          {rec.customerCity}
+                    <td className={td}>
+                      <div className="max-w-[180px] truncate text-[13px] font-medium text-fg">{rec.customerName}</div>
+                      {rec.customerCity && <div className="max-w-[180px] truncate text-[12px] text-muted">{rec.customerCity}</div>}
+                    </td>
+                    <td className={td}>
+                      <StatusPill rec={rec} />
+                    </td>
+                    <td className={`${td} text-right font-mono text-[13px] text-fg`}>{rec.itemsCount}</td>
+                    <td className={`${td} text-right font-mono text-[13px] ${rec.isPaid ? 'text-fg' : 'text-faint line-through'}`}>{money(gross)}</td>
+                    <td className={`${td} text-right font-mono text-[13px]`}>
+                      {fees > 0 ? <span className="text-st-stop-fg">-{money(fees)}</span> : <span className="text-faint">-</span>}
+                    </td>
+                    <td className={`${td} text-right font-mono text-[13px] text-st-done-fg`}>{money(clean)}</td>
+                    <td className={`${td} text-right`}>
+                      <div className="font-mono text-[13px] text-fg">{money(paid)}</div>
+                      {rec.platformSubsidy > 0 && (
+                        <div className="text-[12px] text-muted" title="Buyer voucher paid for by the marketplace">
+                          -{money(rec.platformSubsidy)} voucher
                         </div>
                       )}
                     </td>
-
-                    <td className="py-3 px-4 whitespace-nowrap">
-                      {getStatusBadge(rec)}
-                    </td>
-
-                    <td className="py-3 px-4 text-center font-mono font-bold text-neutral-300">
-                      {rec.itemsCount}
-                    </td>
-
-                    {/* 1. Gross Sales */}
-                    <td
-                      className={clsx(
-                        'py-3 px-4 text-right font-mono font-bold tabular-nums text-xs whitespace-nowrap',
-                        rec.isPaid ? 'text-white' : 'text-neutral-500 line-through'
-                      )}
-                    >
-                      {formatCurrency(displayGross, primaryCurrency)}
-                    </td>
-
-                    {/* 2. Platform Fees Deducted */}
-                    <td className="py-3 px-4 text-right font-mono text-[11px] tabular-nums whitespace-nowrap">
-                      {totalFeeDeductions > 0 ? (
-                        <span className="text-rose-400 font-semibold">
-                          -{formatCurrency(totalFeeDeductions, primaryCurrency)}
-                        </span>
-                      ) : (
-                        <span className="text-neutral-600">-</span>
-                      )}
-                    </td>
-
-                    {/* 3. Clean Withdrawable Revenue */}
-                    <td className="py-3 px-4 text-right font-mono font-black text-emerald-400 tabular-nums whitespace-nowrap text-xs">
-                      {formatCurrency(displayClean, primaryCurrency)}
-                    </td>
-
-                    {/* 4. Buyer Paid (Checkout) */}
-                    <td className="py-3 px-4 text-right font-mono text-[11px] tabular-nums whitespace-nowrap">
-                      <div className="flex flex-col items-end gap-0.5">
-                        <span className="text-neutral-300 font-medium">
-                          {formatCurrency(displayPaid, primaryCurrency)}
-                        </span>
-                        {rec.platformSubsidy > 0 && (
-                          <span className="text-[10px] text-amber-400/90" title="Buyer voucher subsidy funded by platform">
-                            -{formatCurrency(rec.platformSubsidy, primaryCurrency)} voucher
-                          </span>
-                        )}
-                      </div>
-                    </td>
                   </tr>
 
-                  {isExpanded && (
-                    <tr className="bg-[#090a0d]/80 border-b border-white/[0.06]">
-                      <td colSpan={10} className="p-4 sm:p-5">
-                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-                          {/* Column 1 (5 cols): Line Items & Metadata */}
-                          <div className="lg:col-span-5 space-y-2">
-                            <div className="text-[10px] font-mono uppercase tracking-wider text-neutral-400 font-bold">
-                              Order Line Items ({rec.itemsCount} {rec.itemsCount === 1 ? 'unit' : 'units'})
+                  {expanded && (
+                    <tr className="bg-chip">
+                      <td colSpan={10} className="border-b border-line px-4 py-4">
+                        <div className="grid grid-cols-1 gap-4 text-[12.5px] lg:grid-cols-12">
+                          <div className="lg:col-span-5">
+                            <div className="mb-1.5 text-[12px] text-faint">
+                              Items ({rec.itemsCount} {rec.itemsCount === 1 ? 'unit' : 'units'})
                             </div>
-                            <div className="rounded-xl border border-white/[0.06] bg-[#121316] divide-y divide-white/[0.04]">
+                            <div className="divide-y divide-line rounded-[10px] border border-card-border bg-card">
                               {rec.items.map((item, idx) => (
-                                <div key={idx} className="p-3 flex items-center justify-between gap-3">
-                                  <div className="flex items-center gap-3 min-w-0">
+                                <div key={idx} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                                  <div className="flex min-w-0 items-center gap-2.5">
                                     {item.imageUrl ? (
-                                      <img
-                                        src={item.imageUrl}
-                                        alt={item.name}
-                                        className="w-9 h-9 rounded-lg object-cover border border-white/10 shrink-0"
-                                      />
+                                      <img src={item.imageUrl} alt="" className="h-8 w-8 flex-none rounded-[7px] border border-line object-cover" />
                                     ) : (
-                                      <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/10 flex items-center justify-center text-[10px] font-mono text-neutral-500 shrink-0">
-                                        SKIN
-                                      </div>
+                                      <span className="h-8 w-8 flex-none rounded-[7px] bg-chip" aria-hidden />
                                     )}
                                     <div className="min-w-0">
-                                      <div className="text-xs font-semibold text-white truncate">
-                                        {item.name}
-                                      </div>
-                                      <div className="text-[10px] font-mono text-neutral-400 flex items-center gap-2 mt-0.5">
-                                        <span>Qty: {item.quantity}</span>
-                                        {item.sku && <span>· SKU: {item.sku}</span>}
+                                      <div className="truncate font-medium text-fg">{cleanItemTitle(item.name)}</div>
+                                      <div className="flex items-center gap-2 text-[12px] text-muted">
+                                        <span>Qty {item.quantity}</span>
+                                        {item.sku && <span>SKU {item.sku}</span>}
                                         {item.originalPrice && item.originalPrice > item.price && (
-                                          <span className="text-neutral-500 line-through">
-                                            {formatCurrency(item.originalPrice, primaryCurrency)}
-                                          </span>
+                                          <span className="text-faint line-through">{money(item.originalPrice)}</span>
                                         )}
                                       </div>
                                     </div>
                                   </div>
-
-                                  <div className="text-right font-mono shrink-0">
-                                    <div className="text-xs font-bold text-white tabular-nums">
-                                      {formatCurrency(item.price * item.quantity, primaryCurrency)}
-                                    </div>
-                                    {item.quantity > 1 && (
-                                      <div className="text-[10px] text-neutral-400 tabular-nums">
-                                        {formatCurrency(item.price, primaryCurrency)} each
-                                      </div>
-                                    )}
+                                  <div className="flex-none text-right font-mono">
+                                    <div className="text-fg">{money(item.price * item.quantity)}</div>
+                                    {item.quantity > 1 && <div className="text-[12px] text-muted">{money(item.price)} each</div>}
                                   </div>
                                 </div>
                               ))}
                             </div>
-
-                            <div className="p-3 rounded-xl border border-white/[0.06] bg-[#121316] space-y-1 font-mono text-[10px] text-neutral-400">
-                              <div className="flex items-center justify-between">
-                                <span>Created:</span>
-                                <span className="text-neutral-200">{rec.dateTimeFormatted}</span>
-                              </div>
-                              {rec.payTimeFormatted && (
-                                <div className="flex items-center justify-between">
-                                  <span>Paid At:</span>
-                                  <span className="text-neutral-200">{rec.payTimeFormatted}</span>
-                                </div>
-                              )}
-                              <div className="flex items-center justify-between">
-                                <span>Payment Method:</span>
-                                <span className="text-neutral-200">{rec.paymentMethod || '-'}</span>
-                              </div>
+                            <div className="mt-2 rounded-[10px] border border-card-border bg-card px-3 py-2">
+                              <DetailLine label="Created" value={rec.dateTimeFormatted} />
+                              {rec.payTimeFormatted && <DetailLine label="Paid at" value={rec.payTimeFormatted} />}
+                              <DetailLine label="Payment method" value={rec.paymentMethod || '-'} />
                             </div>
                           </div>
 
-                          {/* Column 2 (4 cols): Seller Payout Reconciliation Waterfall */}
-                          <div className="lg:col-span-4 space-y-2">
-                            <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-400 font-bold">
-                              Seller Payout Reconciliation
-                            </div>
-                            <div className="p-3.5 rounded-xl border border-emerald-500/20 bg-[#121316] space-y-2 font-mono text-xs">
-                              <div className="flex items-center justify-between text-white font-bold">
-                                <span>Gross Product Sales:</span>
-                                <span className="tabular-nums">
-                                  {formatCurrency(displayGross, primaryCurrency)}
-                                </span>
-                              </div>
-
-                              {rec.sellerVoucher > 0 && (
-                                <div className="flex items-center justify-between text-amber-300">
-                                  <span>Seller Voucher / Coupon:</span>
-                                  <span className="tabular-nums">
-                                    -{formatCurrency(rec.sellerVoucher, primaryCurrency)}
-                                  </span>
-                                </div>
-                              )}
-
-                              {rec.commissionFee > 0 && (
-                                <div className="flex items-center justify-between text-rose-400">
-                                  <span>Admin / Commission Fee:</span>
-                                  <span className="tabular-nums">
-                                    -{formatCurrency(rec.commissionFee, primaryCurrency)}
-                                  </span>
-                                </div>
-                              )}
-
-                              {rec.serviceFee > 0 && (
-                                <div className="flex items-center justify-between text-rose-400">
-                                  <span>Service Fee (Layanan):</span>
-                                  <span className="tabular-nums">
-                                    -{formatCurrency(rec.serviceFee, primaryCurrency)}
-                                  </span>
-                                </div>
-                              )}
-
+                          <div className="lg:col-span-4">
+                            <div className="mb-1.5 text-[12px] text-faint">Payout reconciliation</div>
+                            <div className="rounded-[10px] border border-card-border bg-card px-3 py-2">
+                              <DetailLine label="Gross product sales" value={money(gross)} strong />
+                              {rec.sellerVoucher > 0 && <DetailLine label="Seller voucher / coupon" value={`-${money(rec.sellerVoucher)}`} tone="text-st-stop-fg" />}
+                              {rec.commissionFee > 0 && <DetailLine label="Admin / commission" value={`-${money(rec.commissionFee)}`} tone="text-st-stop-fg" />}
+                              {rec.serviceFee > 0 && <DetailLine label="Service fee" value={`-${money(rec.serviceFee)}`} tone="text-st-stop-fg" />}
                               {rec.transactionFee > 0 && (
-                                <div className="flex items-center justify-between text-rose-400">
-                                  <span>Order Processing / Trans Fee:</span>
-                                  <span className="tabular-nums">
-                                    -{formatCurrency(rec.transactionFee, primaryCurrency)}
-                                  </span>
-                                </div>
+                                <DetailLine label="Order processing / transaction" value={`-${money(rec.transactionFee)}`} tone="text-st-stop-fg" />
                               )}
-
                               {rec.affiliateCommission > 0 && (
-                                <div className="flex items-center justify-between text-rose-400">
-                                  <span>Affiliate Commission (AMS):</span>
-                                  <span className="tabular-nums">
-                                    -{formatCurrency(rec.affiliateCommission, primaryCurrency)}
-                                  </span>
+                                <DetailLine label="Affiliate commission (AMS)" value={`-${money(rec.affiliateCommission)}`} tone="text-st-stop-fg" />
+                              )}
+                              {rec.otherPlatformFee > 0 && <DetailLine label="Other platform fee" value={`-${money(rec.otherPlatformFee)}`} tone="text-st-stop-fg" />}
+                              {fees > 0 && (
+                                <div className="mt-1 border-t border-line pt-1">
+                                  <DetailLine label="Total seller fees" value={`-${money(fees)}`} tone="text-st-stop-fg" strong />
                                 </div>
                               )}
-
-                              {rec.otherPlatformFee > 0 && (
-                                <div className="flex items-center justify-between text-rose-400">
-                                  <span>Other Platform Fee:</span>
-                                  <span className="tabular-nums">
-                                    -{formatCurrency(rec.otherPlatformFee, primaryCurrency)}
-                                  </span>
-                                </div>
-                              )}
-
-                              {totalFeeDeductions > 0 && (
-                                <div className="pt-1.5 border-t border-white/[0.06] flex items-center justify-between text-rose-400 font-semibold">
-                                  <span>Total Seller Fees:</span>
-                                  <span className="tabular-nums">
-                                    -{formatCurrency(totalFeeDeductions, primaryCurrency)}
-                                  </span>
-                                </div>
-                              )}
-
-                              <div className="pt-2 border-t border-emerald-500/30 flex items-center justify-between text-emerald-400 font-black text-sm">
-                                <span>Clean Withdrawable Revenue:</span>
-                                <span className="tabular-nums">
-                                  {formatCurrency(displayClean, primaryCurrency)}
-                                </span>
+                              <div className="mt-1 border-t border-line pt-1">
+                                <DetailLine label="Payout after fees" value={money(clean)} tone="text-st-done-fg" strong />
                               </div>
                             </div>
                           </div>
 
-                          {/* Column 3 (3 cols): Buyer Checkout Summary */}
-                          <div className="lg:col-span-3 space-y-2">
-                            <div className="text-[10px] font-mono uppercase tracking-wider text-neutral-400 font-bold">
-                              Buyer Checkout Summary
-                            </div>
-                            <div className="p-3.5 rounded-xl border border-white/[0.06] bg-[#121316] space-y-2 font-mono text-xs">
-                              <div className="flex items-center justify-between text-neutral-300">
-                                <span>Product Selling Price:</span>
-                                <span className="tabular-nums">
-                                  {formatCurrency(displayGross, primaryCurrency)}
-                                </span>
+                          <div className="lg:col-span-3">
+                            <div className="mb-1.5 text-[12px] text-faint">Buyer checkout</div>
+                            <div className="rounded-[10px] border border-card-border bg-card px-3 py-2">
+                              <DetailLine label="Product price" value={money(gross)} />
+                              {rec.platformSubsidy > 0 && <DetailLine label="Platform voucher" value={`-${money(rec.platformSubsidy)}`} tone="text-muted" />}
+                              {rec.shippingAndFees > 0 && <DetailLine label="Shipping and fees" value={`+${money(rec.shippingAndFees)}`} tone="text-muted" />}
+                              <div className="mt-1 border-t border-line pt-1">
+                                <DetailLine label="Buyer paid" value={money(paid)} strong />
                               </div>
-
                               {rec.platformSubsidy > 0 && (
-                                <div className="flex items-center justify-between text-amber-400">
-                                  <span>Buyer Voucher (Platform):</span>
-                                  <span className="tabular-nums">
-                                    -{formatCurrency(rec.platformSubsidy, primaryCurrency)}
-                                  </span>
-                                </div>
-                              )}
-
-                              {rec.shippingAndFees > 0 && (
-                                <div className="flex items-center justify-between text-sky-400">
-                                  <span>Buyer Shipping & Fees:</span>
-                                  <span className="tabular-nums">
-                                    +{formatCurrency(rec.shippingAndFees, primaryCurrency)}
-                                  </span>
-                                </div>
-                              )}
-
-                              <div className="pt-2 border-t border-white/[0.08] flex items-center justify-between text-white font-bold">
-                                <span>Buyer Paid Total:</span>
-                                <span className="tabular-nums">
-                                  {formatCurrency(displayPaid, primaryCurrency)}
-                                </span>
-                              </div>
-
-                              {rec.platformSubsidy > 0 && (
-                                <p className="text-[10px] text-neutral-500 font-sans leading-relaxed pt-1">
-                                  *Buyer vouchers are subsidized by marketplace platform and do not reduce seller payout.
+                                <p className="pt-1 text-[12px] leading-relaxed text-faint">
+                                  Platform vouchers are paid by the marketplace and do not reduce your payout.
                                 </p>
                               )}
                             </div>
@@ -615,48 +350,29 @@ export const FinancialLedgerTable: React.FC<FinancialLedgerTableProps> = ({
                 </React.Fragment>
               );
             })}
-
-            {paginatedRecords.length === 0 && (
-              <tr>
-                <td colSpan={10} className="py-12 text-center text-neutral-500 font-mono text-xs">
-                  No financial transactions found matching current criteria.
-                </td>
-              </tr>
-            )}
           </tbody>
         </table>
       </div>
 
-      {totalPages > 1 && (
-        <div className="p-3.5 border-t border-white/[0.06] flex items-center justify-between text-xs font-mono text-neutral-400">
-          <span>
-            Showing {(currentPage - 1) * pageSize + 1} to{' '}
-            {Math.min(currentPage * pageSize, filteredRecords.length)} of {filteredRecords.length} orders
+      {/* Pagination */}
+      <div className="flex flex-col items-center justify-between gap-3 px-4 py-3 text-[13px] text-muted sm:flex-row">
+        <span>
+          Showing <span className="font-mono font-medium text-fg">{filteredRecords.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}</span> to{' '}
+          <span className="font-mono font-medium text-fg">{Math.min(page * PAGE_SIZE, filteredRecords.length)}</span> of{' '}
+          <span className="font-mono font-medium text-fg">{filteredRecords.length}</span> orders
+        </span>
+        <div className="flex items-center gap-1.5">
+          <Button size="sm" onClick={() => setCurrentPage(Math.max(1, page - 1))} disabled={page <= 1}>
+            Prev
+          </Button>
+          <span className="px-1.5 font-mono text-[12.5px] text-fg">
+            Page {page} of {totalPages}
           </span>
-
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              disabled={currentPage <= 1}
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              className="px-2.5 py-1 rounded-lg border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.06] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-            >
-              Prev
-            </button>
-            <span className="px-2 font-bold text-white">
-              {currentPage} / {totalPages}
-            </span>
-            <button
-              type="button"
-              disabled={currentPage >= totalPages}
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              className="px-2.5 py-1 rounded-lg border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.06] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-            >
-              Next
-            </button>
-          </div>
+          <Button size="sm" onClick={() => setCurrentPage(Math.min(totalPages, page + 1))} disabled={page >= totalPages}>
+            Next
+          </Button>
         </div>
-      )}
-    </GlassCard>
+      </div>
+    </section>
   );
 };

@@ -1,131 +1,75 @@
 import React, { useMemo, useState } from 'react';
-import { DateRangePicker, DatePreset } from '../components/ui/DateRangePicker';
-import { GlassCard } from '../components/ui/GlassCard';
-import { CardEyebrow } from '../components/ui/CardEyebrow';
-import { ChannelFilterPills } from '../components/analytics/ChannelFilterPills';
-import { ChannelRevenueBreakdownCard } from '../components/analytics/ChannelRevenueBreakdownCard';
-import { MultiChannelRevenueChart } from '../components/analytics/MultiChannelRevenueChart';
-import { TopFinancialProductsCard } from '../components/analytics/TopFinancialProductsCard';
+import { AlertTriangle, CalendarRange, Layers, Loader2, RefreshCw, Trophy } from 'lucide-react';
+import type { DatePreset } from '../components/ui/DateRangePicker';
+import { Button } from '../components/ds/Button';
+import { Card } from '../components/ds/Card';
+import { KpiCard } from '../components/ds/KpiCard';
+import { Select } from '../components/ds/Select';
+import { Tabs } from '../components/ds/Tabs';
+import { TextField } from '../components/ds/TextField';
+import { ChangeChip } from '../components/dashboard/ChangeChip';
+import { CHANNEL_DOT } from '../components/dashboard/ChannelSalesList';
+import { ChannelReconciliationCard } from '../components/analytics/ChannelReconciliationCard';
+import { RevenueChart } from '../components/analytics/RevenueChart';
+import { TopProductsList } from '../components/analytics/TopProductsList';
 import { FinancialLedgerTable } from '../components/analytics/FinancialLedgerTable';
-import {
-  FinancialChannel,
-  aggregateFinancialMetrics,
-  exportFinancialReportToCsv,
-} from '../lib/financialAnalyticsService';
-import { useFinancialMetrics } from '../hooks/useFinancialMetrics';
-import {
-  formatCurrency,
-  getStoreDateKey,
-  getStoreDayStartMs,
-  getStoreDayEndMs,
-  formatStoreDateFull,
-} from '../lib/formatters';
-import {
-  RefreshCw,
-  DollarSign,
-  ShoppingBag,
-  Wallet,
-  CreditCard,
-  Receipt,
-  AlertCircle,
-  Loader2,
-  Layers,
-} from 'lucide-react';
-import { clsx } from 'clsx';
+import { FinancialChannel, exportFinancialReportToCsv } from '../lib/financialAnalyticsService';
+import { ALL_CHANNELS, CHANNEL_LABELS, buildPeriodComparison, useFinancialMetrics } from '../hooks/useFinancialMetrics';
+import { periodWindows, previousPeriodLabel, previousWindowFor, type ComparePreset, type TimeWindow } from '../lib/periodComparison';
+import { formatCurrency, getStoreDateKey, getStoreDayStartMs, getStoreDayEndMs, formatStoreDateFull } from '../lib/formatters';
 
 interface ReportsPageProps {
   onNavigate?: (tab: string, filter?: string) => void;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const MAIN_RANGES: { key: DatePreset; label: string }[] = [
+  { key: 'today', label: 'Today' },
+  { key: '7d', label: '7 days' },
+  { key: '30d', label: '30 days' },
+  { key: 'this_month', label: 'This month' },
+];
+const MORE_RANGES: { value: DatePreset; label: string }[] = [
+  { value: 'last_month', label: 'Last month' },
+  { value: '90d', label: '90 days' },
+  { value: 'year', label: 'This year' },
+  { value: 'all', label: 'All time' },
+  { value: 'custom', label: 'Custom range' },
+];
+/** Ranges the Dashboard also offers: same windows on both pages. */
+const COMPARE_PRESETS: DatePreset[] = ['today', '7d', '30d', 'this_month'];
+
 export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
   const [datePreset, setDatePreset] = useState<DatePreset>('30d');
   const [customStart, setCustomStart] = useState<string>('');
   const [customEnd, setCustomEnd] = useState<string>('');
-
-  const [selectedChannels, setSelectedChannels] = useState<FinancialChannel[]>([
-    'webstore',
-    'shopee',
-    'tiktok',
-  ]);
+  const [selectedChannels, setSelectedChannels] = useState<FinancialChannel[]>(['webstore', 'shopee', 'tiktok']);
 
   const { startMs, endMs, dateLabel } = useMemo(() => {
     const todayKey = getStoreDateKey(Date.now());
     const todayStartMs = getStoreDayStartMs(todayKey);
     const todayEndMs = getStoreDayEndMs(todayKey);
-
     const [currY, currM] = todayKey.split('-').map(Number);
 
-    if (datePreset === 'today') {
-      return {
-        startMs: todayStartMs,
-        endMs: todayEndMs,
-        dateLabel: 'Today',
-      };
-    }
-
-    if (datePreset === '7d') {
-      return {
-        startMs: todayStartMs - 6 * 24 * 60 * 60 * 1000,
-        endMs: todayEndMs,
-        dateLabel: 'Last 7 Days',
-      };
-    }
-
-    if (datePreset === '30d') {
-      return {
-        startMs: todayStartMs - 29 * 24 * 60 * 60 * 1000,
-        endMs: todayEndMs,
-        dateLabel: 'Last 30 Days',
-      };
-    }
-
+    if (datePreset === 'today') return { startMs: todayStartMs, endMs: todayEndMs, dateLabel: 'Today' };
+    if (datePreset === '7d') return { startMs: todayStartMs - 6 * DAY_MS, endMs: todayEndMs, dateLabel: 'Last 7 Days' };
+    if (datePreset === '30d') return { startMs: todayStartMs - 29 * DAY_MS, endMs: todayEndMs, dateLabel: 'Last 30 Days' };
     if (datePreset === 'this_month') {
       const monthStartKey = `${currY}-${String(currM).padStart(2, '0')}-01`;
-      return {
-        startMs: getStoreDayStartMs(monthStartKey),
-        endMs: todayEndMs,
-        dateLabel: 'This Month',
-      };
+      return { startMs: getStoreDayStartMs(monthStartKey), endMs: todayEndMs, dateLabel: 'This Month' };
     }
-
     if (datePreset === 'last_month') {
       const prevY = currM === 1 ? currY - 1 : currY;
       const prevM = currM === 1 ? 12 : currM - 1;
       const daysInPrevMonth = new Date(Date.UTC(currY, currM - 1, 0)).getUTCDate();
       const lastMonthStartKey = `${prevY}-${String(prevM).padStart(2, '0')}-01`;
       const lastMonthEndKey = `${prevY}-${String(prevM).padStart(2, '0')}-${String(daysInPrevMonth).padStart(2, '0')}`;
-      return {
-        startMs: getStoreDayStartMs(lastMonthStartKey),
-        endMs: getStoreDayEndMs(lastMonthEndKey),
-        dateLabel: 'Last Month',
-      };
+      return { startMs: getStoreDayStartMs(lastMonthStartKey), endMs: getStoreDayEndMs(lastMonthEndKey), dateLabel: 'Last Month' };
     }
-
-    if (datePreset === '90d') {
-      return {
-        startMs: todayStartMs - 89 * 24 * 60 * 60 * 1000,
-        endMs: todayEndMs,
-        dateLabel: 'Last 90 Days',
-      };
-    }
-
-    if (datePreset === 'year') {
-      const yearStartKey = `${currY}-01-01`;
-      return {
-        startMs: getStoreDayStartMs(yearStartKey),
-        endMs: todayEndMs,
-        dateLabel: 'This Year',
-      };
-    }
-
-    if (datePreset === 'all') {
-      return {
-        startMs: getStoreDayStartMs('2020-01-01'),
-        endMs: todayEndMs,
-        dateLabel: 'All Time',
-      };
-    }
-
+    if (datePreset === '90d') return { startMs: todayStartMs - 89 * DAY_MS, endMs: todayEndMs, dateLabel: 'Last 90 Days' };
+    if (datePreset === 'year') return { startMs: getStoreDayStartMs(`${currY}-01-01`), endMs: todayEndMs, dateLabel: 'This Year' };
+    if (datePreset === 'all') return { startMs: getStoreDayStartMs('2020-01-01'), endMs: todayEndMs, dateLabel: 'All Time' };
     if (datePreset === 'custom' && customStart) {
       const startMsVal = getStoreDayStartMs(customStart);
       const endMsVal = getStoreDayEndMs(customEnd || customStart);
@@ -137,26 +81,20 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
         dateLabel: customStart === (customEnd || customStart) ? sLabel : `${sLabel} to ${eLabel}`,
       };
     }
-
-    return {
-      startMs: todayStartMs - 29 * 24 * 60 * 60 * 1000,
-      endMs: todayEndMs,
-      dateLabel: 'Last 30 Days',
-    };
+    return { startMs: todayStartMs - 29 * DAY_MS, endMs: todayEndMs, dateLabel: 'Last 30 Days' };
   }, [datePreset, customStart, customEnd]);
 
-  // Compute days required to cover the selected date horizon
+  // Days the marketplace sync must cover for the selected range (2-day buffer, 7 to 365 days)
   const requiredHorizonDays = useMemo(() => {
-    const now = Date.now();
-    const diffMs = Math.max(0, now - startMs);
-    const days = Math.ceil(diffMs / (24 * 60 * 60 * 1000));
-    // 2-day buffer, minimum 7 days, maximum 365 days
+    const days = Math.ceil(Math.max(0, Date.now() - startMs) / DAY_MS);
     return Math.max(7, Math.min(365, days + 2));
   }, [startMs]);
 
   const {
     records: allRecords,
     shopeeOrders,
+    oldestByChannel,
+    failedChannels,
     isLoading,
     isRefreshing,
     error,
@@ -164,382 +102,329 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
     reload,
   } = useFinancialMetrics({ horizonDays: requiredHorizonDays, autoSyncEscrow: true });
 
-  const loadFinancialData = (quiet = false, syncChannels = false, days?: number) =>
-    reload({ quiet, syncChannels, days });
+  const loadFinancialData = (quiet = false, syncChannels = false, days?: number) => reload({ quiet, syncChannels, days });
 
-  // Evaluate Shopee order cache date coverage against active horizon
+  // Shopee cache coverage against the selected range (cache keeps a limited window)
   const shopeeCoverage = useMemo(() => {
-    if (shopeeOrders.length === 0) {
-      return {
-        hasOrders: false,
-        oldestMs: 0,
-        coverageDays: 0,
-        missingCoverage: false,
-      };
-    }
-    const timestamps = shopeeOrders
-      .map(o => (o.create_timestamp ? o.create_timestamp * 1000 : 0))
-      .filter(t => t > 0);
-    if (timestamps.length === 0) {
-      return {
-        hasOrders: false,
-        oldestMs: 0,
-        coverageDays: 0,
-        missingCoverage: false,
-      };
-    }
+    const timestamps = shopeeOrders.map((o) => (o.create_timestamp ? o.create_timestamp * 1000 : 0)).filter((t) => t > 0);
+    if (timestamps.length === 0) return { hasOrders: false, oldestMs: 0, coverageDays: 0, missingCoverage: false };
     const oldestMs = Math.min(...timestamps);
-    const coverageDays = Math.max(1, Math.floor((Date.now() - oldestMs) / (24 * 60 * 60 * 1000)));
-    // If selected horizon start date is older than oldest cached Shopee order by > 24h
-    const missingCoverage = startMs < oldestMs - (24 * 60 * 60 * 1000);
-    return {
-      hasOrders: true,
-      oldestMs,
-      coverageDays,
-      missingCoverage,
-    };
+    const coverageDays = Math.max(1, Math.floor((Date.now() - oldestMs) / DAY_MS));
+    // Range starts more than a day before the oldest cached Shopee order
+    const missingCoverage = startMs < oldestMs - DAY_MS;
+    return { hasOrders: true, oldestMs, coverageDays, missingCoverage };
   }, [shopeeOrders, startMs]);
 
-  const summary = useMemo(() => {
-    return aggregateFinancialMetrics(allRecords, selectedChannels, startMs, endMs);
-  }, [allRecords, selectedChannels, startMs, endMs]);
+  // Same windows as the Dashboard for its four ranges; other ranges compare with the same length before
+  const now = lastRefreshedAt ? lastRefreshedAt.getTime() : Date.now();
+  const previousWindow: TimeWindow | null = useMemo(() => {
+    if (datePreset === 'all') return null;
+    if (COMPARE_PRESETS.includes(datePreset)) return periodWindows(datePreset as ComparePreset, now).previous;
+    return previousWindowFor({ startMs, endMs }, now);
+  }, [datePreset, startMs, endMs, now]);
+
+  const comparison = useMemo(
+    () => buildPeriodComparison(allRecords, selectedChannels, { startMs, endMs }, previousWindow, oldestByChannel),
+    [allRecords, selectedChannels, startMs, endMs, previousWindow, oldestByChannel],
+  );
+  const summary = comparison.current;
+  const currency = summary.primaryCurrency || 'IDR';
+  const money = (v: number) => formatCurrency(v, currency);
+  const count = (v: number) => v.toLocaleString('en-US');
+  const prevLabel = previousPeriodLabel(datePreset);
 
   const handleToggleChannel = (ch: FinancialChannel) => {
-    setSelectedChannels(prev => {
-      if (prev.includes(ch)) {
-        if (prev.length === 1) return prev;
-        return prev.filter(c => c !== ch);
-      } else {
-        return [...prev, ch];
-      }
+    setSelectedChannels((prev) => {
+      if (prev.includes(ch)) return prev.length === 1 ? prev : prev.filter((c) => c !== ch);
+      return ALL_CHANNELS.filter((c) => c === ch || prev.includes(c));
     });
   };
 
-  const handleSelectAllChannels = () => {
-    setSelectedChannels(['webstore', 'shopee', 'tiktok']);
-  };
-
-  const handleSelectChannelOnly = (ch: FinancialChannel) => {
-    setSelectedChannels([ch]);
-  };
-
-  const handleExportCsv = () => {
-    exportFinancialReportToCsv(summary, dateLabel);
-  };
+  const handleExportCsv = () => exportFinancialReportToCsv(summary, dateLabel);
 
   const totalSellerDeductions = summary.totalPlatformFees + summary.totalSellerVouchers;
-  const effectiveFeeRatePct =
-    summary.totalGrossRevenue > 0
-      ? ((totalSellerDeductions / summary.totalGrossRevenue) * 100).toFixed(1)
-      : '0.0';
-  const cleanMarginPct =
-    summary.totalGrossRevenue > 0
-      ? ((summary.totalCleanRevenue / summary.totalGrossRevenue) * 100).toFixed(1)
-      : '0.0';
+  const pctOfGross = (v: number) => (summary.totalGrossRevenue > 0 ? ((v / summary.totalGrossRevenue) * 100).toFixed(1) : '0.0');
+  const busy = isLoading || isRefreshing;
+  const caption = (text: string) => <span className="text-[12px] text-faint">{text}</span>;
+  const chip = (key: 'sales' | 'orders' | 'aov' | 'payout') =>
+    previousWindow ? (
+      <ChangeChip comparison={comparison.metrics[key]} periodLabel={prevLabel} formatValue={key === 'orders' ? count : money} />
+    ) : null;
+  const moreValue = MORE_RANGES.some((r) => r.value === datePreset) ? datePreset : '';
+  const allSelected = selectedChannels.length === ALL_CHANNELS.length;
 
   return (
-    <div className="space-y-6">
-      {/* 1. Header & Quick Actions */}
-      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="text-xs font-mono uppercase tracking-wider text-neutral-400">
-              Financial Intelligence
-            </span>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-[#121316] text-neutral-300 border border-white/[0.08]">
-              {dateLabel}
-            </span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white font-sans">
-            Revenue & Sales Reports
-          </h1>
-          <p className="text-sm text-neutral-400 mt-1 font-sans">
-            Gross product sales, marketplace fee deductions, and clean withdrawable payout ledger.
-          </p>
+    <div className="flex flex-col gap-4">
+      {/* Title row */}
+      <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
+        <div className="min-w-0">
+          <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.025em] text-fg">Sales &amp; Reports</h1>
+          <p className="mt-0.5 text-[14px] text-muted">Gross sales, marketplace fees and the payout you can withdraw, for every channel.</p>
         </div>
-
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           {lastRefreshedAt && (
-            <span className="text-[11px] font-mono text-neutral-400 hidden md:inline-block">
+            <span className="hidden text-[12px] text-faint md:inline">
               Updated {lastRefreshedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </span>
           )}
           {onNavigate && (
+            <Button icon={Layers} onClick={() => onNavigate('skin_performance')}>
+              Skin analytics
+            </Button>
+          )}
+          <Button
+            icon={RefreshCw}
+            onClick={() => loadFinancialData(true, true, requiredHorizonDays)}
+            disabled={busy}
+            className={busy ? '[&>svg:first-child]:animate-spin' : ''}
+            title={`Pull Shopee and TikTok Shop orders and escrow for ${dateLabel} (${requiredHorizonDays} days)`}
+          >
+            {isRefreshing ? `Syncing ${requiredHorizonDays} days...` : 'Refresh and sync'}
+          </Button>
+        </div>
+      </div>
+
+      {/* Range and channels */}
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Tabs items={MAIN_RANGES} value={datePreset} onChange={(k) => setDatePreset(k as DatePreset)} />
+          <Select
+            aria-label="More date ranges"
+            className="w-[150px]"
+            value={moreValue}
+            onChange={(v) => {
+              if (!v) return;
+              if (v === 'custom' && !customStart) {
+                const today = getStoreDateKey(Date.now());
+                setCustomStart(today);
+                setCustomEnd(today);
+              }
+              setDatePreset(v as DatePreset);
+            }}
+            options={[{ value: '', label: 'More ranges' }, ...MORE_RANGES]}
+          />
+          {datePreset === 'custom' && (
+            <div className="flex items-center gap-2">
+              <TextField
+                aria-label="From"
+                type="date"
+                className="w-[150px]"
+                value={customStart}
+                max={customEnd || undefined}
+                onChange={(e) => setCustomStart(e.target.value)}
+              />
+              <span className="text-[13px] text-faint">to</span>
+              <TextField
+                aria-label="To"
+                type="date"
+                className="w-[150px]"
+                value={customEnd}
+                min={customStart || undefined}
+                onChange={(e) => setCustomEnd(e.target.value)}
+              />
+            </div>
+          )}
+
+          <div className="ml-auto inline-flex flex-wrap items-center gap-1 rounded-[12px] border border-line bg-chip p-1" role="group" aria-label="Channels">
             <button
               type="button"
-              onClick={() => onNavigate('skin_performance')}
-              className="min-h-11 px-3.5 rounded-xl border border-white/10 bg-[#121316] text-neutral-200 hover:bg-white/[0.06] hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
-              title="Open Configurator Base Skin Analytics"
+              aria-pressed={allSelected}
+              onClick={() => setSelectedChannels([...ALL_CHANNELS])}
+              className={`rounded-[9px] border px-3 py-[6px] text-[13px] font-[450] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                allSelected ? 'border-field-border bg-field text-fg' : 'border-transparent text-muted hover:text-fg'
+              }`}
             >
-              <Layers className="w-3.5 h-3.5 text-[#f3aa18]" />
-              <span>Skin Analytics</span>
+              All channels
             </button>
-          )}
-          <button
-            type="button"
-            onClick={() => loadFinancialData(true, true, requiredHorizonDays)}
-            disabled={isLoading || isRefreshing}
-            className="min-h-11 px-3.5 rounded-xl border border-white/10 bg-[#121316] text-neutral-200 hover:bg-white/[0.06] hover:text-white text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer shadow-xs disabled:opacity-50"
-            title={`Sync live Shopee and TikTok Shop orders & escrow settlements for ${dateLabel} (${requiredHorizonDays} days)`}
-          >
-            <RefreshCw className={clsx('w-3.5 h-3.5', (isLoading || isRefreshing) && 'animate-spin text-[#f3aa18]')} />
-            <span>{isRefreshing ? `Syncing ${requiredHorizonDays}d...` : 'Refresh & Sync'}</span>
-          </button>
-        </div>
-      </header>
-
-      {/* 2. Timespan Horizon Selector */}
-      <DateRangePicker
-        preset={datePreset}
-        onPresetChange={setDatePreset}
-        customStart={customStart}
-        customEnd={customEnd}
-        onCustomChange={(start, end) => {
-          setCustomStart(start);
-          setCustomEnd(end);
-        }}
-        label={dateLabel}
-        subtitle={`Analyzing ${summary.totalOrders.toLocaleString()} verified paid orders (${summary.totalUnitsSold.toLocaleString()} units) across active channels (cancelled and unpaid excluded)`}
-      />
-
-      {/* 3. Multi-Channel Filter Bar */}
-      <GlassCard className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-white/[0.08]">
-        <ChannelFilterPills
-          selectedChannels={selectedChannels}
-          onToggleChannel={handleToggleChannel}
-          onSelectAll={handleSelectAllChannels}
-          channelMetrics={summary.channelBreakdown}
-        />
-
-        <div className="text-[11px] font-mono text-neutral-400 flex items-center gap-2 self-end sm:self-auto">
-          <span>Active filter:</span>
-          <span className="font-bold text-[#f3aa18]">
-            {selectedChannels.length === 3
-              ? 'All 3 Channels'
-              : selectedChannels.map(c => c.toUpperCase()).join(' + ')}
-          </span>
-        </div>
-      </GlassCard>
-
-      {/* 3b. Shopee Historical Horizon Coverage Notice */}
-      {!isLoading && !error && selectedChannels.includes('shopee') && shopeeCoverage.missingCoverage && (
-        <GlassCard className="p-4 border-amber-500/25 bg-amber-500/[0.03] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 font-sans">
-          <div className="flex items-start gap-3">
-            <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0 mt-0.5">
-              <AlertCircle className="w-4 h-4" />
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-white">
-                Shopee sales cache currently covers the latest {shopeeCoverage.coverageDays} days
-              </p>
-              <p className="text-[11px] text-neutral-400 mt-0.5 leading-relaxed">
-                Your selected horizon ({dateLabel}) reaches back further than cached orders.
-                Click below to fetch full historical orders and escrow settlements from Shopee API.
-              </p>
-            </div>
+            {ALL_CHANNELS.map((ch) => {
+              const on = selectedChannels.includes(ch) && !allSelected;
+              return (
+                <button
+                  key={ch}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => (allSelected ? setSelectedChannels([ch]) : handleToggleChannel(ch))}
+                  title={allSelected ? `Show only ${CHANNEL_LABELS[ch]}` : `Add or remove ${CHANNEL_LABELS[ch]}`}
+                  className={`flex items-center gap-2 rounded-[9px] border px-3 py-[6px] text-[13px] font-[450] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                    on ? 'border-field-border bg-field text-fg' : 'border-transparent text-muted hover:text-fg'
+                  }`}
+                >
+                  <span className={`h-2 w-2 rounded-full ${CHANNEL_DOT[ch]}`} aria-hidden />
+                  {CHANNEL_LABELS[ch]}
+                </button>
+              );
+            })}
           </div>
-          <button
-            type="button"
+        </div>
+        <p className="flex flex-wrap items-center gap-1.5 px-1 text-[12px] text-faint">
+          <CalendarRange className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
+          {dateLabel}: {count(summary.totalOrders)} paid orders ({count(summary.totalUnitsSold)} units)
+          {previousWindow
+            ? `, compared with ${datePreset === 'today' ? 'yesterday' : `the ${prevLabel}`} (${formatStoreDateFull(previousWindow.startMs)} to ${formatStoreDateFull(previousWindow.endMs)}).`
+            : '.'}{' '}
+          Cancelled, refunded and unpaid orders are left out.
+        </p>
+      </div>
+
+      {/* Shopee history notice */}
+      {!isLoading && !error && selectedChannels.includes('shopee') && shopeeCoverage.missingCoverage && (
+        <div className="flex flex-wrap items-center gap-3 rounded-[12px] border border-st-wait-border bg-st-wait-bg px-4 py-3" role="status">
+          <AlertTriangle className="h-4 w-4 flex-none text-st-wait-fg" strokeWidth={1.8} aria-hidden />
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-medium text-fg">Shopee orders are cached for the latest {shopeeCoverage.coverageDays} days only</p>
+            <p className="text-[12.5px] text-muted">
+              {dateLabel} reaches further back, so Shopee totals are incomplete. Sync to fetch older orders and escrow from the Shopee API.
+            </p>
+          </div>
+          <Button
+            variant="primary"
+            icon={RefreshCw}
             onClick={() => loadFinancialData(true, true, requiredHorizonDays)}
             disabled={isRefreshing}
-            className="min-h-10 px-4 rounded-xl bg-[#f3aa18] text-zinc-950 hover:bg-[#d9940e] font-semibold text-xs flex items-center justify-center gap-2 shrink-0 transition-all cursor-pointer shadow-xs disabled:opacity-50"
-            title={`Sync ${requiredHorizonDays} days of orders from Shopee API`}
+            className={isRefreshing ? '[&>svg:first-child]:animate-spin' : ''}
           >
-            <RefreshCw className={clsx('w-3.5 h-3.5', isRefreshing && 'animate-spin')} />
-            <span>{isRefreshing ? 'Syncing Shopee API...' : `Sync ${requiredHorizonDays} Days from Shopee`}</span>
-          </button>
-        </GlassCard>
+            {isRefreshing ? 'Syncing Shopee...' : `Sync ${requiredHorizonDays} days from Shopee`}
+          </Button>
+        </div>
       )}
-
-      {/* 4. Loading State */}
-      {isLoading && (
-        <div className="min-h-[380px] flex flex-col items-center justify-center gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-[#f3aa18]" />
-          <p className="text-sm font-medium text-neutral-300">
-            Synchronizing financial ledgers for {dateLabel}...
-          </p>
-          <p className="text-xs text-neutral-500 font-mono">
-            Querying Webstore, Shopee, and TikTok Shop transactions and escrow settlements.
-          </p>
+      {!isLoading && !error && failedChannels.length > 0 && (
+        <div className="flex items-center gap-2.5 rounded-[12px] border border-st-wait-border bg-st-wait-bg px-4 py-2.5 text-[13px] text-st-wait-fg" role="status">
+          <AlertTriangle className="h-4 w-4 flex-none" strokeWidth={1.8} aria-hidden />
+          {failedChannels.map((c) => CHANNEL_LABELS[c]).join(' and ')} could not be loaded. The numbers below leave {failedChannels.length > 1 ? 'them' : 'it'} out.
         </div>
       )}
 
-      {/* 5. Error State */}
-      {!isLoading && error && (
-        <GlassCard className="min-h-[300px] p-6 flex flex-col items-center justify-center text-center">
-          <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 mb-3">
-            <AlertCircle className="w-6 h-6" />
-          </div>
-          <h2 className="text-base font-bold text-white">Financial Sync Interrupted</h2>
-          <p className="text-sm text-neutral-400 mt-1 max-w-md">{error}</p>
-          <button
-            type="button"
-            onClick={() => loadFinancialData(false)}
-            className="mt-5 min-h-11 px-5 rounded-xl bg-white text-zinc-950 font-semibold text-sm cursor-pointer shadow-xs hover:opacity-90"
-          >
-            Retry Sync
-          </button>
-        </GlassCard>
+      {isLoading && (
+        <div className="flex min-h-[360px] flex-col items-center justify-center gap-2 rounded-[14px] border border-card-border bg-card">
+          <Loader2 className="h-6 w-6 animate-spin text-accent-fg" aria-hidden />
+          <p className="text-[13.5px] text-fg">Loading sales for {dateLabel}...</p>
+          <p className="text-[12.5px] text-muted">Webstore, Shopee and TikTok Shop orders and escrow settlements.</p>
+        </div>
       )}
 
-      {/* 6. Active Financial Dashboard Content */}
+      {!isLoading && error && (
+        <div className="flex min-h-[260px] flex-col items-center justify-center gap-2 rounded-[14px] border border-card-border bg-card p-6 text-center">
+          <AlertTriangle className="h-6 w-6 text-st-stop-fg" strokeWidth={1.8} aria-hidden />
+          <h2 className="text-[15px] font-semibold text-fg">Could not load sales</h2>
+          <p className="max-w-md text-[13px] text-muted">{error}</p>
+          <Button variant="primary" className="mt-2" onClick={() => loadFinancialData(false)}>
+            Try again
+          </Button>
+        </div>
+      )}
+
       {!isLoading && !error && (
         <>
-          {/* Executive Money KPI Cards (Left-to-Right Reconciliation Flow) */}
-          <section
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 font-sans"
-            aria-label="Executive financial metrics"
-          >
-            {/* 1. Gross Product Sales */}
-            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[132px] border-[#f3aa18]/25 bg-[#f3aa18]/[0.02]">
-              <div className="flex items-center justify-between">
-                <CardEyebrow>1. Gross Sales</CardEyebrow>
-                <div className="p-2 rounded-xl bg-[#f3aa18]/10 text-[#f3aa18] border border-[#f3aa18]/20">
-                  <DollarSign className="w-4 h-4" />
-                </div>
-              </div>
-              <div className="mt-2">
-                <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-white tabular-nums">
-                  {formatCurrency(summary.totalGrossRevenue, summary.primaryCurrency)}
-                </p>
-                <p className="text-[10px] font-mono text-neutral-400 mt-1 leading-relaxed">
-                  {summary.totalPaidThenCancelledGross > 0
-                    ? `Incl. paid-cancelled (${summary.totalOrders + summary.totalPaidThenCancelledOrders}): ${formatCurrency(
-                        summary.totalGrossRevenue + summary.totalPaidThenCancelledGross,
-                        summary.primaryCurrency
-                      )}`
-                    : 'Product selling price before fees'}
-                </p>
-              </div>
-            </GlassCard>
-
-            {/* 2. Platform Fees & Seller Deductions */}
-            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[132px] border-rose-500/20 bg-rose-500/[0.02]">
-              <div className="flex items-center justify-between">
-                <CardEyebrow>2. Platform Fees</CardEyebrow>
-                <div className="p-2 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20">
-                  <Receipt className="w-4 h-4" />
-                </div>
-              </div>
-              <div className="mt-2">
-                <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-rose-400 tabular-nums">
-                  {totalSellerDeductions > 0
-                    ? `-${formatCurrency(totalSellerDeductions, summary.primaryCurrency)}`
-                    : formatCurrency(0, summary.primaryCurrency)}
-                </p>
-                <p className="text-[10px] font-mono text-neutral-400 mt-1 leading-relaxed">
-                  {totalSellerDeductions > 0
-                    ? `${effectiveFeeRatePct}% take rate (Admin, Service, Trans, AMS)`
-                    : isRefreshing
-                    ? 'Syncing marketplace escrow fee breakdown...'
-                    : 'Admin, service, transaction & seller vouchers'}
-                </p>
-              </div>
-            </GlassCard>
-
-            {/* 3. Clean Revenue (Withdrawable Payout) */}
-            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[132px] border-emerald-500/30 bg-emerald-500/[0.03]">
-              <div className="flex items-center justify-between">
-                <CardEyebrow>3. Clean Revenue</CardEyebrow>
-                <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
-                  <Wallet className="w-4 h-4" />
-                </div>
-              </div>
-              <div className="mt-2">
-                <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-emerald-400 tabular-nums">
-                  {formatCurrency(summary.totalCleanRevenue, summary.primaryCurrency)}
-                </p>
-                <p className="text-[10px] font-mono text-neutral-300 mt-1 leading-relaxed">
-                  Withdrawable payout ({cleanMarginPct}% net of gross)
-                </p>
-              </div>
-            </GlassCard>
-
-            {/* 4. Buyer Checkout & Platform Voucher Subsidy */}
-            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[132px]">
-              <div className="flex items-center justify-between">
-                <CardEyebrow>Buyer Checkout</CardEyebrow>
-                <div className="p-2 rounded-xl bg-white/[0.04] text-sky-400 border border-white/[0.06]">
-                  <CreditCard className="w-4 h-4" />
-                </div>
-              </div>
-              <div className="mt-2">
-                <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-white tabular-nums">
-                  {formatCurrency(summary.totalBuyerPaid, summary.primaryCurrency)}
-                </p>
-                <p className="text-[10px] font-mono text-amber-400/90 mt-1 leading-relaxed">
-                  {summary.totalPlatformSubsidy > 0
-                    ? `Buyer Vouchers (Platform): -${formatCurrency(summary.totalPlatformSubsidy, summary.primaryCurrency)}`
-                    : 'Out-of-pocket buyer payment'}
-                </p>
-              </div>
-            </GlassCard>
-
-            {/* 5. Paid Orders, Units & Clean AOV */}
-            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between group transition-all min-h-[132px]">
-              <div className="flex items-center justify-between">
-                <CardEyebrow>Paid Orders & AOV</CardEyebrow>
-                <div className="p-2 rounded-xl bg-white/[0.04] text-neutral-300 border border-white/[0.06]">
-                  <ShoppingBag className="w-4 h-4" />
-                </div>
-              </div>
-              <div className="mt-2">
-                <div className="flex items-baseline justify-between gap-2">
-                  <p className="text-xl sm:text-2xl font-black font-mono tracking-tight text-white tabular-nums">
-                    {summary.totalOrders.toLocaleString()}
-                  </p>
-                  <span className="text-[11px] font-mono text-neutral-400">
-                    {summary.totalUnitsSold.toLocaleString()} units
-                  </span>
-                </div>
-                <p className="text-[10px] font-mono text-neutral-400 mt-1 leading-relaxed">
-                  Clean AOV: {formatCurrency(summary.averageCleanOrderValue, summary.primaryCurrency)}
-                  {summary.totalCancelledOrders > 0 ? ` · Excl. ${summary.totalCancelledOrders} cancel` : ''}
-                </p>
-              </div>
-            </GlassCard>
+          {/* KPIs */}
+          <section aria-label="Key numbers" className="grid grid-cols-2 gap-3 lg:grid-cols-3 min-[1700px]:grid-cols-6">
+            <KpiCard
+              label="Gross sales"
+              value={money(summary.totalGrossRevenue)}
+              footer={
+                <>
+                  {chip('sales')}
+                  {summary.totalPaidThenCancelledGross > 0 &&
+                    caption(`${money(summary.totalGrossRevenue + summary.totalPaidThenCancelledGross)} with paid then cancelled`)}
+                </>
+              }
+            />
+            <KpiCard
+              label="Paid orders"
+              value={count(summary.totalOrders)}
+              footer={
+                <>
+                  {chip('orders')}
+                  {caption(
+                    `${count(summary.totalUnitsSold)} units${summary.totalCancelledOrders > 0 ? `, ${count(summary.totalCancelledOrders)} cancelled left out` : ''}`,
+                  )}
+                </>
+              }
+            />
+            <KpiCard
+              label="Avg order value"
+              value={money(summary.averageOrderValue)}
+              footer={
+                <>
+                  {chip('aov')}
+                  {caption(`Payout per order ${money(summary.averageCleanOrderValue)}`)}
+                </>
+              }
+            />
+            <KpiCard
+              label="Platform fees and vouchers"
+              value={
+                <span className={totalSellerDeductions > 0 ? 'text-st-stop-fg' : ''}>
+                  {totalSellerDeductions > 0 ? `-${money(totalSellerDeductions)}` : money(0)}
+                </span>
+              }
+              footer={caption(
+                totalSellerDeductions > 0
+                  ? `${pctOfGross(totalSellerDeductions)}% of gross (admin, service, transaction, AMS)`
+                  : isRefreshing
+                    ? 'Syncing marketplace fee details...'
+                    : 'Admin, service, transaction and seller vouchers',
+              )}
+            />
+            <KpiCard
+              label="Payout after fees"
+              value={<span className="text-st-done-fg">{money(summary.totalCleanRevenue)}</span>}
+              footer={
+                <>
+                  {chip('payout')}
+                  {caption(`${pctOfGross(summary.totalCleanRevenue)}% of gross, withdrawable`)}
+                </>
+              }
+            />
+            <KpiCard
+              label="Buyer paid at checkout"
+              value={money(summary.totalBuyerPaid)}
+              footer={caption(
+                summary.totalPlatformSubsidy > 0 ? `Platform buyer vouchers -${money(summary.totalPlatformSubsidy)}` : 'What buyers paid out of pocket',
+              )}
+            />
           </section>
 
-          {/* 7. Visual Analytics: Revenue Dynamic Chart & Channel Contribution Matrix */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-stretch">
-            <div className="lg:col-span-2">
-              <MultiChannelRevenueChart
-                timeline={summary.timeline}
-                selectedChannels={selectedChannels}
-                totalRevenue={summary.totalGrossRevenue}
-                totalCleanRevenue={summary.totalCleanRevenue}
-                totalPlatformFees={totalSellerDeductions}
-                totalBuyerPaid={summary.totalBuyerPaid}
-              />
+          {/* Chart and top products */}
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <div className="xl:col-span-2">
+              <RevenueChart timeline={summary.timeline} selectedChannels={selectedChannels} channelLabels={CHANNEL_LABELS} currency={currency} />
             </div>
-            <div className="lg:col-span-1">
-              <ChannelRevenueBreakdownCard
-                breakdown={summary.channelBreakdown}
-                totalNetRevenue={summary.totalGrossRevenue}
-                selectedChannels={selectedChannels}
-                onSelectChannelOnly={handleSelectChannelOnly}
+            <Card icon={Trophy} title="Top products" count={Math.min(10, summary.topProducts.length)}>
+              <TopProductsList
+                products={summary.topProducts}
+                currency={currency}
+                limit={10}
+                totalSales={summary.totalGrossRevenue}
+                showChannels
+                channelLabels={CHANNEL_LABELS}
               />
-            </div>
+            </Card>
           </div>
 
-          {/* 8. Top Performing Skins & Models */}
-          <section>
-            <TopFinancialProductsCard
-              products={summary.topProducts}
-              totalNetRevenue={summary.totalGrossRevenue}
-              primaryCurrency={summary.primaryCurrency}
-            />
+          {/* Channel reconciliation */}
+          <section aria-label="Channel reconciliation" className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            {ALL_CHANNELS.map((ch) => (
+              <ChannelReconciliationCard
+                key={ch}
+                label={CHANNEL_LABELS[ch]}
+                dotClass={CHANNEL_DOT[ch]}
+                metric={summary.channelBreakdown[ch]}
+                currency={currency}
+                change={previousWindow ? comparison.channelSales[ch] : undefined}
+                periodLabel={prevLabel}
+                selected={selectedChannels.includes(ch)}
+                failed={failedChannels.includes(ch)}
+                onShowOnly={selectedChannels.length === 1 && selectedChannels[0] === ch ? undefined : () => setSelectedChannels([ch])}
+              />
+            ))}
           </section>
 
-          {/* 9. Financial Orders & Transactions Ledger */}
-          <section>
-            <FinancialLedgerTable
-              records={summary.filteredRecords}
-              allWindowRecords={summary.allWindowRecords}
-              onExportCsv={handleExportCsv}
-              primaryCurrency={summary.primaryCurrency}
-            />
-          </section>
+          <FinancialLedgerTable
+            records={summary.filteredRecords}
+            allWindowRecords={summary.allWindowRecords}
+            onExportCsv={handleExportCsv}
+            primaryCurrency={currency}
+          />
         </>
       )}
     </div>
