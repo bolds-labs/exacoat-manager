@@ -1,12 +1,7 @@
 import React from 'react';
-import { 
-  Search, 
-  RefreshCw, 
-  Sun, 
-  Moon, 
-  Menu
-} from 'lucide-react';
-import { NavItemKey } from './Sidebar';
+import { Search, RefreshCw, Sun, Moon, Menu } from 'lucide-react';
+import { NavItemKey, groupLabelForTab } from './sidebarNav';
+import { SearchField } from '../ds';
 import { useTheme } from '../../context/ThemeContext';
 import { TopBarInjectionWidget } from './TopBarInjectionWidget';
 
@@ -62,58 +57,49 @@ export const Header: React.FC<HeaderProps> = ({
   const { theme, toggleTheme } = useTheme();
 
   return (
-    <header className="h-16 px-3 sm:px-5 border-b border-zinc-200 dark:border-white/[0.07] bg-white dark:bg-[#0a0a0c] flex items-center justify-between sticky top-0 z-20 font-sans select-none transition-colors duration-200 gap-3">
-      <div className="flex items-center gap-3 min-w-0 lg:w-48 xl:w-56">
-        {/* Mobile Hamburger Button */}
+    <header className="sticky top-0 z-20 flex h-[58px] select-none items-center justify-between gap-3 border-b border-line bg-bg px-3 font-sans sm:px-7">
+      <div className="flex min-w-0 items-center gap-3 lg:w-56">
         {onOpenMobileNav && (
           <button
             type="button"
             onClick={onOpenMobileNav}
-            className="lg:hidden p-2 rounded-xl bg-zinc-100 dark:bg-white/[0.04] hover:bg-zinc-200 dark:hover:bg-white/[0.08] border border-zinc-200 dark:border-white/[0.06] text-zinc-700 dark:text-zinc-300 transition-colors cursor-pointer shrink-0"
+            className="shrink-0 cursor-pointer rounded-[9px] border border-field-border bg-field p-2 text-muted transition-colors hover:text-fg lg:hidden"
             aria-label="Open navigation"
           >
-            <Menu className="w-4 h-4" />
+            <Menu className="h-4 w-4" />
           </button>
         )}
-
-        <p className="truncate text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
-          {pageTitles[currentTab]}
+        <p className="truncate text-[13.5px] text-faint">
+          {groupLabelForTab(currentTab)} <span className="px-0.5">/</span> <b className="font-medium text-fg">{pageTitles[currentTab]}</b>
         </p>
       </div>
 
-      <div className="hidden sm:flex flex-1 max-w-md lg:max-w-lg">
-        <button
-          type="button"
+      <div className="hidden max-w-md flex-1 sm:flex lg:max-w-lg">
+        <SearchField
+          readOnly
+          placeholder="Search workspace"
+          shortcut="Ctrl K"
           onClick={onOpenCommandPalette}
-          className="w-full flex items-center justify-between px-3 sm:px-3.5 py-2 rounded-xl bg-zinc-100 dark:bg-white/[0.03] hover:bg-zinc-200/70 dark:hover:bg-white/[0.06] border border-zinc-200 dark:border-white/[0.07] hover:border-zinc-300 dark:hover:border-white/[0.14] text-xs text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-all cursor-pointer"
-        >
-          <span className="flex items-center gap-2 truncate">
-            <Search className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
-            <span className="truncate text-xs">Search workspace</span>
-          </span>
-          <kbd className="hidden sm:inline-block px-1.5 py-0.5 rounded bg-white dark:bg-white/[0.06] border border-zinc-200 dark:border-white/[0.08] text-[10px] text-zinc-600 dark:text-zinc-400 font-mono shrink-0 shadow-xs">
-            Ctrl K
-          </kbd>
-        </button>
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') onOpenCommandPalette?.();
+          }}
+          className="w-full cursor-pointer"
+        />
       </div>
 
       <TopBarInjectionWidget />
 
-      <div className="flex items-center gap-1.5 shrink-0">
+      <div className="flex shrink-0 items-center gap-1.5">
         <button
           type="button"
           onClick={onNavigateToLogs}
-          className="hidden md:flex h-9 items-center gap-2 px-3 rounded-xl bg-zinc-100 dark:bg-white/[0.035] border border-zinc-200 dark:border-white/[0.07] text-[11px] font-mono text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-white/[0.07] transition-colors"
+          className="hidden h-9 cursor-pointer items-center gap-2 rounded-[9px] border border-field-border bg-field px-3 font-mono text-[11px] text-muted transition-colors hover:text-fg md:flex"
           title="Open audit logs"
           aria-label={`Database ${dbStatus}, ${dbLatencyMs} milliseconds. Open audit logs`}
         >
           <span
-            className={`w-1.5 h-1.5 rounded-full ${
-              dbStatus === 'healthy'
-                ? 'bg-lime-500 dark:bg-[#f3aa18] shadow-[0_0_8px_rgba(169,255,93,0.8)]'
-                : dbStatus === 'warning'
-                ? 'bg-amber-400'
-                : 'bg-rose-500'
+            className={`h-1.5 w-1.5 rounded-full ${
+              dbStatus === 'healthy' ? 'bg-st-done-fg' : dbStatus === 'warning' ? 'bg-st-wait-fg' : 'bg-st-stop-fg'
             }`}
           />
           <span>{dbLatencyMs} ms</span>
@@ -122,37 +108,32 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           type="button"
           onClick={onOpenCommandPalette}
-          className="sm:hidden p-2 rounded-xl bg-zinc-100 dark:bg-white/[0.03] hover:bg-zinc-200 dark:hover:bg-white/[0.06] border border-zinc-200 dark:border-white/[0.06] text-zinc-600 dark:text-zinc-400 cursor-pointer"
+          className="cursor-pointer rounded-[9px] border border-field-border bg-field p-2 text-muted sm:hidden"
           aria-label="Search workspace"
         >
-          <Search className="w-4 h-4" />
+          <Search className="h-4 w-4" />
         </button>
 
-        {/* Dark / Light Theme Toggle Button */}
         <button
           type="button"
           onClick={toggleTheme}
-          className="p-2 rounded-xl bg-zinc-100 dark:bg-white/[0.03] hover:bg-zinc-200 dark:hover:bg-white/[0.06] border border-zinc-200 dark:border-white/[0.06] text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-all shadow-xs"
+          className="flex h-9 cursor-pointer items-center gap-2 rounded-[9px] border border-field-border bg-field px-3 text-[13px] text-muted transition-colors hover:text-fg"
           title={`Use ${theme === 'dark' ? 'light' : 'dark'} mode`}
           aria-label={`Use ${theme === 'dark' ? 'light' : 'dark'} mode`}
         >
-          {theme === 'dark' ? (
-            <Sun className="w-4 h-4 text-amber-400" />
-          ) : (
-            <Moon className="w-4 h-4 text-zinc-700" />
-          )}
+          {theme === 'dark' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+          <span className="hidden sm:inline">{theme === 'dark' ? 'Dark' : 'Light'}</span>
         </button>
 
-        {/* Sync Button */}
         <button
           type="button"
           onClick={onRefreshData}
           disabled={isRefreshing}
-          className="p-2 rounded-xl bg-zinc-100 dark:bg-white/[0.03] hover:bg-zinc-200 dark:hover:bg-white/[0.06] border border-zinc-200 dark:border-white/[0.06] text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-all shadow-xs disabled:opacity-50"
+          className="cursor-pointer rounded-[9px] border border-field-border bg-field p-2 text-muted transition-colors hover:text-fg disabled:opacity-50"
           title="Refresh workspace data"
           aria-label="Refresh workspace data"
         >
-          <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-lime-600 dark:text-[#f3aa18]' : ''}`} />
+          <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin text-accent' : ''}`} />
         </button>
       </div>
     </header>

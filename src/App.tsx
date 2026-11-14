@@ -3,6 +3,7 @@ import { useAuth } from './context/AuthContext';
 import { useToast } from './context/ToastContext';
 import { Layout } from './components/layout/Layout';
 import { NavItemKey } from './components/layout/Sidebar';
+import { SHOP_MANAGER_ALLOWED_TABS } from './components/layout/sidebarNav';
 import { LoginPage } from './pages/LoginPage';
 import { fetchOrdersDirect, handleShopeeCallbackDirect, handleTikTokCallbackDirect } from './lib/wordpressBridge';
 import { tabNeedsOrderList } from './lib/workspaceTabs';
@@ -185,8 +186,6 @@ const getTabFromUrl = (): NavItemKey => {
 
   return urlMap[key] || 'dashboard';
 };
-
-const SHOP_MANAGER_ALLOWED_TABS: NavItemKey[] = ['orders', 'custom_label', 'reviews', 'rma', 'warranty', 'export', 'tracking_pool'];
 
 export const App: React.FC = () => {
   const { user, simulatedRole, isLoading: isAuthLoading } = useAuth();

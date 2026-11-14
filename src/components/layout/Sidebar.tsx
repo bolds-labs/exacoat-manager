@@ -1,129 +1,42 @@
 import React from 'react';
-import { 
-  LayoutDashboard, 
-  Users, 
-  FileText, 
-  Activity, 
-  Settings, 
-  LogOut,
-  ShieldCheck,
-  Bot,
-  Mail,
-  FlaskConical,
-  ShoppingBag,
-  Shield,
-  Eye,
-  ExternalLink,
-  X,
-  Star,
-  Layers,
-  Sliders,
-  FileSpreadsheet,
-  Package,
-  UserCog,
-  Share2,
-  ChevronDown,
-  Tag,
-  LucideIcon
-} from 'lucide-react';
+import { LogOut, Shield, ShoppingBag, Eye, ExternalLink, X, ChevronDown } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { clsx } from 'clsx';
 import { APP_VERSION } from '../../config/version';
 import { lockBodyScroll } from '../../lib/bodyScrollLock';
 import { ExacoatLogo } from '../ui/ExacoatLogo';
+import { CountPill } from '../ds';
+import { getTabHref, navForRole, type NavItemKey } from './sidebarNav';
 
-export type NavItemKey = 
-  | 'dashboard'
-  | 'orders'
-  | 'custom_label'
-  | 'customers'
-  | 'products'
-  | 'rma'
-  | 'warranty'
-  | 'export'
-  | 'tracking_pool'
-  | 'configurator'
-  | 'materials'
-  | 'reviews'
-  | 'reports'
-  | 'skin_performance'
-  | 'ai_tools'
-  | 'emails'
-  | 'marketing_emails'
-  | 'affiliates'
-  | 'team'
-  | 'testing'
-  | 'health'
-  | 'audit'
-  | 'settings'
-  | 'design_system';
-
-export const getTabHref = (key: NavItemKey): string => {
-  if (typeof window === 'undefined') return `#${key}`;
-  if (window.location.pathname.includes('admin.php') || window.location.search.includes('page=exacoat-manager')) {
-    return `admin.php?page=exacoat-manager#${key}`;
-  }
-  return `/#${key}`;
-};
-
-interface NavChildItem {
-  key: NavItemKey;
-  label: string;
-  icon?: LucideIcon;
-  badge?: number;
-  badgeVariant?: 'amber' | 'lime' | 'purple';
-}
-
-interface NavItem {
-  key: NavItemKey;
-  label: string;
-  icon: LucideIcon;
-  badge?: number;
-  badgeVariant?: 'amber' | 'lime' | 'purple';
-  children?: NavChildItem[];
-}
-
-interface NavSection {
-  title: string;
-  items: NavItem[];
-}
+export type { NavItemKey };
+export { getTabHref };
 
 export interface SidebarProps {
   currentTab: string;
   onTabChange?: (tab: any) => void;
   onSelectTab?: (tab: any) => void;
   pendingReviewCount?: number;
+  counts?: Partial<Record<NavItemKey, number>>;
   isMobileOpen?: boolean;
   onMobileClose?: () => void;
 }
+
+const isPlainClick = (e: React.MouseEvent) => !(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0);
 
 export const Sidebar: React.FC<SidebarProps> = ({
   currentTab,
   onTabChange,
   onSelectTab,
   pendingReviewCount = 0,
+  counts,
   isMobileOpen = false,
   onMobileClose,
 }) => {
-  const { 
-    user, 
-    logout, 
-    simulatedRole, 
-    setSimulatedRole, 
-    canSimulateRoles, 
-    isSimulatingRole 
-  } = useAuth();
+  const { user, logout, simulatedRole, setSimulatedRole, canSimulateRoles, isSimulatingRole } = useAuth();
   const handleSelect = onTabChange || onSelectTab || (() => {});
 
   const [openSections, setOpenSections] = React.useState<Record<string, boolean>>({});
-
-  const toggleSection = (key: string, e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    setOpenSections(prev => {
-      const isCurrentlyOpen = prev[key] ?? false;
-      return { ...prev, [key]: !isCurrentlyOpen };
-    });
-  };
+  const toggleSection = (key: string) => setOpenSections((prev) => ({ ...prev, [key]: !(prev[key] ?? false) }));
 
   const [isRendered, setIsRendered] = React.useState(isMobileOpen);
   const [isVisible, setIsVisible] = React.useState(false);
@@ -137,268 +50,132 @@ export const Sidebar: React.FC<SidebarProps> = ({
         clearTimeout(timer);
         unlock();
       };
-    } else {
-      setIsVisible(false);
-      const timer = setTimeout(() => setIsRendered(false), 300);
-      return () => clearTimeout(timer);
     }
+    setIsVisible(false);
+    const timer = setTimeout(() => setIsRendered(false), 300);
+    return () => clearTimeout(timer);
   }, [isMobileOpen]);
 
-  const effectiveRole = simulatedRole || user?.role;
-  const isShopManager = effectiveRole === 'shop_manager';
+  const effectiveRole = simulatedRole || user?.role || 'super_admin';
+  const groups = navForRole(effectiveRole);
 
-  const fullNavSections: NavSection[] = [
-    {
-      title: 'Workspace',
-      items: [
-        { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { 
-          key: 'orders', 
-          label: 'Orders', 
-          icon: ShoppingBag,
-          children: [
-            { key: 'orders', label: 'All Orders' },
-            { key: 'custom_label', label: 'Custom Label', icon: Tag },
-            { key: 'rma', label: 'RMA Claims', icon: Layers },
-            { key: 'export', label: 'Export Shipments', icon: FileSpreadsheet },
-            { key: 'tracking_pool', label: 'Tracking Pool', icon: Package },
-          ]
-        },
-        { key: 'products', label: 'Products', icon: Package },
-        { key: 'configurator', label: 'Configurator Studio', icon: Sliders },
-        { key: 'materials', label: 'Materials & Stock', icon: Layers },
-        { key: 'reviews', label: 'Reviews', icon: Star, badge: pendingReviewCount > 0 ? pendingReviewCount : undefined, badgeVariant: 'amber' },
-      ]
-    },
-    {
-      title: 'Analytics',
-      items: [
-        { key: 'reports', label: 'Sales & Reports', icon: FileText },
-        { key: 'skin_performance', label: 'Skin Performance', icon: Layers },
-        { key: 'customers', label: 'Customers', icon: Users },
-      ]
-    },
-    {
-      title: 'Marketing & Tools',
-      items: [
-        { key: 'affiliates', label: 'Affiliates', icon: Share2 },
-        { 
-          key: 'marketing_emails', 
-          label: 'Email Hub', 
-          icon: Mail,
-          children: [
-            { key: 'marketing_emails', label: 'Marketing Studio' },
-            { key: 'emails', label: 'Transactional Templates' },
-          ]
-        },
-        { key: 'ai_tools', label: 'AI Tools', icon: Bot },
-      ]
-    },
-    {
-      title: 'Administration',
-      items: [
-        { key: 'team', label: 'Team Roles', icon: UserCog },
-        { key: 'testing', label: 'Testing Sandbox', icon: FlaskConical },
-        { key: 'health', label: 'Store Health', icon: Activity },
-        { key: 'audit', label: 'Audit Logs', icon: ShieldCheck },
-        { key: 'settings', label: 'Settings', icon: Settings },
-      ]
-    }
-  ];
+  const countFor = (key: NavItemKey): number | undefined => {
+    const fromProp = counts?.[key];
+    if (fromProp !== undefined) return fromProp;
+    if (key === 'reviews' && pendingReviewCount > 0) return pendingReviewCount;
+    return undefined;
+  };
 
-  const shopNavSections: NavSection[] = [
-    {
-      title: 'Workspace',
-      items: [
-        { 
-          key: 'orders', 
-          label: 'Orders', 
-          icon: ShoppingBag,
-          children: [
-            { key: 'orders', label: 'All Orders' },
-            { key: 'custom_label', label: 'Custom Label', icon: Tag },
-            { key: 'rma', label: 'RMA Claims', icon: Layers },
-            { key: 'export', label: 'Export Shipments', icon: FileSpreadsheet },
-            { key: 'tracking_pool', label: 'Tracking Pool', icon: Package },
-          ]
-        },
-        { key: 'reviews', label: 'Reviews', icon: Star, badge: pendingReviewCount > 0 ? pendingReviewCount : undefined, badgeVariant: 'amber' },
-      ]
-    }
-  ];
-
-  const navSections: NavSection[] = isShopManager 
-    ? shopNavSections 
-    : fullNavSections;
+  const roleLabel = user?.role ? user.role.replace('_', ' ') : 'super admin';
 
   const renderContent = (isMobile = false) => (
     <>
-      {/* Brand Header */}
-      <div className="p-4 sm:p-5 border-b border-zinc-200 dark:border-white/[0.06] shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="h-9 flex flex-col justify-center min-w-0">
-              <div className="flex items-center gap-2">
-                <ExacoatLogo
-                  variant="current"
-                  width={112}
-                  height={20}
-                  className="h-4 w-auto text-zinc-900 dark:text-white shrink-0"
-                />
-                <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-zinc-100 dark:bg-white/[0.06] text-[#f3aa18] border border-zinc-200 dark:border-white/10 shrink-0">
-                  ERP
-                </span>
-              </div>
-              <span className="text-[10px] font-mono text-zinc-500 block leading-none mt-1.5 truncate">
-                Manager v{APP_VERSION}
-              </span>
-            </div>
-          </div>
-
-          {isMobile && onMobileClose && (
-            <button
-              type="button"
-              onClick={onMobileClose}
-              className="p-1.5 rounded-xl text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-              aria-label="Close navigation"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          )}
+      <div className="flex shrink-0 items-center justify-between px-[14px] pb-3 pt-4">
+        <div className="flex min-w-0 items-center gap-2">
+          <ExacoatLogo variant="current" width={112} height={20} className="h-4 w-auto shrink-0 text-fg" />
+          <span className="shrink-0 rounded-md border border-accent-border bg-accent-soft px-1.5 py-px font-mono text-[10px] font-semibold text-accent-fg">
+            ERP
+          </span>
         </div>
+        {isMobile && onMobileClose && (
+          <button
+            type="button"
+            onClick={onMobileClose}
+            className="cursor-pointer rounded-lg p-1.5 text-muted hover:bg-chip hover:text-fg"
+            aria-label="Close navigation"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        )}
       </div>
 
-      {/* Main Navigation */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-6 custom-scrollbar">
-        {navSections.map(section => (
-          <div key={section.title} className="space-y-1">
-            <h3 className="px-3 text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 font-mono">
-              {section.title}
+      <nav aria-label="Main navigation" className="custom-scrollbar flex-1 overflow-y-auto px-3 pb-3">
+        {groups.map((group) => (
+          <div key={group.label}>
+            <h3 className="px-2.5 pb-1.5 pt-4 text-[11px] font-semibold uppercase tracking-[0.07em] text-faint">
+              {group.label}
             </h3>
-
-            <div className="space-y-0.5 pt-1">
-              {section.items.map(item => {
+            <div className="space-y-0.5">
+              {group.items.map((item) => {
                 const Icon = item.icon;
                 const isItemActive = currentTab === item.key;
-                const isChildActive = Boolean(item.children && item.children.some(c => c.key === currentTab));
+                const isChildActive = Boolean(item.children?.some((c) => c.key === currentTab));
                 const isSectionActive = isItemActive || isChildActive;
                 const isExpanded = openSections[item.key] ?? isSectionActive;
+                const count = countFor(item.key);
 
                 return (
-                  <div key={item.key} className="space-y-0.5">
+                  <div key={item.key}>
                     <a
                       href={getTabHref(item.key)}
+                      aria-current={isSectionActive ? 'page' : undefined}
                       onClick={(e) => {
-                        // Allow middle click, Ctrl+click, Cmd+click, Shift+click to open native new tab
-                        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) {
-                          return;
-                        }
+                        if (!isPlainClick(e)) return;
                         e.preventDefault();
                         handleSelect(item.key);
-                        if (item.children) {
-                          setOpenSections(prev => ({ ...prev, [item.key]: true }));
-                        } else if (isMobile) {
-                          onMobileClose?.();
-                        }
+                        if (item.children) setOpenSections((prev) => ({ ...prev, [item.key]: true }));
+                        else if (isMobile) onMobileClose?.();
                       }}
                       className={clsx(
-                        'w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all group relative border cursor-pointer select-none no-underline',
-                        isSectionActive
-                          ? 'bg-white dark:bg-white/[0.08] text-zinc-950 dark:text-white border-zinc-200 dark:border-white/[0.1] shadow-sm font-bold'
-                          : 'border-transparent text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200/60 dark:hover:bg-white/[0.03]'
+                        'relative flex cursor-pointer select-none items-center gap-[11px] rounded-[9px] px-2.5 py-2 text-[13.5px] font-medium no-underline transition-colors',
+                        isSectionActive ? 'bg-accent-soft text-fg' : 'text-muted hover:bg-chip hover:text-fg',
                       )}
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <Icon className={clsx(
-                          'w-4 h-4 transition-colors shrink-0',
-                          isSectionActive ? 'text-lime-600 dark:text-[#f3aa18]' : 'text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-700 dark:group-hover:text-zinc-300'
-                        )} />
-                        <span className="truncate">{item.label}</span>
-                      </div>
-
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {item.badge !== undefined && (
-                          <span className={clsx(
-                            'px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold shrink-0',
-                            item.badgeVariant === 'amber'
-                              ? 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30'
-                              : 'bg-zinc-200 dark:bg-white/[0.06] text-zinc-800 dark:text-[#f3aa18] border border-zinc-300 dark:border-white/[0.1]'
-                          )}>
-                            {item.badge}
-                          </span>
-                        )}
-
-                        {item.children && (
-                          <span
-                            role="button"
-                            tabIndex={0}
-                            aria-label={`Toggle ${item.label} sub-menu`}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              toggleSection(item.key, e);
-                            }}
-                            onAuxClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                toggleSection(item.key);
-                              }
-                            }}
-                            className="p-0.5 rounded hover:bg-zinc-200 dark:hover:bg-white/10 transition-colors cursor-pointer inline-flex items-center justify-center z-10"
-                          >
-                            <ChevronDown className={clsx(
-                              "w-3.5 h-3.5 text-zinc-400 transition-transform duration-200",
-                              isExpanded && "rotate-180"
-                            )} />
-                          </span>
-                        )}
-                      </div>
-
                       {isSectionActive && (
-                        <div className="w-1 h-3.5 rounded-full bg-lime-500 dark:bg-[#f3aa18] absolute left-0 top-1/2 -translate-y-1/2" />
+                        <span aria-hidden className="absolute -left-3 top-1/2 h-[14px] w-1 -translate-y-1/2 rounded-full bg-accent" />
+                      )}
+                      <Icon className={clsx('h-[17px] w-[17px] shrink-0', isSectionActive ? 'text-accent' : 'text-faint')} />
+                      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                      {count !== undefined && <CountPill value={count} tone={isSectionActive ? 'hot' : 'neutral'} />}
+                      {item.children && (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`Toggle ${item.label} sub-menu`}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toggleSection(item.key);
+                          }}
+                          onAuxClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              toggleSection(item.key);
+                            }
+                          }}
+                          className="inline-flex cursor-pointer items-center justify-center rounded p-0.5 hover:bg-chip"
+                        >
+                          <ChevronDown className={clsx('h-3.5 w-3.5 text-faint transition-transform duration-200', isExpanded && 'rotate-180')} />
+                        </span>
                       )}
                     </a>
 
-                    {/* Sub-menu items for parent containers */}
                     {item.children && isExpanded && (
-                      <div className="pl-6 pr-1 py-1 space-y-0.5 border-l border-zinc-200 dark:border-white/[0.06] ml-4 mt-0.5">
-                        {item.children.map(child => {
+                      <div className="ml-[19px] mt-0.5 space-y-0.5 border-l border-line pl-3">
+                        {item.children.map((child) => {
                           const isSubActive = currentTab === child.key;
                           return (
                             <a
                               key={child.key}
                               href={getTabHref(child.key)}
+                              aria-current={isSubActive ? 'page' : undefined}
                               onClick={(e) => {
-                                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) {
-                                  return;
-                                }
+                                if (!isPlainClick(e)) return;
                                 e.preventDefault();
                                 handleSelect(child.key);
                                 if (isMobile) onMobileClose?.();
                               }}
                               className={clsx(
-                                'w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-[11px] transition-colors cursor-pointer select-none no-underline',
-                                isSubActive
-                                  ? 'bg-lime-500/10 text-lime-700 dark:text-[#f3aa18] font-bold'
-                                  : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 hover:bg-zinc-200/40 dark:hover:bg-white/[0.02]'
+                                'block cursor-pointer select-none truncate rounded-lg px-2.5 py-1.5 text-[13px] no-underline transition-colors',
+                                isSubActive ? 'bg-chip font-medium text-fg' : 'text-muted hover:bg-chip hover:text-fg',
                               )}
                             >
-                              <span className="truncate">{child.label}</span>
-                              {child.badge !== undefined && (
-                                <span className={clsx(
-                                  'px-1.5 py-0.2 rounded-full text-[9px] font-mono font-bold',
-                                  child.badgeVariant === 'lime' 
-                                    ? 'bg-lime-500/20 text-lime-700 dark:text-[#f3aa18] border border-lime-500/30'
-                                    : 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30'
-                                )}>
-                                  {child.badge}
-                                </span>
-                              )}
+                              {child.label}
                             </a>
                           );
                         })}
@@ -410,33 +187,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           </div>
         ))}
-      </div>
+      </nav>
 
-      {/* User / Bottom Control Section */}
-      <div className="p-3 border-t border-zinc-200 dark:border-white/[0.06] space-y-2 shrink-0 bg-[#ebebe5] dark:bg-[#070707]">
+      <div className="shrink-0 space-y-2 border-t border-line p-3">
         <a
           href="https://exacoat.com"
           target="_blank"
           rel="noreferrer"
-          className="flex items-center justify-between px-3 py-2 rounded-xl bg-white dark:bg-white/[0.02] hover:bg-zinc-100 dark:hover:bg-white/[0.05] border border-zinc-200 dark:border-white/[0.05] text-[11px] text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors shadow-xs"
+          className="flex items-center justify-between rounded-[9px] border border-card-border bg-card px-3 py-2 text-[12.5px] text-muted no-underline transition-colors hover:text-fg"
         >
           <span>Visit exacoat.com</span>
-          <ExternalLink className="w-3 h-3 text-zinc-400" />
+          <ExternalLink className="h-3 w-3 text-faint" />
         </a>
 
-        {/* Role Simulation Switcher (Super Admins Only) */}
         {canSimulateRoles && (
-          <div className="p-2.5 rounded-xl bg-white dark:bg-white/[0.03] border border-zinc-200 dark:border-white/[0.06] space-y-2 shadow-xs">
+          <div className="space-y-2 rounded-[9px] border border-card-border bg-card p-2.5">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-mono uppercase font-bold text-zinc-500 flex items-center gap-1.5">
-                <Eye className="w-3 h-3 text-[#f3aa18]" />
+              <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.07em] text-faint">
+                <Eye className="h-3 w-3 text-accent" />
                 <span>Simulate Role</span>
               </span>
               {isSimulatingRole && (
                 <button
                   type="button"
                   onClick={() => setSimulatedRole(null)}
-                  className="text-[10px] font-mono font-bold text-amber-500 hover:text-amber-400 transition-colors cursor-pointer"
+                  className="cursor-pointer text-[11px] font-semibold text-accent-fg hover:underline"
                   title="Reset simulation back to Super Admin"
                 >
                   Exit
@@ -444,112 +219,81 @@ export const Sidebar: React.FC<SidebarProps> = ({
               )}
             </div>
             <div className="grid grid-cols-2 gap-1.5">
-              <button
-                type="button"
-                onClick={() => setSimulatedRole(simulatedRole === 'manager' ? null : 'manager')}
-                className={clsx(
-                  "px-2 py-1.5 rounded-lg text-[11px] font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer border active:scale-95",
-                  simulatedRole === 'manager'
-                    ? "bg-sky-500/20 text-sky-300 border-sky-500/40 font-bold"
-                    : "bg-zinc-50 dark:bg-zinc-900/60 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border-zinc-200 dark:border-white/[0.06]"
-                )}
-                title="Preview Studio Manager view"
-              >
-                <Shield className="w-3 h-3 text-sky-400" />
-                <span>Manager</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setSimulatedRole(simulatedRole === 'shop_manager' ? null : 'shop_manager')}
-                className={clsx(
-                  "px-2 py-1.5 rounded-lg text-[11px] font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer border active:scale-95",
-                  simulatedRole === 'shop_manager'
-                    ? "bg-violet-500/20 text-violet-300 border-violet-500/40 font-bold"
-                    : "bg-zinc-50 dark:bg-zinc-900/60 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border-zinc-200 dark:border-white/[0.06]"
-                )}
-                title="Preview Shop Manager view (Orders only)"
-              >
-                <ShoppingBag className="w-3 h-3 text-violet-400" />
-                <span>Shop</span>
-              </button>
+              {([
+                { role: 'manager', label: 'Manager', icon: Shield, title: 'Preview Studio Manager view' },
+                { role: 'shop_manager', label: 'Shop', icon: ShoppingBag, title: 'Preview Shop Manager view (Orders only)' },
+              ] as const).map(({ role, label, icon: RoleIcon, title }) => (
+                <button
+                  key={role}
+                  type="button"
+                  onClick={() => setSimulatedRole(simulatedRole === role ? null : role)}
+                  title={title}
+                  className={clsx(
+                    'flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-[12px] font-medium transition-colors',
+                    simulatedRole === role
+                      ? 'border-accent-border bg-accent-soft text-accent-fg'
+                      : 'border-field-border bg-field text-muted hover:text-fg',
+                  )}
+                >
+                  <RoleIcon className="h-3 w-3" />
+                  <span>{label}</span>
+                </button>
+              ))}
             </div>
           </div>
         )}
 
-        {/* User Badge */}
-        <div className="p-2.5 rounded-xl bg-white dark:bg-white/[0.03] border border-zinc-200 dark:border-white/[0.06] flex items-center justify-between shadow-xs">
-          <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-center justify-between rounded-[9px] border border-card-border bg-card p-2.5">
+          <div className="flex min-w-0 items-center gap-2.5">
             {user?.avatarUrl ? (
-              <img
-                src={user.avatarUrl}
-                alt={user.name || 'User'}
-                className="w-8 h-8 rounded-full object-cover border border-zinc-200 dark:border-white/10 shrink-0"
-              />
+              <img src={user.avatarUrl} alt={user.name || 'User'} className="h-8 w-8 shrink-0 rounded-full border border-line object-cover" />
             ) : (
-              <div className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 flex items-center justify-center text-xs font-bold text-zinc-800 dark:text-white shrink-0">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-xs font-semibold text-accent-fg">
                 {user?.name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || 'A'}
               </div>
             )}
             <div className="min-w-0">
-              <p className="text-xs font-bold text-zinc-900 dark:text-white truncate leading-tight">
-                {user?.name || 'Team member'}
+              <p className="truncate text-[13px] font-medium leading-tight text-fg">{user?.name || 'Team member'}</p>
+              <p className="mt-0.5 truncate text-[11.5px] capitalize text-faint">
+                {isSimulatingRole ? `Sim: ${roleLabel}` : roleLabel}
               </p>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <span className={clsx(
-                  "text-[9px] font-mono px-1 py-0.2 rounded font-bold capitalize",
-                  isSimulatingRole
-                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                    : "bg-zinc-100 dark:bg-white/[0.06] text-zinc-600 dark:text-[#f3aa18]"
-                )}>
-                  {isSimulatingRole 
-                    ? `Sim: ${user?.role ? user.role.replace('_', ' ') : 'super admin'}`
-                    : (user?.role ? user.role.replace('_', ' ') : 'super admin')
-                  }
-                </span>
-              </div>
             </div>
           </div>
-
           <button
+            type="button"
             onClick={logout}
             title="Sign out"
             aria-label="Sign out"
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors shrink-0"
+            className="shrink-0 cursor-pointer rounded-lg p-1.5 text-faint transition-colors hover:bg-chip hover:text-st-stop-fg"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className="h-4 w-4" />
           </button>
         </div>
+
+        <p className="px-1 font-mono text-[10px] text-faint">Manager v{APP_VERSION}</p>
       </div>
     </>
   );
 
   return (
     <>
-      {/* 1. Desktop Fixed Sidebar (lg+ displays) */}
-      <aside className="hidden lg:flex w-64 h-full bg-[#f0f0eb] dark:bg-[#080808] border-r border-zinc-200 dark:border-white/[0.07] flex-col justify-between select-none z-30 shrink-0 font-sans transition-colors duration-200">
+      <aside className="z-30 hidden h-full w-[248px] shrink-0 select-none flex-col border-r border-line bg-panel font-sans lg:flex">
         {renderContent(false)}
       </aside>
 
-      {/* 2. Mobile Slide-Over Drawer (< lg displays) */}
       {isRendered && (
-        <div className="fixed inset-0 z-50 lg:hidden flex font-sans pointer-events-none">
-          {/* Backdrop with smooth blur & opacity transition */}
-          <div 
+        <div className="pointer-events-none fixed inset-0 z-50 flex font-sans lg:hidden">
+          <div
             className={clsx(
-              "fixed inset-0 bg-black/80 backdrop-blur-md transition-opacity duration-300 ease-out pointer-events-auto cursor-pointer",
-              isVisible ? "opacity-100" : "opacity-0"
+              'pointer-events-auto fixed inset-0 cursor-pointer bg-black transition-opacity duration-300 ease-out',
+              isVisible ? 'opacity-70' : 'opacity-0',
             )}
             onClick={onMobileClose}
           />
-          
-          {/* Drawer Body sliding smoothly from left with spring curve */}
-          <aside 
-            style={{
-              transitionTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)',
-            }}
+          <aside
             className={clsx(
-              "relative w-72 max-w-[85vw] h-full bg-[#f0f0eb] dark:bg-[#080808] border-r border-zinc-200 dark:border-white/[0.08] flex flex-col justify-between z-10 shadow-2xl overflow-hidden pb-safe pointer-events-auto transform transition-transform duration-300 ease-out",
-              isVisible ? "translate-x-0" : "-translate-x-full"
+              'pb-safe pointer-events-auto relative z-10 flex h-full w-72 max-w-[85vw] transform flex-col overflow-hidden border-r border-line bg-panel shadow-2xl transition-transform duration-300 ease-out',
+              isVisible ? 'translate-x-0' : '-translate-x-full',
             )}
           >
             {renderContent(true)}

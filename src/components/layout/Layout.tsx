@@ -57,19 +57,7 @@ export const Layout: React.FC<LayoutProps> = ({
   const isShopManager = user?.role === 'shop_manager';
 
   return (
-    <div className="manager-workspace h-screen w-screen bg-[#f6f6f3] dark:bg-[#080808] text-zinc-900 dark:text-zinc-100 flex relative overflow-hidden font-sans transition-colors duration-200">
-      {/* Ambient background glow: static gradients instead of animated blur filters, which repaint every frame on weak GPUs */}
-      <div
-        aria-hidden="true"
-        className="fixed inset-0 pointer-events-none -z-10"
-        style={{
-          background:
-            'radial-gradient(600px 500px at 30% 0%, rgba(243, 170, 24, 0.025), transparent 70%),' +
-            'radial-gradient(500px 400px at 70% 100%, rgba(161, 161, 170, 0.025), transparent 70%),' +
-            'radial-gradient(400px 400px at 100% 55%, rgba(113, 113, 122, 0.025), transparent 70%)',
-        }}
-      />
-
+    <div className="manager-workspace h-screen w-screen bg-bg text-fg flex relative overflow-hidden font-sans">
       {/* Sidebar with Desktop Fixed & Mobile Drawer Modes */}
       <Sidebar
         currentTab={currentTab}
@@ -107,7 +95,7 @@ export const Layout: React.FC<LayoutProps> = ({
       {!isShopManager && (
       <nav 
         aria-label="Mobile Navigation" 
-        className="lg:hidden fixed bottom-0 left-0 right-0 h-16 bg-white dark:bg-[#0c0c0e] border-t border-zinc-200 dark:border-white/10 z-30 grid grid-cols-4 items-center px-3 font-sans select-none shadow-[0_-10px_30px_rgba(0,0,0,0.28)] pb-safe"
+        className="lg:hidden fixed bottom-0 left-0 right-0 h-16 bg-panel border-t border-line z-30 grid grid-cols-4 items-center px-3 font-sans select-none pb-safe"
       >
         {/* 1. Dashboard */}
         <a
@@ -120,8 +108,8 @@ export const Layout: React.FC<LayoutProps> = ({
           className={clsx(
             "flex flex-col items-center justify-center flex-1 py-1.5 transition-all duration-200 cursor-pointer text-center active:scale-90 group select-none no-underline",
             currentTab === 'dashboard'
-              ? "text-lime-600 dark:text-[#f3aa18]"
-              : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
+              ? "text-accent"
+              : "text-muted hover:text-fg"
           )}
         >
           <div className={clsx("transition-transform duration-200", currentTab === 'dashboard' && "scale-110")}>
@@ -141,14 +129,14 @@ export const Layout: React.FC<LayoutProps> = ({
           className={clsx(
             "flex flex-col items-center justify-center flex-1 py-1.5 transition-all duration-200 cursor-pointer text-center relative active:scale-90 group select-none no-underline",
             currentTab === 'orders'
-              ? "text-lime-600 dark:text-[#f3aa18]"
-              : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
+              ? "text-accent"
+              : "text-muted hover:text-fg"
           )}
         >
           <div className={clsx("relative transition-transform duration-200", currentTab === 'orders' && "scale-110")}>
             <ShoppingBag className="w-5 h-5" />
             {pendingOrdersCount > 0 && (
-              <span className="absolute -top-1 -right-2 px-1 py-0.2 rounded-full bg-amber-500 text-zinc-950 text-[9px] font-mono font-bold leading-none animate-pulse">
+              <span className="absolute -top-1 -right-2 px-1 py-0.2 rounded-full bg-accent text-accent-on text-[9px] font-mono font-bold leading-none">
                 {pendingOrdersCount}
               </span>
             )}
@@ -167,14 +155,14 @@ export const Layout: React.FC<LayoutProps> = ({
           className={clsx(
             "flex flex-col items-center justify-center flex-1 py-1.5 transition-all duration-200 cursor-pointer text-center relative active:scale-90 group select-none no-underline",
             currentTab === 'reviews'
-              ? "text-lime-600 dark:text-[#f3aa18]"
-              : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
+              ? "text-accent"
+              : "text-muted hover:text-fg"
           )}
         >
           <div className={clsx("relative transition-transform duration-200", currentTab === 'reviews' && "scale-110")}>
             <Star className="w-5 h-5" />
             {pendingReviewsCount > 0 && (
-              <span className="absolute -top-1 -right-2 px-1 py-0.2 rounded-full bg-amber-500 text-zinc-950 text-[9px] font-mono font-bold leading-none animate-pulse">
+              <span className="absolute -top-1 -right-2 px-1 py-0.2 rounded-full bg-accent text-accent-on text-[9px] font-mono font-bold leading-none">
                 {pendingReviewsCount}
               </span>
             )}
@@ -193,8 +181,8 @@ export const Layout: React.FC<LayoutProps> = ({
           className={clsx(
             "flex flex-col items-center justify-center flex-1 py-1.5 transition-all duration-200 cursor-pointer text-center active:scale-90 group select-none no-underline",
             currentTab === 'reports'
-              ? "text-lime-600 dark:text-[#f3aa18]"
-              : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
+              ? "text-accent"
+              : "text-muted hover:text-fg"
           )}
         >
           <div className={clsx("transition-transform duration-200", currentTab === 'reports' && "scale-110")}>
