@@ -4014,6 +4014,14 @@ export const ConfiguratorStudioPage: React.FC = () => {
         rowMenuItems={studioRowMenu}
         reloadToken={catalogReloadToken}
         overrides={catalogOverrides}
+        onLoaded={(ids) =>
+          setCatalogOverrides((prev) => {
+            if (!ids.some((id) => prev[id])) return prev;
+            const next = { ...prev };
+            ids.forEach((id) => delete next[id]);
+            return next;
+          })
+        }
       />
 
       {/* Global Catalog Asset Audit Dialog */}
@@ -4428,6 +4436,7 @@ export const ConfiguratorStudioPage: React.FC = () => {
 
       <DuplicateProductModal
         source={duplicateSource}
+        allowPrice={false}
         onClose={() => setDuplicateSource(null)}
         onDuplicated={(newId) => {
           setCatalogReloadToken((t) => t + 1);
@@ -8945,8 +8954,8 @@ export const ConfiguratorStudioPage: React.FC = () => {
                               <div className="grid grid-cols-2 gap-2 pt-1">
                                 <div>
                                   <div className="flex items-center gap-1 mb-1 text-[11px]">
-                                    <span className="text-zinc-400 font-medium">Base Price (IDR)</span>
-                                    <InfoTooltip text="The product's regular price. Prices are edited only in Products; saving here never changes it." />
+                                    <span className="text-zinc-400 font-medium">Configurator Base Price (IDR)</span>
+                                    <InfoTooltip text="The price the webstore configurator starts from. It follows the product's regular price, which is edited only in Products. Saving here never changes either." />
                                   </div>
                                   <div className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-zinc-950 border border-white/10 flex items-center justify-between gap-2">
                                     <span className="text-white font-mono">{(editingProfile.base_price || 0).toLocaleString('id-ID')}</span>

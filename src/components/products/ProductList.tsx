@@ -12,6 +12,7 @@ import {
   PAGE_SIZE,
   SORT_OPTIONS,
   buildWebstoreQuery,
+  textureScaleLabel,
   configuratorCounts,
   type ConfiguratorFilter,
   type SortOption,
@@ -63,6 +64,8 @@ export interface ProductListProps {
   overrides?: Record<number, Product>;
   /** Product hidden at once after it was moved to trash. */
   hiddenIds?: number[];
+  /** Ids of the rows a fresh load returned: callers drop their overrides and hidden ids for them. */
+  onLoaded?(ids: number[]): void;
 }
 
 const th = 'border-b border-line px-3 py-2.5 text-left text-[12px] font-[450] text-faint whitespace-nowrap';
@@ -85,6 +88,7 @@ export function ProductList({
   reloadToken = 0,
   overrides,
   hiddenIds,
+  onLoaded,
 }: ProductListProps) {
   const studio = mode === 'studio';
   const [channel, setChannel] = useState<ProductChannel>('webstore');
@@ -138,6 +142,8 @@ export function ProductList({
   );
 
   const requestId = useRef(0);
+  const onLoadedRef = useRef(onLoaded);
+  onLoadedRef.current = onLoaded;
   useEffect(() => {
     if (channel !== 'webstore') return;
     if ('unavailable' in request) {
@@ -164,6 +170,7 @@ export function ProductList({
         if (id !== requestId.current) return;
         if (res.success) {
           setProducts(res.products);
+          onLoadedRef.current?.(res.products.map((p) => p.id));
           setTotal(res.total_products);
           setMaxPages(Math.max(1, res.max_pages));
         } else {
@@ -201,7 +208,8 @@ export function ProductList({
     ...(categories || []).map((c) => ({ value: String(c.id), label: c.count ? `${c.name} (${c.count})` : c.name })),
   ];
 
-  const hidden = new Set(hiddenIds || []);
+  // Products moved to trash here stay hidden from the other lists, but the Trash filter shows them.
+  const hidden = new Set(status === 'trash' ? [] : hiddenIds || []);
   const rows = products.filter((p) => !hidden.has(p.id)).map((p) => (overrides && overrides[p.id] ? { ...p, ...overrides[p.id] } : p));
 
   const handleConfigurator = (v: string) => {
@@ -260,7 +268,7 @@ export function ProductList({
           <div className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2.5">
             <SearchField
               className="w-full sm:w-[220px]"
-              placeholder={studio ? 'Search devices, slug or id' : 'Search products or id'}
+              placeholder={studio ? 'Search devices or id' : 'Search products or id'}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -357,6 +365,7 @@ export function ProductList({
                                     {summary.views_count} {summary.views_count === 1 ? 'view' : 'views'}, {summary.layers_count}{' '}
                                     {summary.layers_count === 1 ? 'layer' : 'layers'}
                                     {(summary.presets_count || 0) > 0 ? `, ${summary.presets_count} looks` : ''}
+                                    <span className="block text-[12px] text-faint">Texture scale {textureScaleLabel(summary)}</span>
                                   </span>
                                 ) : (
                                   <span className="text-faint">None</span>

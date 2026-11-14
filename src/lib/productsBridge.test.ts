@@ -5,6 +5,8 @@ import {
   fetchFinishSurchargeTiersDirect,
   fetchProductConfiguratorProfileDirect,
   fetchProductByIdDirect,
+  fetchPluginFeaturesDirect,
+  resetPluginFeaturesCache,
   fetchProductCategoriesDirect,
   fetchProductsDirect,
   saveProductConfiguratorProfileDirect,
@@ -107,5 +109,19 @@ describe('no invented configurator data', () => {
   it('reports failed price tiers instead of returning built-in ones', async () => {
     fetchMock.mockRejectedValue(new Error('offline'));
     expect(await fetchFinishSurchargeTiersDirect()).toEqual({ success: false, tiers: [], error: 'offline' });
+  });
+});
+
+describe('plugin features', () => {
+  it('reads features from /health and treats an older plugin as having none', async () => {
+    resetPluginFeaturesCache();
+    fetchMock.mockResolvedValueOnce(json(200, { status: 'online', features: ['set_price_keeps_sale'] }));
+    expect(await fetchPluginFeaturesDirect()).toEqual(['set_price_keeps_sale']);
+    resetPluginFeaturesCache();
+    fetchMock.mockResolvedValueOnce(json(200, { status: 'online', plugin_version: '0.1.228' }));
+    expect(await fetchPluginFeaturesDirect()).toEqual([]);
+    resetPluginFeaturesCache();
+    fetchMock.mockRejectedValueOnce(new Error('offline'));
+    expect(await fetchPluginFeaturesDirect()).toBeNull();
   });
 });

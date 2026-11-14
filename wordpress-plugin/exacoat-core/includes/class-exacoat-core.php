@@ -2103,6 +2103,8 @@ class Exacoat_Core {
 				'review_manager'    => (bool) self::get_setting( 'enable_review_manager', 1 ),
 			],
 			'timestamp'        => current_time( 'mysql' ),
+			// Behaviour flags the manager checks before relying on a fix (versions are reused between builds).
+			'features'         => [ 'set_price_keeps_sale' ],
 		];
 
 		return rest_ensure_response( $response );

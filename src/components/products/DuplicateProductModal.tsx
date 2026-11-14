@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Copy } from 'lucide-react';
 import { duplicateProductDirect, type Product } from '../../lib/wordpressBridge';
-import { parsePriceInput } from '../../lib/productList';
+import { formatIdr, parsePriceInput } from '../../lib/productList';
 import { slugify } from '../../lib/finishesEditor';
 import { Modal } from '../ds/Modal';
 import { Button } from '../ds/Button';
@@ -31,11 +31,13 @@ export interface DuplicateProductModalProps {
   onClose(): void;
   /** Products offers AI SEO for the copy; Studio did not. */
   offerAutoSeo?: boolean;
+  /** Studio does not edit prices: the copy keeps the source's regular price, changed later in Products. */
+  allowPrice?: boolean;
   onDuplicated(productId: number): void;
 }
 
 /** One Duplicate pop-up for Products and Studio. The copy is created as a draft. */
-export function DuplicateProductModal({ source, onClose, offerAutoSeo = false, onDuplicated }: DuplicateProductModalProps) {
+export function DuplicateProductModal({ source, onClose, offerAutoSeo = false, allowPrice = true, onDuplicated }: DuplicateProductModalProps) {
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [price, setPrice] = useState('');
@@ -52,7 +54,7 @@ export function DuplicateProductModal({ source, onClose, offerAutoSeo = false, o
     setAutoSeo(true);
   }, [source]);
 
-  const parsedPrice = parsePriceInput(price);
+  const parsedPrice = allowPrice ? parsePriceInput(price) : source && source.price > 0 ? source.price : null;
   const error =
     !name.trim() ? 'Enter a name for the copy.' : parsedPrice === 'invalid' ? 'Price must be a whole number of rupiah.' : null;
 
@@ -103,14 +105,20 @@ export function DuplicateProductModal({ source, onClose, offerAutoSeo = false, o
     >
       <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} />
       <TextField label="Slug" mono value={slug} onChange={(e) => setSlug(e.target.value)} />
-      <TextField
-        label="Regular price (Rp)"
-        inputMode="numeric"
-        mono
-        value={price}
-        onChange={(e) => setPrice(e.target.value)}
-        placeholder="Same as the source"
-      />
+      {allowPrice ? (
+        <TextField
+          label="Regular price (Rp)"
+          inputMode="numeric"
+          mono
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+          placeholder="Same as the source"
+        />
+      ) : (
+        <p className="text-[13px] text-muted">
+          The copy keeps the source's regular price{source && source.price > 0 ? ` (${formatIdr(source.price)})` : ''}. Change it in Products after duplicating.
+        </p>
+      )}
       <Switch label="Copy the configurator setup" checked={copyConfig} onCheckedChange={setCopyConfig} />
       {offerAutoSeo && <Switch label="Write SEO title and description with AI" checked={autoSeo} onCheckedChange={setAutoSeo} />}
       {error && <p className="text-[12.5px] text-st-stop-fg">{error}</p>}

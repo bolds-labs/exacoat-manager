@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   AlertCircle,
   Copy,
@@ -15,6 +15,7 @@ import {
 import {
   fetchProductCategoriesDirect,
   fetchProductConfiguratorProfileDirect,
+  fetchPluginFeaturesDirect,
   fetchShopeeProductsDirect,
   fetchTikTokProductsDirect,
   setProductPriceDirect,
@@ -32,6 +33,8 @@ import {
   draftFromProduct,
   formatIdr,
   isDetailsDirty,
+  configuratorPriceSync,
+  productPriceView,
   matchesListingName,
   shopeePrice,
   shopeeStatusMeta,
@@ -59,6 +62,8 @@ const ProductSeoModal = lazy(() => import('./ProductSeoModal').then((m) => ({ de
 const ShopeeProductDuplicatorModal = lazy(() =>
   import('../orders/ShopeeProductDuplicatorModal').then((m) => ({ default: m.ShopeeProductDuplicatorModal })),
 );
+
+type PriceNotice = { kind: 'failed' | 'sale' | 'unknown'; price: number };
 
 export type PanelTab = 'details' | 'images' | 'seo' | 'configurator' | 'marketplaces';
 
@@ -116,14 +121,14 @@ export function ProductPanel(props: ProductPanelProps) {
   const [draft, setDraft] = useState<DetailsDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
-  const [priceSyncFailed, setPriceSyncFailed] = useState<number | null>(null);
+  const [priceNotice, setPriceNotice] = useState<PriceNotice | null>(null);
   const [imagesOpen, setImagesOpen] = useState(false);
   const [seoOpen, setSeoOpen] = useState(false);
 
   const productId = product?.id;
   useEffect(() => {
     setTab(props.initialTab || 'details');
-    setPriceSyncFailed(null);
+    setPriceNotice(null);
     // Only a different product resets the tab; a save keeps it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId]);
@@ -144,10 +149,10 @@ export function ProductPanel(props: ProductPanelProps) {
   const syncConfiguratorPrice = async (id: number, price: number) => {
     const res = await setProductPriceDirect(id, price);
     if (res.success) {
-      setPriceSyncFailed(null);
+      setPriceNotice(null);
       return true;
     }
-    setPriceSyncFailed(price);
+    setPriceNotice({ kind: 'failed', price });
     toast.error('Configurator price not updated', `The product price is saved, but the configurator still has the old base price. ${res.error || ''}`.trim());
     return false;
   };
@@ -164,9 +169,21 @@ export function ProductPanel(props: ProductPanelProps) {
     try {
       const res = await updateProductDirect(product.id, payload);
       if (!res.success || !res.product) throw new Error(res.error || 'The store did not accept the changes.');
-      // The webstore configurator reads the profile's base price first, so it follows the regular price.
-      const hasProfile = !summary || summary.is_migrated || summary.is_configurable;
-      if (regularChanged && hasProfile) await syncConfiguratorPrice(product.id, Number(payload.regular_price));
+      // The webstore configurator reads the profile's base price first, so it follows the regular price,
+      // but never at the cost of a running sale or for a product whose profile state is unknown.
+      const newRegular = Number(payload.regular_price);
+      const onSaleAfterSave = productPriceView(res.product).onSale;
+      const features = regularChanged && onSaleAfterSave ? await fetchPluginFeaturesDirect() : null;
+      const decision = configuratorPriceSync({
+        regularChanged,
+        summary,
+        summariesFailed: Boolean(summaryUnknown),
+        onSaleAfterSave,
+        pluginKeepsSale: Boolean(features?.includes('set_price_keeps_sale')),
+      });
+      if (decision === 'sync') await syncConfiguratorPrice(product.id, newRegular);
+      else if (decision === 'unknown') setPriceNotice({ kind: 'unknown', price: newRegular });
+      else if (decision === 'sale-needs-plugin') setPriceNotice({ kind: 'sale', price: newRegular });
       onSaved(res.product);
       toast.success('Product saved', res.product.name);
     } catch (err) {
@@ -268,8 +285,8 @@ export function ProductPanel(props: ProductPanelProps) {
                 dirty={dirty}
                 onSave={() => void save()}
                 onReset={() => setDraft(draftFromProduct(product))}
-                priceSyncFailed={priceSyncFailed}
-                onRetrySync={() => priceSyncFailed !== null && void syncConfiguratorPrice(product.id, priceSyncFailed)}
+                priceNotice={priceNotice}
+                onRetrySync={() => priceNotice?.kind === 'failed' && void syncConfiguratorPrice(product.id, priceNotice.price)}
               />
             )}
             {tab === 'images' && <ImagesSection product={product} onManage={() => setImagesOpen(true)} />}
@@ -336,7 +353,7 @@ function DetailsSection({
   dirty,
   onSave,
   onReset,
-  priceSyncFailed,
+  priceNotice,
   onRetrySync,
 }: {
   draft: DetailsDraft;
@@ -346,7 +363,7 @@ function DetailsSection({
   dirty: boolean;
   onSave(): void;
   onReset(): void;
-  priceSyncFailed: number | null;
+  priceNotice: PriceNotice | null;
   onRetrySync(): void;
 }) {
   const [categories, setCategories] = useState<ProductCategory[] | null>(null);
@@ -375,14 +392,20 @@ function DetailsSection({
 
   return (
     <>
-      {priceSyncFailed !== null && (
+      {priceNotice && (
         <div role="status" className="flex flex-wrap items-center gap-3 border-b border-line bg-st-wait-bg px-5 py-3">
           <p className="min-w-0 flex-1 text-[13px] text-st-wait-fg">
-            The configurator still uses the old base price. The webstore configurator shows that price until it is updated to {formatIdr(priceSyncFailed)}.
+            {priceNotice.kind === 'failed'
+              ? `The product price is saved, but the configurator still uses the old base price. Update it to ${formatIdr(priceNotice.price)} so the webstore configurator matches.`
+              : priceNotice.kind === 'sale'
+              ? `A sale is running, and the installed plugin would end it if the configurator base price were updated now. The product price is saved; the configurator base price follows (${formatIdr(priceNotice.price)}) once the new plugin is installed and the price is saved again.`
+              : 'The product price is saved. Configurator data did not load, so the configurator base price was not touched. Retry the list, then save the price again if this product has a configurator.'}
           </p>
-          <Button size="sm" icon={RefreshCw} onClick={onRetrySync}>
-            Update configurator price
-          </Button>
+          {priceNotice.kind === 'failed' && (
+            <Button size="sm" icon={RefreshCw} onClick={onRetrySync}>
+              Update configurator price
+            </Button>
+          )}
         </div>
       )}
       <Section title="Product">
@@ -537,19 +560,34 @@ function ConfiguratorSection({
   const [profileError, setProfileError] = useState<string | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
 
+  const profileRequest = useRef(0);
   const load = () => {
+    const id = ++profileRequest.current;
+    setProfile(null);
     setLoadingProfile(true);
     setProfileError(null);
     fetchProductConfiguratorProfileDirect(product.id)
       .then((res) => {
+        if (id !== profileRequest.current) return;
         if (res.success && res.profile) setProfile(res.profile);
+        else if (res.success && res.isNew) setProfile(null);
         else setProfileError(res.error || 'The configurator profile did not load.');
       })
-      .catch((err) => setProfileError(errorText(err, 'The configurator profile did not load.')))
-      .finally(() => setLoadingProfile(false));
+      .catch((err) => {
+        if (id === profileRequest.current) setProfileError(errorText(err, 'The configurator profile did not load.'));
+      })
+      .finally(() => {
+        if (id === profileRequest.current) setLoadingProfile(false);
+      });
   };
   useEffect(() => {
     if (has) load();
+    else {
+      profileRequest.current += 1;
+      setProfile(null);
+      setProfileError(null);
+      setLoadingProfile(false);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product.id, has]);
 
@@ -633,19 +671,35 @@ function MarketplacesSection({ product }: { product: Product }) {
   const [tiktok, setTiktok] = useState<{ items: TikTokListingItem[]; error?: string; loading: boolean }>({ items: [], loading: true });
   const [duplicator, setDuplicator] = useState<{ open: boolean; source?: string }>({ open: false });
 
+  // Only the latest search may fill the lists (a slow answer for an older term or product is dropped).
+  const searchRequest = useRef(0);
   const run = (q: string) => {
+    const id = ++searchRequest.current;
+    const current = () => id === searchRequest.current;
     setSearched(q);
     setShopee({ items: [], loading: true });
     setTiktok({ items: [], loading: true });
     fetchShopeeProductsDirect({ search: q, page_size: 50, item_status: 'ALL' })
-      .then((r) => setShopee(r.success ? { items: r.items.filter((it) => matchesListingName(it.item_name, q)), loading: false } : { items: [], error: r.error || 'Did not load.', loading: false }))
-      .catch((e) => setShopee({ items: [], error: errorText(e, 'Did not load.'), loading: false }));
+      .then((r) => {
+        if (current()) setShopee(r.success ? { items: r.items.filter((it) => matchesListingName(it.item_name, q)), loading: false } : { items: [], error: r.error || 'Did not load.', loading: false });
+      })
+      .catch((e) => {
+        if (current()) setShopee({ items: [], error: errorText(e, 'Did not load.'), loading: false });
+      });
     fetchTikTokProductsDirect({ search: q, page_size: 50, status: 'ALL' })
-      .then((r) => setTiktok(r.success ? { items: r.products.filter((it) => matchesListingName(it.title, q)), loading: false } : { items: [], error: r.error || 'Did not load.', loading: false }))
-      .catch((e) => setTiktok({ items: [], error: errorText(e, 'Did not load.'), loading: false }));
+      .then((r) => {
+        if (current()) setTiktok(r.success ? { items: r.products.filter((it) => matchesListingName(it.title, q)), loading: false } : { items: [], error: r.error || 'Did not load.', loading: false });
+      })
+      .catch((e) => {
+        if (current()) setTiktok({ items: [], error: errorText(e, 'Did not load.'), loading: false });
+      });
   };
   useEffect(() => {
+    setTerm(deviceName);
     run(deviceName);
+    return () => {
+      searchRequest.current += 1;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product.id]);
 

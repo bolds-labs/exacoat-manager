@@ -31,7 +31,10 @@ export function prepareWordPressRequest(
   // (the manager received USD 14.9 instead of Rp 129.000). Staff always work in the base
   // currency, and a converted price saved back would overwrite the rupiah price.
   let forcedCurrency = false;
-  if (/\/wp-json\/wc\/v\d+\/products(\/|$)/.test(target.pathname) && !target.searchParams.has('aelia_cs_currency')) {
+  // Configurator routes read product prices too (summary prices, profile base price on save).
+  const readsProductPrices =
+    /\/wp-json\/wc\/v\d+\/products(\/|$)/.test(target.pathname) || /\/wp-json\/exacoat(-core)?\/v\d+\/configurator(\/|$)/.test(target.pathname);
+  if (readsProductPrices && !target.searchParams.has('aelia_cs_currency')) {
     target.searchParams.set('aelia_cs_currency', 'IDR');
     forcedCurrency = true;
   }

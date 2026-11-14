@@ -15,6 +15,8 @@ import {
   productPriceView,
   shopeePrice,
   sortListings,
+  configuratorPriceSync,
+  textureScaleLabel,
   matchesListingName,
   tiktokStatusMeta,
   wpStatusMeta,
@@ -243,5 +245,40 @@ describe('misc', () => {
     expect(sortListings(rows, 'price_desc').map((r) => r.title)).toEqual(['A', 'B', 'C']);
     expect(sortListings(rows, 'price_asc').map((r) => r.title)).toEqual(['B', 'A', 'C']);
     expect(sortListings(rows, 'updated_desc').map((r) => r.title)).toEqual(['A', 'C', 'B']);
+  });
+});
+
+describe('configuratorPriceSync', () => {
+  const base = { regularChanged: true, summary: clean, summariesFailed: false, onSaleAfterSave: false, pluginKeepsSale: false };
+  it('syncs only a real regular price change on a stored profile', () => {
+    expect(configuratorPriceSync(base)).toBe('sync');
+    expect(configuratorPriceSync({ ...base, regularChanged: false })).toBe('none');
+    expect(configuratorPriceSync({ ...base, summary: s({ is_migrated: false }) })).toBe('no-profile');
+    expect(configuratorPriceSync({ ...base, summary: undefined })).toBe('no-profile');
+  });
+  it('never syncs when summaries failed', () => {
+    expect(configuratorPriceSync({ ...base, summariesFailed: true })).toBe('unknown');
+  });
+  it('never risks ending a sale on an older plugin', () => {
+    expect(configuratorPriceSync({ ...base, onSaleAfterSave: true })).toBe('sale-needs-plugin');
+    expect(configuratorPriceSync({ ...base, onSaleAfterSave: true, pluginKeepsSale: true })).toBe('sync');
+  });
+});
+
+describe('fix round 1 parsing', () => {
+  it('reads WooCommerce decimal prices', () => {
+    expect(parsePriceInput('129000.00')).toBe(129000);
+    expect(parsePriceInput('129000.5')).toBe('invalid');
+    expect(parsePriceInput('129.000')).toBe(129000);
+    expect(parsePriceInput('Rp 1.290.000')).toBe(1290000);
+    expect(parsePriceInput('129,000.00')).toBe(129000);
+  });
+});
+
+describe('textureScaleLabel', () => {
+  it('shows the primary view scale', () => {
+    expect(textureScaleLabel(s({ texture_scale: 0.75 }))).toBe('75%');
+    expect(textureScaleLabel(s({ texture_scale: 1 }))).toBe('100%');
+    expect(textureScaleLabel(s({ texture_scale: undefined }))).toBe('not set');
   });
 });

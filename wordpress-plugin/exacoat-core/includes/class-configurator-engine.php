@@ -2304,19 +2304,21 @@ class Exacoat_Configurator_Engine {
 			return 0.0;
 		}
 
-		$price = (float) ( $product->get_price() ?: $product->get_regular_price() ?: 0 );
+		// The configurator base price is the regular price: the active price drops during a sale, and a
+		// base price taken from it stays low after the sale ends.
+		$price = (float) ( $product->get_regular_price() ?: $product->get_price() ?: 0 );
 
 		if ( $price <= 0 && method_exists( $product, 'is_type' ) && $product->is_type( 'variable' ) ) {
-			if ( method_exists( $product, 'get_variation_price' ) ) {
-				$min_price = (float) $product->get_variation_price( 'min', true );
-				if ( $min_price > 0 ) {
-					return $min_price;
-				}
-			}
 			if ( method_exists( $product, 'get_variation_regular_price' ) ) {
 				$min_reg_price = (float) $product->get_variation_regular_price( 'min', true );
 				if ( $min_reg_price > 0 ) {
 					return $min_reg_price;
+				}
+			}
+			if ( method_exists( $product, 'get_variation_price' ) ) {
+				$min_price = (float) $product->get_variation_price( 'min', true );
+				if ( $min_price > 0 ) {
+					return $min_price;
 				}
 			}
 		}
@@ -3455,7 +3457,20 @@ class Exacoat_Configurator_Engine {
 			}
 		}
 
+		// The manager never sends base_price (prices are edited in Products and synced by /configurator/set-price).
+		// Without one, keep the stored profile base price, then fall back to the regular price, never the
+		// active (sale) price.
 		$raw_price = isset( $params['base_price'] ) ? (float) $params['base_price'] : 0;
+		if ( $raw_price <= 0 ) {
+			$stored_meta = get_post_meta( $product_id, self::PROFILE_META_KEY, true );
+			$stored      = is_array( $stored_meta ) ? $stored_meta : ( is_string( $stored_meta ) && '' !== $stored_meta ? json_decode( $stored_meta, true ) : null );
+			if ( is_string( $stored_meta ) && ! is_array( $stored ) ) {
+				$stored = json_decode( wp_unslash( $stored_meta ), true );
+			}
+			if ( is_array( $stored ) && isset( $stored['base_price'] ) && (float) $stored['base_price'] > 0 ) {
+				$raw_price = (float) $stored['base_price'];
+			}
+		}
 		if ( $raw_price <= 0 && $wc_product ) {
 			$raw_price = self::get_product_base_price( $wc_product );
 		}
@@ -4051,7 +4066,8 @@ class Exacoat_Configurator_Engine {
 		}
 
 		// Set price
-		$price_to_set = ( $new_price !== null && $new_price > 0 ) ? $new_price : (float) $source_product->get_price();
+		// Without a new price the copy keeps the source's regular price (not a running sale price).
+		$price_to_set = ( $new_price !== null && $new_price > 0 ) ? $new_price : self::get_product_base_price( $source_product );
 		if ( $price_to_set > 0 ) {
 			$new_product->set_regular_price( $price_to_set );
 			$new_product->set_price( $price_to_set );

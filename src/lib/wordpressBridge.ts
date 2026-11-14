@@ -971,6 +971,30 @@ export async function fetchWordPressSiteHealth(): Promise<WordPressSiteHealth> {
   }
 }
 
+let pluginFeaturesCache: Promise<string[] | null> | null = null;
+
+/**
+ * Behaviour flags of the installed exacoat-core (`features` on /health), cached per session. Null when the
+ * store did not answer; an older plugin answers without the field, which reads as no features.
+ */
+export function fetchPluginFeaturesDirect(): Promise<string[] | null> {
+  if (!pluginFeaturesCache) {
+    pluginFeaturesCache = fetchWordPressSiteHealth().then((h) => {
+      if (h.status === 'offline') {
+        pluginFeaturesCache = null;
+        return null;
+      }
+      const features = (h as { features?: unknown }).features;
+      return Array.isArray(features) ? features.map(String) : [];
+    });
+  }
+  return pluginFeaturesCache;
+}
+
+export function resetPluginFeaturesCache(): void {
+  pluginFeaturesCache = null;
+}
+
 export async function fetchSiteHealthDirect(): Promise<WordPressSiteHealth> {
   return fetchWordPressSiteHealth();
 }

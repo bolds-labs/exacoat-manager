@@ -33,6 +33,12 @@ export function configuratorStatus(summary?: ConfiguratorProfileSummary | null):
   return { state: 'clean', label: 'Clean', issues: 0, family: 'done' };
 }
 
+/** Primary view texture scale (AGENTS sections 36 and 42), as a percentage. */
+export function textureScaleLabel(summary: ConfiguratorProfileSummary): string {
+  const scale = Number(summary.texture_scale);
+  return Number.isFinite(scale) && scale > 0 ? `${Math.round(scale * 100)}%` : 'not set';
+}
+
 export function matchesConfiguratorFilter(state: ConfiguratorState, filter: ConfiguratorFilter): boolean {
   if (filter === 'all') return true;
   if (filter === 'has') return state === 'clean' || state === 'issues' || state === 'unaudited';
@@ -164,11 +170,21 @@ export function productPriceView(p: { price?: string; regular_price?: string; sa
   return { current: onSale ? sale : current, regular, onSale };
 }
 
-/** Rupiah typed by staff: "Rp 129.000", "129,000" and "129000" all read as 129000. Empty is null. */
+/**
+ * Rupiah typed by staff or sent by WooCommerce: "Rp 129.000", "129,000", "129000" and "129000.00" all read
+ * as 129000. A separator followed by one or two digits at the end is a decimal part; rupiah has no cents,
+ * so a non-zero decimal is invalid. Empty is null.
+ */
 export function parsePriceInput(raw: string | number | null | undefined): number | null | 'invalid' {
   if (raw === null || raw === undefined) return null;
-  const cleaned = String(raw).trim().replace(/^rp\.?\s*/i, '').replace(/[.,\s]/g, '');
-  if (cleaned === '') return null;
+  let text = String(raw).trim().replace(/^rp\.?\s*/i, '').replace(/\s/g, '');
+  if (text === '') return null;
+  const decimal = text.match(/[.,](\d{1,2})$/);
+  if (decimal) {
+    if (!/^0+$/.test(decimal[1])) return 'invalid';
+    text = text.slice(0, -decimal[0].length);
+  }
+  const cleaned = text.replace(/[.,]/g, '');
   if (!/^\d+$/.test(cleaned)) return 'invalid';
   return Number(cleaned);
 }
@@ -342,4 +358,26 @@ export function matchesListingName(title: string, term: string): boolean {
   const words = term.toLowerCase().split(/\s+/).filter(Boolean);
   const t = (title || '').toLowerCase();
   return words.every((w) => t.includes(w));
+}
+
+export type PriceSyncDecision = 'none' | 'sync' | 'no-profile' | 'unknown' | 'sale-needs-plugin';
+
+/**
+ * Whether a saved regular price change may also be sent to /configurator/set-price, which updates the
+ * profile base price the webstore configurator reads. Only products with a stored profile sync; unknown
+ * summaries never sync; and while a sale runs it syncs only when the plugin reports `set_price_keeps_sale`
+ * (older builds force the active price to the regular price, ending the sale).
+ */
+export function configuratorPriceSync(input: {
+  regularChanged: boolean;
+  summary?: ConfiguratorProfileSummary;
+  summariesFailed: boolean;
+  onSaleAfterSave: boolean;
+  pluginKeepsSale: boolean;
+}): PriceSyncDecision {
+  if (!input.regularChanged) return 'none';
+  if (input.summariesFailed) return 'unknown';
+  if (!input.summary || !input.summary.is_migrated) return 'no-profile';
+  if (input.onSaleAfterSave && !input.pluginKeepsSale) return 'sale-needs-plugin';
+  return 'sync';
 }

@@ -169,6 +169,17 @@ export const ProductsPage: React.FC = () => {
         reloadToken={reloadToken}
         overrides={overrides}
         hiddenIds={hiddenIds}
+        onLoaded={(ids) => {
+          // Fresh data wins: saved copies and trash hiding are only kept until the list reloads them.
+          const fresh = new Set(ids);
+          setOverrides((prev) => {
+            if (!ids.some((id) => prev[id])) return prev;
+            const next = { ...prev };
+            ids.forEach((id) => delete next[id]);
+            return next;
+          });
+          setHiddenIds((prev) => (prev.some((id) => fresh.has(id)) ? prev.filter((id) => !fresh.has(id)) : prev));
+        }}
         toolbarActions={(channel, loaded, total) =>
           channel === 'webstore' ? (
             <Button icon={Wand2} onClick={() => setBatchSeo({ products: loaded, total })} disabled={loaded.length === 0}>

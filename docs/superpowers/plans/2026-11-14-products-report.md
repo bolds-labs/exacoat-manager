@@ -44,3 +44,17 @@ Screenshots in `docs/superpowers/screens/`: `before-products-1366-{dark,light}.j
 - **New-layer default groups** (`['Signature skins', 'Colors', 'Natural']`) remain in Studio; changing them needs a storefront check (AGENTS section 47).
 - **exacoat-web** still has its own built-in finishes, tiers, group order, 129000 price fallbacks, add-on fallback products and fallback product lists. Listed in the audit file; needs a webstore change and deploy (ask before pushing).
 - The editor (fullscreen Studio) is unchanged apart from the read-only price; its own legacy styling and native selects remain (non-goal this round).
+
+## Fix round 1
+
+Review fixes, commit `fix(products): stable configurator base price, sale-safe price sync`.
+
+1. **Stable configurator base price** (plugin): `rest_save_product_configurator` keeps the stored profile `base_price` when none is sent and otherwise falls back to the regular price; `get_product_base_price` is regular-price first (variable products: minimum regular variation price), which also fixes the duplicate fallback (it used `get_price()`, the sale price). `prepareWordPressRequest` adds `aelia_cs_currency=IDR` to configurator routes (`/wp-json/exacoat(-core)/v1/configurator/*`, tested in `requestAuth.test.ts`). The Studio Pricing label now reads "Configurator Base Price (IDR)" with an accurate tooltip.
+2. **Sale-safe price sync**: `configuratorPriceSync` (tested) syncs only for a stored profile, skips with a notice when summaries failed, and during a sale only when `/health` reports `features: ['set_price_keeps_sale']` (new in the plugin; `fetchPluginFeaturesDirect`, cached). The version alone cannot tell because 0.1.228 zips without the fix already exist. Panel tests cover all four paths.
+3. **Studio Duplicate** has no price field; the copy keeps the source's regular price (sent explicitly, so older plugins also keep it).
+4. **Texture scale** is back in Studio's Setup column.
+5. **Minors**: trash-hidden rows show under the Trash filter and are dropped from the hidden set when a fresh load returns them; saved overrides are replaced by fresh data (`onLoaded`, tested); Studio search placeholder no longer mentions slugs; `parsePriceInput` handles "129000.00" and rejects non-zero decimals; ConfiguratorSection clears the previous profile and ignores stale answers; MarketplacesSection ignores stale searches (request id) and resets the search term per product.
+
+Checks: `php -l` clean on both changed plugin files; `npx tsc --noEmit` clean; `npm test` and `npm run build` results below. Browser: read-only reload of Products and Studio after the change; nothing saved.
+
+Still open (as documented): no marketplace column on list rows; exacoat-web fallbacks.

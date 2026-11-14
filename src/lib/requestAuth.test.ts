@@ -39,6 +39,15 @@ describe('prepareWordPressRequest', () => {
     expect(new URL(v.url).searchParams.get('aelia_cs_currency')).toBe('IDR');
   });
 
+  it('asks for rupiah on configurator requests (profiles, saves and set-price read product prices)', () => {
+    for (const path of ['/wp-json/exacoat-core/v1/configurator/profiles?per_page=500', '/wp-json/exacoat-core/v1/configurator/save', '/wp-json/exacoat/v1/configurator/542441']) {
+      const r = prepareWordPressRequest(`${BASE}${path}`, BASE, '7.abc');
+      expect(new URL(r.url).searchParams.get('aelia_cs_currency')).toBe('IDR');
+    }
+    const other = prepareWordPressRequest(`${BASE}/wp-json/exacoat-core/v1/finishes`, BASE, '7.abc');
+    expect(new URL(other.url).searchParams.get('aelia_cs_currency')).toBeNull();
+  });
+
   it('keeps an explicit currency and leaves order requests alone', () => {
     const r = prepareWordPressRequest(`${BASE}/wp-json/wc/v3/products?aelia_cs_currency=USD`, BASE, '7.abc');
     expect(new URL(r.url).searchParams.get('aelia_cs_currency')).toBe('USD');

@@ -41,6 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Studio catalog**: checks, family sync, webstore revalidation and migration are in the Studio header; duplicate, publish and include or exclude are in each row's menu, each with a confirmation. Sync device families is back on the screen.
 - **No old copies**: the manager no longer falls back to a built-in list of finishes, price tiers or guessed configurator data. When something cannot load, the screen says so and offers Retry, and nothing can be saved over the real data.
 - **Faster first load**: the marketplace image injector now loads when it is first opened.
+- **Sale-safe prices**: saving a configurator in Studio keeps the configurator base price and never takes it from a sale price; duplicates keep the regular price. While a sale runs, the Products panel only updates the configurator base price once the new plugin is installed, so a sale is never ended by mistake.
+- **Studio list**: texture scale is shown again in the Setup column; Duplicate in Studio no longer offers a price field.
 
 ### Design: Finishes & Stock
 - **One place for finishes**: Materials & Stock is now Finishes & Stock and is the only editor for finishes. The Master Textures pop-up in Configurator Studio is gone; Studio's Finishes button opens this screen (in a new tab while a device is open, so device edits are kept).
