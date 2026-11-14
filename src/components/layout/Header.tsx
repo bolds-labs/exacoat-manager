@@ -1,7 +1,7 @@
 import React from 'react';
 import { Search, RefreshCw, Sun, Moon, Menu } from 'lucide-react';
 import { NavItemKey, groupLabelForTab } from './sidebarNav';
-import { SearchField } from '../ds';
+import { SearchField } from '../ds/SearchField';
 import { useTheme } from '../../context/ThemeContext';
 import { TopBarInjectionWidget } from './TopBarInjectionWidget';
 

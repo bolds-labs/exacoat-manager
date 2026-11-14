@@ -5,7 +5,7 @@ import { clsx } from 'clsx';
 import { APP_VERSION } from '../../config/version';
 import { lockBodyScroll } from '../../lib/bodyScrollLock';
 import { ExacoatLogo } from '../ui/ExacoatLogo';
-import { CountPill } from '../ds';
+import { CountPill } from '../ds/CountPill';
 import { getTabHref, navForRole, type NavItemKey } from './sidebarNav';
 
 export type { NavItemKey };

@@ -1864,6 +1864,7 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 
 ## 61. Manager Load Performance Invariants
 
+- **Always-loaded code imports kit files directly**: the shell, `App` and contexts import from `src/components/ds/<File>`, never the `src/components/ds` barrel, because the barrel pulls Radix dialog and menu code (Menu, Modal, Drawer, toast) into the first load.
 - **No catch-all vendor chunk**: `vite.config.ts` pins only React into `vendor-react`; every other library is split automatically so it loads with the screen that imports it. Re-adding a catch-all `vendor-libs` chunk pushes PDF, chart and email libraries onto the login and orders screens (3.2 MB instead of 0.87 MB before first render).
 - **Big lists load where they are used**: the app-wide 500-order list loads only for tabs where `tabNeedsOrderList()` is true (dashboard, skin performance). Counts use count-only requests (`per_page=1`, read `total_orders`).
 - **Lists skip heavy fields**: order lists request `exclude=notes`; detail views load notes on demand. Do not add per-order queries to list formatting.
@@ -1880,6 +1881,7 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 - **Status map**: `src/lib/orderStatus.ts` (`getOrderStatusMeta`, `getWarrantyClaimMeta`, `getStatusSteps`, `getCurrentStepIndex`, which returns -1 for statuses outside the flow). It is context-aware via `isStorePickupOrder`. Five families: act, wait, prog, done, stop.
 - **Kit**: build new UI from `src/components/ds` (Button, IconButton, CountPill, TextField, Select, SearchField, Checkbox, Switch, RadioCard, Card, KpiCard, Tabs, StatusChip, WarrantyChip, Menu, Modal, Drawer, toast). Controls are 36px (sm 30px) with 9px radius; cards use 14px radius. Type is Geist and Geist Mono; page title 26/600, card title 14/600.
 - **Legacy ui components** (`src/components/ui`) are restyled to tokens with unchanged APIs. `GlassCard`, `ModalCard` and `StatCard` strip legacy palette surface colour classes from caller `className` via `stripLegacySurfaceClasses` (`src/lib/surfaceClasses.ts`), because the old `.glass-panel` rule used to cancel them. Remove such caller overrides when a screen is redesigned.
+- **Barrel rule**: always-loaded code (shell, App, contexts) imports kit files directly, never the `src/components/ds` barrel (see section 61).
 - **Toned-down glass**: no backdrop blur, and no large or animated blur filters on always-visible layout.
 - **Hidden design system page**: `#design-system`, super_admin only, not in the sidebar, listed in `SELF_LOADING_TABS`. Navigation config lives in `src/components/layout/sidebarNav.ts` (`NAV_GROUPS`, `navForRole`, `SHOP_MANAGER_ALLOWED_TABS`).
 - **Printed documents invariant (owner instruction)**: `PackingSlipModal`, `ShippingLabelA6Modal`, `CustomLabelPage`, `CustomerInvoiceModal` and any print or PDF output keep their content, layout and pinned fonts. Only the surrounding on-screen chrome may change.
