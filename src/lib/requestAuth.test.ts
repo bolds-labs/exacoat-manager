@@ -31,4 +31,18 @@ describe('prepareWordPressRequest', () => {
     expect(r.authorization).toBeUndefined();
     expect(r.url).toBe('https://api.example.com/v1/thing?consumer_key=ck_x');
   });
+
+  it('asks for rupiah prices on product requests so the currency switcher does not convert them', () => {
+    const r = prepareWordPressRequest(`${BASE}/wp-json/wc/v3/products?per_page=25`, BASE, '7.abc');
+    expect(new URL(r.url).searchParams.get('aelia_cs_currency')).toBe('IDR');
+    const v = prepareWordPressRequest(`${BASE}/wp-json/wc/v3/products/12/variations`, BASE, '7.abc');
+    expect(new URL(v.url).searchParams.get('aelia_cs_currency')).toBe('IDR');
+  });
+
+  it('keeps an explicit currency and leaves order requests alone', () => {
+    const r = prepareWordPressRequest(`${BASE}/wp-json/wc/v3/products?aelia_cs_currency=USD`, BASE, '7.abc');
+    expect(new URL(r.url).searchParams.get('aelia_cs_currency')).toBe('USD');
+    const o = prepareWordPressRequest(`${BASE}/wp-json/wc/v3/orders`, BASE, '7.abc');
+    expect(o.url).toBe(`${BASE}/wp-json/wc/v3/orders`);
+  });
 });

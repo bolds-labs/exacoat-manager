@@ -27,8 +27,17 @@ export function prepareWordPressRequest(
   target.searchParams.delete('consumer_key');
   target.searchParams.delete('consumer_secret');
 
+  // The store's Aelia currency switcher converts WooCommerce product prices for REST requests
+  // (the manager received USD 14.9 instead of Rp 129.000). Staff always work in the base
+  // currency, and a converted price saved back would overwrite the rupiah price.
+  let forcedCurrency = false;
+  if (/\/wp-json\/wc\/v\d+\/products(\/|$)/.test(target.pathname) && !target.searchParams.has('aelia_cs_currency')) {
+    target.searchParams.set('aelia_cs_currency', 'IDR');
+    forcedCurrency = true;
+  }
+
   return {
-    url: hadKeys ? target.toString() : url,
+    url: hadKeys || forcedCurrency ? target.toString() : url,
     authorization: sessionToken ? `Bearer ${sessionToken}` : undefined,
   };
 }
