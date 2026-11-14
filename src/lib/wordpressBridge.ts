@@ -3881,7 +3881,19 @@ export interface ConfiguratorPreset {
   image_url?: string;
 }
 
-export async function fetchGlobalFinishesDirect(): Promise<{
+let finishesInFlight: ReturnType<typeof fetchGlobalFinishesUncached> | null = null;
+
+/** Components that ask for finishes at the same moment share one request. */
+export function fetchGlobalFinishesDirect(): ReturnType<typeof fetchGlobalFinishesUncached> {
+  if (!finishesInFlight) {
+    finishesInFlight = fetchGlobalFinishesUncached().finally(() => {
+      finishesInFlight = null;
+    });
+  }
+  return finishesInFlight;
+}
+
+async function fetchGlobalFinishesUncached(): Promise<{
   success: boolean;
   finishes: GlobalFinish[];
   groups?: string[];

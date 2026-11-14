@@ -5,6 +5,7 @@ import { Layout } from './components/layout/Layout';
 import { NavItemKey } from './components/layout/Sidebar';
 import { LoginPage } from './pages/LoginPage';
 import { fetchOrdersDirect, handleShopeeCallbackDirect, handleTikTokCallbackDirect } from './lib/wordpressBridge';
+import { tabNeedsOrderList } from './lib/workspaceTabs';
 import { Order, AuditLog } from './types';
 import { Loader2 } from 'lucide-react';
 
@@ -297,7 +298,11 @@ export const App: React.FC = () => {
     handleTabChange('orders');
   }, [handleTabChange]);
 
-  // Load store orders and audit logs
+  // The recent-orders list is several MB, so it loads only on screens that use it (dashboard, skin performance)
+  const needsOrderList = tabNeedsOrderList(currentTab, isShopManager);
+  const [ordersLoaded, setOrdersLoaded] = useState(false);
+  const [processingCount, setProcessingCount] = useState(0);
+
   const loadWorkspaceData = useCallback(async (quiet = false) => {
     if (!user || isAffiliatePortal) return;
     try {
@@ -307,6 +312,7 @@ export const App: React.FC = () => {
       const ordersRes = await fetchOrdersDirect({ per_page: 500 });
       if (ordersRes.success) {
         setOrders(ordersRes.orders);
+        setOrdersLoaded(true);
       }
     } catch (err: any) {
       console.warn('Workspace data sync error:', err);
@@ -320,10 +326,24 @@ export const App: React.FC = () => {
   }, [user, isAffiliatePortal, showToast]);
 
   useEffect(() => {
-    if (user && !isAffiliatePortal) {
+    if (user && !isAffiliatePortal && needsOrderList && !ordersLoaded) {
       loadWorkspaceData();
     }
-  }, [user, isAffiliatePortal, loadWorkspaceData]);
+  }, [user, isAffiliatePortal, needsOrderList, ordersLoaded, loadWorkspaceData]);
+
+  // Sidebar badge: ask only for the count of processing orders, not the orders themselves
+  useEffect(() => {
+    if (!user || isAffiliatePortal) return;
+    let cancelled = false;
+    fetchOrdersDirect({ status: 'processing', per_page: 1 })
+      .then((res) => {
+        if (!cancelled && res.success) setProcessingCount(res.total_orders || 0);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [user, isAffiliatePortal]);
 
   // Auth Loading
   if (isAuthLoading) {
@@ -355,10 +375,6 @@ export const App: React.FC = () => {
   if (!user) {
     return <LoginPage />;
   }
-
-  const processingCount = orders.filter(
-    o => String(o.status).replace(/^wc-/, '') === 'processing'
-  ).length;
 
   const renderActiveTab = () => {
     if (isShopManager) {
