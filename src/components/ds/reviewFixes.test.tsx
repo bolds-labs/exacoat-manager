@@ -76,17 +76,15 @@ describe('Drawer layering with legacy modals', () => {
 });
 
 describe('kit native controls opt out of legacy light-mode form overrides', () => {
-  it('marks native inputs and selects with data-ds', () => {
+  it('marks native inputs with data-ds', () => {
     render(
       <>
         <TextField label="Name" />
         <SearchField placeholder="Search orders" />
-        <Select label="Courier" value="a" onChange={() => {}} options={[{ value: 'a', label: 'A' }]} />
       </>,
     );
     expect(screen.getByLabelText('Name').hasAttribute('data-ds')).toBe(true);
     expect(screen.getByLabelText('Search orders').hasAttribute('data-ds')).toBe(true);
-    expect(screen.getByLabelText('Courier').hasAttribute('data-ds')).toBe(true);
   });
   it('legacy light-mode input, select and textarea rules skip [data-ds]', () => {
     const css = readFileSync('src/index.css', 'utf8');

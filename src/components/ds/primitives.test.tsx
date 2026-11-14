@@ -1,10 +1,17 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { Plus } from 'lucide-react';
 import { Button, Checkbox, CountPill, IconButton, RadioCard, SearchField, Select, Switch, TextField } from './index';
 
 afterEach(cleanup);
+beforeAll(() => {
+  const proto = window.HTMLElement.prototype as unknown as Record<string, unknown>;
+  proto.hasPointerCapture = () => false;
+  proto.setPointerCapture = () => {};
+  proto.releasePointerCapture = () => {};
+  proto.scrollIntoView = () => {};
+});
 
 describe('Button', () => {
   it('uses h-9 for md and h-[30px] for sm', () => {
@@ -55,8 +62,9 @@ describe('fields', () => {
     expect(screen.getByText('Method')).toBeTruthy();
     expect(screen.getByText('Midtrans')).toBeTruthy();
     const sel = screen.getByLabelText('Method');
-    expect(sel.closest('div')!.className).toContain('h-9');
-    fireEvent.change(sel, { target: { value: 'b' } });
+    expect(sel.className).toContain('h-9');
+    fireEvent.keyDown(sel, { key: 'Enter' });
+    fireEvent.click(screen.getByRole('option', { name: 'Original' }));
     expect(onChange).toHaveBeenCalledWith('b');
   });
 });
