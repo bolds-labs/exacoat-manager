@@ -20,11 +20,11 @@ export const RadioCard = forwardRef<HTMLButtonElement, RadioCardProps>(function 
       type="button"
       role="radio"
       aria-checked={selected}
+      {...rest}
       onClick={onSelect}
       className={`flex items-center gap-2.5 rounded-[10px] border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-        selected ? 'border-accent/55 bg-accent-soft' : 'border-field-border bg-transparent'
+        selected ? 'border-accent-border bg-accent-soft' : 'border-field-border bg-transparent'
       } ${className}`}
-      {...rest}
     >
       <Icon className="h-[15px] w-[15px] flex-none text-muted" strokeWidth={1.8} aria-hidden />
       <span className="min-w-0 flex-1">

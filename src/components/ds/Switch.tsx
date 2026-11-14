@@ -17,9 +17,9 @@ export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(function Switch
       type="button"
       role="switch"
       aria-checked={checked}
+      {...rest}
       onClick={() => onCheckedChange(!checked)}
       className={`inline-flex items-center gap-2 rounded-md text-[13px] text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${className}`}
-      {...rest}
     >
       <span
         className={`relative h-[18px] w-[30px] flex-none rounded-full border transition-colors ${
@@ -28,7 +28,7 @@ export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(function Switch
       >
         <span
           className={`absolute top-0.5 h-3 w-3 rounded-full transition-all ${
-            checked ? 'left-3.5 bg-[#111]' : 'left-0.5 bg-faint'
+            checked ? 'left-3.5 bg-accent-on' : 'left-0.5 bg-faint'
           }`}
         />
       </span>

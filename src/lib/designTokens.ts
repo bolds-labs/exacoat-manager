@@ -24,4 +24,11 @@ export const TOKEN_NAMES: readonly string[] = [
   'st-done-bg',
   'st-stop-fg',
   'st-stop-bg',
+  'accent-border',
+  'accent-on',
+  'st-act-border',
+  'st-wait-border',
+  'st-prog-border',
+  'st-done-border',
+  'st-stop-border',
 ];

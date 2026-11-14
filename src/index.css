@@ -29,6 +29,13 @@
     --st-done-bg: rgba(22, 163, 74, 0.09);
     --st-stop-fg: #be123c;
     --st-stop-bg: rgba(225, 29, 72, 0.08);
+    --accent-border: rgba(243, 170, 24, 0.55);
+    --accent-on: #111111;
+    --st-act-border: rgba(180, 83, 9, 0.28);
+    --st-wait-border: rgba(109, 40, 217, 0.28);
+    --st-prog-border: rgba(3, 105, 161, 0.28);
+    --st-done-border: rgba(21, 128, 61, 0.28);
+    --st-stop-border: rgba(190, 18, 60, 0.28);
 
     --bg-primary: #070709;
     --bg-surface: #0e0e12;
@@ -71,6 +78,13 @@
     --st-done-bg: rgba(74, 222, 128, 0.09);
     --st-stop-fg: #fb7185;
     --st-stop-bg: rgba(251, 113, 133, 0.09);
+    --accent-border: rgba(243, 170, 24, 0.45);
+    --accent-on: #111111;
+    --st-act-border: rgba(251, 191, 36, 0.30);
+    --st-wait-border: rgba(196, 181, 253, 0.30);
+    --st-prog-border: rgba(125, 211, 252, 0.30);
+    --st-done-border: rgba(74, 222, 128, 0.30);
+    --st-stop-border: rgba(251, 113, 133, 0.30);
   }
 
   * {

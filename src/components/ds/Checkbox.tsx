@@ -21,7 +21,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
           className="peer absolute inset-0 m-0 cursor-pointer appearance-none rounded-[5px] border-[1.5px] border-faint bg-transparent checked:border-accent checked:bg-accent focus-visible:ring-2 focus-visible:ring-accent"
           {...rest}
         />
-        <Check className="pointer-events-none absolute inset-0 hidden h-4 w-4 p-0.5 text-[#111] peer-checked:block" strokeWidth={3} aria-hidden />
+        <Check className="pointer-events-none absolute inset-0 hidden h-4 w-4 p-0.5 text-accent-on peer-checked:block" strokeWidth={3} aria-hidden />
       </span>
       {label}
     </label>

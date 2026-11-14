@@ -10,10 +10,10 @@ export const buttonSizeClass: Record<ControlSize, string> = {
 };
 
 export const buttonVariantClass: Record<ButtonVariant, string> = {
-  primary: 'bg-accent text-[#111] border-transparent font-semibold',
+  primary: 'bg-accent text-accent-on border-transparent font-semibold',
   secondary: 'bg-field text-fg border-field-border font-[450]',
   ghost: 'bg-transparent text-fg border-transparent font-[450]',
-  danger: 'text-st-stop-fg bg-st-stop-bg border-st-stop-fg/30 font-[450]',
+  danger: 'text-st-stop-fg bg-st-stop-bg border-st-stop-border font-[450]',
 };
 
 export const buttonBaseClass =
@@ -30,7 +30,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   { variant = 'secondary', size = 'md', icon: Icon, trailingIcon: TrailingIcon, className = '', children, type = 'button', ...rest },
   ref,
 ) {
-  const iconColor = variant === 'primary' ? 'text-[#111]' : variant === 'danger' ? 'text-st-stop-fg' : 'text-muted';
+  const iconColor = variant === 'primary' ? 'text-accent-on' : variant === 'danger' ? 'text-st-stop-fg' : 'text-muted';
   return (
     <button
       ref={ref}

@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { Plus } from 'lucide-react';
-import { Button, CountPill, IconButton, RadioCard, Select, Switch, TextField } from './index';
+import { Button, Checkbox, CountPill, IconButton, RadioCard, SearchField, Select, Switch, TextField } from './index';
 
 afterEach(cleanup);
 
@@ -78,5 +78,43 @@ describe('RadioCard', () => {
     expect(r.getAttribute('aria-checked')).toBe('true');
     fireEvent.click(r);
     expect(onSelect).toHaveBeenCalled();
+  });
+});
+
+describe('token classes', () => {
+  it('danger Button uses the explicit border token', () => {
+    render(<Button variant="danger">Cancel order</Button>);
+    expect(screen.getByRole('button', { name: 'Cancel order' }).className).toContain('border-st-stop-border');
+  });
+  it('selected RadioCard uses the explicit accent border token', () => {
+    render(<RadioCard selected icon={Plus} title="A" onSelect={() => {}} />);
+    expect(screen.getByRole('radio').className).toContain('border-accent-border');
+  });
+  it('no component emits an opacity suffix on a token colour', () => {
+    const { container } = render(
+      <>
+        <Button variant="primary" icon={Plus}>a</Button>
+        <Button variant="danger">b</Button>
+        <IconButton icon={Plus} label="c" />
+        <CountPill value={1} tone="hot" />
+        <TextField label="d" />
+        <Select label="e" tag="t" value="a" onChange={() => {}} options={[{ value: 'a', label: 'A' }]} />
+        <SearchField placeholder="f" shortcut="/" />
+        <Checkbox label="g" />
+        <Switch checked onCheckedChange={() => {}} label="h" />
+        <RadioCard selected icon={Plus} title="i" onSelect={() => {}} />
+      </>,
+    );
+    const bad = /\b(accent|st-[a-z]+-(fg|bg|border)|fg|muted|faint|chip|field|line)\/\d+/;
+    for (const el of Array.from(container.querySelectorAll('[class]'))) {
+      const cls = el.getAttribute('class') ?? '';
+      expect(cls, cls).not.toMatch(bad);
+    }
+  });
+  it('callers cannot override the internal handlers', () => {
+    const onCheckedChange = vi.fn();
+    render(<Switch checked={false} onCheckedChange={onCheckedChange} onClick={() => {}} />);
+    fireEvent.click(screen.getByRole('switch'));
+    expect(onCheckedChange).toHaveBeenCalledWith(true);
   });
 });
