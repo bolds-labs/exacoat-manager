@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.228] - 2026-11-14
 
+### Security: cart prices decided by the server
+- **Fix**: the webstore used to send the price of a configured skin with add to cart, and WordPress charged that number, so anyone could buy at any price. The webstore server now works out the price from WordPress data and signs it; the plugin accepts a configured item only with that signature and refuses it otherwise.
+- **Setup**: add the same secret (32 or more characters) as `EXACOAT_CART_PRICE_SECRET` in wp-config.php and in the webstore environment, then install the new plugin zip. Until both are set, configured items cannot be added to the bag.
+- **Old bags**: a configured item added before this change is removed from the bag with a note asking the customer to add it again.
+- **Configurator Studio**: new Part Bundle Prices card in the Pricing tab (shown for products with a back glass and a camera part) for the all parts price and the finish surcharge per part. The Camera & Back Glass page needs these values (90,000; back glass +15,000; camera +5,000) and shows as unavailable until they are saved.
+
 ### Design: Orders Redesign
 - **Orders screen**: new header with a Create menu, store-wide counts on every tab, the channel switcher and four summary cards (Payment confirmed, Awaiting payment, Ready for pickup, Shipped last 7 days).
 - **Order panel**: new header with the order status steps, and the body rebuilt as cards for customer, items, shipping, notes, payment, refunds, coupons, review and email.

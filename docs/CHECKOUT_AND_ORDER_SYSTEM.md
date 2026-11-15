@@ -89,6 +89,11 @@ The webstore and WooCommerce share one explicit currency context:
 
 ---
 
+## 2b. Configured Item Prices (Signed by the Storefront Server)
+
+- Configured skins, special skins, Camera & Back Glass and EDGE are added through the storefront proxy (`cart/add-configurator-item`, `cart/add-addon-item`), which prices the selection on the server and signs price and cart lines with `EXACOAT_CART_PRICE_SECRET`.
+- exacoat-core accepts `exacoat_custom_price` and `exacoat_addon_data` only with a valid signature (`Exacoat_Configurator_Engine::verify_cart_price_signature`) and refuses the add to cart otherwise. Details: AGENTS.md section 68.
+
 ## 3. Shipping Methods & AJAX Fragment Retention
 
 ### The Fragment Replacement Rule
