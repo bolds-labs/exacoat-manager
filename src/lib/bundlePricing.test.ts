@@ -37,4 +37,12 @@ describe('bundle pricing (Camera & Back Glass)', () => {
     expect(setBundlePartSurcharge(undefined, 'camera', -5)).toBeNull();
     expect(setBundleAllPartsPrice(undefined, Number.NaN)).toBeNull();
   });
+
+  it('matches layer ids in any case and stores keys the way WordPress does (lowercase)', () => {
+    const profile = { layers: [{ id: 'Back-Glass', name: 'Back Glass' }], bundle_pricing: { part_finish_surcharges: { 'back-glass': 15000 } } };
+    expect(bundlePricingParts(profile)[0].surcharge).toBe(15000);
+    expect(setBundlePartSurcharge({ part_finish_surcharges: { 'back-glass': 15000 } }, 'Back-Glass', 20000)).toEqual({
+      part_finish_surcharges: { 'back-glass': 20000 },
+    });
+  });
 });

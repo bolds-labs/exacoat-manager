@@ -26,9 +26,17 @@ export function hasBundlePricingParts(profile: ProfileLike): boolean {
   return layers.some(isBackGlass) && layers.some(isCamera);
 }
 
+/** Same normalisation as WordPress sanitize_key (lowercase, a-z 0-9 _ -), used on both sides. */
+export function bundleKey(id: string): string {
+  return String(id ?? '').toLowerCase().replace(/[^a-z0-9_-]/g, '');
+}
+
 export function bundlePricingParts(profile: ProfileLike): Array<{ id: string; name: string; surcharge: number | undefined }> {
   const surcharges = profile.bundle_pricing?.part_finish_surcharges || {};
-  return (profile.layers || []).map((l) => ({ id: l.id, name: l.name, surcharge: surcharges[l.id] }));
+  return (profile.layers || []).map((l) => {
+    const hit = Object.entries(surcharges).find(([k]) => bundleKey(k) === bundleKey(l.id));
+    return { id: l.id, name: l.name, surcharge: hit ? hit[1] : undefined };
+  });
 }
 
 function clean(bp: BundlePricing): BundlePricing | null {
@@ -54,8 +62,11 @@ export function setBundlePartSurcharge(
   layerId: string,
   value: number | null,
 ): BundlePricing | null {
-  const parts = { ...(current?.part_finish_surcharges || {}) };
-  if (value === null || !Number.isFinite(value) || value < 0) delete parts[layerId];
-  else parts[layerId] = value;
+  const key = bundleKey(layerId);
+  const parts: Record<string, number> = {};
+  for (const [k, v] of Object.entries(current?.part_finish_surcharges || {})) {
+    if (bundleKey(k) !== key) parts[bundleKey(k)] = v;
+  }
+  if (value !== null && Number.isFinite(value) && value >= 0) parts[key] = value;
   return clean({ ...(current || {}), part_finish_surcharges: parts });
 }
