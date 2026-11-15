@@ -1719,6 +1719,12 @@ class Exacoat_Review_Manager {
 					update_post_meta( $coupon_id, '_acfw_coupon_label', "Customer Review Reward ({$percent}% OFF)" );
 					update_post_meta( $coupon_id, '_exacoat_review_reward', 1 );
 					update_post_meta( $coupon_id, '_exacoat_order_id', $order_id );
+					// My Coupons lists email-restricted coupons by this user id only.
+					$reward_order = function_exists( 'wc_get_order' ) ? wc_get_order( $order_id ) : null;
+					$issued_to    = $reward_order ? (int) $reward_order->get_customer_id() : 0;
+					if ( $issued_to > 0 ) {
+						update_post_meta( $coupon_id, '_exacoat_issued_user_id', $issued_to );
+					}
 				}
 
 				return [

@@ -936,7 +936,7 @@ class Exacoat_Checkout_Engine {
 		}
 
 		$generic = esc_html__( 'The email or password is incorrect.', 'exacoat-core' );
-		if ( class_exists( 'Exacoat_Customer_Auth' ) && Exacoat_Customer_Auth::login_locked( $email ) ) {
+		if ( class_exists( 'Exacoat_Customer_Auth' ) && 'locked' === Exacoat_Customer_Auth::login_gate( $email ) ) {
 			wp_send_json_error( [ 'message' => esc_html__( 'Too many sign-in attempts. Please wait a few minutes.', 'exacoat-core' ) ] );
 		}
 

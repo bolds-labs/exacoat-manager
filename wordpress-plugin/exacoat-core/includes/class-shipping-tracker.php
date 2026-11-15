@@ -467,11 +467,9 @@ class Exacoat_Shipping_Tracker {
 					$matched = true;
 				} elseif ( current_user_can( 'manage_woocommerce' ) ) {
 					$matched = true;
-				} elseif ( class_exists( 'Exacoat_Customer_Auth' ) && Exacoat_Customer_Auth::guest_lookup_blocked( (int) $found_order->get_id() ) ) {
-					$matched = false;
 				} elseif ( ! empty( $email_input ) && strcasecmp( trim( (string) $found_order->get_billing_email() ), trim( $email_input ) ) === 0 ) {
 					$matched = true;
-				} elseif ( class_exists( 'Exacoat_Customer_Auth' ) ) {
+				} elseif ( class_exists( 'Exacoat_Customer_Auth' ) && ! Exacoat_Customer_Auth::guest_lookup_blocked( (int) $found_order->get_id() ) ) {
 					Exacoat_Customer_Auth::record_guest_lookup_failure( (int) $found_order->get_id() );
 				}
 
@@ -2075,17 +2073,17 @@ class Exacoat_Shipping_Tracker {
 		if ( $key_valid ) {
 			$matched = true;
 		} else {
-			// Order number plus billing email: limited per IP and per order, and the answer
-			// carries no payment secrets (Exacoat_Customer_Auth::guest_order_payload).
-			if ( class_exists( 'Exacoat_Customer_Auth' ) && Exacoat_Customer_Auth::guest_lookup_blocked( (int) $order->get_id() ) ) {
-				return new WP_REST_Response( [
-					'success' => false,
-					'message' => __( 'Too many attempts. Please try again later.', 'exacoat-core' ),
-				], 429 );
-			}
+			// Order number plus billing email: failed proofs are limited per IP and per order,
+			// and the answer carries no payment secrets (Exacoat_Customer_Auth::guest_order_payload).
 			if ( ! empty( $email_input ) && strcasecmp( trim( (string) $order->get_billing_email() ), trim( $email_input ) ) === 0 ) {
 				$matched = true;
 			} elseif ( class_exists( 'Exacoat_Customer_Auth' ) ) {
+				if ( Exacoat_Customer_Auth::guest_lookup_blocked( (int) $order->get_id() ) ) {
+					return new WP_REST_Response( [
+						'success' => false,
+						'message' => __( 'Too many attempts. Please try again later.', 'exacoat-core' ),
+					], 429 );
+				}
 				Exacoat_Customer_Auth::record_guest_lookup_failure( (int) $order->get_id() );
 			}
 		}

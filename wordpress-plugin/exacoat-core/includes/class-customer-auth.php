@@ -64,8 +64,9 @@ class Exacoat_Customer_Auth {
 			return self::error( 'Enter your email address and password.', 400 );
 		}
 
-		// Per account, whether or not the account exists, so the answer reveals nothing.
-		if ( self::login_locked( $email ) ) {
+		// Per account and client IP, whether or not the account exists, so the answer reveals
+		// nothing and another IP cannot lock the owner out; many IPs only slow the account.
+		if ( 'locked' === self::login_gate( $email ) ) {
 			return self::error( 'Too many sign-in attempts. Please wait a few minutes.', 429 );
 		}
 
@@ -488,14 +489,12 @@ class Exacoat_Customer_Auth {
 		}
 
 		$is_guest_read = ! $is_owner && ! $is_key_valid;
-		if ( $is_guest_read ) {
+		if ( $is_guest_read && ! $is_email_valid ) {
 			if ( self::guest_lookup_blocked( (int) $order->get_id() ) ) {
 				return self::error( 'Too many attempts. Please try again later.', 429 );
 			}
-			if ( ! $is_email_valid ) {
-				self::record_guest_lookup_failure( (int) $order->get_id() );
-				return self::error( $user ? 'Order not found.' : 'Order details could not be found with the credentials provided.', 401 );
-			}
+			self::record_guest_lookup_failure( (int) $order->get_id() );
+			return self::error( $user ? 'Order not found.' : 'Order details could not be found with the credentials provided.', 401 );
 		}
 
 		$items = [];
@@ -642,10 +641,8 @@ class Exacoat_Customer_Auth {
 			);
 
 			$email_restrictions = array_map( 'strtolower', array_map( 'trim', (array) $coupon->get_email_restrictions() ) );
-			$is_direct_user_coupon = in_array( $user_email, $email_restrictions, true );
-
-			// If explicitly disabled from My Coupons page, skip unless restricted directly to this user
-			if ( ! $show_on_my_coupons && ! $is_direct_user_coupon ) {
+			$issued_user_id     = (int) get_post_meta( $id, '_exacoat_issued_user_id', true );
+			if ( ! self::coupon_listed_for_user( (int) $user_id, $email_restrictions, $issued_user_id, $show_on_my_coupons ) ) {
 				continue;
 			}
 
@@ -689,10 +686,7 @@ class Exacoat_Customer_Auth {
 				}
 			}
 
-			// 4. Email restrictions
-			if ( ! empty( $email_restrictions ) && ! in_array( $user_email, $email_restrictions, true ) ) {
-				continue;
-			}
+			// 4. Email restrictions: handled by coupon_listed_for_user() (issued user id).
 
 			// 5. Role restrictions (ACFW / WooCommerce)
 			$role_restrictions = get_post_meta( $id, '_acfw_customer_roles', true )
@@ -858,35 +852,74 @@ class Exacoat_Customer_Auth {
 		return $payload;
 	}
 
-	const LOGIN_ACCOUNT_LIMIT   = 10;
-	const GUEST_ORDER_IP_LIMIT  = 60;
+	const LOGIN_ACCOUNT_IP_LIMIT = 10;
+	const LOGIN_ACCOUNT_SLOW     = 50;
+	const GUEST_ORDER_IP_LIMIT   = 60;
 	const GUEST_ORDER_FAIL_LIMIT = 10;
 
-	public static function login_locked( string $email ): bool {
-		return Exacoat_Request_Guard::is_over( 'login_acct', strtolower( trim( $email ) ), self::LOGIN_ACCOUNT_LIMIT );
-	}
+	/** Seconds a sign-in waits once an email has many failures from many IPs (0 in tests). */
+	public static $login_slow_seconds = 2;
 
-	public static function record_login_failure( string $email ): void {
-		Exacoat_Request_Guard::hit( 'login_acct', strtolower( trim( $email ) ), self::LOGIN_ACCOUNT_LIMIT, 15 * MINUTE_IN_SECONDS );
-	}
-
-	public static function clear_login_failures( string $email ): void {
-		Exacoat_Request_Guard::clear( 'login_acct', strtolower( trim( $email ) ) );
+	private static function login_subject( string $email ): string {
+		return strtolower( trim( $email ) ) . '|' . Exacoat_Request_Guard::client_ip();
 	}
 
 	/**
-	 * Guest order reads (order number plus billing email): counts one lookup for the client IP
-	 * (60 per 10 minutes) and refuses an order with 10 failed proofs in the last hour.
+	 * 'locked' after 10 failures for this email from this client IP in 15 minutes; 'slow'
+	 * (waits, then lets the attempt through) after 50 failures for this email from any IP;
+	 * otherwise 'ok'. A real owner on their own IP is never refused by someone else's attempts.
+	 */
+	public static function login_gate( string $email ): string {
+		if ( Exacoat_Request_Guard::is_over( 'login_acct_ip', self::login_subject( $email ), self::LOGIN_ACCOUNT_IP_LIMIT ) ) {
+			return 'locked';
+		}
+		if ( Exacoat_Request_Guard::is_over( 'login_acct', strtolower( trim( $email ) ), self::LOGIN_ACCOUNT_SLOW ) ) {
+			if ( self::$login_slow_seconds > 0 ) {
+				sleep( self::$login_slow_seconds );
+			}
+			return 'slow';
+		}
+		return 'ok';
+	}
+
+	public static function login_locked( string $email ): bool {
+		return 'locked' === self::login_gate( $email );
+	}
+
+	public static function record_login_failure( string $email ): void {
+		Exacoat_Request_Guard::hit( 'login_acct_ip', self::login_subject( $email ), self::LOGIN_ACCOUNT_IP_LIMIT, 15 * MINUTE_IN_SECONDS );
+		Exacoat_Request_Guard::hit( 'login_acct', strtolower( trim( $email ) ), PHP_INT_MAX, 15 * MINUTE_IN_SECONDS );
+	}
+
+	public static function clear_login_failures( string $email ): void {
+		Exacoat_Request_Guard::clear( 'login_acct_ip', self::login_subject( $email ) );
+	}
+
+	/**
+	 * Guest order reads (order number plus billing email). Only failed proofs are counted:
+	 * 10 per order per hour and 60 per client IP per 10 minutes. Checking never counts, and a
+	 * correct proof, the order key or the owner's session is never gated.
 	 */
 	public static function guest_lookup_blocked( int $order_id ): bool {
-		if ( Exacoat_Request_Guard::is_over( 'guest_order_fail', (string) $order_id, self::GUEST_ORDER_FAIL_LIMIT ) ) {
-			return true;
-		}
-		return Exacoat_Request_Guard::hit( 'guest_order_ip', Exacoat_Request_Guard::client_ip(), self::GUEST_ORDER_IP_LIMIT, 10 * MINUTE_IN_SECONDS );
+		return Exacoat_Request_Guard::is_over( 'guest_order_fail', (string) $order_id, self::GUEST_ORDER_FAIL_LIMIT )
+			|| Exacoat_Request_Guard::is_over( 'guest_order_ip', Exacoat_Request_Guard::client_ip(), self::GUEST_ORDER_IP_LIMIT );
 	}
 
 	public static function record_guest_lookup_failure( int $order_id ): void {
 		Exacoat_Request_Guard::hit( 'guest_order_fail', (string) $order_id, self::GUEST_ORDER_FAIL_LIMIT, HOUR_IN_SECONDS );
+		Exacoat_Request_Guard::hit( 'guest_order_ip', Exacoat_Request_Guard::client_ip(), self::GUEST_ORDER_IP_LIMIT, 10 * MINUTE_IN_SECONDS );
+	}
+
+	/**
+	 * Whether /auth/coupons lists a coupon for this user. A coupon restricted to emails is
+	 * listed only for the user id it was issued to (`_exacoat_issued_user_id`): the account
+	 * email is user-settable and not verified, so it is never enough on its own.
+	 */
+	public static function coupon_listed_for_user( int $user_id, array $email_restrictions, int $issued_user_id, bool $show_on_page ): bool {
+		if ( ! empty( array_filter( $email_restrictions ) ) ) {
+			return $issued_user_id > 0 && $issued_user_id === $user_id;
+		}
+		return $show_on_page;
 	}
 
 	public static function rest_link_ticket( WP_REST_Request $request ) {
