@@ -99,6 +99,7 @@ class Exacoat_Checkout_Engine {
 		add_filter( 'woocommerce_terms_is_checked_default', '__return_true' );
 
 		// 13. Headless Checkout Shipping Fee & Midtrans Snap Gross Amount Reconciler
+		add_action( 'woocommerce_store_api_checkout_update_order_from_request', [ __CLASS__, 'validate_headless_shipping_request' ], 5, 2 );
 		add_action( 'woocommerce_store_api_checkout_order_processed', [ __CLASS__, 'attach_headless_shipping_before_payment' ], 5, 1 );
 		add_filter( 'midtrans_snap_params_main_before_charge', [ __CLASS__, 'reconcile_midtrans_snap_parameters' ], 99, 1 );
 		add_filter( 'midtrans_snap_params', [ __CLASS__, 'reconcile_midtrans_snap_parameters' ], 99, 1 );
@@ -1488,10 +1489,148 @@ class Exacoat_Checkout_Engine {
 		return true;
 	}
 
+	/** Store pickup address (Exacoat Store Bekasi), same as BEKASI_STORE_ADDRESS in the storefront. */
+	const STORE_PICKUP_ADDRESS = [
+		'company'   => 'Exacoat Store Bekasi',
+		'address_1' => 'Ruby Commercial TB12, Jl. Bulevar Selatan, Summarecon Bekasi',
+		'address_2' => 'Marga Mulya, Bekasi Utara',
+		'city'      => 'Bekasi',
+		'state'     => 'JB',
+		'postcode'  => '17142',
+		'country'   => 'ID',
+	];
+
+	/** @var array<int, array|null> Decisions already computed for an order in this request. */
+	private static $headless_shipping_decisions = [];
+
+	private static function shipping_header( string $name ): string {
+		$key = 'HTTP_X_EXACOAT_SHIPPING_' . $name;
+		return isset( $_SERVER[ $key ] ) ? trim( sanitize_text_field( wp_unslash( (string) $_SERVER[ $key ] ) ) ) : '';
+	}
+
 	/**
-	 * Attach headless shipping rate to order immediately upon creation in Store API checkout,
-	 * ensuring the shipping fee is included before payment gateways (Midtrans, etc.) calculate gross amount.
-	 * Runs at priority 5 (before BCA unique code runs at priority 20).
+	 * Shipping for a headless (storefront) checkout, decided on the server.
+	 *
+	 * The storefront sends the courier choice with the signed quote it issued
+	 * (X-Exacoat-Shipping-Courier, -Service, -Amount, -Quote). The quote must match this
+	 * order's destination (shipping country and postcode) and item count; the free shipping
+	 * zone rule and the shipping promo coupon are applied here from the order's own subtotal
+	 * and coupons. Amount, discount or total headers from older storefronts are never trusted.
+	 * Store pickup is free and moves the shipping address to the store.
+	 *
+	 * @return array|null Null when the request carries no headless shipping choice.
+	 * @throws \Exception RouteException when a courier choice has no valid quote.
+	 */
+	public static function headless_shipping_decision( \WC_Order $order ): ?array {
+		$order_id = (int) $order->get_id();
+		if ( $order_id > 0 && array_key_exists( $order_id, self::$headless_shipping_decisions ) ) {
+			return self::$headless_shipping_decisions[ $order_id ];
+		}
+
+		$mode    = strtolower( self::shipping_header( 'MODE' ) );
+		$rate_id = strtolower( self::shipping_header( 'RATE_ID' ) );
+		$quote   = self::shipping_header( 'QUOTE' );
+		$legacy  = self::shipping_header( 'TOTAL' );
+
+		if ( '' === $mode && '' === $rate_id && '' === $quote && '' === $legacy ) {
+			return null;
+		}
+
+		if ( 'pickup' === $mode || 0 === strpos( $rate_id, 'local_pickup' ) ) {
+			$decision = [ 'mode' => 'pickup' ];
+		} else {
+			$courier  = strtolower( self::shipping_header( 'COURIER' ) );
+			$service  = strtolower( self::shipping_header( 'SERVICE' ) );
+			$amount   = self::shipping_header( 'AMOUNT' );
+			$country  = strtoupper( (string) ( $order->get_shipping_country() ?: $order->get_billing_country() ) );
+			$postcode = (string) ( $order->get_shipping_postcode() ?: $order->get_billing_postcode() );
+			$quantity = 0;
+			foreach ( $order->get_items( 'line_item' ) as $item ) {
+				$quantity += (int) $item->get_quantity();
+			}
+
+			$secret = class_exists( 'Exacoat_Configurator_Engine' ) ? Exacoat_Configurator_Engine::cart_price_secret() : '';
+			$fields = [
+				'context'  => 'checkout',
+				'courier'  => $courier,
+				'service'  => $service,
+				'country'  => $country,
+				'postcode' => $postcode,
+				'quantity' => $quantity,
+				'amount'   => ctype_digit( $amount ) ? (int) $amount : -1,
+			];
+
+			$valid = 'ID' === $country
+				&& in_array( $courier, Exacoat_Shipping_Quote::QUOTED_COURIERS, true )
+				&& ctype_digit( $amount )
+				&& Exacoat_Shipping_Quote::verify( $secret, $fields, $quote, time() );
+
+			if ( ! $valid ) {
+				self::throw_store_api_error( Exacoat_Shipping_Quote::INVALID_CODE, Exacoat_Shipping_Quote::INVALID_MESSAGE, 409 );
+			}
+
+			$currency = strtoupper( (string) ( $order->get_currency() ?: 'IDR' ) );
+			$rule     = class_exists( 'Exacoat_Store_Enhancements' )
+				? Exacoat_Store_Enhancements::free_shipping_rule( $country, (float) $order->get_subtotal(), $currency )
+				: null;
+			$promo    = class_exists( 'Exacoat_Store_Enhancements' ) ? Exacoat_Store_Enhancements::get_shipping_promo_config() : null;
+			$applied  = array_map( 'strtoupper', (array) $order->get_coupon_codes() );
+			$promo_on = is_array( $promo ) && ! empty( $promo['code'] ) && in_array( strtoupper( (string) $promo['code'] ), $applied, true );
+
+			$charge = Exacoat_Shipping_Quote::headless_charge(
+				(int) $amount,
+				$courier,
+				$service,
+				(bool) ( $rule['qualified'] ?? false ),
+				(string) ( $rule['filter_text'] ?? '' ),
+				$promo,
+				$promo_on
+			);
+
+			// Same conversion the checkout page used for courier rates: the currency's rate and
+			// rounding with no markup (calculatePriceForCurrency(idr, currency, 1.0)).
+			$total = (float) $charge['total'];
+			$raw   = (float) $charge['raw'];
+			if ( 'IDR' !== $currency && class_exists( 'Exacoat_Store_Enhancements' ) ) {
+				$total = $charge['total'] > 0 ? (float) Exacoat_Store_Enhancements::calculate_price_for_currency( $charge['total'], $currency, false, 1.0 ) : 0.0;
+				$raw   = $charge['raw'] > 0 ? (float) Exacoat_Store_Enhancements::calculate_price_for_currency( $charge['raw'], $currency, false, 1.0 ) : 0.0;
+			}
+
+			$decision = [
+				'mode'       => 'courier',
+				'title'      => Exacoat_Shipping_Quote::label( $courier, $service ),
+				'method_id'  => 'biteship_shipping',
+				'raw_idr'    => (int) $charge['raw'],
+				'raw'        => $raw,
+				'total'      => $total,
+				'discount'   => max( 0.0, $raw - $total ),
+				'is_free'    => (bool) $charge['is_free'],
+				'promo_code' => (string) $charge['promo_code'],
+			];
+		}
+
+		if ( $order_id > 0 ) {
+			self::$headless_shipping_decisions[ $order_id ] = $decision;
+		}
+		return $decision;
+	}
+
+	/**
+	 * Refuse a headless checkout early (before the order is processed) when its courier
+	 * choice has no valid signed quote.
+	 *
+	 * @param \WC_Order|mixed $order
+	 */
+	public static function validate_headless_shipping_request( $order, $request = null ): void {
+		if ( $order instanceof \WC_Order ) {
+			self::headless_shipping_decision( $order );
+		}
+	}
+
+	/**
+	 * Attach the server-decided shipping line to a headless checkout order before payment
+	 * gateways (Midtrans, etc.) read the total. Runs at priority 5 (before the BCA unique
+	 * code at priority 20).
 	 *
 	 * @param \WC_Order|mixed $order
 	 */
@@ -1500,95 +1639,57 @@ class Exacoat_Checkout_Engine {
 			return;
 		}
 
-		$shipping_total  = null;
-		$shipping_title  = '';
-		$shipping_method = 'biteship_shipping';
-
-		if ( isset( $_SERVER['HTTP_X_EXACOAT_SHIPPING_TOTAL'] ) && is_numeric( $_SERVER['HTTP_X_EXACOAT_SHIPPING_TOTAL'] ) ) {
-			$shipping_total  = floatval( $_SERVER['HTTP_X_EXACOAT_SHIPPING_TOTAL'] );
-			$shipping_title  = sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_EXACOAT_SHIPPING_TITLE'] ?? '' ) );
-			$shipping_method = sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_EXACOAT_SHIPPING_RATE_ID'] ?? 'biteship_shipping' ) );
-		}
-
-		// Also check customer note if headers were not present or as fallback
-		if ( null === $shipping_total && ! empty( $order->get_customer_note() ) ) {
-			$note = (string) $order->get_customer_note();
-			if ( preg_match( '/Shipping Courier:\s*(.+)/i', $note, $matches ) ) {
-				$shipping_title = trim( $matches[1] );
-			}
-		}
-
-		if ( null === $shipping_total || $shipping_total < 0 ) {
+		$decision = self::headless_shipping_decision( $order );
+		if ( null === $decision ) {
 			return;
 		}
 
-		if ( empty( $shipping_title ) ) {
-			$shipping_title = 'Courier Delivery';
-		} else {
-			$shipping_title = preg_replace( '/\s*[\(\[]\s*[^)\]]*applied[^)\]]*[\)\]]/i', '', $shipping_title );
-			$shipping_title = preg_replace( '/\s*[\(\[]\s*free\s*shipping\s*[\)\]]/i', '', $shipping_title );
-			$shipping_title = trim( preg_replace( '/\s{2,}/', ' ', $shipping_title ) );
-		}
-
-		// Check existing shipping lines
-		$existing_shipping    = $order->get_items( 'shipping' );
-		$already_attached     = false;
-
-		foreach ( $existing_shipping as $ship_item ) {
-			if (
-				$ship_item->get_method_title() === $shipping_title
-				&& abs( floatval( $ship_item->get_total() ) - $shipping_total ) < 0.01
-			) {
-				$already_attached = true;
-				break;
-			}
-		}
-
-		// Strip automated courier notes from customer note so they are never saved into database
+		// Strip automated courier notes from the customer note so they are never saved.
 		$raw_note = (string) $order->get_customer_note();
-		$note_changed = false;
-		if ( ! empty( $raw_note ) && preg_match( '/(?:shipping courier|jasa kirim|courier)\s*:\s*[^\r\n]+/i', $raw_note ) ) {
-			$cleaned_note = trim( preg_replace( '/(?:shipping courier|jasa kirim|courier)\s*:\s*[^\r\n]+/i', '', $raw_note ) );
-			$order->set_customer_note( $cleaned_note );
-			$note_changed = true;
+		if ( '' !== $raw_note && preg_match( '/(?:shipping courier|jasa kirim|courier)\s*:\s*[^\r\n]+/i', $raw_note ) ) {
+			$order->set_customer_note( trim( preg_replace( '/(?:shipping courier|jasa kirim|courier)\s*:\s*[^\r\n]+/i', '', $raw_note ) ) );
 		}
 
-		$raw_shipping_price = isset( $_SERVER['HTTP_X_EXACOAT_SHIPPING_RAW'] ) && is_numeric( $_SERVER['HTTP_X_EXACOAT_SHIPPING_RAW'] )
-			? floatval( $_SERVER['HTTP_X_EXACOAT_SHIPPING_RAW'] )
-			: $shipping_total;
-		$shipping_discount  = isset( $_SERVER['HTTP_X_EXACOAT_SHIPPING_DISCOUNT'] ) && is_numeric( $_SERVER['HTTP_X_EXACOAT_SHIPPING_DISCOUNT'] )
-			? floatval( $_SERVER['HTTP_X_EXACOAT_SHIPPING_DISCOUNT'] )
-			: 0.0;
-		$shipping_promo     = isset( $_SERVER['HTTP_X_EXACOAT_SHIPPING_PROMO'] )
-			? sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_EXACOAT_SHIPPING_PROMO'] ) )
-			: '';
+		foreach ( $order->get_items( 'shipping' ) as $ship_id => $ship_item ) {
+			$order->remove_item( $ship_id );
+		}
 
-		if ( ! empty( $raw_shipping_price ) || $shipping_discount > 0 ) {
-			$order->update_meta_data( '_shipping_raw_price', strval( $raw_shipping_price ) );
-			if ( $shipping_discount > 0 ) {
-				$order->update_meta_data( '_shipping_discount_amount', strval( $shipping_discount ) );
-				$order->update_meta_data( '_shipping_promo_code', $shipping_promo ?: 'ONGKIR15' );
+		$shipping_item = new \WC_Order_Item_Shipping();
+
+		if ( 'pickup' === $decision['mode'] ) {
+			$shipping_item->set_method_title( 'Store pickup - Summarecon Bekasi' );
+			$shipping_item->set_method_id( 'local_pickup' );
+			$shipping_item->set_total( '0' );
+
+			$shipping = $order->get_address( 'shipping' );
+			$order->set_address( array_merge( is_array( $shipping ) ? $shipping : [], self::STORE_PICKUP_ADDRESS ), 'shipping' );
+			$order->update_meta_data( '_is_store_pickup', 'yes' );
+			$order->delete_meta_data( '_shipping_raw_price' );
+			$order->delete_meta_data( '_shipping_discount_amount' );
+			$order->delete_meta_data( '_shipping_promo_code' );
+		} else {
+			$shipping_item->set_method_title( $decision['title'] );
+			$shipping_item->set_method_id( $decision['method_id'] );
+			$shipping_item->set_total( (string) $decision['total'] );
+			$shipping_item->add_meta_data( '_biteship_raw_idr_cost', (string) $decision['raw_idr'], true );
+			if ( $decision['is_free'] && $decision['raw'] > 0 ) {
+				$shipping_item->add_meta_data( 'original_cost', (string) $decision['raw'], true );
+				$shipping_item->add_meta_data( 'is_free_shipping', '1', true );
+			}
+
+			$order->update_meta_data( '_shipping_raw_price', (string) $decision['raw'] );
+			if ( $decision['discount'] > 0 ) {
+				$order->update_meta_data( '_shipping_discount_amount', (string) $decision['discount'] );
+				$order->update_meta_data( '_shipping_promo_code', $decision['promo_code'] );
+			} else {
+				$order->delete_meta_data( '_shipping_discount_amount' );
+				$order->delete_meta_data( '_shipping_promo_code' );
 			}
 		}
 
-		if ( ! $already_attached ) {
-			// Clear out existing dummy or zero-cost shipping items from headless cart
-			foreach ( $existing_shipping as $ship_id => $ship_item ) {
-				$order->remove_item( $ship_id );
-			}
-
-			// Add the authoritative shipping item
-			$shipping_item = new \WC_Order_Item_Shipping();
-			$shipping_item->set_method_title( $shipping_title );
-			$shipping_item->set_method_id( $shipping_method ?: 'biteship_shipping' );
-			$shipping_item->set_total( (string) $shipping_total );
-			$order->add_item( $shipping_item );
-
-			$order->calculate_totals( false );
-			$order->save();
-		} elseif ( $note_changed || $shipping_discount > 0 ) {
-			$order->save();
-		}
+		$order->add_item( $shipping_item );
+		$order->calculate_totals( false );
+		$order->save();
 	}
 
 	/**

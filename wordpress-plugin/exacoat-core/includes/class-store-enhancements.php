@@ -717,14 +717,15 @@ class Exacoat_Store_Enhancements {
 	/**
 	 * Calculate rounded price for a given IDR base amount in any target currency using decimal or psychological rounding
 	 */
-	public static function calculate_price_for_currency( $amount_idr, $currency_code = 'IDR', $is_addon = false ): float {
+	public static function calculate_price_for_currency( $amount_idr, $currency_code = 'IDR', $is_addon = false, $markup_override = null ): float {
 		$currency_code = strtoupper( trim( (string) $currency_code ) );
 		if ( empty( $currency_code ) || 'IDR' === $currency_code ) {
 			return (float) $amount_idr;
 		}
 
 		$settings   = Exacoat_Core::get_settings();
-		$markup     = floatval( $settings['currency_global_markup'] ?? 1.8 );
+		// $markup_override: shipping converts at 1.0, like calculatePriceForCurrency(x, currency, 1.0) on the checkout page.
+		$markup     = null !== $markup_override ? floatval( $markup_override ) : floatval( $settings['currency_global_markup'] ?? 1.8 );
 		$currencies = self::get_currency_rates();
 
 		if ( ! isset( $currencies[ $currency_code ] ) ) {
@@ -1189,21 +1190,20 @@ class Exacoat_Store_Enhancements {
 	}
 
 	/**
-	 * Apply Multi-Zone Tiered Free Shipping Discount (#14577)
+	 * Free shipping rule for a destination and an items subtotal (AGENTS.md section 11).
+	 * Shared by the WooCommerce rate filter below and the headless checkout shipping charge
+	 * (Exacoat_Checkout_Engine::headless_shipping_decision).
+	 *
+	 * @param string $country         Destination country code.
+	 * @param float  $cart_total      Items subtotal in $active_currency.
+	 * @param string $active_currency Currency of $cart_total.
+	 * @return array{qualified: bool, filter_text: string}|null Null when no zone applies.
 	 */
-	public static function apply_zone_tiered_shipping_discount( $rates, $package ) {
-		if ( is_admin() && ! defined( 'DOING_AJAX' ) ) return $rates;
-
-		$config     = self::get_shipping_config();
-		$target_ids = $config['target_method_ids'];
-		$zones      = $config['zones'];
-
-		$country    = strtoupper( trim( $package['destination']['country'] ?? 'ID' ) );
-		$cart_total = ( function_exists( 'WC' ) && WC()->cart ) ? (float) WC()->cart->get_displayed_subtotal() : 0.0;
-
-		$active_currency = class_exists( 'Exacoat_Checkout_Engine' )
-			? Exacoat_Checkout_Engine::get_active_currency()
-			: ( function_exists( 'get_woocommerce_currency' ) ? get_woocommerce_currency() : 'IDR' );
+	public static function free_shipping_rule( string $country, float $cart_total, string $active_currency ): ?array {
+		$config = self::get_shipping_config();
+		$zones  = $config['zones'];
+		$country = strtoupper( trim( $country ) ) ?: 'ID';
+		$active_currency = strtoupper( trim( $active_currency ) ) ?: 'IDR';
 
 		// Normalize cart total to IDR base currency for comparison against IDR-configured zone thresholds
 		$cart_total_idr = $cart_total;
@@ -1236,7 +1236,7 @@ class Exacoat_Store_Enhancements {
 		}
 
 		if ( ! $matched_zone ) {
-			return $rates;
+			return null;
 		}
 		$free_thresh = floatval( $matched_zone['free'] ?? 0 );
 		$zone_curr   = strtoupper( trim( $matched_zone['currency'] ?? '' ) );
@@ -1286,6 +1286,35 @@ class Exacoat_Store_Enhancements {
 				$filter_text = 'pos';
 			}
 		}
+
+		return [
+			'qualified'   => $is_free_qualified,
+			'filter_text' => $filter_text,
+		];
+	}
+
+	/**
+	 * Apply Multi-Zone Tiered Free Shipping Discount (#14577)
+	 */
+	public static function apply_zone_tiered_shipping_discount( $rates, $package ) {
+		if ( is_admin() && ! defined( 'DOING_AJAX' ) ) return $rates;
+
+		$config     = self::get_shipping_config();
+		$target_ids = $config['target_method_ids'];
+
+		$country    = strtoupper( trim( $package['destination']['country'] ?? 'ID' ) );
+		$cart_total = ( function_exists( 'WC' ) && WC()->cart ) ? (float) WC()->cart->get_displayed_subtotal() : 0.0;
+
+		$active_currency = class_exists( 'Exacoat_Checkout_Engine' )
+			? Exacoat_Checkout_Engine::get_active_currency()
+			: ( function_exists( 'get_woocommerce_currency' ) ? get_woocommerce_currency() : 'IDR' );
+
+		$rule = self::free_shipping_rule( $country, $cart_total, $active_currency );
+		if ( null === $rule ) {
+			return $rates;
+		}
+		$is_free_qualified = $rule['qualified'];
+		$filter_text       = $rule['filter_text'];
 
 		foreach ( $rates as $rate_id => $rate ) {
 			$rate_label = strtolower( (string) $rate->label );

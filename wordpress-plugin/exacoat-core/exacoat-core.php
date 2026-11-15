@@ -415,6 +415,7 @@ require_once EXACOAT_CORE_PATH . 'includes/class-performance-auditor.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-email-engine.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-email-logger.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-order-manager.php';
+require_once EXACOAT_CORE_PATH . 'includes/class-shipping-quote.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-checkout-engine.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-customer-auth.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-review-manager.php';
