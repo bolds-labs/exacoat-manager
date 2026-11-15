@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fix**: the webstore used to send the price of a configured skin with add to cart, and WordPress charged that number, so anyone could buy at any price. The webstore server now works out the price from WordPress data and signs it; the plugin accepts a configured item only with that signature and refuses it otherwise.
 - **Setup**: add the same secret (32 or more characters) as `EXACOAT_CART_PRICE_SECRET` in wp-config.php and in the webstore environment, then install the new plugin zip. Until both are set, configured items cannot be added to the bag.
 - **Old bags**: a configured item added before this change is removed from the bag with a note asking the customer to add it again.
+- **Hand-written options**: add to cart now drops any option field that was not signed by the webstore server (for example product configurator or custom addon fields), so items carry only the checked options.
+- **Order details**: the saved configuration list on order items is now valid data that warranty claims and the manager both read.
 - **Configurator Studio**: new Part Bundle Prices card in the Pricing tab (shown for products with a back glass and a camera part) for the all parts price and the finish surcharge per part. The Camera & Back Glass page needs these values (90,000; back glass +15,000; camera +5,000) and shows as unavailable until they are saved.
 
 ### Design: Orders Redesign

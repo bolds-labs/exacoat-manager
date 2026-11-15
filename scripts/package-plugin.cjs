@@ -120,8 +120,8 @@ async function createPluginZip() {
 - Staff dashboard: team notes endpoints (/staff/notes, stored in exacoat_staff_notes) and the overdue international orders endpoint (/staff/overdue-international)
 - Products: /configurator/set-price sets only the regular price and keeps a running sale price (it used to force the active price to the regular price)
 - Products: configurator saves keep the stored base price (regular price fallback, never the sale price), duplicates keep the regular price, /health lists features (set_price_keeps_sale)
-- Security: configured add to cart accepts exacoat_custom_price and exacoat_addon_data only with a valid storefront signature (EXACOAT_CART_PRICE_SECRET in wp-config.php) and refuses the item otherwise; unsigned custom prices already in carts are removed
-- Configurator: profiles keep bundle_pricing (all parts price and per part finish surcharges) for the Camera & Back Glass product; order items get _configurator_data_raw from the signed cart lines`,
+- Security: configured add to cart accepts exacoat_custom_price and exacoat_addon_data only with a valid storefront signature (EXACOAT_CART_PRICE_SECRET in wp-config.php) and refuses the item otherwise; unsigned custom prices already in carts are removed; add to cart keeps only standard and signed fields (MKL pc_configurator_data, WCPA and addon_* fields are stripped)
+- Configurator: profiles keep bundle_pricing (all parts price and per part finish surcharges) for the Camera & Back Glass product; order items get _configurator_data_raw from the signed cart lines (valid JSON readable by the warranty parser and the manager); bundle surcharge keys match in any case`,
     },
   };
 
