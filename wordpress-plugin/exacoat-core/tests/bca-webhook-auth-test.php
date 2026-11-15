@@ -17,6 +17,14 @@ class WP_REST_Request {
 	public function get_header( $k ) { return $this->h[ strtolower( $k ) ] ?? null; }
 }
 
+class Fake_BCA_Order {
+	private $method;
+	private $currency;
+	public function __construct( string $m, string $c ) { $this->method = $m; $this->currency = $c; }
+	public function get_payment_method() { return $this->method; }
+	public function get_currency() { return $this->currency; }
+}
+
 require_once __DIR__ . '/../includes/class-bca-payment-webhook.php';
 
 $fails = 0;
@@ -39,6 +47,12 @@ $check( $auth( [ 'amount' => '150023' ] ), 'denied', 'missing token' );
 $check( $auth( [ 'token' => 'wrong-token-0123456789abcdef0000' ] ), 'denied', 'wrong token' );
 $check( $auth( [ 'token' => $token ] ), 'ok', 'token in the URL query' );
 $check( $auth( [], [ 'x-exacoat-webhook-token' => $token ] ), 'ok', 'token in the header' );
+
+// Only IDR bank transfer orders can be paid by a BCA mutation.
+$check( Exacoat_BCA_Payment_Webhook::is_bca_candidate( new Fake_BCA_Order( 'bacs', 'IDR' ) ), true, 'IDR bacs order' );
+$check( Exacoat_BCA_Payment_Webhook::is_bca_candidate( new Fake_BCA_Order( 'midtrans', 'IDR' ) ), false, 'Midtrans order never matched' );
+$check( Exacoat_BCA_Payment_Webhook::is_bca_candidate( new Fake_BCA_Order( 'bacs', 'USD' ) ), false, 'non IDR order never matched' );
+$check( Exacoat_BCA_Payment_Webhook::is_bca_candidate( new Fake_BCA_Order( 'BCA', 'idr' ) ), true, 'case insensitive' );
 
 if ( $fails > 0 ) {
 	echo "$fails check(s) failed\n";

@@ -250,6 +250,13 @@ class Exacoat_BCA_Payment_Webhook {
 	 *
 	 * @return string 'ok', 'denied' or 'not_configured'.
 	 */
+	/** Only IDR bank transfer (BCA) orders can be paid by a BCA mutation. */
+	public static function is_bca_candidate( $order ): bool {
+		$method = strtolower( (string) $order->get_payment_method() );
+		return 'IDR' === strtoupper( (string) $order->get_currency() )
+			&& in_array( $method, [ 'bacs', 'bca', 'bank_transfer', 'manual_bca' ], true );
+	}
+
 	public static function webhook_auth_status( $request ): string {
 		$expected = defined( 'EXACOAT_BCA_WEBHOOK_TOKEN' ) ? (string) EXACOAT_BCA_WEBHOOK_TOKEN : (string) get_option( 'exacoat_bca_webhook_token', '' );
 		if ( strlen( $expected ) < 24 ) {
@@ -446,7 +453,7 @@ class Exacoat_BCA_Payment_Webhook {
 		// Collect all candidate orders that match the exact integer payment amount
 		$candidates = [];
 		foreach ( $orders as $order ) {
-			if ( ! $order instanceof \WC_Order ) {
+			if ( ! $order instanceof \WC_Order || ! self::is_bca_candidate( $order ) ) {
 				continue;
 			}
 			$order_total = (int) round( (float) $order->get_total() );

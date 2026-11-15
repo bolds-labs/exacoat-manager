@@ -1813,6 +1813,26 @@ class Exacoat_Checkout_Engine {
 	 * If the notification has standard format and targets an active (non-cancelled) order,
 	 * it yields execution so the official Midtrans plugin handles it as normal.
 	 */
+	/**
+	 * A Midtrans notification is trusted only with a configured server key, a valid
+	 * signature (sha512 of order id, status code, gross amount and server key) and a gross
+	 * amount equal to the WooCommerce order total. Without a server key the signature is
+	 * computable by anyone, so the notification is refused.
+	 */
+	public static function midtrans_notification_valid( array $data, string $raw_order_id, string $server_key, float $order_total ): bool {
+		if ( '' === trim( $server_key ) ) {
+			return false;
+		}
+		$status_code  = (string) ( $data['status_code'] ?? '' );
+		$gross_amount = (string) ( $data['gross_amount'] ?? '' );
+		$signature    = (string) ( $data['signature_key'] ?? '' );
+		$expected     = hash( 'sha512', $raw_order_id . $status_code . $gross_amount . $server_key );
+		if ( '' === $signature || ! hash_equals( $expected, $signature ) ) {
+			return false;
+		}
+		return is_numeric( $gross_amount ) && (int) round( (float) $gross_amount ) === (int) round( $order_total );
+	}
+
 	public static function handle_midtrans_webhook_fallback(): void {
 		$method = strtoupper( $_SERVER['REQUEST_METHOD'] ?? 'GET' );
 		if ( 'POST' !== $method ) {
@@ -1886,14 +1906,9 @@ class Exacoat_Checkout_Engine {
 			$server_key = defined( 'MIDTRANS_SERVER_KEY' ) ? MIDTRANS_SERVER_KEY : ( getenv( 'MIDTRANS_SERVER_KEY' ) ?: '' );
 		}
 
-		$status_code  = (string) ( $data['status_code'] ?? '' );
-		$gross_amount = (string) ( $data['gross_amount'] ?? '' );
-		$signature    = (string) ( $data['signature_key'] ?? '' );
-
-		$expected_sig = hash( 'sha512', $raw_order_id . $status_code . $gross_amount . $server_key );
-		if ( ! hash_equals( $expected_sig, $signature ) ) {
+		if ( ! self::midtrans_notification_valid( $data, $raw_order_id, (string) $server_key, (float) $order->get_total() ) ) {
 			if ( class_exists( 'Exacoat_Logger' ) ) {
-				\Exacoat_Logger::log( "Midtrans fallback signature mismatch for order #{$base_id} (raw: {$raw_order_id})", 'warning' );
+				\Exacoat_Logger::log( "Midtrans fallback refused for order #{$base_id} (raw: {$raw_order_id}): no server key, bad signature or amount mismatch", 'warning' );
 			}
 			return;
 		}
