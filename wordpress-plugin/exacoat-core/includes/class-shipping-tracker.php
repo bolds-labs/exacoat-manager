@@ -465,10 +465,14 @@ class Exacoat_Shipping_Tracker {
 				$matched = false;
 				if ( ! empty( $order_key ) && hash_equals( (string) $found_order->get_order_key(), $order_key ) ) {
 					$matched = true;
-				} elseif ( ! empty( $email_input ) && strcasecmp( trim( (string) $found_order->get_billing_email() ), trim( $email_input ) ) === 0 ) {
-					$matched = true;
 				} elseif ( current_user_can( 'manage_woocommerce' ) ) {
 					$matched = true;
+				} elseif ( class_exists( 'Exacoat_Customer_Auth' ) && Exacoat_Customer_Auth::guest_lookup_blocked( (int) $found_order->get_id() ) ) {
+					$matched = false;
+				} elseif ( ! empty( $email_input ) && strcasecmp( trim( (string) $found_order->get_billing_email() ), trim( $email_input ) ) === 0 ) {
+					$matched = true;
+				} elseif ( class_exists( 'Exacoat_Customer_Auth' ) ) {
+					Exacoat_Customer_Auth::record_guest_lookup_failure( (int) $found_order->get_id() );
 				}
 
 				if ( $matched ) {
@@ -2066,11 +2070,24 @@ class Exacoat_Shipping_Tracker {
 			], 404 );
 		}
 
-		$matched = false;
-		if ( ! empty( $order_key ) && hash_equals( (string) $order->get_order_key(), $order_key ) ) {
+		$matched   = false;
+		$key_valid = ! empty( $order_key ) && hash_equals( (string) $order->get_order_key(), $order_key );
+		if ( $key_valid ) {
 			$matched = true;
-		} elseif ( ! empty( $email_input ) && strcasecmp( trim( (string) $order->get_billing_email() ), trim( $email_input ) ) === 0 ) {
-			$matched = true;
+		} else {
+			// Order number plus billing email: limited per IP and per order, and the answer
+			// carries no payment secrets (Exacoat_Customer_Auth::guest_order_payload).
+			if ( class_exists( 'Exacoat_Customer_Auth' ) && Exacoat_Customer_Auth::guest_lookup_blocked( (int) $order->get_id() ) ) {
+				return new WP_REST_Response( [
+					'success' => false,
+					'message' => __( 'Too many attempts. Please try again later.', 'exacoat-core' ),
+				], 429 );
+			}
+			if ( ! empty( $email_input ) && strcasecmp( trim( (string) $order->get_billing_email() ), trim( $email_input ) ) === 0 ) {
+				$matched = true;
+			} elseif ( class_exists( 'Exacoat_Customer_Auth' ) ) {
+				Exacoat_Customer_Auth::record_guest_lookup_failure( (int) $order->get_id() );
+			}
 		}
 
 		if ( ! $matched ) {
@@ -2097,10 +2114,14 @@ class Exacoat_Shipping_Tracker {
 			$req->set_param( 'email', $order->get_billing_email() );
 			$auth_res = Exacoat_Customer_Auth::rest_order( $req );
 			if ( $auth_res instanceof WP_REST_Response && 200 === $auth_res->get_status() ) {
-				$payload = $auth_res->get_data();
+				$payload    = $auth_res->get_data();
+				$order_data = $payload['order'] ?? null;
+				if ( ! $key_valid && is_array( $order_data ) ) {
+					$order_data = Exacoat_Customer_Auth::guest_order_payload( $order_data );
+				}
 				return new WP_REST_Response( [
 					'success' => true,
-					'order'   => $payload['order'] ?? null,
+					'order'   => $order_data,
 				], 200 );
 			}
 		}

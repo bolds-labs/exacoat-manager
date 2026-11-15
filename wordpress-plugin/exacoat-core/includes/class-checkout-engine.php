@@ -910,10 +910,10 @@ class Exacoat_Checkout_Engine {
 
 		$user = get_user_by( 'email', $email );
 		if ( $user && $user->exists() ) {
+			// No name or other account data for an anonymous caller.
 			wp_send_json_success( [
-				'exists'       => true,
-				'email'        => $email,
-				'display_name' => $user->display_name ?: $user->user_login,
+				'exists' => true,
+				'email'  => $email,
 			] );
 		}
 
@@ -933,9 +933,17 @@ class Exacoat_Checkout_Engine {
 			wp_send_json_error( [ 'message' => esc_html__( 'Please provide both email and password.', 'exacoat-core' ) ] );
 		}
 
+		$generic = esc_html__( 'The email or password is incorrect.', 'exacoat-core' );
+		if ( class_exists( 'Exacoat_Customer_Auth' ) && Exacoat_Customer_Auth::login_locked( $email ) ) {
+			wp_send_json_error( [ 'message' => esc_html__( 'Too many sign-in attempts. Please wait a few minutes.', 'exacoat-core' ) ] );
+		}
+
 		$user = get_user_by( 'email', $email );
 		if ( ! $user ) {
-			wp_send_json_error( [ 'message' => esc_html__( 'No account found with this email.', 'exacoat-core' ) ] );
+			if ( class_exists( 'Exacoat_Customer_Auth' ) ) {
+				Exacoat_Customer_Auth::record_login_failure( $email );
+			}
+			wp_send_json_error( [ 'message' => $generic ] );
 		}
 
 		$creds = [
@@ -947,9 +955,15 @@ class Exacoat_Checkout_Engine {
 		$signon = wp_signon( $creds, is_ssl() );
 
 		if ( is_wp_error( $signon ) ) {
-			wp_send_json_error( [ 'message' => esc_html__( 'Incorrect password. Please try again or continue as guest.', 'exacoat-core' ) ] );
+			if ( class_exists( 'Exacoat_Customer_Auth' ) ) {
+				Exacoat_Customer_Auth::record_login_failure( $email );
+			}
+			wp_send_json_error( [ 'message' => $generic ] );
 		}
 
+		if ( class_exists( 'Exacoat_Customer_Auth' ) ) {
+			Exacoat_Customer_Auth::clear_login_failures( $email );
+		}
 		wp_set_current_user( $signon->ID );
 
 		// Retrieve customer billing meta

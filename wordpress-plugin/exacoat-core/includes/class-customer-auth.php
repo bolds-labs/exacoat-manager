@@ -64,11 +64,18 @@ class Exacoat_Customer_Auth {
 			return self::error( 'Enter your email address and password.', 400 );
 		}
 
+		// Per account, whether or not the account exists, so the answer reveals nothing.
+		if ( self::login_locked( $email ) ) {
+			return self::error( 'Too many sign-in attempts. Please wait a few minutes.', 429 );
+		}
+
 		$user = wp_authenticate( $email, $password );
 		if ( is_wp_error( $user ) ) {
+			self::record_login_failure( $email );
 			return self::error( 'The email or password is incorrect.', 401 );
 		}
 
+		self::clear_login_failures( $email );
 		return self::authenticated_response( $user );
 	}
 
@@ -286,6 +293,8 @@ class Exacoat_Customer_Auth {
 			update_user_meta( $user->ID, 'billing_first_name', $first_name );
 			update_user_meta( $user->ID, 'billing_last_name', $last_name );
 		}
+		// billing_email is contact data only: no order access depends on it (orders are owned
+		// by customer id, see owns_order()).
 		update_user_meta( $user->ID, 'billing_email', $email );
 		return self::response( [
 			'success' => true,
@@ -381,35 +390,9 @@ class Exacoat_Customer_Auth {
 			'orderby'     => 'date',
 			'order'       => 'DESC',
 		] );
-		$user_billing_email = (string) get_user_meta( $user->ID, 'billing_email', true );
-		$emails = array_values( array_unique( array_filter( [
-			strtolower( trim( (string) $user->user_email ) ),
-			strtolower( trim( $user_billing_email ) ),
-		] ) ) );
-		$email_query = [];
-		foreach ( $emails as $em ) {
-			$by_cust = wc_get_orders( [
-				'customer' => $em,
-				'limit'    => 50,
-				'return'   => 'ids',
-				'orderby'  => 'date',
-				'order'    => 'DESC',
-			] );
-			if ( is_array( $by_cust ) ) {
-				$email_query = array_merge( $email_query, $by_cust );
-			}
-			$by_bill = wc_get_orders( [
-				'billing_email' => $em,
-				'limit'         => 50,
-				'return'        => 'ids',
-				'orderby'       => 'date',
-				'order'         => 'DESC',
-			] );
-			if ( is_array( $by_bill ) && count( $by_bill ) < 50 ) {
-				$email_query = array_merge( $email_query, $by_bill );
-			}
-		}
-		$order_ids = array_values( array_unique( array_map( 'intval', array_merge( $customer_query, $email_query ) ) ) );
+		// Orders are owned by customer id only. Matching by account or billing email let anyone
+		// read a guest's orders by setting that email on their own profile.
+		$order_ids = array_values( array_unique( array_map( 'intval', is_array( $customer_query ) ? $customer_query : [] ) ) );
 		rsort( $order_ids, SORT_NUMERIC );
 		$total       = count( $order_ids );
 		$total_pages = max( 1, (int) ceil( $total / $per_page ) );
@@ -494,7 +477,7 @@ class Exacoat_Customer_Auth {
 		}
 
 		$user     = self::authenticated_user( $request );
-		$is_owner = ( $user instanceof WP_User && self::user_owns_order( $user, $order ) );
+		$is_owner = ( $user instanceof WP_User && self::owns_order( $user, $order ) );
 
 		$order_key      = sanitize_text_field( (string) $request->get_param( 'key' ) );
 		$billing_email  = sanitize_email( (string) $request->get_param( 'email' ) );
@@ -504,8 +487,15 @@ class Exacoat_Customer_Auth {
 			$is_key_valid = ( 0 === strcasecmp( (string) $order->get_billing_email(), $billing_email ) );
 		}
 
-		if ( ! $is_owner && ! $is_key_valid && ! $is_email_valid ) {
-			return self::error( $user ? 'Order not found.' : 'Order details could not be found with the credentials provided.', 401 );
+		$is_guest_read = ! $is_owner && ! $is_key_valid;
+		if ( $is_guest_read ) {
+			if ( self::guest_lookup_blocked( (int) $order->get_id() ) ) {
+				return self::error( 'Too many attempts. Please try again later.', 429 );
+			}
+			if ( ! $is_email_valid ) {
+				self::record_guest_lookup_failure( (int) $order->get_id() );
+				return self::error( $user ? 'Order not found.' : 'Order details could not be found with the credentials provided.', 401 );
+			}
 		}
 
 		$items = [];
@@ -570,9 +560,7 @@ class Exacoat_Customer_Auth {
 			}
 		}
 
-		return self::response( [
-			'success' => true,
-			'order'   => [
+		$order_payload = [
 				'id'               => $order->get_id(),
 				'number'           => (string) $order->get_order_number(),
 				'status'           => $order->get_status(),
@@ -602,7 +590,17 @@ class Exacoat_Customer_Auth {
 				'orderKey'         => (string) $order->get_order_key(),
 				'snapToken'        => (string) ( $order->get_meta( '_mt_payment_snap_token' ) ?: '' ),
 				'snapUrl'          => (string) ( $order->get_meta( '_mt_payment_url' ) ?: '' ),
-			],
+		];
+
+		// Order number plus billing email is a weak proof (sequential numbers): no order key,
+		// payment URL or Snap token for that read.
+		if ( $is_guest_read ) {
+			$order_payload = self::guest_order_payload( $order_payload );
+		}
+
+		return self::response( [
+			'success' => true,
+			'order'   => $order_payload,
 		] );
 	}
 
@@ -844,19 +842,51 @@ class Exacoat_Customer_Auth {
 		] );
 	}
 
-	private static function user_owns_order( WP_User $user, WC_Order $order ): bool {
-		if ( (int) $order->get_user_id() === (int) $user->ID ) {
+	/** Orders are owned by WordPress customer id only (never by account or billing email). */
+	public static function owns_order( $user, $order ): bool {
+		$uid = (int) $order->get_user_id();
+		return $uid > 0 && $uid === (int) $user->ID;
+	}
+
+	/** Removes the payment secrets from an order read proven only by order number and email. */
+	public static function guest_order_payload( array $payload ): array {
+		foreach ( [ 'orderKey', 'snapToken', 'snapUrl', 'viewUrl' ] as $key ) {
+			if ( array_key_exists( $key, $payload ) ) {
+				$payload[ $key ] = '';
+			}
+		}
+		return $payload;
+	}
+
+	const LOGIN_ACCOUNT_LIMIT   = 10;
+	const GUEST_ORDER_IP_LIMIT  = 60;
+	const GUEST_ORDER_FAIL_LIMIT = 10;
+
+	public static function login_locked( string $email ): bool {
+		return Exacoat_Request_Guard::is_over( 'login_acct', strtolower( trim( $email ) ), self::LOGIN_ACCOUNT_LIMIT );
+	}
+
+	public static function record_login_failure( string $email ): void {
+		Exacoat_Request_Guard::hit( 'login_acct', strtolower( trim( $email ) ), self::LOGIN_ACCOUNT_LIMIT, 15 * MINUTE_IN_SECONDS );
+	}
+
+	public static function clear_login_failures( string $email ): void {
+		Exacoat_Request_Guard::clear( 'login_acct', strtolower( trim( $email ) ) );
+	}
+
+	/**
+	 * Guest order reads (order number plus billing email): counts one lookup for the client IP
+	 * (60 per 10 minutes) and refuses an order with 10 failed proofs in the last hour.
+	 */
+	public static function guest_lookup_blocked( int $order_id ): bool {
+		if ( Exacoat_Request_Guard::is_over( 'guest_order_fail', (string) $order_id, self::GUEST_ORDER_FAIL_LIMIT ) ) {
 			return true;
 		}
-		$order_email = trim( (string) $order->get_billing_email() );
-		if ( ! $order_email ) {
-			return false;
-		}
-		if ( 0 === strcasecmp( $order_email, trim( (string) $user->user_email ) ) ) {
-			return true;
-		}
-		$user_billing_email = trim( (string) get_user_meta( $user->ID, 'billing_email', true ) );
-		return $user_billing_email && 0 === strcasecmp( $order_email, $user_billing_email );
+		return Exacoat_Request_Guard::hit( 'guest_order_ip', Exacoat_Request_Guard::client_ip(), self::GUEST_ORDER_IP_LIMIT, 10 * MINUTE_IN_SECONDS );
+	}
+
+	public static function record_guest_lookup_failure( int $order_id ): void {
+		Exacoat_Request_Guard::hit( 'guest_order_fail', (string) $order_id, self::GUEST_ORDER_FAIL_LIMIT, HOUR_IN_SECONDS );
 	}
 
 	public static function rest_link_ticket( WP_REST_Request $request ) {
@@ -1197,16 +1227,9 @@ class Exacoat_Customer_Auth {
 	}
 
 	private static function is_rate_limited( string $action, int $limit, int $window ): bool {
-		$raw_ip = (string) ( $_SERVER['HTTP_X_EXACOAT_CLIENT_IP'] ?? $_SERVER['HTTP_CF_CONNECTING_IP'] ?? $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown' );
-		if ( false !== strpos( $raw_ip, ',' ) ) {
-			$raw_ip = trim( explode( ',', $raw_ip )[0] );
-		}
-		$ip   = sanitize_text_field( wp_unslash( $raw_ip ) );
-		$key  = 'exacoat_auth_rate_' . md5( $action . '|' . $ip );
-		$data = get_transient( $key );
-		$count = is_array( $data ) ? (int) $data['count'] : 0;
-		set_transient( $key, [ 'count' => $count + 1 ], $window );
-		return $count >= $limit;
+		// Trusted client IP only (signed storefront header, Cloudflare, REMOTE_ADDR); never
+		// X-Forwarded-For or an unsigned X-Exacoat-Client-IP.
+		return Exacoat_Request_Guard::hit( 'auth_' . $action, Exacoat_Request_Guard::client_ip(), $limit, $window );
 	}
 
 	private static function web_origin(): string {
