@@ -19,6 +19,21 @@ class Exacoat_Warranty_Manager {
 	const WARRANTY_WINDOW_SECS  = 172800;    // 48 * 3600
 	const OPTION_WARRANTY_CODES = 'exacoat_warranty_codes';
 
+	const RATES_UNAVAILABLE_MESSAGE = 'Shipping rates are unavailable right now, please try again shortly.';
+
+	/**
+	 * Cloudflare edge address ranges. Source: https://www.cloudflare.com/ips/ (ips-v4 and
+	 * ips-v6, checked 2026-11-15). Update here or with the `exacoat_cloudflare_ip_ranges` filter.
+	 */
+	const CLOUDFLARE_IP_RANGES = [
+		'173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22',
+		'141.101.64.0/18', '108.162.192.0/18', '190.93.240.0/20', '188.114.96.0/20',
+		'197.234.240.0/22', '198.41.128.0/17', '162.158.0.0/15', '104.16.0.0/13',
+		'104.24.0.0/14', '172.64.0.0/13', '131.0.72.0/22',
+		'2400:cb00::/32', '2606:4700::/32', '2803:f800::/32', '2405:b500::/32',
+		'2405:8100::/32', '2a06:98c0::/29', '2c0f:f248::/32',
+	];
+
 	/**
 	 * Excluded product / line item keywords
 	 */
@@ -1437,15 +1452,29 @@ class Exacoat_Warranty_Manager {
 			], 200 );
 		}
 
-		// Anonymous lookups cannot hammer Biteship: a failed postcode is not retried for 5 minutes
-		// and each visitor IP gets a bounded number of live lookups (staff are not limited).
-		$fail_key = 'biteship_warranty_fail_' . md5( $postcode );
-		$can_ask  = ! empty( $api_key ) && false === get_transient( $fail_key ) && ! self::public_request_limited( 'wrates', 30, 10 * MINUTE_IN_SECONDS );
+		// Anonymous lookups cannot hammer Biteship or fish for the flat fallback prices: a failed
+		// postcode and courier set is not retried for 5 minutes, each visitor IP gets a bounded
+		// number of live lookups, and the public always gets "try later" instead of fallback rates.
+		// Staff are not limited and still see the fallback rates.
+		$is_staff    = self::is_staff_request();
+		$couriers    = 'jne,sicepat';
+		$fail_key    = 'biteship_warranty_fail_' . md5( $postcode . '|' . $couriers );
+		$unavailable = static function (): \WP_REST_Response {
+			return new \WP_REST_Response( [
+				'success' => false,
+				'code'    => 'shipping_rates_unavailable',
+				'message' => self::RATES_UNAVAILABLE_MESSAGE,
+			], 503 );
+		};
+		if ( ! $is_staff && ( empty( $api_key ) || false !== get_transient( $fail_key ) || self::public_request_limited( 'wrates', 30, 10 * MINUTE_IN_SECONDS ) ) ) {
+			return $unavailable();
+		}
+		$can_ask = ! empty( $api_key ) && ( ! $is_staff || false === get_transient( $fail_key ) );
 		if ( $can_ask ) {
 			$body = [
 				'origin_postal_code'      => (int) $origin_zip,
 				'destination_postal_code' => (int) $postcode,
-				'couriers'                => 'jne,sicepat',
+				'couriers'                => $couriers,
 				'items'                   => [
 					[
 						'name'     => 'Replacement Skin Pack',
@@ -1497,6 +1526,10 @@ class Exacoat_Warranty_Manager {
 			set_transient( $transient_key, $rates, 7 * DAY_IN_SECONDS );
 		} elseif ( $can_ask ) {
 			set_transient( $fail_key, 1, 5 * MINUTE_IN_SECONDS );
+		}
+
+		if ( empty( $rates ) && ! $is_staff ) {
+			return $unavailable();
 		}
 
 		$is_fallback = false;
@@ -1552,11 +1585,10 @@ class Exacoat_Warranty_Manager {
 	 * $window seconds. Signed-in staff are never limited.
 	 */
 	public static function public_request_limited( string $bucket, int $limit, int $window ): bool {
-		if ( function_exists( 'current_user_can' ) && current_user_can( 'manage_woocommerce' ) ) {
+		if ( self::is_staff_request() ) {
 			return false;
 		}
-		$ip  = sanitize_text_field( wp_unslash( (string) ( $_SERVER['REMOTE_ADDR'] ?? '' ) ) );
-		$key = 'exacoat_rl_' . $bucket . '_' . md5( $ip );
+		$key = 'exacoat_rl_' . $bucket . '_' . md5( self::client_ip() );
 		$hit = (int) get_transient( $key );
 		if ( $hit >= $limit ) {
 			return true;
@@ -1565,22 +1597,73 @@ class Exacoat_Warranty_Manager {
 		return false;
 	}
 
+	public static function is_staff_request(): bool {
+		return function_exists( 'current_user_can' ) && current_user_can( 'manage_woocommerce' );
+	}
+
 	/**
-	 * Proof that the caller owns the order: its order key, its billing email, or being the
-	 * signed-in customer of the order.
+	 * Visitor IP for rate limits: CF-Connecting-IP only when the connection comes from a
+	 * Cloudflare edge address (CLOUDFLARE_IP_RANGES), otherwise REMOTE_ADDR. No other header
+	 * is trusted, so a client cannot pick its own bucket.
+	 */
+	public static function client_ip(): string {
+		$remote = trim( (string) ( $_SERVER['REMOTE_ADDR'] ?? '' ) );
+		$cf     = trim( (string) ( $_SERVER['HTTP_CF_CONNECTING_IP'] ?? '' ) );
+		if ( '' !== $cf && false !== filter_var( $cf, FILTER_VALIDATE_IP ) && false !== filter_var( $remote, FILTER_VALIDATE_IP ) ) {
+			$ranges = (array) apply_filters( 'exacoat_cloudflare_ip_ranges', self::CLOUDFLARE_IP_RANGES );
+			foreach ( $ranges as $cidr ) {
+				if ( self::ip_in_cidr( $remote, (string) $cidr ) ) {
+					return $cf;
+				}
+			}
+		}
+		return $remote;
+	}
+
+	/** Whether $ip (IPv4 or IPv6) is inside $cidr. */
+	public static function ip_in_cidr( string $ip, string $cidr ): bool {
+		$parts = explode( '/', $cidr, 2 );
+		$addr  = @inet_pton( $ip );
+		$net   = @inet_pton( $parts[0] );
+		if ( false === $addr || false === $net || strlen( $addr ) !== strlen( $net ) ) {
+			return false;
+		}
+		$bits = isset( $parts[1] ) ? (int) $parts[1] : strlen( $net ) * 8;
+		$full = intdiv( $bits, 8 );
+		if ( substr( $addr, 0, $full ) !== substr( $net, 0, $full ) ) {
+			return false;
+		}
+		$rest = $bits % 8;
+		if ( 0 === $rest ) {
+			return true;
+		}
+		$mask = ( 0xff << ( 8 - $rest ) ) & 0xff;
+		return ( ord( $addr[ $full ] ) & $mask ) === ( ord( $net[ $full ] ) & $mask );
+	}
+
+	/**
+	 * Proof that the caller owns the order: its order key, being the signed-in customer of the
+	 * order, or its billing email together with its shipping postcode (order numbers are
+	 * sequential, so an email alone is not enough).
 	 */
 	public static function caller_owns_order( \WC_Order $order, \WP_REST_Request $request ): bool {
 		$key = sanitize_text_field( (string) ( $request->get_param( 'order_key' ) ?: '' ) );
 		if ( '' !== $key && hash_equals( (string) $order->get_order_key(), $key ) ) {
 			return true;
 		}
-		$email = strtolower( trim( sanitize_email( (string) ( $request->get_param( 'billing_email' ) ?: $request->get_param( 'email' ) ?: '' ) ) ) );
-		$own   = strtolower( trim( (string) $order->get_billing_email() ) );
-		if ( '' !== $email && '' !== $own && hash_equals( $own, $email ) ) {
+		$user_id = function_exists( 'get_current_user_id' ) ? (int) get_current_user_id() : 0;
+		if ( $user_id > 0 && $user_id === (int) $order->get_customer_id() ) {
 			return true;
 		}
-		$user_id = function_exists( 'get_current_user_id' ) ? (int) get_current_user_id() : 0;
-		return $user_id > 0 && $user_id === (int) $order->get_customer_id();
+		$norm_pc  = static function ( $v ): string {
+			return preg_replace( '/\s+/', '', strtoupper( trim( (string) $v ) ) );
+		};
+		$email    = strtolower( trim( sanitize_email( (string) ( $request->get_param( 'billing_email' ) ?: $request->get_param( 'email' ) ?: '' ) ) ) );
+		$own      = strtolower( trim( (string) $order->get_billing_email() ) );
+		$postcode = $norm_pc( $request->get_param( 'shipping_postcode' ) ?: $request->get_param( 'postcode' ) ?: '' );
+		$own_pc   = $norm_pc( $order->get_shipping_postcode() ?: $order->get_billing_postcode() );
+		return '' !== $email && '' !== $own && '' !== $postcode && '' !== $own_pc
+			&& hash_equals( $own, $email ) && hash_equals( $own_pc, $postcode );
 	}
 
 	/**
@@ -1590,6 +1673,10 @@ class Exacoat_Warranty_Manager {
 		$rates_request = new \WP_REST_Request( 'POST', '/exacoat-core/v1/warranty/shipping-rates' );
 		$rates_request->set_param( 'order_id', $order_id );
 		$data = self::rest_get_shipping_rates( $rates_request )->get_data();
+		// A fallback (flat) price is never charged on a claim; nor is a "try later" answer.
+		if ( ! empty( $data['is_fallback'] ) || 'shipping_rates_unavailable' === ( $data['code'] ?? '' ) ) {
+			return [ 'unavailable' => true ];
+		}
 		if ( empty( $data['success'] ) || empty( $data['rates'] ) || ! is_array( $data['rates'] ) ) {
 			return null;
 		}
@@ -1619,7 +1706,7 @@ class Exacoat_Warranty_Manager {
 		if ( ! $parent_order || ! self::caller_owns_order( $parent_order, $request ) ) {
 			return new \WP_REST_Response( [
 				'success' => false,
-				'message' => 'Original order not found. Please enter the order number with its order key or billing email.',
+				'message' => 'Original order not found. Please enter the order number with its order key, or the billing email and shipping postcode.',
 			], 404 );
 		}
 
@@ -1649,6 +1736,13 @@ class Exacoat_Warranty_Manager {
 		// Shipping is priced here, from this endpoint's own rates for the parent order's
 		// address; a posted shipping_cost or courier_label is ignored.
 		$server_rate = self::server_rate_for_order( $parent_order_id, $courier_id );
+		if ( ! empty( $server_rate['unavailable'] ) ) {
+			return new \WP_REST_Response( [
+				'success' => false,
+				'code'    => 'shipping_rates_unavailable',
+				'message' => self::RATES_UNAVAILABLE_MESSAGE,
+			], 409 );
+		}
 		if ( null === $server_rate ) {
 			return new \WP_REST_Response( [
 				'success' => false,
