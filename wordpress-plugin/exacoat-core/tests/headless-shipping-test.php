@@ -45,6 +45,12 @@ class WC_Order_Item_Shipping {
 	public function add_meta_data( $k, $v, $unique = false ) { $this->meta[ $k ] = $v; }
 }
 
+class Fake_Ship {
+	private $method;
+	public function __construct( string $method ) { $this->method = $method; }
+	public function get_method_id() { return $this->method; }
+}
+
 class Fake_Line {
 	private $qty;
 	public function __construct( int $qty ) { $this->qty = $qty; }
@@ -59,12 +65,13 @@ class WC_Order {
 	public $currency = 'IDR';
 	public $coupons = [];
 	public $meta = [];
-	public $shipping_items = [ 7 => 'cart rate' ];
+	public $shipping_items;
 	public $added = [];
 	public $note = '';
 	public function __construct( int $id, array $quantities ) {
 		$this->id    = $id;
 		$this->lines = array_map( fn( $q ) => new Fake_Line( $q ), $quantities );
+		$this->shipping_items = [ 7 => new Fake_Ship( 'biteship_shipping' ) ];
 	}
 	public function get_id() { return $this->id; }
 	public function get_shipping_country() { return $this->shipping['country'] ?? ''; }
@@ -127,9 +134,28 @@ $decide = function ( WC_Order $order ) {
 };
 $refused = 'refused: ' . Exacoat_Shipping_Quote::INVALID_MESSAGE;
 
-// No headless headers: WooCommerce's own selected rate stays.
+// No headless headers. Outside Indonesia WooCommerce's own selected rate stays.
 $set_headers( [] );
-$check( $decide( new WC_Order( $next_id++, [ 1 ] ) ), null, 'no headers' );
+$intl = new WC_Order( $next_id++, [ 1 ] );
+$intl->shipping['country'] = 'US';
+$intl->shipping_items = [ 7 => new Fake_Ship( 'flat_rate' ) ];
+$check( $decide( $intl ), null, 'no headers, international rate kept' );
+
+$no_line = new WC_Order( $next_id++, [ 1 ] );
+$no_line->shipping_items = [];
+$check( $decide( $no_line ), null, 'no headers, nothing to ship' );
+
+// Indonesia without a signed quote: only store pickup is accepted.
+$check( $decide( new WC_Order( $next_id++, [ 1 ] ) ), $refused, 'no headers, biteship line without a verified decision refused' );
+$flat = new WC_Order( $next_id++, [ 1 ] );
+$flat->shipping_items = [ 7 => new Fake_Ship( 'flat_rate' ) ];
+$check( $decide( $flat ), $refused, 'no headers, other Indonesian method refused' );
+
+$wc_pickup = new WC_Order( $next_id++, [ 1 ] );
+$wc_pickup->shipping_items = [ 7 => new Fake_Ship( 'local_pickup' ) ];
+$check( $decide( $wc_pickup ), [ 'mode' => 'pickup' ], 'no headers, local pickup' );
+Exacoat_Checkout_Engine::attach_headless_shipping_before_payment( $wc_pickup );
+$check( [ $wc_pickup->shipping['postcode'], $wc_pickup->meta['_is_store_pickup'] ?? null, $wc_pickup->added[0]->total ?? null ], [ '17142', 'yes', '0' ], 'no headers, local pickup gets the store address' );
 
 // Valid quote, no discount.
 $set_headers( $courier_headers() );
@@ -182,8 +208,20 @@ $check( [ $d['total'] ?? null, $d['promo_code'] ?? null ], [ 7000.0, 'ONGKIR15' 
 $set_headers( $courier_headers() );
 $usd = new WC_Order( $next_id++, [ 3 ] );
 $usd->currency = 'USD';
-$check( $decide( $usd )['total'] ?? null, 2.2, 'currency conversion' );
-$check( Exacoat_Store_Enhancements::$last_markup, 1.0, 'shipping converts without markup' );
+$check( $decide( $usd )['total'] ?? null, 3.96, 'currency conversion' );
+$check( Exacoat_Store_Enhancements::$last_markup, null, 'shipping converts with the global markup, like the page' );
+
+// The second check at attach is real: a quote that stops matching is refused there.
+$set_headers( $courier_headers() );
+$late = new WC_Order( $next_id++, [ 3 ] );
+$decide( $late );
+$late->shipping['postcode'] = '17142';
+try {
+	Exacoat_Checkout_Engine::attach_headless_shipping_before_payment( $late );
+	$check( 'attached', 'refused', 'attach re-checks the quote' );
+} catch ( \Exception $e ) {
+	$check( $e->getMessage(), Exacoat_Shipping_Quote::INVALID_MESSAGE, 'attach re-checks the quote' );
+}
 
 // Attach writes the decided line.
 $set_headers( $courier_headers() );

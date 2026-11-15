@@ -20,7 +20,7 @@ class Exacoat_Shipping_Quote {
 	const VERSION         = 'exacoat-ship-v1';
 	const MAX_TTL         = 7200;
 	const MIN_SECRET      = 32;
-	const INVALID_MESSAGE = 'Shipping rates changed, please choose a courier again.';
+	const INVALID_MESSAGE = 'Shipping rates changed, please choose a courier again. If the courier options do not reload, refresh the page.';
 	const INVALID_CODE    = 'exacoat_shipping_quote_invalid';
 
 	/** Couriers the storefront quotes for Indonesian delivery. */

@@ -717,15 +717,14 @@ class Exacoat_Store_Enhancements {
 	/**
 	 * Calculate rounded price for a given IDR base amount in any target currency using decimal or psychological rounding
 	 */
-	public static function calculate_price_for_currency( $amount_idr, $currency_code = 'IDR', $is_addon = false, $markup_override = null ): float {
+	public static function calculate_price_for_currency( $amount_idr, $currency_code = 'IDR', $is_addon = false ): float {
 		$currency_code = strtoupper( trim( (string) $currency_code ) );
 		if ( empty( $currency_code ) || 'IDR' === $currency_code ) {
 			return (float) $amount_idr;
 		}
 
 		$settings   = Exacoat_Core::get_settings();
-		// $markup_override: shipping converts at 1.0, like calculatePriceForCurrency(x, currency, 1.0) on the checkout page.
-		$markup     = null !== $markup_override ? floatval( $markup_override ) : floatval( $settings['currency_global_markup'] ?? 1.8 );
+		$markup     = floatval( $settings['currency_global_markup'] ?? 1.8 );
 		$currencies = self::get_currency_rates();
 
 		if ( ! isset( $currencies[ $currency_code ] ) ) {

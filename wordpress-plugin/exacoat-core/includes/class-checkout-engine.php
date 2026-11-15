@@ -1500,9 +1500,6 @@ class Exacoat_Checkout_Engine {
 		'country'   => 'ID',
 	];
 
-	/** @var array<int, array|null> Decisions already computed for an order in this request. */
-	private static $headless_shipping_decisions = [];
-
 	private static function shipping_header( string $name ): string {
 		$key = 'HTTP_X_EXACOAT_SHIPPING_' . $name;
 		return isset( $_SERVER[ $key ] ) ? trim( sanitize_text_field( wp_unslash( (string) $_SERVER[ $key ] ) ) ) : '';
@@ -1522,18 +1519,13 @@ class Exacoat_Checkout_Engine {
 	 * @throws \Exception RouteException when a courier choice has no valid quote.
 	 */
 	public static function headless_shipping_decision( \WC_Order $order ): ?array {
-		$order_id = (int) $order->get_id();
-		if ( $order_id > 0 && array_key_exists( $order_id, self::$headless_shipping_decisions ) ) {
-			return self::$headless_shipping_decisions[ $order_id ];
-		}
-
 		$mode    = strtolower( self::shipping_header( 'MODE' ) );
 		$rate_id = strtolower( self::shipping_header( 'RATE_ID' ) );
 		$quote   = self::shipping_header( 'QUOTE' );
 		$legacy  = self::shipping_header( 'TOTAL' );
 
 		if ( '' === $mode && '' === $rate_id && '' === $quote && '' === $legacy ) {
-			return null;
+			return self::headerless_shipping_decision( $order );
 		}
 
 		if ( 'pickup' === $mode || 0 === strpos( $rate_id, 'local_pickup' ) ) {
@@ -1587,13 +1579,13 @@ class Exacoat_Checkout_Engine {
 				$promo_on
 			);
 
-			// Same conversion the checkout page used for courier rates: the currency's rate and
-			// rounding with no markup (calculatePriceForCurrency(idr, currency, 1.0)).
+			// Same conversion the checkout page uses for courier rates: the currency's rate,
+			// rounding and the global markup (calculatePriceForCurrency(idr, currency)).
 			$total = (float) $charge['total'];
 			$raw   = (float) $charge['raw'];
 			if ( 'IDR' !== $currency && class_exists( 'Exacoat_Store_Enhancements' ) ) {
-				$total = $charge['total'] > 0 ? (float) Exacoat_Store_Enhancements::calculate_price_for_currency( $charge['total'], $currency, false, 1.0 ) : 0.0;
-				$raw   = $charge['raw'] > 0 ? (float) Exacoat_Store_Enhancements::calculate_price_for_currency( $charge['raw'], $currency, false, 1.0 ) : 0.0;
+				$total = $charge['total'] > 0 ? (float) Exacoat_Store_Enhancements::calculate_price_for_currency( $charge['total'], $currency ) : 0.0;
+				$raw   = $charge['raw'] > 0 ? (float) Exacoat_Store_Enhancements::calculate_price_for_currency( $charge['raw'], $currency ) : 0.0;
 			}
 
 			$decision = [
@@ -1609,10 +1601,30 @@ class Exacoat_Checkout_Engine {
 			];
 		}
 
-		if ( $order_id > 0 ) {
-			self::$headless_shipping_decisions[ $order_id ] = $decision;
-		}
 		return $decision;
+	}
+
+	/**
+	 * Store API checkout sent without the storefront's shipping headers (for example straight
+	 * to cms). Outside Indonesia WooCommerce's own selected rate stays. In Indonesia only store
+	 * pickup is accepted: a courier needs a signed quote, so any other method is refused.
+	 */
+	private static function headerless_shipping_decision( \WC_Order $order ): ?array {
+		$methods = [];
+		foreach ( $order->get_items( 'shipping' ) as $ship_item ) {
+			$methods[] = strtolower( (string) $ship_item->get_method_id() );
+		}
+		if ( empty( $methods ) ) {
+			return null;
+		}
+		if ( in_array( 'local_pickup', $methods, true ) && 1 === count( array_unique( $methods ) ) ) {
+			return [ 'mode' => 'pickup' ];
+		}
+		$country = strtoupper( (string) ( $order->get_shipping_country() ?: $order->get_billing_country() ) );
+		if ( 'ID' === $country ) {
+			self::throw_store_api_error( Exacoat_Shipping_Quote::INVALID_CODE, Exacoat_Shipping_Quote::INVALID_MESSAGE, 409 );
+		}
+		return null;
 	}
 
 	/**
@@ -1630,7 +1642,8 @@ class Exacoat_Checkout_Engine {
 	/**
 	 * Attach the server-decided shipping line to a headless checkout order before payment
 	 * gateways (Midtrans, etc.) read the total. Runs at priority 5 (before the BCA unique
-	 * code at priority 20).
+	 * code at priority 20). The decision is computed again here from the order as it is now,
+	 * so this is a second, independent check after validate_headless_shipping_request.
 	 *
 	 * @param \WC_Order|mixed $order
 	 */
