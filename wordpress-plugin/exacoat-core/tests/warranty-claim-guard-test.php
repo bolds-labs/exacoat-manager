@@ -55,6 +55,8 @@ class WP_REST_Request {
 	public function set_param( $k, $v ) { $this->p[ $k ] = $v; }
 }
 
+function delete_transient( $k ) { unset( $GLOBALS['transients'][ $k ] ); return true; }
+require_once __DIR__ . '/../includes/class-request-guard.php';
 require_once __DIR__ . '/../includes/class-warranty-manager.php';
 
 $fails = 0;

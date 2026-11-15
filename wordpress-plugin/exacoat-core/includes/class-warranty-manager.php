@@ -21,18 +21,7 @@ class Exacoat_Warranty_Manager {
 
 	const RATES_UNAVAILABLE_MESSAGE = 'Shipping rates are unavailable right now, please try again shortly.';
 
-	/**
-	 * Cloudflare edge address ranges. Source: https://www.cloudflare.com/ips/ (ips-v4 and
-	 * ips-v6, checked 2026-11-15). Update here or with the `exacoat_cloudflare_ip_ranges` filter.
-	 */
-	const CLOUDFLARE_IP_RANGES = [
-		'173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22',
-		'141.101.64.0/18', '108.162.192.0/18', '190.93.240.0/20', '188.114.96.0/20',
-		'197.234.240.0/22', '198.41.128.0/17', '162.158.0.0/15', '104.16.0.0/13',
-		'104.24.0.0/14', '172.64.0.0/13', '131.0.72.0/22',
-		'2400:cb00::/32', '2606:4700::/32', '2803:f800::/32', '2405:b500::/32',
-		'2405:8100::/32', '2a06:98c0::/29', '2c0f:f248::/32',
-	];
+	// Cloudflare ranges and the trusted client IP live in Exacoat_Request_Guard.
 
 	/**
 	 * Excluded product / line item keywords
@@ -346,6 +335,16 @@ class Exacoat_Warranty_Manager {
 		$verification = trim( (string) $request->get_param( 'verification' ) );
 		$warranty_code = trim( (string) $request->get_param( 'warranty_code' ) );
 
+		// Order numbers are sequential: bound lookups per visitor IP (Exacoat_Request_Guard).
+		if ( ! self::is_staff_request() && Exacoat_Request_Guard::hit( 'welig_ip', self::client_ip(), 120, 10 * MINUTE_IN_SECONDS ) ) {
+			return new \WP_REST_Response( [
+				'success'  => false,
+				'eligible' => false,
+				'reason'   => 'too_many_attempts',
+				'message'  => 'Too many attempts. Please try again later.',
+			], 429 );
+		}
+
 		$clean_id = ltrim( $order_param, '#' );
 		$order = wc_get_order( $clean_id );
 
@@ -436,27 +435,25 @@ class Exacoat_Warranty_Manager {
 		$raw_phone = $order->get_billing_phone() ?: $order->get_shipping_phone() ?: $order->get_meta( '_shipping_phone' );
 		$billing_phone = preg_replace( '/[^0-9]/', '', (string) $raw_phone );
 
-		if ( ! empty( $verification ) ) {
-			$norm_verif = strtolower( trim( $verification ) );
-			$is_email_match = ( $norm_verif === $billing_email );
-
-			$digits_verif = preg_replace( '/[^0-9]/', '', $verification );
-			$is_phone_match = false;
-			if ( strlen( $digits_verif ) >= 6 ) {
-				$norm_order_phone = self::normalize_phone( $billing_phone );
-				$norm_verif_phone = self::normalize_phone( $digits_verif );
-				$is_phone_match = ( ! empty( $norm_order_phone ) && $norm_order_phone === $norm_verif_phone )
-					|| ( substr( $billing_phone, -8 ) === substr( $digits_verif, -8 ) );
-			}
-
-			if ( ! $is_email_match && ! $is_phone_match ) {
-				return new \WP_REST_Response( [
-					'success'  => false,
-					'eligible' => false,
-					'reason'   => 'verification_failed',
-					'message'  => 'The email or phone number does not match the billing records for Order #' . $order->get_order_number() . '.',
-				], 200 );
-			}
+		// Verification is always required (AGENTS.md "Plugin Auth and Ownership"): the signed-in
+		// customer who owns the order, the exact billing email, or the full phone number.
+		$fail_subject = 'wc:' . $order_id;
+		if ( Exacoat_Request_Guard::is_over( 'welig_fail', $fail_subject, 10 ) ) {
+			return new \WP_REST_Response( [
+				'success'  => false,
+				'eligible' => false,
+				'reason'   => 'too_many_attempts',
+				'message'  => 'Too many attempts. Please try again later.',
+			], 429 );
+		}
+		if ( '' === self::webstore_verification( $order, $verification ) ) {
+			Exacoat_Request_Guard::hit( 'welig_fail', $fail_subject, 10, HOUR_IN_SECONDS );
+			return new \WP_REST_Response( [
+				'success'  => false,
+				'eligible' => false,
+				'reason'   => 'verification_failed',
+				'message'  => 'Enter the billing email or the full phone number used for this order.',
+			], 200 );
 		}
 
 		// 0. Store Pickup Exclusion (Summarecon Bekasi / SMB)
@@ -821,27 +818,26 @@ class Exacoat_Warranty_Manager {
 			], 200 );
 		}
 
-		// 2. Verification check (phone number or username)
-		if ( ! empty( $verification ) ) {
-			$raw_phone = preg_replace( '/[^0-9]/', '', (string) ( $ord['recipient_phone'] ?? '' ) );
-			$digits_verif = preg_replace( '/[^0-9]/', '', $verification );
-			$is_phone_match = false;
-			if ( strlen( $digits_verif ) >= 6 && ! empty( $raw_phone ) ) {
-				$norm_order_phone = self::normalize_phone( $raw_phone );
-				$norm_verif_phone = self::normalize_phone( $digits_verif );
-				$is_phone_match = ( ! empty( $norm_order_phone ) && $norm_order_phone === $norm_verif_phone )
-					|| ( substr( $raw_phone, -8 ) === substr( $digits_verif, -8 ) );
-			}
-			$is_user_match = ( strcasecmp( trim( $verification ), trim( $ord['buyer_username'] ?? '' ) ) === 0 );
-
-			if ( ! $is_phone_match && ! $is_user_match ) {
-				return new \WP_REST_Response( [
-					'success'  => false,
-					'eligible' => false,
-					'reason'   => 'verification_failed',
-					'message'  => 'The phone number does not match the recipient records for Shopee Order #' . $sn . '.',
-				], 200 );
-			}
+		// 2. Verification is always required: the full recipient phone number, or the buyer
+		// username (then no recipient data is returned, the customer enters the address).
+		$fail_subject = 'mp:' . strtolower( (string) $sn );
+		if ( Exacoat_Request_Guard::is_over( 'welig_fail', $fail_subject, 10 ) ) {
+			return new \WP_REST_Response( [
+				'success'  => false,
+				'eligible' => false,
+				'reason'   => 'too_many_attempts',
+				'message'  => 'Too many attempts. Please try again later.',
+			], 429 );
+		}
+		$verified_by = self::marketplace_verification( $ord, $verification );
+		if ( '' === $verified_by ) {
+			Exacoat_Request_Guard::hit( 'welig_fail', $fail_subject, 10, HOUR_IN_SECONDS );
+			return new \WP_REST_Response( [
+				'success'  => false,
+				'eligible' => false,
+				'reason'   => 'verification_failed',
+				'message'  => 'Enter the full phone number or the buyer username used for this order.',
+			], 200 );
 		}
 
 		// 3. Delivered Status & 48-Hour Window Check
@@ -952,6 +948,10 @@ class Exacoat_Warranty_Manager {
 			'eligible_items'     => $eligible_items,
 			'excluded_items'     => [],
 		];
+		if ( 'username' === $verified_by ) {
+			$res_payload['shipping_address'] = self::without_personal_data( $res_payload['shipping_address'] );
+			$res_payload['address_hidden']   = true;
+		}
 
 		if ( $is_code_override ) {
 			$res_payload['warranty_code_applied'] = true;
@@ -987,27 +987,26 @@ class Exacoat_Warranty_Manager {
 			], 200 );
 		}
 
-		// 2. Verification check
-		if ( ! empty( $verification ) ) {
-			$raw_phone = preg_replace( '/[^0-9]/', '', (string) ( $ord['recipient_phone'] ?? '' ) );
-			$digits_verif = preg_replace( '/[^0-9]/', '', $verification );
-			$is_phone_match = false;
-			if ( strlen( $digits_verif ) >= 6 && ! empty( $raw_phone ) ) {
-				$norm_order_phone = self::normalize_phone( $raw_phone );
-				$norm_verif_phone = self::normalize_phone( $digits_verif );
-				$is_phone_match = ( ! empty( $norm_order_phone ) && $norm_order_phone === $norm_verif_phone )
-					|| ( substr( $raw_phone, -8 ) === substr( $digits_verif, -8 ) );
-			}
-			$is_user_match = ( strcasecmp( trim( $verification ), trim( $ord['buyer_username'] ?? '' ) ) === 0 );
-
-			if ( ! $is_phone_match && ! $is_user_match ) {
-				return new \WP_REST_Response( [
-					'success'  => false,
-					'eligible' => false,
-					'reason'   => 'verification_failed',
-					'message'  => 'The phone number does not match the recipient records for TikTok Shop Order #' . $order_id . '.',
-				], 200 );
-			}
+		// 2. Verification is always required: the full recipient phone number, or the buyer
+		// username (then no recipient data is returned, the customer enters the address).
+		$fail_subject = 'mp:' . strtolower( (string) $order_id );
+		if ( Exacoat_Request_Guard::is_over( 'welig_fail', $fail_subject, 10 ) ) {
+			return new \WP_REST_Response( [
+				'success'  => false,
+				'eligible' => false,
+				'reason'   => 'too_many_attempts',
+				'message'  => 'Too many attempts. Please try again later.',
+			], 429 );
+		}
+		$verified_by = self::marketplace_verification( $ord, $verification );
+		if ( '' === $verified_by ) {
+			Exacoat_Request_Guard::hit( 'welig_fail', $fail_subject, 10, HOUR_IN_SECONDS );
+			return new \WP_REST_Response( [
+				'success'  => false,
+				'eligible' => false,
+				'reason'   => 'verification_failed',
+				'message'  => 'Enter the full phone number or the buyer username used for this order.',
+			], 200 );
 		}
 
 		// 3. Delivered Status & 48-Hour Window Check
@@ -1119,6 +1118,10 @@ class Exacoat_Warranty_Manager {
 			'eligible_items'     => $eligible_items,
 			'excluded_items'     => [],
 		];
+		if ( 'username' === $verified_by ) {
+			$res_payload['shipping_address'] = self::without_personal_data( $res_payload['shipping_address'] );
+			$res_payload['address_hidden']   = true;
+		}
 
 		if ( $is_code_override ) {
 			$res_payload['warranty_code_applied'] = true;
@@ -1588,57 +1591,20 @@ class Exacoat_Warranty_Manager {
 		if ( self::is_staff_request() ) {
 			return false;
 		}
-		$key = 'exacoat_rl_' . $bucket . '_' . md5( self::client_ip() );
-		$hit = (int) get_transient( $key );
-		if ( $hit >= $limit ) {
-			return true;
-		}
-		set_transient( $key, $hit + 1, $window );
-		return false;
+		return Exacoat_Request_Guard::hit( $bucket, self::client_ip(), $limit, $window );
 	}
 
 	public static function is_staff_request(): bool {
 		return function_exists( 'current_user_can' ) && current_user_can( 'manage_woocommerce' );
 	}
 
-	/**
-	 * Visitor IP for rate limits: CF-Connecting-IP only when the connection comes from a
-	 * Cloudflare edge address (CLOUDFLARE_IP_RANGES), otherwise REMOTE_ADDR. No other header
-	 * is trusted, so a client cannot pick its own bucket.
-	 */
+	/** Trusted visitor IP (Exacoat_Request_Guard::client_ip). */
 	public static function client_ip(): string {
-		$remote = trim( (string) ( $_SERVER['REMOTE_ADDR'] ?? '' ) );
-		$cf     = trim( (string) ( $_SERVER['HTTP_CF_CONNECTING_IP'] ?? '' ) );
-		if ( '' !== $cf && false !== filter_var( $cf, FILTER_VALIDATE_IP ) && false !== filter_var( $remote, FILTER_VALIDATE_IP ) ) {
-			$ranges = (array) apply_filters( 'exacoat_cloudflare_ip_ranges', self::CLOUDFLARE_IP_RANGES );
-			foreach ( $ranges as $cidr ) {
-				if ( self::ip_in_cidr( $remote, (string) $cidr ) ) {
-					return $cf;
-				}
-			}
-		}
-		return $remote;
+		return Exacoat_Request_Guard::client_ip();
 	}
 
-	/** Whether $ip (IPv4 or IPv6) is inside $cidr. */
 	public static function ip_in_cidr( string $ip, string $cidr ): bool {
-		$parts = explode( '/', $cidr, 2 );
-		$addr  = @inet_pton( $ip );
-		$net   = @inet_pton( $parts[0] );
-		if ( false === $addr || false === $net || strlen( $addr ) !== strlen( $net ) ) {
-			return false;
-		}
-		$bits = isset( $parts[1] ) ? (int) $parts[1] : strlen( $net ) * 8;
-		$full = intdiv( $bits, 8 );
-		if ( substr( $addr, 0, $full ) !== substr( $net, 0, $full ) ) {
-			return false;
-		}
-		$rest = $bits % 8;
-		if ( 0 === $rest ) {
-			return true;
-		}
-		$mask = ( 0xff << ( 8 - $rest ) ) & 0xff;
-		return ( ord( $addr[ $full ] ) & $mask ) === ( ord( $net[ $full ] ) & $mask );
+		return Exacoat_Request_Guard::ip_in_cidr( $ip, $cidr );
 	}
 
 	/**
@@ -4024,6 +3990,67 @@ class Exacoat_Warranty_Manager {
 	 * Normalize Indonesian phone numbers to standard 628... digits format.
 	 * Handles 08..., +628..., 628..., 8...
 	 */
+	/** Full phone match after normalisation; masked or short numbers never match. */
+	public static function phones_match( string $given, string $stored ): bool {
+		if ( '' === trim( $stored ) || false !== strpos( $stored, '*' ) || false !== strpos( $given, '*' ) ) {
+			return false;
+		}
+		$a = self::normalize_phone( $given );
+		$b = self::normalize_phone( $stored );
+		return strlen( $a ) >= 9 && strlen( $b ) >= 9 && hash_equals( $b, $a );
+	}
+
+	/**
+	 * How the caller proved they own a webstore order: 'owner' (signed-in customer by customer
+	 * id), 'email' (exact billing email), 'phone' (full phone), or '' when not proven.
+	 */
+	public static function webstore_verification( $order, string $verification ): string {
+		$user_id = function_exists( 'get_current_user_id' ) ? (int) get_current_user_id() : 0;
+		if ( $user_id > 0 && $user_id === (int) $order->get_customer_id() ) {
+			return 'owner';
+		}
+		$given = trim( $verification );
+		if ( '' === $given ) {
+			return '';
+		}
+		$email = strtolower( trim( (string) $order->get_billing_email() ) );
+		if ( '' !== $email && false !== strpos( $given, '@' ) && hash_equals( $email, strtolower( $given ) ) ) {
+			return 'email';
+		}
+		foreach ( [ (string) $order->get_billing_phone(), (string) $order->get_shipping_phone() ] as $stored ) {
+			if ( self::phones_match( $given, $stored ) ) {
+				return 'phone';
+			}
+		}
+		return '';
+	}
+
+	/** 'phone' (full recipient phone), 'username' (exact buyer username) or ''. */
+	public static function marketplace_verification( array $ord, string $verification ): string {
+		$given = trim( $verification );
+		if ( '' === $given ) {
+			return '';
+		}
+		if ( self::phones_match( $given, (string) ( $ord['recipient_phone'] ?? '' ) ) ) {
+			return 'phone';
+		}
+		$username = trim( (string) ( $ord['buyer_username'] ?? '' ) );
+		if ( '' !== $username && 0 === strcasecmp( $given, $username ) ) {
+			return 'username';
+		}
+		return '';
+	}
+
+	/** Address without the personal fields (country kept). */
+	public static function without_personal_data( array $address ): array {
+		foreach ( $address as $key => $value ) {
+			if ( 'country' !== $key ) {
+				$address[ $key ] = '';
+			}
+		}
+		return $address;
+	}
+
 	public static function normalize_phone( $phone ): string {
 		$digits = preg_replace( '/[^0-9]/', '', (string) $phone );
 		if ( empty( $digits ) ) {
