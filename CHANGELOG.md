@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Order details**: the saved configuration list on order items is now valid data that warranty claims and the manager both read.
 - **Configurator Studio**: new Part Bundle Prices card in the Pricing tab (shown for products with a back glass and a camera part) for the all parts price and the finish surcharge per part. The Camera & Back Glass page needs these values (90,000; back glass +15,000; camera +5,000) and shows as unavailable until they are saved.
 
+### Security: customer data and payments
+- **Orders**: a signed-in customer now sees only orders placed on their account. Orders cannot be reached any more by changing the account email to someone else's.
+- **Order lookup by number and email**: still works for tracking, but no longer returns payment links, and repeated wrong attempts are paused.
+- **Sign-in**: too many wrong passwords for one email pause sign-in for that email for 15 minutes.
+- **Warranty check**: always asks for the billing email or the full phone number (or a signed-in owner). Marketplace claims checked by username no longer show the recipient address.
+- **Affiliates**: the affiliate portal and payouts work only for the account linked to the affiliate.
+- **BCA payments**: the bank mutation webhook now needs a secret token. **Setup**: set `EXACOAT_BCA_WEBHOOK_TOKEN` in wp-config.php and add `?token=` with the same value to the webhook URL in MesinOtomatis before installing this zip, or BCA payments will not be confirmed automatically.
+
 ### Security: shipping charged by the server
 - **Fix**: the webstore checkout, the warranty claim form and the warranty pay page used to send the shipping cost from the browser, and that number was charged, so a customer could pay less shipping than the courier costs. Courier rates are now signed by the webstore server when they are shown, and a courier is accepted only with a matching rate for that order's address and items. Free shipping and the ONGKIR promo are worked out by WordPress from the order.
 - **Customers**: if a rate is old (more than 30 minutes) or the bag or address changed, checkout says "Shipping rates changed, please choose a courier again" and loads fresh rates.
