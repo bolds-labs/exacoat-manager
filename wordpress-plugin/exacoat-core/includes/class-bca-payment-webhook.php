@@ -242,8 +242,37 @@ class Exacoat_BCA_Payment_Webhook {
 	/**
 	 * Handle incoming REST Webhook payload from MesinOtomatis
 	 */
+	/**
+	 * The mutation webhook marks orders paid, so it needs the shared token configured in
+	 * MesinOtomatis (`?token=...` on the webhook URL, or the X-Exacoat-Webhook-Token header).
+	 * Token: EXACOAT_BCA_WEBHOOK_TOKEN in wp-config.php, or the exacoat_bca_webhook_token
+	 * option, 24 characters or more. Without one the webhook refuses everything.
+	 *
+	 * @return string 'ok', 'denied' or 'not_configured'.
+	 */
+	public static function webhook_auth_status( $request ): string {
+		$expected = defined( 'EXACOAT_BCA_WEBHOOK_TOKEN' ) ? (string) EXACOAT_BCA_WEBHOOK_TOKEN : (string) get_option( 'exacoat_bca_webhook_token', '' );
+		if ( strlen( $expected ) < 24 ) {
+			return 'not_configured';
+		}
+		$given = (string) ( $request->get_header( 'X-Exacoat-Webhook-Token' ) ?: $request->get_param( 'token' ) ?: '' );
+		return ( '' !== $given && hash_equals( $expected, $given ) ) ? 'ok' : 'denied';
+	}
+
 	public static function handle_webhook_request( \WP_REST_Request $request ): \WP_REST_Response {
+		$auth = self::webhook_auth_status( $request );
+		if ( 'ok' !== $auth ) {
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::log( 'warning', 'bca_webhook', 'not_configured' === $auth ? 'BCA webhook refused: no webhook token configured.' : 'BCA webhook refused: missing or wrong token.', [] );
+			}
+			return new \WP_REST_Response( [
+				'success' => false,
+				'message' => 'Unauthorized.',
+			], 'not_configured' === $auth ? 503 : 401 );
+		}
+
 		$params = $request->get_params();
+		unset( $params['token'] );
 
 		// 1. Balance update from MesinOtomatis ($_POST['target'] == 'balance')
 		$target = strtolower( sanitize_text_field( $params['target'] ?? '' ) );
