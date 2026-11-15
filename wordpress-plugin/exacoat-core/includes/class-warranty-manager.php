@@ -1296,7 +1296,7 @@ class Exacoat_Warranty_Manager {
 					$calc_result = WC()->shipping()->calculate_shipping_for_package( $package );
 					if ( ! empty( $calc_result['rates'] ) && is_array( $calc_result['rates'] ) ) {
 						foreach ( $calc_result['rates'] as $rate_obj ) {
-							if ( is_a( $rate_obj, 'WC_Shipping_Rate' ) ) {
+							if ( is_a( $rate_obj, 'WC_Shipping_Rate' ) && self::is_courier_rate( $rate_obj->get_method_id(), $rate_obj->get_cost() ) ) {
 								$rid = $rate_obj->get_id();
 								$rates[ $rid ] = [
 									'id'       => $rid,
@@ -1326,7 +1326,7 @@ class Exacoat_Warranty_Manager {
 								$method->calculate_shipping( $package );
 								if ( ! empty( $method->rates ) && is_array( $method->rates ) ) {
 									foreach ( $method->rates as $rate_obj ) {
-										if ( is_a( $rate_obj, 'WC_Shipping_Rate' ) ) {
+										if ( is_a( $rate_obj, 'WC_Shipping_Rate' ) && self::is_courier_rate( $rate_obj->get_method_id(), $rate_obj->get_cost() ) ) {
 											$rid = $rate_obj->get_id();
 											if ( ! isset( $rates[ $rid ] ) ) {
 												$rates[ $rid ] = [
@@ -1347,7 +1347,7 @@ class Exacoat_Warranty_Manager {
 								$rate_key = method_exists( $method, 'get_rate_id' ) ? $method->get_rate_id() : ( $method->id . '_' . $method->get_instance_id() );
 								if ( ! isset( $rates[ $rate_key ] ) ) {
 									$cost_val = $method->get_option( 'cost' );
-									if ( '' !== $cost_val && null !== $cost_val ) {
+									if ( '' !== $cost_val && null !== $cost_val && self::is_courier_rate( (string) $method->id, $cost_val ) ) {
 										$rates[ $rate_key ] = [
 											'id'       => $rate_key,
 											'courier'  => $method->id,
@@ -1437,7 +1437,11 @@ class Exacoat_Warranty_Manager {
 			], 200 );
 		}
 
-		if ( ! empty( $api_key ) ) {
+		// Anonymous lookups cannot hammer Biteship: a failed postcode is not retried for 5 minutes
+		// and each visitor IP gets a bounded number of live lookups (staff are not limited).
+		$fail_key = 'biteship_warranty_fail_' . md5( $postcode );
+		$can_ask  = ! empty( $api_key ) && false === get_transient( $fail_key ) && ! self::public_request_limited( 'wrates', 30, 10 * MINUTE_IN_SECONDS );
+		if ( $can_ask ) {
 			$body = [
 				'origin_postal_code'      => (int) $origin_zip,
 				'destination_postal_code' => (int) $postcode,
@@ -1491,6 +1495,8 @@ class Exacoat_Warranty_Manager {
 
 		if ( ! empty( $rates ) ) {
 			set_transient( $transient_key, $rates, 7 * DAY_IN_SECONDS );
+		} elseif ( $can_ask ) {
+			set_transient( $fail_key, 1, 5 * MINUTE_IN_SECONDS );
 		}
 
 		$is_fallback = false;
@@ -1532,6 +1538,51 @@ class Exacoat_Warranty_Manager {
 		], 200 );
 	}
 
+	/** A paid courier rate (not store pickup, not free shipping, not zero cost). */
+	public static function is_courier_rate( $method_id, $cost ): bool {
+		$method_id = strtolower( (string) $method_id );
+		if ( in_array( $method_id, [ 'local_pickup', 'pickup_location', 'free_shipping' ], true ) ) {
+			return false;
+		}
+		return is_numeric( $cost ) && (float) $cost > 0;
+	}
+
+	/**
+	 * Counts a public request from this visitor IP and reports whether it is over $limit in
+	 * $window seconds. Signed-in staff are never limited.
+	 */
+	public static function public_request_limited( string $bucket, int $limit, int $window ): bool {
+		if ( function_exists( 'current_user_can' ) && current_user_can( 'manage_woocommerce' ) ) {
+			return false;
+		}
+		$ip  = sanitize_text_field( wp_unslash( (string) ( $_SERVER['REMOTE_ADDR'] ?? '' ) ) );
+		$key = 'exacoat_rl_' . $bucket . '_' . md5( $ip );
+		$hit = (int) get_transient( $key );
+		if ( $hit >= $limit ) {
+			return true;
+		}
+		set_transient( $key, $hit + 1, $window );
+		return false;
+	}
+
+	/**
+	 * Proof that the caller owns the order: its order key, its billing email, or being the
+	 * signed-in customer of the order.
+	 */
+	public static function caller_owns_order( \WC_Order $order, \WP_REST_Request $request ): bool {
+		$key = sanitize_text_field( (string) ( $request->get_param( 'order_key' ) ?: '' ) );
+		if ( '' !== $key && hash_equals( (string) $order->get_order_key(), $key ) ) {
+			return true;
+		}
+		$email = strtolower( trim( sanitize_email( (string) ( $request->get_param( 'billing_email' ) ?: $request->get_param( 'email' ) ?: '' ) ) ) );
+		$own   = strtolower( trim( (string) $order->get_billing_email() ) );
+		if ( '' !== $email && '' !== $own && hash_equals( $own, $email ) ) {
+			return true;
+		}
+		$user_id = function_exists( 'get_current_user_id' ) ? (int) get_current_user_id() : 0;
+		return $user_id > 0 && $user_id === (int) $order->get_customer_id();
+	}
+
 	/**
 	 * The rate this site quotes for $courier_id to the order's own shipping address, or null.
 	 */
@@ -1557,10 +1608,18 @@ class Exacoat_Warranty_Manager {
 		$parent_order_id = absint( $request->get_param( 'order_id' ) );
 		$parent_order    = wc_get_order( $parent_order_id );
 
-		if ( ! $parent_order ) {
+		if ( self::public_request_limited( 'wclaim', 10, HOUR_IN_SECONDS ) ) {
 			return new \WP_REST_Response( [
 				'success' => false,
-				'message' => 'Original order not found.',
+				'message' => 'Too many claim attempts. Please try again later.',
+			], 429 );
+		}
+
+		// Same answer for a missing order and one the caller cannot prove is theirs.
+		if ( ! $parent_order || ! self::caller_owns_order( $parent_order, $request ) ) {
+			return new \WP_REST_Response( [
+				'success' => false,
+				'message' => 'Original order not found. Please enter the order number with its order key or billing email.',
 			], 404 );
 		}
 
@@ -1594,7 +1653,7 @@ class Exacoat_Warranty_Manager {
 			return new \WP_REST_Response( [
 				'success' => false,
 				'code'    => 'shipping_quote_invalid',
-				'message' => 'Shipping rates changed, please choose a courier again.',
+				'message' => 'Shipping rates changed, please choose a courier again. If the courier options do not reload, refresh the page.',
 			], 409 );
 		}
 		$courier_label = sanitize_text_field( (string) ( $server_rate['label'] ?? 'Courier Delivery' ) );
