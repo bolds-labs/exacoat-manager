@@ -23,7 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sign-in**: too many wrong passwords for one email pause sign-in for that email for 15 minutes.
 - **Warranty check**: always asks for the billing email or the full phone number (or a signed-in owner). Marketplace claims checked by username no longer show the recipient address.
 - **Affiliates**: the affiliate portal and payouts work only for the account linked to the affiliate.
-- **BCA payments**: the bank mutation webhook now needs a secret token. **Setup**: set `EXACOAT_BCA_WEBHOOK_TOKEN` in wp-config.php and add `?token=` with the same value to the webhook URL in MesinOtomatis before installing this zip, or BCA payments will not be confirmed automatically.
+- **Sign-in pauses**: the pause counts wrong passwords per email and per device address, so someone else cannot lock you out; many failures from different places only slow sign-in.
+- **Marketplace warranty**: a Shopee or TikTok claim needs the full recipient phone number or a claim code from Exacoat Care (the buyer username is no longer enough).
+- **My Coupons**: personal coupons show for the account they were issued to; older personal coupons no longer show in My Coupons but still work with their code.
+- **BCA payments**: the bank mutation webhook now needs a secret token and only confirms rupiah bank transfer orders. **Setup**: set `EXACOAT_BCA_WEBHOOK_TOKEN` in wp-config.php and add `?token=` with the same value to the webhook URL in MesinOtomatis before installing this zip, or BCA payments will not be confirmed automatically.
 
 ### Security: shipping charged by the server
 - **Fix**: the webstore checkout, the warranty claim form and the warranty pay page used to send the shipping cost from the browser, and that number was charged, so a customer could pay less shipping than the courier costs. Courier rates are now signed by the webstore server when they are shown, and a courier is accepted only with a matching rate for that order's address and items. Free shipping and the ONGKIR promo are worked out by WordPress from the order.

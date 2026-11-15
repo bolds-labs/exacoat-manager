@@ -50,3 +50,40 @@ Vector (secret `test-secret-0123456789abcdef0123456789abcdef`): payload `exacoat
 - A per-order failure limit lets someone pause guest lookups for a known order number for an hour (owners and key links unaffected).
 - Until the storefront sends the signed IP header, all storefront customers share one IP bucket.
 - Not in scope, noticed: `class-affiliate-manager.php` `ensure_edwin_yang_setup()` hardcodes a real person's email address in plugin code; it should move to data.
+
+
+## Fix round 1 (2026-11-15, review)
+
+Critical:
+- **C1, REMOTE_ADDR rewrite**: `apply_headless_currency_context` (init -999) copied the unsigned `X-Exacoat-Client-IP` / `X-Artmatter-Client-IP` into `$_SERVER['REMOTE_ADDR']`, so every limit could be bypassed by sending a fresh header. It now uses only `Exacoat_Request_Guard::signed_storefront_ip()`, and the guard captures the web server's `REMOTE_ADDR` when the plugin loads and reads that, so no later rewrite counts. Grep found no other `REMOTE_ADDR` writes. Other IP readers now use the guard: `Exacoat_Affiliate_Manager::get_client_ip()` (it trusted `CF-Connecting-IP` and `X-Forwarded-For` from anyone) and the checkout address lookup limit. `tests/client-ip-init-test.php` runs `Exacoat_Checkout_Engine::init()` and the init -999 callbacks.
+
+Important:
+- **I1, owner lockout**: the sign-in lock counts failures per email and client IP (10 in 15 minutes). Failures for one email from many IPs (50) only add a 2 second wait; a correct password still signs in, so staff cannot be locked out from elsewhere. Checkout quick login uses the same gate.
+- **I2, marketplace**: `buyer_username` is masked in `/shopee/verify-order` and `/tiktok/verify-order` (the storefront only shows it), the replacement order number is dropped from their already-claimed reply, and both plus `/tracking-info` are limited to 60 per client IP per 10 minutes. The username is no longer warranty proof. A staff claim code mechanism exists (warranty codes with `bound_order_id`, issued in the manager), so marketplace proof is the full recipient phone or a valid code bound to that exact order. The early already-claimed reply in eligibility no longer reveals the replacement order.
+- **I3, coupons**: `/auth/coupons` lists an email-restricted coupon only for the user id in `_exacoat_issued_user_id`. Coupon creation found: review reward coupons (`issue_reward_coupon`, now storing the order's customer id); abandoned cart and affiliate code paths create commission or tracking rows, not email-restricted coupons. There is no email verification at registration, so there is no email fallback: older email-restricted coupons (no stored id) no longer show in My Coupons, but still work at checkout with the code from the email. Note: WooCommerce itself checks email restrictions against the checkout billing email, which a buyer types, so an email-restricted code is effectively a bearer code.
+- **I4, gates**: eligibility checks the owner session or a correct proof first; only failures (wrong proof, order not found) are counted and gated. Guest order reads gate and count only failed proofs; the owner, the order key and a correct email are never gated.
+- **I5, BCA**: only IDR orders with payment method `bacs`, `bca`, `bank_transfer` or `manual_bca` are candidates.
+
+Minor:
+- **Midtrans fallback**: refused when no server key is configured (the signature would be computable by anyone) and unless `gross_amount` equals the order total.
+- **Affiliate seed**: the edwinyg seed no longer uses a hardcoded personal email or a fallback user id, never grants the affiliate role by email, stops writing that email into coupon and commission rows, and runs once behind `exacoat_affiliate_seed_edwinyg_done` instead of on every recalculation (it used to reset the balance each time). The callers stay; the function returns early after the first run. Other creator seeds (`ensure_*_setup`) still run on every recalculation and should get the same treatment.
+- **Phone proof** also accepts the `_shipping_phone` meta (full match only).
+- **Counters**: atomic with a persistent object cache (`wp_cache_add` + `wp_cache_incr`); otherwise a transient read and write, and simultaneous requests can let a few extra attempts through.
+
+Deploy order (updated):
+1. Set `EXACOAT_BCA_WEBHOOK_TOKEN` and the MesinOtomatis `?token=` (unchanged).
+2. Deploy the storefront hotfix that sends the three signed `X-Exacoat-Client-IP*` headers before or together with this plugin. Without them, after this plugin every storefront customer shares the storefront server's IP for all limits (sign-in, guest lookups, warranty, marketplace verify), and geolocation falls back to the storefront server's address.
+3. Install the 0.1.228 zip.
+
+Affiliate rows linked only by email (staff step): portal, settings and payouts now need `user_id` on the affiliate row. For each affected affiliate:
+1. In WordPress, Users, find the affiliate's account (ask them to sign up first if they have none) and note the user ID.
+2. In the database table `wp_exacoat_affiliates`, set `user_id` on that affiliate's row (match by slug), for example with phpMyAdmin or `wp db query`.
+3. Give the user the affiliate role (Users, edit, role) if they do not have it.
+4. Ask them to sign in and open the affiliate portal to check.
+To find rows needing this: `SELECT id, slug, display_name FROM wp_exacoat_affiliates WHERE user_id IS NULL OR user_id = 0;`
+
+Also noticed (not changed): the export manager has a personal email address as a default JNE recipient; it should move to settings.
+
+Evidence (fix round 1):
+- `php -l` clean on every include. All PHP tests pass, including new `client-ip-init-test.php` (real init path), `midtrans-notification-test.php`, and extended `request-guard-test.php` (object cache counters), `customer-auth-guard-test.php` (per email and IP lock, slow path, failures-only gates, coupon listing), `warranty-verification-test.php` (username not proof, bound code, `_shipping_phone`, masking), `bca-webhook-auth-test.php` (IDR bank transfer candidates).
+- `npx tsc --noEmit` clean, `npm test` passes, `npm run build` rebuilt the 0.1.228 zips.
