@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fix**: the webstore checkout, the warranty claim form and the warranty pay page used to send the shipping cost from the browser, and that number was charged, so a customer could pay less shipping than the courier costs. Courier rates are now signed by the webstore server when they are shown, and a courier is accepted only with a matching rate for that order's address and items. Free shipping and the ONGKIR promo are worked out by WordPress from the order.
 - **Customers**: if a rate is old (more than 30 minutes) or the bag or address changed, checkout says "Shipping rates changed, please choose a courier again" and loads fresh rates.
 - **Store pickup**: still free; the order's shipping address is set to the Bekasi store.
+- **Direct checkouts**: an Indonesian checkout sent straight to WordPress without a signed courier rate is refused unless it is store pickup.
+- **Warranty**: claims outside Indonesia get international rates only; the public WordPress claim form needs the order key, the billing email or a signed-in customer, and is limited per visitor.
 - **Setup**: uses the same `EXACOAT_CART_PRICE_SECRET` as signed cart prices. Install this plugin zip and deploy the webstore together.
 
 ### Design: Orders Redesign

@@ -60,3 +60,26 @@ Follows `2026-11-14-server-pricing-report.md`, which left three client-priced sh
 ## Commits
 - exacoat-web `chore/remove-hardcoded-fallbacks`: signed courier quotes; checkout shipping from signed quotes; warranty shipping from signed quotes; docs.
 - exacoat-manager `design/manager-redesign`: server-decided headless checkout shipping; plugin warranty claim prices its own shipping; docs, changelog, zips and this report.
+
+## Fix round 1 (2026-11-15, review)
+
+Important:
+- **I1, checkouts without shipping headers**: `headerless_shipping_decision()` in the plugin. Outside Indonesia WooCommerce's selected rate stays. In Indonesia a `local_pickup` order gets the store address and `_is_store_pickup` exactly like the header path; any other method, including a `biteship_shipping` line without a verified decision, is refused with the 409 message. The proxy now refuses an Indonesian non-pickup checkout without a signed quote.
+- **I2, pay portal**: `resolvePayPortalShipping` changes a courier only on warranty replacement orders (`_is_warranty = yes`, any `_rma_order_type`, or `_order_badge = WARRANTY`), for both `update-order-shipping` and `pay-order`. `/api/warranty/shipping-rates` signs quotes only for claim parents (paid statuses, not a replacement), replacement orders and marketplace invoices (not WooCommerce orders); other orders get prices without quotes, which cannot be submitted.
+- **I3, international warranty claims**: non-ID destinations get exacoat-core's international rates (zone lookup or its international fallback, paid courier rates only via `internationalCourierRates`) and are priced again from exacoat-core when the claim is submitted; an unknown courier is refused (409). The domestic 12,000/24,000 fallback is never used for them. The pay portal cannot change the courier on an international replacement (no quotes); it charges the order's existing line.
+- **I4, bag count**: checkout quotes are signed for the Store API cart's item count when the bag is on the server (`resolveQuoteQuantity`), the same count the checkout compares against, so a different count on the page no longer loops on 409. Test added.
+
+Minor:
+- **M1, currency markup**: the intended value is the global `currency_global_markup` (default 1.8; AGENTS section 7 says `lib/money.ts` and `calculate_price_for_currency` share markup 1.8, and the page's `calculatePriceForCurrency(baseIdr, activeCurrency)` uses that default). The plugin side was wrong (1.0 override); it now calls `calculate_price_for_currency( x, currency )` and the override argument is gone. The storefront AGENTS note is corrected.
+- **M2**: marketplace pickup claims ship to the store address, like webstore ones.
+- **M3**: the decision cache is removed; attach computes the decision again from the order. Test: a quote that stops matching between the two hooks is refused at attach.
+- **M4**: message is now "Shipping rates changed, please choose a courier again. If the courier options do not reload, refresh the page." (storefront and plugin).
+- **M5, plugin public `/warranty/submit-claim`**: needs ownership proof (`order_key`, the billing email as `billing_email` or `email`, or the signed-in customer of the order), answering the same 404 as a missing order otherwise; 10 claims per IP per hour (staff exempt). Public domestic rate lookups cache a failed postcode for 5 minutes and allow 30 live Biteship lookups per IP per 10 minutes (staff exempt). The limit uses `REMOTE_ADDR`; behind a proxy that hides visitor IPs it limits the proxy as a whole.
+- **M6**: the plugin's international zone lookup drops `local_pickup`, `pickup_location`, `free_shipping`, zero cost and formula cost methods (`is_courier_rate`).
+- Domestic fallback amounts (storefront 12,000 and 24,000, plugin 10,000 and 20,000) are unchanged as documented. They are Java-centric: remote areas (for example Papua, Maluku, NTT) cost much more, so a Biteship outage undercharges those claims.
+- The `customerId === 99999` checks in `pay-order` and `update-order-shipping` were left alone here; the separate sign-in hotfix (exacoat-web-hotfix) removes them.
+
+Evidence (fix round 1):
+- exacoat-manager: `php -l` clean; PHP tests pass (headless shipping now covers checkouts without headers, the second check at attach and the global markup; new `warranty-claim-guard-test.php` covers ownership proof, the per IP limit and the courier rate filter); `npx tsc --noEmit` clean; `npm test` 559 pass; `npm run build` rebuilt the 0.1.228 zips.
+- exacoat-web: `npm test` 105 pass; `next build --webpack` passes.
+- Read-only local check: an Indonesian checkout without a quote answered 409 with the new message before reaching WooCommerce; `/api/warranty/shipping-rates` for a US destination returned the plugin's zone rates (Goorita 120,000, DHL Express 549,500, FedEx 385,000) with no domestic fallback; checkout rates were still signed.
