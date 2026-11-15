@@ -28,6 +28,12 @@ function esc_url_raw( $url ) {
 function wp_rand() {
 	return mt_rand();
 }
+function sanitize_text_field( $text ) {
+	return trim( strip_tags( (string) $text ) );
+}
+function wp_json_encode( $data, $flags = 0 ) {
+	return json_encode( $data, $flags );
+}
 function sanitize_key( $key ) {
 	return preg_replace( '/[^a-z0-9_\-]/', '', strtolower( (string) $key ) );
 }
@@ -107,6 +113,51 @@ $check( is_array( $ok ) ? $ok['exacoat_addons'][0]['label'] : $ok, 'Macbook Pro 
 $ok = $add( $signed( 11, '', '[{"label":"Device Model","value":"iPhone 14 Pro"}]' ), 430927, 11 );
 $check( is_array( $ok ) ? array_key_exists( 'exacoat_custom_price', $ok ) : $ok, false, 'catalog-priced variation keeps WooCommerce price' );
 $check( $add( $signed( 430927, '', '[]' ), 430927, 11 ), 'refused', 'variation signed with parent id refused' );
+
+// Unsigned configuration fields are stripped (MKL, WCPA, per-label fields).
+$_POST = $_REQUEST = [
+	'product_id'             => '537268',
+	'quantity'               => '1',
+	'attribute_pa_edge-for'  => 'iphone-14-pro',
+	'pc_configurator_data'   => '[{"is_choice":"1","layer_name":"Back","name":"Everything"}]',
+	'addon_back'             => 'Everything',
+	'Device Model'           => 'iPhone 99',
+	'text-1626'              => 'hand written spec',
+	'wcpa_field_key_checker' => 'x',
+];
+$removed = Exacoat_Configurator_Engine::strip_unsigned_configuration_fields();
+sort( $removed );
+$check( $removed, [ 'Device Model', 'addon_back', 'pc_configurator_data', 'text-1626', 'wcpa_field_key_checker' ], 'unsigned config fields removed' );
+$check( array_keys( $_POST ), [ 'product_id', 'quantity', 'attribute_pa_edge-for' ], 'standard fields kept in $_POST' );
+$check( array_keys( $_REQUEST ), [ 'product_id', 'quantity', 'attribute_pa_edge-for' ], 'standard fields kept in $_REQUEST' );
+
+$out = $add( [ 'pc_configurator_data' => '[{"is_choice":"1","layer_name":"Back","name":"Everything"}]', 'addon_back' => 'Everything' ] );
+$check( $out, [], 'plain add with stray specs keeps nothing' );
+$check( isset( $_POST['pc_configurator_data'] ) || isset( $_POST['addon_back'] ), false, 'stray specs gone before other add-ons run' );
+
+// _configurator_data_raw is valid JSON every reader understands.
+class Test_Order_Item {
+	public $meta = [];
+	public function add_meta_data( $key, $value, $unique = false ) {
+		$this->meta[ $key ] = $value;
+	}
+}
+$item = new Test_Order_Item();
+Exacoat_Configurator_Engine::save_custom_addons_to_order_item( $item, 'k', [
+	'exacoat_addons' => [
+		[ 'label' => 'Back', 'value' => 'Swarm' ],
+		[ 'label' => 'Coverage', 'value' => 'Model 360°' ],
+		[ 'label' => 'Top', 'value' => '14" Lid "Matte"' ],
+	],
+], null );
+$decoded = json_decode( $item->meta['_configurator_data_raw'] ?? '', true );
+$check( is_array( $decoded ), true, '_configurator_data_raw is valid JSON' );
+$check( $decoded[0] ?? null, [ 'is_choice' => '1', 'layer_id' => 1, 'layer_name' => 'Back', 'name' => 'Swarm', 'layerId' => '1', 'layerName' => 'Back', 'choiceName' => 'Swarm' ], '_configurator_data_raw entry shape' );
+$by_layer = array_column( (array) $decoded, 'name', 'layer_name' );
+$check( $by_layer['Coverage'] ?? null, 'Model 360°', 'degree sign kept as text' );
+$check( $by_layer['Top'] ?? null, '14" Lid "Matte"', 'quotes survive' );
+$check( strpos( $item->meta['_configurator_data_raw'], str_repeat( chr( 92 ), 2 ) ), false, 'no doubled slashes stored' );
+$check( $item->meta['Back'] ?? null, 'Swarm', 'line meta saved' );
 
 // Bundle prices.
 $check(

@@ -283,7 +283,8 @@ class Exacoat_Configurator_Engine {
 		add_action( 'woocommerce_process_product_meta', [ __CLASS__, 'save_configurator_product_checkbox' ] );
 
 		// Hook into WooCommerce cart and order items for headless addons
-		add_filter( 'woocommerce_add_cart_item_data', [ __CLASS__, 'add_addon_data_to_cart_item' ], 10, 3 );
+		// Priority 1: strip unsigned configuration fields before other add-ons (MKL, WCPA) read $_POST.
+		add_filter( 'woocommerce_add_cart_item_data', [ __CLASS__, 'add_addon_data_to_cart_item' ], 1, 3 );
 		add_filter( 'woocommerce_get_cart_item_from_session', [ __CLASS__, 'get_cart_item_from_session' ], 10, 3 );
 		add_action( 'woocommerce_before_calculate_totals', [ __CLASS__, 'calculate_custom_addon_totals' ], 20, 1 );
 		add_filter( 'woocommerce_get_item_data', [ __CLASS__, 'display_custom_addons_in_cart' ], 10, 2 );
@@ -4362,7 +4363,72 @@ class Exacoat_Configurator_Engine {
 	 *
 	 * @throws Exception When the signature is missing or invalid (WooCommerce turns it into a notice).
 	 */
+	/** Add to cart fields WooCommerce and exacoat-core need. Everything else is dropped. */
+	const CART_ALLOWED_FIELDS = [
+		'product_id', 'add-to-cart', 'quantity', 'variation_id',
+		'print_finish', 'finish', 'feelform_mode',
+		'exacoat_custom_image', 'exacoat_custom_price', 'exacoat_addon_data', 'exacoat_price_exp', 'exacoat_price_sig',
+		'security', '_wpnonce', '_wp_http_referer',
+	];
+
+	/**
+	 * Removes every add to cart field that is not a standard WooCommerce field
+	 * (`attribute_*` included) or a signed exacoat-core field, from $_POST and $_REQUEST.
+	 * This drops hand-written configuration specs that other add-ons would otherwise save
+	 * as order item meta: MKL Product Configurator `pc_configurator_data`, WCPA (Acowebs
+	 * Custom Product Addons) form fields such as `text-*` / `select-*` and
+	 * `wcpa_field_key_checker`, and the old per-label and `addon_*` fields. The signed
+	 * lines in exacoat_addon_data are the only configuration an item can carry.
+	 *
+	 * @return string[] Removed field names.
+	 */
+	public static function strip_unsigned_configuration_fields(): array {
+		$removed = [];
+		foreach ( [ '_POST', '_REQUEST' ] as $global ) {
+			if ( empty( $GLOBALS[ $global ] ) || ! is_array( $GLOBALS[ $global ] ) ) {
+				continue;
+			}
+			foreach ( array_keys( $GLOBALS[ $global ] ) as $key ) {
+				$key = (string) $key;
+				if ( in_array( $key, self::CART_ALLOWED_FIELDS, true ) || 0 === strpos( $key, 'attribute_' ) ) {
+					continue;
+				}
+				unset( $GLOBALS[ $global ][ $key ] );
+				$removed[ $key ] = true;
+			}
+		}
+		return array_keys( $removed );
+	}
+
+	/**
+	 * Lines as stored in `_configurator_data_raw`, in a shape every reader understands:
+	 * MKL style (`is_choice`, `layer_id`, `layer_name`, `name`) for the warranty parts
+	 * parser and the plugin, plus `layerId` / `layerName` / `choiceName` for the manager.
+	 */
+	public static function configurator_data_raw( array $addons ): string {
+		$raw = [];
+		foreach ( array_values( $addons ) as $idx => $addon ) {
+			if ( empty( $addon['label'] ) || empty( $addon['value'] ) ) {
+				continue;
+			}
+			$label = sanitize_text_field( $addon['label'] );
+			$value = sanitize_text_field( $addon['value'] );
+			$raw[] = [
+				'is_choice'  => '1',
+				'layer_id'   => $idx + 1,
+				'layer_name' => $label,
+				'name'       => $value,
+				'layerId'    => (string) ( $idx + 1 ),
+				'layerName'  => $label,
+				'choiceName' => $value,
+			];
+		}
+		return empty( $raw ) ? '' : (string) wp_json_encode( $raw, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+	}
+
 	public static function add_addon_data_to_cart_item( $cart_item_data, $product_id, $variation_id ) {
+		self::strip_unsigned_configuration_fields();
+
 		$posted_price  = isset( $_POST['exacoat_custom_price'] ) ? trim( (string) wp_unslash( $_POST['exacoat_custom_price'] ) ) : '';
 		$posted_addons = isset( $_POST['exacoat_addon_data'] ) ? (string) wp_unslash( $_POST['exacoat_addon_data'] ) : '';
 
@@ -4513,18 +4579,16 @@ class Exacoat_Configurator_Engine {
 	public static function save_custom_addons_to_order_item( $item, $cart_item_key, $values, $order ) {
 		if ( ! empty( $values['exacoat_addons'] ) && is_array( $values['exacoat_addons'] ) ) {
 			$sorted = self::sort_addon_layers( $values['exacoat_addons'] );
-			$raw    = [];
-			foreach ( $sorted as $idx => $addon ) {
+			foreach ( $sorted as $addon ) {
 				if ( ! empty( $addon['label'] ) && ! empty( $addon['value'] ) ) {
-					$label = sanitize_text_field( $addon['label'] );
-					$value = sanitize_text_field( $addon['value'] );
-					$item->add_meta_data( $label, $value, true );
-					$raw[] = [ 'layerId' => (string) ( $idx + 1 ), 'layerName' => $label, 'choiceName' => $value ];
+					$item->add_meta_data( sanitize_text_field( $addon['label'] ), sanitize_text_field( $addon['value'] ), true );
 				}
 			}
 			// Signed cart lines; the storefront no longer writes browser-sent lines after checkout.
-			if ( ! empty( $raw ) ) {
-				$item->add_meta_data( '_configurator_data_raw', wp_slash( wp_json_encode( $raw, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) ), true );
+			// No wp_slash here: WooCommerce's meta data store slashes values itself.
+			$raw = self::configurator_data_raw( $sorted );
+			if ( '' !== $raw ) {
+				$item->add_meta_data( '_configurator_data_raw', $raw, true );
 			}
 		}
 		if ( ! empty( $values['exacoat_custom_image'] ) ) {
