@@ -401,6 +401,7 @@ if ( ! function_exists( 'get_sub_field' ) ) {
 }
 
 require_once EXACOAT_CORE_PATH . 'includes/class-logger.php';
+require_once EXACOAT_CORE_PATH . 'includes/class-request-guard.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-pushover-service.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-telegram-service.php';
 require_once EXACOAT_CORE_PATH . 'includes/class-notification-service.php';
