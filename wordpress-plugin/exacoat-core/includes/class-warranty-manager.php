@@ -1533,6 +1533,24 @@ class Exacoat_Warranty_Manager {
 	}
 
 	/**
+	 * The rate this site quotes for $courier_id to the order's own shipping address, or null.
+	 */
+	public static function server_rate_for_order( int $order_id, string $courier_id ): ?array {
+		$rates_request = new \WP_REST_Request( 'POST', '/exacoat-core/v1/warranty/shipping-rates' );
+		$rates_request->set_param( 'order_id', $order_id );
+		$data = self::rest_get_shipping_rates( $rates_request )->get_data();
+		if ( empty( $data['success'] ) || empty( $data['rates'] ) || ! is_array( $data['rates'] ) ) {
+			return null;
+		}
+		foreach ( $data['rates'] as $rate ) {
+			if ( is_array( $rate ) && strtolower( (string) ( $rate['id'] ?? '' ) ) === strtolower( $courier_id ) ) {
+				return $rate;
+			}
+		}
+		return null;
+	}
+
+	/**
 	 * Submit warranty claim & generate Rp 0 replacement order with customer shipping fee
 	 */
 	public static function rest_submit_claim( \WP_REST_Request $request ): \WP_REST_Response {
@@ -1566,10 +1584,21 @@ class Exacoat_Warranty_Manager {
 		$customer_notes  = sanitize_textarea_field( $request->get_param( 'notes' ) ?: '' );
 		$video_url       = esc_url_raw( $request->get_param( 'video_url' ) ?: '' );
 		$video_path      = sanitize_text_field( $request->get_param( 'video_file_path' ) ?: '' );
-		$courier_id      = sanitize_text_field( $request->get_param( 'courier_id' ) ?: 'jne_reg' );
-		$courier_label   = sanitize_text_field( $request->get_param( 'courier_label' ) ?: 'JNE Regular' );
-		$shipping_cost   = max( 0, floatval( $request->get_param( 'shipping_cost' ) ?: 10000 ) );
+		$courier_id      = strtolower( sanitize_text_field( $request->get_param( 'courier_id' ) ?: 'jne_reg' ) );
 		$warranty_code   = sanitize_text_field( $request->get_param( 'warranty_code' ) ?: '' );
+
+		// Shipping is priced here, from this endpoint's own rates for the parent order's
+		// address; a posted shipping_cost or courier_label is ignored.
+		$server_rate = self::server_rate_for_order( $parent_order_id, $courier_id );
+		if ( null === $server_rate ) {
+			return new \WP_REST_Response( [
+				'success' => false,
+				'code'    => 'shipping_quote_invalid',
+				'message' => 'Shipping rates changed, please choose a courier again.',
+			], 409 );
+		}
+		$courier_label = sanitize_text_field( (string) ( $server_rate['label'] ?? 'Courier Delivery' ) );
+		$shipping_cost = max( 0.0, (float) ( $server_rate['price'] ?? 0 ) );
 
 		if ( empty( $item_ids ) ) {
 			return new \WP_REST_Response( [
