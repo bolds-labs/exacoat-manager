@@ -17,6 +17,7 @@ class WC_Order {
 	public function get_billing_email() { return 'Ana@Example.com'; }
 	public function get_billing_phone() { return $this->phone; }
 	public function get_shipping_phone() { return ''; }
+	public function get_meta( $k ) { return '_shipping_phone' === $k ? '+62 811 2222 3333' : ''; }
 }
 
 require_once __DIR__ . '/../includes/class-warranty-manager.php';
@@ -40,6 +41,8 @@ $check( $v( '081234567890' ), 'phone', 'full phone in 08 form' );
 $check( $v( '34567890' ), '', 'last 8 digits refused' );
 $check( $v( '99934567890' ), '', 'suffix match refused' );
 $check( $v( '17142' ), '', 'postcode guess refused' );
+$check( $v( '081122223333' ), 'phone', 'full _shipping_phone meta accepted' );
+$check( $v( '22223333' ), '', '_shipping_phone suffix refused' );
 $GLOBALS['user_id'] = 42;
 $check( $v( '' ), 'owner', 'signed-in customer of the order' );
 $GLOBALS['user_id'] = 7;
@@ -52,10 +55,16 @@ $check( Exacoat_Warranty_Manager::phones_match( '081234', '081234' ), false, 'to
 
 $shopee = [ 'recipient_phone' => '6281234567890', 'buyer_username' => 'ana_shop' ];
 $check( Exacoat_Warranty_Manager::marketplace_verification( $shopee, '081234567890' ), 'phone', 'marketplace full phone' );
-$check( Exacoat_Warranty_Manager::marketplace_verification( $shopee, 'ANA_SHOP' ), 'username', 'marketplace username' );
+$check( Exacoat_Warranty_Manager::marketplace_verification( $shopee, 'ANA_SHOP' ), '', 'buyer username is not proof' );
+$check( Exacoat_Warranty_Manager::marketplace_verification( $shopee, '', true ), 'code', 'staff claim code bound to this order' );
+$check( Exacoat_Warranty_Manager::marketplace_verification( $shopee, 'ana_shop', false ), '', 'no code, no phone' );
 $check( Exacoat_Warranty_Manager::marketplace_verification( $shopee, '67890' ), '', 'marketplace suffix refused' );
 $check( Exacoat_Warranty_Manager::marketplace_verification( [ 'recipient_phone' => '62812******90' ], '6281200000090' ), '', 'masked marketplace phone refused' );
 $check( Exacoat_Warranty_Manager::marketplace_verification( $shopee, '' ), '', 'marketplace empty refused' );
+
+$check( Exacoat_Warranty_Manager::mask_username( 'ana_shop' ), 'a******p', 'username masked' );
+$check( Exacoat_Warranty_Manager::mask_username( 'ab' ), '**', 'short username fully masked' );
+$check( Exacoat_Warranty_Manager::mask_username( '' ), '', 'empty username' );
 
 $addr = [ 'first_name' => 'Ana', 'last_name' => 'B', 'address_1' => 'Jl. Merdeka 1', 'city' => 'Bandung', 'postcode' => '40115', 'country' => 'ID', 'phone' => '0812', 'email' => 'a@b.c' ];
 $check( Exacoat_Warranty_Manager::without_personal_data( $addr ), [ 'first_name' => '', 'last_name' => '', 'address_1' => '', 'city' => '', 'postcode' => '', 'country' => 'ID', 'phone' => '', 'email' => '' ], 'personal data removed' );

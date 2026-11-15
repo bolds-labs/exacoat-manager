@@ -1713,12 +1713,28 @@ class Exacoat_TikTok_Client {
 	}
 
 	public static function rest_get_tracking_info( \WP_REST_Request $request ): \WP_REST_Response {
+		// Public and calls the live marketplace API: bounded per client IP (staff exempt).
+		if ( class_exists( 'Exacoat_Request_Guard' ) && ! current_user_can( 'manage_woocommerce' ) && Exacoat_Request_Guard::hit( 'mp_track', Exacoat_Request_Guard::client_ip(), 60, 10 * MINUTE_IN_SECONDS ) ) {
+			return new \WP_REST_Response( [
+				'success' => false,
+				'error'   => 'Too many requests. Please try again later.',
+				'message' => 'Too many requests. Please try again later.',
+			], 429 );
+		}
 		$order_id = trim( (string) $request->get_param( 'order_id' ) );
 		$res = self::get_tracking_info( $order_id );
 		return rest_ensure_response( $res );
 	}
 
 	public static function rest_verify_order( \WP_REST_Request $request ): \WP_REST_Response {
+		// Public and calls the live marketplace API: bounded per client IP (staff exempt).
+		if ( class_exists( 'Exacoat_Request_Guard' ) && ! current_user_can( 'manage_woocommerce' ) && Exacoat_Request_Guard::hit( 'mp_verify', Exacoat_Request_Guard::client_ip(), 60, 10 * MINUTE_IN_SECONDS ) ) {
+			return new \WP_REST_Response( [
+				'success' => false,
+				'error'   => 'Too many requests. Please try again later.',
+				'message' => 'Too many requests. Please try again later.',
+			], 429 );
+		}
 		$order_id = trim( (string) $request->get_param( 'order_id' ) );
 		$clean = preg_replace( '/^#+/', '', $order_id );
 
@@ -1758,8 +1774,8 @@ class Exacoat_TikTok_Client {
 			return rest_ensure_response([
 				'success'             => false,
 				'already_claimed'     => true,
-				'message'             => "This TikTok Shop order ({$order_id_to_verify}) has already been processed for replacement under Order #{$claim_info['existing_order_num']} ({$claim_info['claim_type']}).",
-				'existing_order_num'  => $claim_info['existing_order_num'],
+				// No replacement order number before any proof of ownership.
+				'message'             => "This TikTok Shop order ({$order_id_to_verify}) has already been processed for replacement.",
 				'existing_order_type' => $claim_info['claim_type'],
 			]);
 		}
@@ -1788,7 +1804,8 @@ class Exacoat_TikTok_Client {
 				'is_delivered'     => $is_delivered,
 				'delivered_time'   => $delivered_time,
 				'delivered_ts'     => $delivered_ts,
-				'buyer_username'   => $found['buyer_username'] ?? '',
+				// Masked: the username is personal data and is not proof of ownership.
+				'buyer_username'   => class_exists( 'Exacoat_Warranty_Manager' ) ? Exacoat_Warranty_Manager::mask_username( (string) ( $found['buyer_username'] ?? '' ) ) : '',
 				'buyer_note'       => $found['buyer_note'] ?? ( $found['buyer_message'] ?? '' ),
 				'shipping_carrier' => $found['shipping_carrier'] ?? '',
 				'tracking_number'  => $found['tracking_number'] ?? '',

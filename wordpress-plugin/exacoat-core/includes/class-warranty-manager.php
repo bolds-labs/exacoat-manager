@@ -336,7 +336,7 @@ class Exacoat_Warranty_Manager {
 		$warranty_code = trim( (string) $request->get_param( 'warranty_code' ) );
 
 		// Order numbers are sequential: bound lookups per visitor IP (Exacoat_Request_Guard).
-		if ( ! self::is_staff_request() && Exacoat_Request_Guard::hit( 'welig_ip', self::client_ip(), 120, 10 * MINUTE_IN_SECONDS ) ) {
+		if ( ! self::is_staff_request() && Exacoat_Request_Guard::is_over( 'welig_ip', self::client_ip(), 120 ) ) {
 			return new \WP_REST_Response( [
 				'success'  => false,
 				'eligible' => false,
@@ -422,6 +422,7 @@ class Exacoat_Warranty_Manager {
 				return self::check_tiktok_eligibility( $tiktok_match, $verification, $clean_id, $warranty_code );
 			}
 
+			Exacoat_Request_Guard::hit( 'welig_ip', self::client_ip(), 120, 10 * MINUTE_IN_SECONDS );
 			return new \WP_REST_Response( [
 				'success'  => false,
 				'eligible' => false,
@@ -438,7 +439,8 @@ class Exacoat_Warranty_Manager {
 		// Verification is always required (AGENTS.md "Plugin Auth and Ownership"): the signed-in
 		// customer who owns the order, the exact billing email, or the full phone number.
 		$fail_subject = 'wc:' . $order_id;
-		if ( Exacoat_Request_Guard::is_over( 'welig_fail', $fail_subject, 10 ) ) {
+		$verified_by  = self::webstore_verification( $order, $verification );
+		if ( '' === $verified_by && Exacoat_Request_Guard::is_over( 'welig_fail', $fail_subject, 10 ) ) {
 			return new \WP_REST_Response( [
 				'success'  => false,
 				'eligible' => false,
@@ -446,8 +448,9 @@ class Exacoat_Warranty_Manager {
 				'message'  => 'Too many attempts. Please try again later.',
 			], 429 );
 		}
-		if ( '' === self::webstore_verification( $order, $verification ) ) {
+		if ( '' === $verified_by ) {
 			Exacoat_Request_Guard::hit( 'welig_fail', $fail_subject, 10, HOUR_IN_SECONDS );
+			Exacoat_Request_Guard::hit( 'welig_ip', self::client_ip(), 120, 10 * MINUTE_IN_SECONDS );
 			return new \WP_REST_Response( [
 				'success'  => false,
 				'eligible' => false,
@@ -808,20 +811,20 @@ class Exacoat_Warranty_Manager {
 		], [ 'limit' => 1 ] );
 
 		if ( ! empty( $existing_claim_ids ) ) {
-			$rep_order = wc_get_order( reset( $existing_claim_ids ) );
 			return new \WP_REST_Response( [
 				'success'              => false,
 				'eligible'             => false,
 				'reason'               => 'already_claimed',
-				'message'              => 'A warranty replacement has already been claimed for this Shopee order under replacement order #' . ( $rep_order ? $rep_order->get_order_number() : reset( $existing_claim_ids ) ) . '.',
-				'replacement_order_id' => reset( $existing_claim_ids ),
+				'message'              => 'A warranty replacement has already been claimed for this Shopee order.',
 			], 200 );
 		}
 
-		// 2. Verification is always required: the full recipient phone number, or the buyer
-		// username (then no recipient data is returned, the customer enters the address).
+		// 2. Verification is always required: the full recipient phone number, or a staff-issued
+		// warranty code bound to this order. The buyer username is not proof (it is shown on the
+		// marketplace and was returned by the public verify-order routes).
 		$fail_subject = 'mp:' . strtolower( (string) $sn );
-		if ( Exacoat_Request_Guard::is_over( 'welig_fail', $fail_subject, 10 ) ) {
+		$verified_by  = self::marketplace_verification( $ord, $verification, self::claim_code_bound_to( $warranty_code, (string) $sn ) );
+		if ( '' === $verified_by && Exacoat_Request_Guard::is_over( 'welig_fail', $fail_subject, 10 ) ) {
 			return new \WP_REST_Response( [
 				'success'  => false,
 				'eligible' => false,
@@ -829,14 +832,14 @@ class Exacoat_Warranty_Manager {
 				'message'  => 'Too many attempts. Please try again later.',
 			], 429 );
 		}
-		$verified_by = self::marketplace_verification( $ord, $verification );
 		if ( '' === $verified_by ) {
 			Exacoat_Request_Guard::hit( 'welig_fail', $fail_subject, 10, HOUR_IN_SECONDS );
+			Exacoat_Request_Guard::hit( 'welig_ip', self::client_ip(), 120, 10 * MINUTE_IN_SECONDS );
 			return new \WP_REST_Response( [
 				'success'  => false,
 				'eligible' => false,
 				'reason'   => 'verification_failed',
-				'message'  => 'Enter the full phone number or the buyer username used for this order.',
+				'message'  => 'Enter the full recipient phone number for this order, or the claim code from Exacoat Care.',
 			], 200 );
 		}
 
@@ -948,10 +951,6 @@ class Exacoat_Warranty_Manager {
 			'eligible_items'     => $eligible_items,
 			'excluded_items'     => [],
 		];
-		if ( 'username' === $verified_by ) {
-			$res_payload['shipping_address'] = self::without_personal_data( $res_payload['shipping_address'] );
-			$res_payload['address_hidden']   = true;
-		}
 
 		if ( $is_code_override ) {
 			$res_payload['warranty_code_applied'] = true;
@@ -977,20 +976,20 @@ class Exacoat_Warranty_Manager {
 		], [ 'limit' => 1 ] );
 
 		if ( ! empty( $existing_claim_ids ) ) {
-			$rep_order = wc_get_order( reset( $existing_claim_ids ) );
 			return new \WP_REST_Response( [
 				'success'              => false,
 				'eligible'             => false,
 				'reason'               => 'already_claimed',
-				'message'              => 'A warranty replacement has already been claimed for this TikTok Shop order under replacement order #' . ( $rep_order ? $rep_order->get_order_number() : reset( $existing_claim_ids ) ) . '.',
-				'replacement_order_id' => reset( $existing_claim_ids ),
+				'message'              => 'A warranty replacement has already been claimed for this TikTok Shop order.',
 			], 200 );
 		}
 
-		// 2. Verification is always required: the full recipient phone number, or the buyer
-		// username (then no recipient data is returned, the customer enters the address).
+		// 2. Verification is always required: the full recipient phone number, or a staff-issued
+		// warranty code bound to this order. The buyer username is not proof (it is shown on the
+		// marketplace and was returned by the public verify-order routes).
 		$fail_subject = 'mp:' . strtolower( (string) $order_id );
-		if ( Exacoat_Request_Guard::is_over( 'welig_fail', $fail_subject, 10 ) ) {
+		$verified_by  = self::marketplace_verification( $ord, $verification, self::claim_code_bound_to( $warranty_code, (string) $order_id ) );
+		if ( '' === $verified_by && Exacoat_Request_Guard::is_over( 'welig_fail', $fail_subject, 10 ) ) {
 			return new \WP_REST_Response( [
 				'success'  => false,
 				'eligible' => false,
@@ -998,14 +997,14 @@ class Exacoat_Warranty_Manager {
 				'message'  => 'Too many attempts. Please try again later.',
 			], 429 );
 		}
-		$verified_by = self::marketplace_verification( $ord, $verification );
 		if ( '' === $verified_by ) {
 			Exacoat_Request_Guard::hit( 'welig_fail', $fail_subject, 10, HOUR_IN_SECONDS );
+			Exacoat_Request_Guard::hit( 'welig_ip', self::client_ip(), 120, 10 * MINUTE_IN_SECONDS );
 			return new \WP_REST_Response( [
 				'success'  => false,
 				'eligible' => false,
 				'reason'   => 'verification_failed',
-				'message'  => 'Enter the full phone number or the buyer username used for this order.',
+				'message'  => 'Enter the full recipient phone number for this order, or the claim code from Exacoat Care.',
 			], 200 );
 		}
 
@@ -1118,10 +1117,6 @@ class Exacoat_Warranty_Manager {
 			'eligible_items'     => $eligible_items,
 			'excluded_items'     => [],
 		];
-		if ( 'username' === $verified_by ) {
-			$res_payload['shipping_address'] = self::without_personal_data( $res_payload['shipping_address'] );
-			$res_payload['address_hidden']   = true;
-		}
 
 		if ( $is_code_override ) {
 			$res_payload['warranty_code_applied'] = true;
@@ -4017,7 +4012,11 @@ class Exacoat_Warranty_Manager {
 		if ( '' !== $email && false !== strpos( $given, '@' ) && hash_equals( $email, strtolower( $given ) ) ) {
 			return 'email';
 		}
-		foreach ( [ (string) $order->get_billing_phone(), (string) $order->get_shipping_phone() ] as $stored ) {
+		$phones = [ (string) $order->get_billing_phone(), (string) $order->get_shipping_phone() ];
+		if ( method_exists( $order, 'get_meta' ) ) {
+			$phones[] = (string) $order->get_meta( '_shipping_phone' );
+		}
+		foreach ( $phones as $stored ) {
 			if ( self::phones_match( $given, $stored ) ) {
 				return 'phone';
 			}
@@ -4025,20 +4024,38 @@ class Exacoat_Warranty_Manager {
 		return '';
 	}
 
-	/** 'phone' (full recipient phone), 'username' (exact buyer username) or ''. */
-	public static function marketplace_verification( array $ord, string $verification ): string {
-		$given = trim( $verification );
-		if ( '' === $given ) {
-			return '';
-		}
-		if ( self::phones_match( $given, (string) ( $ord['recipient_phone'] ?? '' ) ) ) {
+	/** 'phone' (full recipient phone), 'code' (staff claim code bound to this order) or ''. */
+	public static function marketplace_verification( array $ord, string $verification, bool $code_bound = false ): string {
+		if ( self::phones_match( trim( $verification ), (string) ( $ord['recipient_phone'] ?? '' ) ) ) {
 			return 'phone';
 		}
-		$username = trim( (string) ( $ord['buyer_username'] ?? '' ) );
-		if ( '' !== $username && 0 === strcasecmp( $given, $username ) ) {
-			return 'username';
+		return $code_bound ? 'code' : '';
+	}
+
+	/** A valid warranty code issued by staff for exactly this order (bound_order_id). */
+	public static function claim_code_bound_to( string $code, string $order_ref ): bool {
+		$code = trim( $code );
+		if ( '' === $code || '' === trim( $order_ref ) ) {
+			return false;
 		}
-		return '';
+		$data = self::find_warranty_code( $code );
+		if ( ! $data || 0 !== strcasecmp( trim( (string) ( $data['bound_order_id'] ?? '' ) ), ltrim( trim( $order_ref ), '#' ) ) ) {
+			return false;
+		}
+		$valid = self::validate_warranty_code( $code, $order_ref );
+		return ! empty( $valid['valid'] );
+	}
+
+	/** First and last character kept, the rest masked (e.g. a******p). */
+	public static function mask_username( string $username ): string {
+		$username = trim( $username );
+		$len      = function_exists( 'mb_strlen' ) ? mb_strlen( $username ) : strlen( $username );
+		if ( $len <= 2 ) {
+			return str_repeat( '*', $len );
+		}
+		$first = function_exists( 'mb_substr' ) ? mb_substr( $username, 0, 1 ) : substr( $username, 0, 1 );
+		$last  = function_exists( 'mb_substr' ) ? mb_substr( $username, -1 ) : substr( $username, -1 );
+		return $first . str_repeat( '*', $len - 2 ) . $last;
 	}
 
 	/** Address without the personal fields (country kept). */
