@@ -316,3 +316,9 @@ Fulfillment extraction evaluates sources in prioritized order:
 6. **Customer Note**: Explicit notes (e.g. `Shipping Courier: SICEPAT - REG`) are parsed.
 7. **Backend Data**: `shipping_courier_name` and `detected_courier`.
 8. **Fallback**: Defaults to `jne` instead of `custom` when standard delivery is specified.
+
+---
+
+## Signed Courier Quotes (0.1.228)
+
+Courier prices shown to customers (checkout and warranty) are signed by the storefront server and accepted only for the destination and items they were quoted for. See AGENTS.md section 69 for the payload, the routes and the deploy order. Biteship rate lookups themselves are unchanged (storefront for checkout and warranty, plugin `rest_get_shipping_rates` for staff and the public plugin claim route); no shipments or bookings are created by any of this.

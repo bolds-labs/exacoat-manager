@@ -121,7 +121,8 @@ async function createPluginZip() {
 - Products: /configurator/set-price sets only the regular price and keeps a running sale price (it used to force the active price to the regular price)
 - Products: configurator saves keep the stored base price (regular price fallback, never the sale price), duplicates keep the regular price, /health lists features (set_price_keeps_sale)
 - Security: configured add to cart accepts exacoat_custom_price and exacoat_addon_data only with a valid storefront signature (EXACOAT_CART_PRICE_SECRET in wp-config.php) and refuses the item otherwise; unsigned custom prices already in carts are removed; add to cart keeps only standard and signed fields (MKL pc_configurator_data, WCPA and addon_* fields are stripped)
-- Configurator: profiles keep bundle_pricing (all parts price and per part finish surcharges) for the Camera & Back Glass product; order items get _configurator_data_raw from the signed cart lines (valid JSON readable by the warranty parser and the manager); bundle surcharge keys match in any case`,
+- Configurator: profiles keep bundle_pricing (all parts price and per part finish surcharges) for the Camera & Back Glass product; order items get _configurator_data_raw from the signed cart lines (valid JSON readable by the warranty parser and the manager); bundle surcharge keys match in any case
+- Security: headless checkout shipping is decided on the server; a courier choice needs a signed storefront quote (exacoat-ship-v1) bound to the order's destination and item count, free shipping and the shipping promo are applied from the order, store pickup is free and uses the store address; the public /warranty/submit-claim prices shipping from its own rates for the parent order`,
     },
   };
 

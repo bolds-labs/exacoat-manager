@@ -250,3 +250,15 @@ WooCommerce injects virtual coupons (`'store credit'`, `'store-credit'`, `'store
    - Displays `+{cashbackPercent}% Cashback` badge and interactive popover terms tooltip showing calculated store credit reward and delivery waiting periods.
 3. **Cashback Summary Row**:
    - When cashback is active on an order, renders a dedicated `Cashback earned: +{amount}` line item in the totals recap with full terms tooltip.
+
+---
+
+## Server-Decided Checkout Shipping (0.1.228)
+
+Shipping on a headless checkout is decided by servers, never by the browser (AGENTS.md section 69).
+
+1. `/api/commerce/shipping-rates` (storefront) quotes Biteship and signs each rate (`exacoat-ship-v1`: courier, service, country, postcode, item count, IDR amount, 30 minute expiry).
+2. Checkout posts `biteship_rate: { rate_id, quote, quote_amount }`. The proxy checks the quote against the Store API cart and the shipping address, then forwards `X-Exacoat-Shipping-Mode`, `-Courier`, `-Service`, `-Amount`, `-Quote`.
+3. `Exacoat_Checkout_Engine::headless_shipping_decision()` verifies the quote against the order (country, postcode, line quantities), applies the free shipping zone rule and the shipping promo coupon from the order, converts the currency and writes the shipping line before payment gateways read the total.
+4. A missing, expired or changed quote fails with 409 "Shipping rates changed, please choose a courier again." and the page reloads rates.
+5. Store pickup is free and the shipping address becomes the Bekasi store. Requests without these headers keep WooCommerce's own selected rate.

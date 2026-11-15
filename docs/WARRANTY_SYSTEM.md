@@ -119,3 +119,11 @@
     - Informative notices explain that Coverage and Logo Cutout are automatically set to None.
     - `compiledSpecs` and warranty claim submission (`createManualWarrantyClaimDirect`) strictly omit `Coverage` and `Logo` when the back layer is inactive or when set to `'None'`.
 
+---
+
+## Warranty Shipping Cost (0.1.228)
+
+- `/api/warranty/shipping-rates` signs each courier rate for `warranty:{order_id}` and the destination (a webstore order is always quoted for its own shipping address).
+- `submit-claim` (storefront) takes the courier cost and label from a valid quote; store pickup is free. A missing or stale quote returns 409 and the wizard reloads rates.
+- The pay portal changes the courier only with a quote for that replacement order, only while it is unpaid; Midtrans always charges the WooCommerce order total.
+- The plugin's public `/warranty/submit-claim` prices the chosen courier from its own rates for the parent order and ignores a posted `shipping_cost`.
