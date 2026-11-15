@@ -858,7 +858,7 @@ class Exacoat_Customer_Auth {
 	const GUEST_ORDER_FAIL_LIMIT = 10;
 
 	/** Seconds a sign-in waits once an email has many failures from many IPs (0 in tests). */
-	public static $login_slow_seconds = 2;
+	public static $login_slow_seconds = 1;
 
 	private static function login_subject( string $email ): string {
 		return strtolower( trim( $email ) ) . '|' . Exacoat_Request_Guard::client_ip();

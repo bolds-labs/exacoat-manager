@@ -2366,8 +2366,8 @@ class Exacoat_Core {
 			return new WP_Error( 'invalid_submission', 'Please refresh the page and try again.', [ 'status' => 400 ] );
 		}
 
-		$forwarded_ip = $request->get_header( 'X-Exacoat-Client-IP' ) ?: $request->get_header( 'X-Artmatter-Client-IP' );
-		$remote_ip    = sanitize_text_field( $forwarded_ip ?: ( $_SERVER['REMOTE_ADDR'] ?? 'unknown' ) );
+		// Client IP from the request guard: an unsigned client IP header must never pick the bucket.
+		$remote_ip    = Exacoat_Request_Guard::client_ip() ?: 'unknown';
 		$rate_key     = 'exacoat_contact_rate_' . md5( $remote_ip );
 		$rate_count   = (int) get_transient( $rate_key );
 		if ( $rate_count >= 10 ) {
