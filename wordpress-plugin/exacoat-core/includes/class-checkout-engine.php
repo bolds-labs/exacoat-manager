@@ -118,8 +118,11 @@ class Exacoat_Checkout_Engine {
 	 * Make the original visitor and explicitly selected currency available to Aelia.
 	 */
 	public static function apply_headless_currency_context(): void {
-		$client_ip = sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_EXACOAT_CLIENT_IP'] ?? ( $_SERVER['HTTP_X_ARTMATTER_CLIENT_IP'] ?? '' ) ) );
-		if ( $client_ip && filter_var( $client_ip, FILTER_VALIDATE_IP ) ) {
+		// Only a storefront-signed client IP may stand in for REMOTE_ADDR (Aelia geolocation).
+		// An unsigned X-Exacoat-Client-IP or X-Artmatter-Client-IP is ignored; rate limits
+		// read the original address through Exacoat_Request_Guard either way.
+		$client_ip = class_exists( 'Exacoat_Request_Guard' ) ? Exacoat_Request_Guard::signed_storefront_ip() : null;
+		if ( null !== $client_ip ) {
 			$_SERVER['REMOTE_ADDR'] = $client_ip;
 		}
 
@@ -442,8 +445,7 @@ class Exacoat_Checkout_Engine {
 			return rest_ensure_response( $cached );
 		}
 
-		$forwarded_ip = sanitize_text_field( wp_unslash( $_SERVER['HTTP_CF_CONNECTING_IP'] ?? $_SERVER['REMOTE_ADDR'] ?? '' ) );
-		$client_ip    = filter_var( $forwarded_ip, FILTER_VALIDATE_IP ) ? $forwarded_ip : 'unknown';
+		$client_ip    = Exacoat_Request_Guard::client_ip();
 		$limit_key    = 'artmatter_address_limit_' . md5( $client_ip );
 		$request_count = (int) get_transient( $limit_key );
 		if ( $request_count >= 20 ) {

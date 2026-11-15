@@ -32,6 +32,23 @@ class Exacoat_Request_Guard {
 		'2405:8100::/32', '2a06:98c0::/29', '2c0f:f248::/32',
 	];
 
+	/** REMOTE_ADDR as the web server set it, captured when the plugin loads. */
+	private static $original_remote_addr = null;
+
+	/**
+	 * Keeps the web server's REMOTE_ADDR before any code (or header copy) can rewrite it.
+	 * Called when this file loads, which is before every plugin hook runs.
+	 */
+	public static function capture_remote_addr(): void {
+		if ( null === self::$original_remote_addr && isset( $_SERVER['REMOTE_ADDR'] ) && '' !== (string) $_SERVER['REMOTE_ADDR'] ) {
+			self::$original_remote_addr = (string) $_SERVER['REMOTE_ADDR'];
+		}
+	}
+
+	public static function remote_addr(): string {
+		return trim( null !== self::$original_remote_addr ? self::$original_remote_addr : (string) ( $_SERVER['REMOTE_ADDR'] ?? '' ) );
+	}
+
 	public static function client_ip_payload( string $ip, int $ts ): string {
 		return self::CLIENT_IP_VERSION . "\n" . $ip . "\n" . $ts;
 	}
@@ -70,7 +87,7 @@ class Exacoat_Request_Guard {
 		if ( null !== $signed ) {
 			return $signed;
 		}
-		$remote = trim( (string) ( $_SERVER['REMOTE_ADDR'] ?? '' ) );
+		$remote = self::remote_addr();
 		$cf     = trim( (string) ( $_SERVER['HTTP_CF_CONNECTING_IP'] ?? '' ) );
 		if ( '' !== $cf && false !== filter_var( $cf, FILTER_VALIDATE_IP ) && false !== filter_var( $remote, FILTER_VALIDATE_IP ) ) {
 			$ranges = (array) apply_filters( 'exacoat_cloudflare_ip_ranges', self::CLOUDFLARE_IP_RANGES );
@@ -108,9 +125,24 @@ class Exacoat_Request_Guard {
 		return 'exacoat_rl_' . $bucket . '_' . md5( strtolower( $subject ) );
 	}
 
-	/** Counts one event for $subject; true when $limit events were already counted in the window. */
+	private static function use_object_cache(): bool {
+		return function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache()
+			&& function_exists( 'wp_cache_add' ) && function_exists( 'wp_cache_incr' );
+	}
+
+	/**
+	 * Counts one event for $subject; true when $limit events were already counted in the window.
+	 * With a persistent object cache the increment is atomic (wp_cache_add then wp_cache_incr).
+	 * Without one it falls back to a transient read and write, so two requests at the same
+	 * moment can both pass; the limits are sized so that race only lets a few extra through.
+	 */
 	public static function hit( string $bucket, string $subject, int $limit, int $window ): bool {
-		$key   = self::key( $bucket, $subject );
+		$key = self::key( $bucket, $subject );
+		if ( self::use_object_cache() ) {
+			wp_cache_add( $key, 0, 'exacoat_rl', $window );
+			$count = (int) wp_cache_incr( $key, 1, 'exacoat_rl' );
+			return $count > $limit;
+		}
 		$count = (int) get_transient( $key );
 		if ( $count >= $limit ) {
 			return true;
@@ -121,10 +153,18 @@ class Exacoat_Request_Guard {
 
 	/** True when $subject already reached $limit, without counting. */
 	public static function is_over( string $bucket, string $subject, int $limit ): bool {
-		return (int) get_transient( self::key( $bucket, $subject ) ) >= $limit;
+		$key = self::key( $bucket, $subject );
+		$count = self::use_object_cache() ? (int) wp_cache_get( $key, 'exacoat_rl' ) : (int) get_transient( $key );
+		return $count >= $limit;
 	}
 
 	public static function clear( string $bucket, string $subject ): void {
-		delete_transient( self::key( $bucket, $subject ) );
+		$key = self::key( $bucket, $subject );
+		if ( self::use_object_cache() ) {
+			wp_cache_delete( $key, 'exacoat_rl' );
+		}
+		delete_transient( $key );
 	}
 }
+
+Exacoat_Request_Guard::capture_remote_addr();

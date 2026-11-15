@@ -15,6 +15,13 @@ function get_transient( $k ) { return $GLOBALS['transients'][ $k ] ?? false; }
 function set_transient( $k, $v, $t ) { $GLOBALS['transients'][ $k ] = $v; return true; }
 function delete_transient( $k ) { unset( $GLOBALS['transients'][ $k ] ); return true; }
 function apply_filters( $hook, $value ) { return $value; }
+$GLOBALS['ext_cache'] = false;
+$GLOBALS['cache']     = [];
+function wp_using_ext_object_cache() { return $GLOBALS['ext_cache']; }
+function wp_cache_add( $k, $v, $g, $t ) { if ( isset( $GLOBALS['cache'][ $g . $k ] ) ) { return false; } $GLOBALS['cache'][ $g . $k ] = $v; return true; }
+function wp_cache_incr( $k, $n, $g ) { $GLOBALS['cache'][ $g . $k ] = ( $GLOBALS['cache'][ $g . $k ] ?? 0 ) + $n; return $GLOBALS['cache'][ $g . $k ]; }
+function wp_cache_get( $k, $g ) { return $GLOBALS['cache'][ $g . $k ] ?? false; }
+function wp_cache_delete( $k, $g ) { unset( $GLOBALS['cache'][ $g . $k ] ); return true; }
 
 require_once __DIR__ . '/../includes/class-request-guard.php';
 
@@ -76,6 +83,18 @@ $check( Exacoat_Request_Guard::is_over( 'b', 'subject', 3 ), true, 'is_over with
 $check( Exacoat_Request_Guard::is_over( 'b', 'other', 3 ), false, 'other subject' );
 Exacoat_Request_Guard::clear( 'b', 'subject' );
 $check( Exacoat_Request_Guard::is_over( 'b', 'subject', 3 ), false, 'clear' );
+
+// Persistent object cache: atomic increments.
+$GLOBALS['ext_cache'] = true;
+$hits = [];
+for ( $i = 0; $i < 4; $i++ ) {
+	$hits[] = Exacoat_Request_Guard::hit( 'c', 'subject', 3, 60 );
+}
+$check( $hits, [ false, false, false, true ], 'object cache counter limits after 3' );
+$check( Exacoat_Request_Guard::is_over( 'c', 'subject', 3 ), true, 'object cache is_over' );
+Exacoat_Request_Guard::clear( 'c', 'subject' );
+$check( Exacoat_Request_Guard::is_over( 'c', 'subject', 3 ), false, 'object cache clear' );
+$GLOBALS['ext_cache'] = false;
 
 if ( $fails > 0 ) {
 	echo "$fails check(s) failed\n";

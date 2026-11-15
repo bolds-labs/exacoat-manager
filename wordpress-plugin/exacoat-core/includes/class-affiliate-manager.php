@@ -42,20 +42,11 @@ class Exacoat_Affiliate_Manager {
 	}
 
 	/**
-	 * Helper: Resolve accurate client IP address supporting Cloudflare and reverse proxies.
+	 * Helper: client IP for affiliate visit tracking.
 	 */
 	public static function get_client_ip(): string {
-		if ( ! empty( $_SERVER['HTTP_CF_CONNECTING_IP'] ) ) {
-			return sanitize_text_field( wp_unslash( $_SERVER['HTTP_CF_CONNECTING_IP'] ) );
-		}
-		if ( ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) {
-			$parts = explode( ',', wp_unslash( $_SERVER['HTTP_X_FORWARDED_FOR'] ) );
-			return sanitize_text_field( trim( $parts[0] ) );
-		}
-		if ( ! empty( $_SERVER['REMOTE_ADDR'] ) ) {
-			return sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) );
-		}
-		return '';
+		// Trusted client IP only (signed storefront header, Cloudflare range check, REMOTE_ADDR).
+		return class_exists( 'Exacoat_Request_Guard' ) ? Exacoat_Request_Guard::client_ip() : (string) ( $_SERVER['REMOTE_ADDR'] ?? '' );
 	}
 
 	public static function init(): void {
@@ -4949,16 +4940,15 @@ class Exacoat_Affiliate_Manager {
 		$table_affiliates  = $wpdb->prefix . 'exacoat_affiliates';
 		$table_commissions = $wpdb->prefix . 'exacoat_affiliate_commissions';
 
-		// Look for user by email edwinyang10@gmail.com or ID 11309
-		$user = get_user_by( 'email', 'edwinyang10@gmail.com' );
-		$user_id = $user ? (int) $user->ID : 11309;
-
-		$aff = $wpdb->get_row(
-			$wpdb->prepare(
-				"SELECT * FROM {$table_affiliates} WHERE user_id = %d OR slug = 'edwinyg' LIMIT 1",
-				$user_id
-			)
-		);
+		// One-time seed, keyed by the affiliate row (slug) and its linked user id only. It used
+		// to run on every recalculation, reset the balance and look the user up by a hardcoded
+		// email (granting the affiliate role to whoever registered it).
+		if ( get_option( 'exacoat_affiliate_seed_edwinyg_done' ) ) {
+			return;
+		}
+		$aff = $wpdb->get_row( "SELECT * FROM {$table_affiliates} WHERE slug = 'edwinyg' LIMIT 1" );
+		$user_id = $aff ? (int) $aff->user_id : 0;
+		$user    = $user_id > 0 ? get_user_by( 'id', $user_id ) : null;
 
 		$edwin_aff_id = 0;
 		if ( $aff ) {
@@ -5015,7 +5005,6 @@ class Exacoat_Affiliate_Manager {
 				if ( $coupon_id > 0 ) {
 					update_post_meta( $coupon_id, '_exacoat_affiliate_id', $edwin_aff_id );
 					update_post_meta( $coupon_id, '_exacoat_affiliate_slug', 'edwinyg' );
-					update_post_meta( $coupon_id, '_exacoat_affiliate_email', 'edwinyang10@gmail.com' );
 					update_post_meta( $coupon_id, 'coupon_amount', '15' );
 				}
 			} catch ( \Throwable $e ) {
@@ -5059,7 +5048,6 @@ class Exacoat_Affiliate_Manager {
 					'commission_amount' => 28050.00,
 					'coupon_code'       => 'edwin15',
 					'status'            => 'unpaid',
-					'customer_email'    => 'edwinyang10@gmail.com',
 					'created_at'        => '2026-09-24 22:27:00',
 				]
 			);
@@ -5078,6 +5066,8 @@ class Exacoat_Affiliate_Manager {
 				[ 'id' => $edwin_aff_id ]
 			);
 		}
+
+		update_option( 'exacoat_affiliate_seed_edwinyg_done', gmdate( 'c' ), false );
 	}
 
 	/**
