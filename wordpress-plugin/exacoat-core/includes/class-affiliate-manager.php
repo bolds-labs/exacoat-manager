@@ -2038,17 +2038,9 @@ class Exacoat_Affiliate_Manager {
 			}
 			$user_id = (int) $affiliate->user_id;
 		} else {
+			// Only the affiliate row linked to this user id: account emails are user-settable and
+			// not verified, so an email match would hand over another affiliate's portal.
 			$affiliate = self::get_affiliate_by_user_id( $user_id );
-			if ( ! $affiliate && $user_id > 0 ) {
-				$current_user = get_userdata( $user_id );
-				if ( $current_user && ! empty( $current_user->user_email ) ) {
-					global $wpdb;
-					$tbl = $wpdb->prefix . 'exacoat_affiliates';
-					$affiliate = $wpdb->get_row(
-						$wpdb->prepare( "SELECT * FROM {$tbl} WHERE email = %s LIMIT 1", $current_user->user_email )
-					);
-				}
-			}
 			if ( ! $affiliate ) {
 				return new WP_Error( 'not_found', 'Affiliate profile not found.', [ 'status' => 404 ] );
 			}
@@ -2313,16 +2305,8 @@ class Exacoat_Affiliate_Manager {
 		}
 
 		// Fallback lookup by user email if affiliate user_id is null or mismatched
-		if ( ! $affiliate && $user_id > 0 ) {
-			$current_user = get_userdata( $user_id );
-			if ( $current_user && ! empty( $current_user->user_email ) ) {
-				global $wpdb;
-				$tbl = $wpdb->prefix . 'exacoat_affiliates';
-				$affiliate = $wpdb->get_row(
-					$wpdb->prepare( "SELECT * FROM {$tbl} WHERE email = %s LIMIT 1", $current_user->user_email )
-				);
-			}
-		}
+		// No lookup by account email here: the email is user-settable, so settings and payouts
+		// need the affiliate row linked to this user id.
 
 		if ( ! $affiliate ) {
 			return new WP_Error( 'not_found', 'Affiliate profile not found.', [ 'status' => 404 ] );
@@ -2464,16 +2448,8 @@ class Exacoat_Affiliate_Manager {
 		if ( ! $affiliate && $user_id > 0 ) {
 			$affiliate = self::get_affiliate_by_user_id( $user_id );
 		}
-		if ( ! $affiliate && $user_id > 0 ) {
-			$current_user = get_userdata( $user_id );
-			if ( $current_user && ! empty( $current_user->user_email ) ) {
-				global $wpdb;
-				$tbl = $wpdb->prefix . 'exacoat_affiliates';
-				$affiliate = $wpdb->get_row(
-					$wpdb->prepare( "SELECT * FROM {$tbl} WHERE email = %s LIMIT 1", $current_user->user_email )
-				);
-			}
-		}
+		// No lookup by account email here: the email is user-settable, so settings and payouts
+		// need the affiliate row linked to this user id.
 
 		if ( ! $affiliate || 'active' !== $affiliate->status ) {
 			return new WP_Error( 'forbidden', 'Only approved active affiliates can request payouts.', [ 'status' => 403 ] );
