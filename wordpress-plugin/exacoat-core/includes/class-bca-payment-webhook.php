@@ -36,6 +36,16 @@ class Exacoat_BCA_Payment_Webhook {
 	const ACTIVE_WINDOW_DAYS = 5;
 
 	/**
+	 * Global store of credits already received (key => Unix time), so a credit delivered twice
+	 * (forwarder retry, or direct plus storefront relay) never pays a second order.
+	 */
+	const SEEN_OPTION        = 'exa_bca_seen_mutations';
+	const SEEN_LOCK          = 'exa_bca_seen_lock';
+	const SEEN_TTL           = 604800; // 7 days
+	const SEEN_LOCK_STALE    = 10;
+	const SEEN_LOCK_ATTEMPTS = 5;
+
+	/**
 	 * Initialize hooks and filters
 	 */
 	public static function init() {
@@ -266,6 +276,82 @@ class Exacoat_BCA_Payment_Webhook {
 		return ( '' !== $given && hash_equals( $expected, $given ) ) ? 'ok' : 'denied';
 	}
 
+	/** Hash of a credit, stored on the order as _bca_confirmed_mutation and used as the seen key without an id. */
+	public static function mutation_hash( int $amount, string $description ): string {
+		return md5( $amount . '|' . trim( $description ) );
+	}
+
+	/**
+	 * Key in the global seen store: the MesinOtomatis mutation id when the payload has one (so two genuine
+	 * identical transfers stay separate), else the amount and description hash.
+	 */
+	public static function mutation_key( int $amount, string $description, string $mutation_id ): string {
+		$mutation_id = trim( $mutation_id );
+		return '' !== $mutation_id ? 'id:' . $mutation_id : 'h:' . self::mutation_hash( $amount, $description );
+	}
+
+	/**
+	 * Pure: prune entries older than SEEN_TTL, then record $key unless already present.
+	 *
+	 * @return array{0: bool, 1: array} [ fresh, updated store ]
+	 */
+	public static function claim_seen_mutation( array $seen, string $key, int $now ): array {
+		$kept = [];
+		foreach ( $seen as $k => $t ) {
+			if ( is_numeric( $t ) && ( $now - (int) $t ) <= self::SEEN_TTL ) {
+				$kept[ (string) $k ] = (int) $t;
+			}
+		}
+		if ( isset( $kept[ $key ] ) ) {
+			return [ false, $kept ];
+		}
+		$kept[ $key ] = $now;
+		return [ true, $kept ];
+	}
+
+	/**
+	 * Atomically check and record a credit in the global seen store, under a lock row taken with
+	 * INSERT IGNORE (atomic on the unique option_name; the queue transient lock is not).
+	 *
+	 * @return bool|null true when new, false when already seen, null when the lock stayed busy.
+	 */
+	public static function record_seen_mutation( string $key ): ?bool {
+		global $wpdb;
+		$token = time() . ':' . bin2hex( random_bytes( 8 ) );
+		for ( $i = 0; $i < self::SEEN_LOCK_ATTEMPTS; $i++ ) {
+			$inserted = $wpdb->query( $wpdb->prepare(
+				"INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'no')",
+				self::SEEN_LOCK,
+				$token
+			) );
+			if ( 1 === (int) $inserted ) {
+				try {
+					if ( function_exists( 'wp_cache_delete' ) ) {
+						wp_cache_delete( self::SEEN_OPTION, 'options' );
+					}
+					$seen = get_option( self::SEEN_OPTION, [] );
+					[ $fresh, $seen ] = self::claim_seen_mutation( is_array( $seen ) ? $seen : [], $key, time() );
+					if ( $fresh ) {
+						update_option( self::SEEN_OPTION, $seen, false );
+					}
+					return $fresh;
+				} finally {
+					$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s", self::SEEN_LOCK, $token ) );
+				}
+			}
+			$held = (string) $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", self::SEEN_LOCK ) );
+			$held_ts = (int) strtok( $held, ':' );
+			if ( '' !== $held && ( $held_ts <= 0 || ( time() - $held_ts ) > self::SEEN_LOCK_STALE ) ) {
+				$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s", self::SEEN_LOCK, $held ) );
+				continue;
+			}
+			if ( $i < self::SEEN_LOCK_ATTEMPTS - 1 ) {
+				usleep( 150000 );
+			}
+		}
+		return null;
+	}
+
 	public static function handle_webhook_request( \WP_REST_Request $request ): \WP_REST_Response {
 		$auth = self::webhook_auth_status( $request );
 		if ( 'ok' !== $auth ) {
@@ -332,6 +418,28 @@ class Exacoat_BCA_Payment_Webhook {
 			return new \WP_REST_Response( [
 				'success' => true,
 				'message' => 'Webhook ping / test acknowledged.',
+			], 200 );
+		}
+
+		// Deduplicate across all orders: a repeated credit is recorded once, matched or not.
+		$raw_id      = $params['mutation_id'] ?? ( $params['id'] ?? '' );
+		$mutation_id = is_scalar( $raw_id ) ? sanitize_text_field( (string) $raw_id ) : '';
+		$seen        = self::record_seen_mutation( self::mutation_key( $amount, $description, $mutation_id ) );
+		if ( null === $seen ) {
+			return new \WP_REST_Response( [
+				'success' => false,
+				'message' => 'Webhook busy, try again.',
+			], 503 );
+		}
+		if ( false === $seen ) {
+			if ( class_exists( 'Exacoat_Logger' ) ) {
+				Exacoat_Logger::log( 'info', 'bca_webhook', sprintf( 'Duplicate BCA mutation ignored: Rp %s | %s', number_format( $amount, 0, ',', '.' ), $description ), [ 'mutation_id' => $mutation_id ] );
+			}
+			return new \WP_REST_Response( [
+				'success' => true,
+				'status'  => 'duplicate_ignored',
+				'message' => 'Duplicate mutation, ignored.',
+				'amount'  => $amount,
 			], 200 );
 		}
 
@@ -448,7 +556,7 @@ class Exacoat_BCA_Payment_Webhook {
 			return null;
 		}
 
-		$mutation_hash = md5( $payment_amount . '|' . trim( $description ) );
+		$mutation_hash = self::mutation_hash( $payment_amount, $description );
 
 		// Collect all candidate orders that match the exact integer payment amount
 		$candidates = [];
