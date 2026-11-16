@@ -138,6 +138,13 @@ $GLOBALS['options']['exa_bca_seen_lock'] = ( time() - 60 ) . ':crashed';
 $r7 = $post( [ 'amount' => '120000', 'description' => 'BUSY' ] );
 $check( $r7->get_status(), 200, 'stale lock broken' );
 
+// Logged context never carries the MesinOtomatis account key or other credentials.
+$check(
+	$W::loggable_params( [ 'id' => '165843346', 'key' => str_repeat( 'a', 32 ), 'Signature' => 'x', 'api_key' => 'y', 'secret' => 'z', 'amount' => '186026' ] ),
+	[ 'id' => '165843346', 'amount' => '186026' ],
+	'credentials removed from logged context'
+);
+
 if ( $fails > 0 ) {
 	echo "$fails check(s) failed\n";
 	exit( 1 );

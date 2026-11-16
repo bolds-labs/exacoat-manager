@@ -276,6 +276,16 @@ class Exacoat_BCA_Payment_Webhook {
 		return ( '' !== $given && hash_equals( $expected, $given ) ) ? 'ok' : 'denied';
 	}
 
+	/** Webhook fields safe to write to the system log: MesinOtomatis sends its account `key` on every call. */
+	public static function loggable_params( array $params ): array {
+		foreach ( array_keys( $params ) as $name ) {
+			if ( in_array( strtolower( (string) $name ), [ 'key', 'token', 'secret', 'signature', 'api_key', 'apikey' ], true ) ) {
+				unset( $params[ $name ] );
+			}
+		}
+		return $params;
+	}
+
 	/** Hash of a credit, stored on the order as _bca_confirmed_mutation and used as the seen key without an id. */
 	public static function mutation_hash( int $amount, string $description ): string {
 		return md5( $amount . '|' . trim( $description ) );
@@ -366,6 +376,7 @@ class Exacoat_BCA_Payment_Webhook {
 
 		$params = $request->get_params();
 		unset( $params['token'] );
+		$log_params = self::loggable_params( $params );
 
 		// 1. Balance update from MesinOtomatis ($_POST['target'] == 'balance')
 		$target = strtolower( sanitize_text_field( $params['target'] ?? '' ) );
@@ -384,7 +395,7 @@ class Exacoat_BCA_Payment_Webhook {
 			], false );
 
 			if ( class_exists( 'Exacoat_Logger' ) ) {
-				Exacoat_Logger::log( 'info', 'bca_webhook', sprintf( 'Received BCA Balance Update: Rp %s for account %s', number_format( $balance, 0, ',', '.' ), $account ), $params );
+				Exacoat_Logger::log( 'info', 'bca_webhook', sprintf( 'Received BCA Balance Update: Rp %s for account %s', number_format( $balance, 0, ',', '.' ), $account ), $log_params );
 			}
 
 			return new \WP_REST_Response( [
@@ -445,7 +456,7 @@ class Exacoat_BCA_Payment_Webhook {
 
 		// Log raw incoming webhook event
 		if ( class_exists( 'Exacoat_Logger' ) ) {
-			Exacoat_Logger::log( 'info', 'bca_webhook', sprintf( 'Received BCA Webhook: Rp %s | %s', number_format( $amount, 0, ',', '.' ), $description ), $params );
+			Exacoat_Logger::log( 'info', 'bca_webhook', sprintf( 'Received BCA Webhook: Rp %s | %s', number_format( $amount, 0, ',', '.' ), $description ), $log_params );
 		}
 
 		// Load existing queue
