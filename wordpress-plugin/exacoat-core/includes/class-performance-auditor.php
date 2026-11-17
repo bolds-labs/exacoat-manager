@@ -61,9 +61,9 @@ class Exacoat_Performance_Auditor {
 			register_rest_route( $ns, '/performance/health', [
 				'methods'             => 'GET',
 				'callback'            => [ __CLASS__, 'rest_get_health' ],
-				'permission_callback' => function () {
+				'permission_callback' => function ( WP_REST_Request $request ) {
 					return current_user_can( 'manage_options' ) ||
-						( class_exists( 'Exacoat_Core' ) && Exacoat_Core::verify_bridge_permission() );
+						( class_exists( 'Exacoat_Core' ) && Exacoat_Core::verify_bridge_permission( $request ) );
 				},
 			] );
 		}

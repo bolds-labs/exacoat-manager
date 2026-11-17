@@ -116,6 +116,7 @@ async function createPluginZip() {
     last_updated: new Date().toISOString(),
     sections: {
       changelog: `### Version ${version}
+- Performance audit: the health route passes the REST request to the bridge permission check, fixing a fatal error for requests without a WordPress administrator session
 - Orders redesign: new orders screen with store-wide counts, rebuilt order panel, kit pop-ups and styled dropdowns, restyled Shopee and TikTok views, read-only order counts endpoint, WooCommerce status names, staff name on automatic order notes
 - Staff dashboard: team notes endpoints (/staff/notes, stored in exacoat_staff_notes) and the overdue international orders endpoint (/staff/overdue-international)
 - Products: /configurator/set-price sets only the regular price and keeps a running sale price (it used to force the active price to the regular price)

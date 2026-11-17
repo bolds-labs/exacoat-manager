@@ -1852,6 +1852,7 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 
 ## 59b. Plugin Auth and Ownership (Public Routes)
 
+- **Performance health permissions**: `class-performance-auditor.php` registers `/performance/health` in both `exacoat-core/v1` and `exacoat/v1`. WordPress users with `manage_options` pass the capability check. The other requests must pass the original `WP_REST_Request` into `Exacoat_Core::verify_bridge_permission( $request )` so it can inspect credentials and reject anonymous requests. The former zero-argument call caused a PHP `ArgumentCountError` before authorization completed. `tests/performance-health-permission-test.php` covers both namespaces.
 - **Trusted client IP** (`includes/class-request-guard.php`, `Exacoat_Request_Guard::client_ip()`), in this order:
   1. `X-Exacoat-Client-IP`, only with a valid storefront signature: `X-Exacoat-Client-IP-Ts` (Unix seconds, within 300 seconds of now) and `X-Exacoat-Client-IP-Sig` = lowercase hex HMAC-SHA256 with `EXACOAT_CART_PRICE_SECRET` over `exacoat-client-ip-v1` + `\n` + IP + `\n` + timestamp. Example payload: `exacoat-client-ip-v1\n198.51.100.7\n1800000000`. The storefront server must send all three headers on every call it makes for a customer (auth, order, warranty, tracking); `tests/request-guard-test.php` has the vector.
   2. `CF-Connecting-IP`, only when `REMOTE_ADDR` is inside `CLOUDFLARE_IP_RANGES` (source https://www.cloudflare.com/ips/, filter `exacoat_cloudflare_ip_ranges`).
