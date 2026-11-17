@@ -622,24 +622,7 @@ class Exacoat_Rayspeed_Service {
 	}
 
 	public static function rest_permission_check( WP_REST_Request $request ): bool {
-		if ( current_user_can( self::CAPABILITY ) || current_user_can( 'edit_shop_orders' ) ) {
-			return true;
-		}
-
-		if ( class_exists( 'Exacoat_Customer_Auth' ) ) {
-			$user = Exacoat_Customer_Auth::authenticated_user( $request );
-			if ( $user instanceof WP_User && ( user_can( $user, self::CAPABILITY ) || user_can( $user, 'edit_shop_orders' ) ) ) {
-				return true;
-			}
-		}
-
-		$secret = $request->get_header( 'X-Exacoat-Secret' ) ?: $request->get_header( 'x_exacoat_secret' );
-		$expected = get_option( 'exacoat_bridge_secret' ) ?: 'EXA_BRIDGE_DEFAULT_SECURE_TOKEN';
-		if ( ! empty( $secret ) && hash_equals( $expected, $secret ) ) {
-			return true;
-		}
-
-		return true; // Local manager workstation fallback
+		return Exacoat_Customer_Auth::verify_fulfillment_permission( $request, self::CAPABILITY, 'edit_shop_orders' );
 	}
 
 	public static function rest_get_status( WP_REST_Request $request ): WP_REST_Response {

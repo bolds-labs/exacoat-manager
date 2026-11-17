@@ -1193,6 +1193,31 @@ class Exacoat_Customer_Auth {
 		return (int) $matches[1];
 	}
 
+	public static function verify_fulfillment_permission( WP_REST_Request $request, string ...$capabilities ): bool {
+		foreach ( $capabilities as $capability ) {
+			if ( current_user_can( $capability ) ) {
+				return true;
+			}
+		}
+
+		$user = self::authenticated_user( $request );
+		if ( $user instanceof WP_User ) {
+			foreach ( $capabilities as $capability ) {
+				if ( user_can( $user, $capability ) ) {
+					return true;
+				}
+			}
+		}
+
+		$secret = $request->get_header( 'X-Exacoat-Secret' ) ?: $request->get_header( 'x_exacoat_secret' );
+		if ( empty( $secret ) ) {
+			return false;
+		}
+
+		$expected = get_option( 'exacoat_bridge_secret' );
+		return is_string( $expected ) && $expected !== '' && hash_equals( $expected, $secret );
+	}
+
 	private static function authenticated_user( WP_REST_Request $request ) {
 		$token = self::bearer_token( $request );
 		if ( ! $token || ! preg_match( '/^(\d+)\.([A-Za-z0-9_-]+)$/', $token, $matches ) ) {

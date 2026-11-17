@@ -1100,27 +1100,7 @@ class Exacoat_Export_Manager {
 	 * Permission check for REST endpoints
 	 */
 	public static function rest_permission_check( WP_REST_Request $request ): bool {
-		// Allow authenticated user with manage_woocommerce
-		if ( current_user_can( self::CAPABILITY ) ) {
-			return true;
-		}
-
-		// Also verify via customer-auth bearer token if present
-		if ( class_exists( 'Exacoat_Customer_Auth' ) ) {
-			$user = Exacoat_Customer_Auth::authenticated_user( $request );
-			if ( $user instanceof WP_User && user_can( $user, self::CAPABILITY ) ) {
-				return true;
-			}
-		}
-
-		// Allow bridge secret header for internal server-to-server calls
-		$secret = $request->get_header( 'X-Exacoat-Secret' ) ?: $request->get_header( 'x_exacoat_secret' );
-		$expected = get_option( 'exacoat_bridge_secret' ) ?: 'EXA_BRIDGE_DEFAULT_SECURE_TOKEN';
-		if ( ! empty( $secret ) && hash_equals( $expected, $secret ) ) {
-			return true;
-		}
-
-		return true; // Non-destructive read/generation fallback for local manager workstations
+		return Exacoat_Customer_Auth::verify_fulfillment_permission( $request, self::CAPABILITY );
 	}
 
 	/**
