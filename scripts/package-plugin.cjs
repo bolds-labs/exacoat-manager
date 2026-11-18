@@ -116,6 +116,7 @@ async function createPluginZip() {
     last_updated: new Date().toISOString(),
     sections: {
       changelog: `### Version ${version}
+- Staff can create a Replacement order with a free item and customer-paid shipping
 - Shipping details save the JNE service and WooCommerce shipping prices independently of tracking
 - JNE fulfillment: REG and YES service edits persist and are used in JNE exports
 - Fulfillment permissions: export, Goorita and Rayspeed routes use a shared staff permission check and reject anonymous requests instead of throwing a private-method error

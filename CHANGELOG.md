@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.233] - 2026-11-18
+
+- Create customer-paid shipping replacements from a marketplace invoice or existing order. The item is free and the order starts in Waiting for payment.
+- Reorganized the replacement dialog around the order type, courier rate, and customer total.
+
 ## [0.1.232] - 2026-11-18
 
 - Save JNE service and shipping prices from Shipping details before assigning a tracking number.

@@ -171,6 +171,12 @@ class Exacoat_Warranty_Manager {
 			],
 		] );
 
+		register_rest_route( 'exacoat-core/v1', '/warranty/manual-replacement', [
+			'methods'             => \WP_REST_Server::CREATABLE,
+			'callback'            => [ __CLASS__, 'rest_create_manual_claim' ],
+			'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
+		] );
+
 		// Admin / Manager: Centralized RMA Claims Log (Warranty & Redeem)
 		register_rest_route( 'exacoat-core/v1', '/warranty/claims-log', [
 			[
@@ -2379,9 +2385,13 @@ class Exacoat_Warranty_Manager {
 	public static function rest_create_manual_claim( \WP_REST_Request $request ): \WP_REST_Response {
 		$source_type  = sanitize_text_field( $request->get_param( 'source_type' ) ?: 'marketplace' );
 		$rma_type     = sanitize_text_field( $request->get_param( 'rma_type' ) ?: 'Warranty' );
-		if ( ! in_array( $rma_type, [ 'Warranty', 'Redeem' ], true ) ) {
-			$rma_type = 'Warranty';
+		if ( '/exacoat-core/v1/warranty/manual-replacement' === $request->get_route() ) {
+			$rma_type = 'Replacement';
 		}
+		if ( ! in_array( $rma_type, [ 'Warranty', 'Redeem', 'Replacement' ], true ) ) {
+			return new \WP_REST_Response( [ 'success' => false, 'message' => 'Choose a replacement type.' ], 400 );
+		}
+		$is_replacement = 'Replacement' === $rma_type;
 		$admin_name   = sanitize_text_field( $request->get_param( 'admin_name' ) ?: 'Operations Manager' );
 		$claim_reason = sanitize_text_field( $request->get_param( 'claim_reason' ) ?: ( 'Redeem' === $rma_type ? 'Precision cut defect / sizing mismatch' : 'Manual replacement issued by admin' ) );
 		$notes        = sanitize_textarea_field( $request->get_param( 'notes' ) ?: '' );
@@ -2400,6 +2410,15 @@ class Exacoat_Warranty_Manager {
 		$waive_shipping = (bool) $request->get_param( 'waive_shipping' );
 		$is_redeem      = ( 'Redeem' === $rma_type );
 		$is_free        = ( $is_redeem || $waive_shipping );
+		if ( $is_replacement ) {
+			if ( ! is_numeric( $request->get_param( 'shipping_cost' ) ) || ! is_finite( $shipping_cost ) || $shipping_cost <= 0 || $is_free ||
+				in_array( $courier_id, [ 'store_pickup', 'local_pickup' ], true ) ||
+				! $request->get_param( 'courier_id' ) || ! $request->get_param( 'courier_label' ) ) {
+				return new \WP_REST_Response( [ 'success' => false, 'message' => 'Select a paid courier rate for this replacement.' ], 400 );
+			}
+			$actual_shipping_cost = $shipping_cost;
+			$initial_status = 'on-hold';
+		}
 
 		$is_qc_fault_param = $request->get_param( 'is_qc_fault' );
 		$is_qc_fault       = ( true === $is_qc_fault_param || '1' === $is_qc_fault_param || 'true' === $is_qc_fault_param );
@@ -2410,6 +2429,17 @@ class Exacoat_Warranty_Manager {
 			$is_qc_fault = ! in_array( strtolower( trim( $claim_reason ) ), $external_reasons, true );
 		}
 
+		$lock = null;
+		if ( $is_replacement ) {
+			global $wpdb;
+			$reference = 'existing_order' === $source_type
+				? 'order:' . absint( $request->get_param( 'parent_order_id' ) )
+				: strtolower( sanitize_text_field( $request->get_param( 'channel' ) ?: 'Tokopedia' ) ) . ':' . strtolower( trim( ltrim( sanitize_text_field( $request->get_param( 'marketplace_invoice' ) ?? '' ), '#' ) ) );
+			$lock = 'exa_replace_' . md5( $wpdb->prefix . $reference );
+			if ( '1' !== (string) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 0)', $lock ) ) ) {
+				return new \WP_REST_Response( [ 'success' => false, 'message' => 'A replacement is already being created. Refresh the order before retrying.' ], 409 );
+			}
+		}
 		try {
 			if ( 'existing_order' === $source_type ) {
 				$parent_order_id = absint( $request->get_param( 'parent_order_id' ) );
@@ -2424,6 +2454,26 @@ class Exacoat_Warranty_Manager {
 				// Prevent duplicate claim / redeem on the same parent order
 				$existing_rep_id = $parent_order->get_meta( '_redeem_replacement_order_id' ) ?: $parent_order->get_meta( '_warranty_replacement_order_id' );
 				$already_claimed = ( 'yes' === $parent_order->get_meta( '_has_warranty_claim' ) ) || ( 'yes' === $parent_order->get_meta( '_has_redeem_claim' ) );
+				if ( 'REPLACEMENT' === $parent_order->get_meta( '_order_badge' ) ) {
+					return new \WP_REST_Response( [ 'success' => false, 'message' => 'Select the original order to create a replacement.' ], 400 );
+				}
+				if ( $is_replacement ) {
+					$existing_rep_id = $parent_order->get_meta( '_manual_replacement_order_id' );
+					if ( ! $existing_rep_id ) {
+						$matches = self::query_order_ids_by_meta(
+							[ [ 'key' => '_manual_replacement_parent_id', 'value' => $parent_order_id ] ],
+							[ 'limit' => 1 ]
+						);
+						$existing_rep_id = reset( $matches );
+					}
+					if ( $existing_rep_id ) {
+						return new \WP_REST_Response( [
+							'success' => false,
+							'message' => sprintf( 'A replacement already exists for this order (#%d).', $existing_rep_id ),
+						], 409 );
+					}
+					$already_claimed = false;
+				}
 				if ( $already_claimed || ! empty( $existing_rep_id ) ) {
 					return new \WP_REST_Response( [
 						'success' => false,
@@ -2442,8 +2492,8 @@ class Exacoat_Warranty_Manager {
 
 				$replacement_order = wc_create_order( [
 					'customer_id'   => $parent_order->get_customer_id(),
-					'status'        => $initial_status,
-					'customer_note' => $full_customer_note,
+					'status'        => $is_replacement ? 'pending' : $initial_status,
+					'customer_note' => $is_replacement ? '' : $full_customer_note,
 				] );
 
 				if ( is_wp_error( $replacement_order ) ) {
@@ -2513,6 +2563,8 @@ class Exacoat_Warranty_Manager {
 										$new_item->add_meta_data( '_defect_reason', $claim_reason, true );
 										$new_config = sprintf( '[REDEEM: Company Fault - %s] %s', $claim_reason, trim( $clean_config_base ) );
 										$new_item->add_meta_data( 'Configuration', trim( $new_config ), true );
+									} elseif ( $is_replacement ) {
+										$new_item->add_meta_data( 'Configuration', trim( $clean_config_base ), true );
 									} else {
 										$new_item->add_meta_data( '_is_warranty', 'yes', true );
 										$new_config = sprintf( '[WARRANTY REPLACEMENT] %s', trim( $clean_config_base ) );
@@ -2563,21 +2615,27 @@ class Exacoat_Warranty_Manager {
 				}
 
 				$replacement_order->set_currency( 'IDR' );
-				$replacement_order->calculate_totals();
+				$replacement_order->calculate_totals( ! $is_replacement );
 
 				$rep_id = $replacement_order->get_id();
-				$replacement_order->update_meta_data( '_rma_order_type', $rma_type );
-				$replacement_order->update_meta_data( '_is_redeem', 'Redeem' === $rma_type ? 'yes' : 'no' );
-				$replacement_order->update_meta_data( '_is_warranty', 'Warranty' === $rma_type ? 'yes' : 'no' );
-				$replacement_order->update_meta_data( '_order_badge', 'Redeem' === $rma_type ? 'REDEEM' : 'WARRANTY' );
-				$replacement_order->update_meta_data( '_rma_original_invoice', $parent_order_id );
-				$replacement_order->update_meta_data( '_rma_original_order_number', $parent_order->get_order_number() );
-				$replacement_order->update_meta_data( '_rma_claim_reason', $claim_reason );
-				$replacement_order->update_meta_data( '_rma_status', 'approved' );
-				$replacement_order->update_meta_data( '_actual_shipping_cost', $actual_shipping_cost );
-				$replacement_order->update_meta_data( '_shipping_waived', $is_free ? 'yes' : 'no' );
-				$replacement_order->update_meta_data( '_rma_reviewed_by', $admin_name );
-				$replacement_order->update_meta_data( '_rma_reviewed_at', current_time( 'mysql' ) );
+				if ( $is_replacement ) {
+					$replacement_order->update_meta_data( '_order_badge', 'REPLACEMENT' );
+					$replacement_order->update_meta_data( '_manual_replacement_parent_id', $parent_order_id );
+					$replacement_order->set_status( $initial_status );
+				} else {
+					$replacement_order->update_meta_data( '_rma_order_type', $rma_type );
+					$replacement_order->update_meta_data( '_is_redeem', 'Redeem' === $rma_type ? 'yes' : 'no' );
+					$replacement_order->update_meta_data( '_is_warranty', 'Warranty' === $rma_type ? 'yes' : 'no' );
+					$replacement_order->update_meta_data( '_order_badge', 'Redeem' === $rma_type ? 'REDEEM' : 'WARRANTY' );
+					$replacement_order->update_meta_data( '_rma_original_invoice', $parent_order_id );
+					$replacement_order->update_meta_data( '_rma_original_order_number', $parent_order->get_order_number() );
+					$replacement_order->update_meta_data( '_rma_claim_reason', $claim_reason );
+					$replacement_order->update_meta_data( '_rma_status', 'approved' );
+					$replacement_order->update_meta_data( '_actual_shipping_cost', $actual_shipping_cost );
+					$replacement_order->update_meta_data( '_shipping_waived', $is_free ? 'yes' : 'no' );
+					$replacement_order->update_meta_data( '_rma_reviewed_by', $admin_name );
+					$replacement_order->update_meta_data( '_rma_reviewed_at', current_time( 'mysql' ) );
+				}
 
 				$c_info = self::resolve_courier_info( $courier_id, $courier_label );
 				$replacement_order->update_meta_data( '_carrier_id', $c_info['slug'] );
@@ -2651,6 +2709,11 @@ class Exacoat_Warranty_Manager {
 							) );
 						}
 					}
+				} elseif ( $is_replacement ) {
+					$parent_order->update_meta_data( '_manual_replacement_order_id', $rep_id );
+					$parent_order->add_order_note( sprintf( 'Replacement #%d created by %s. Customer pays shipping.', $rep_id, $admin_name ) );
+					$parent_order->save();
+					$replacement_order->add_order_note( sprintf( 'Replacement for order #%d. Customer pays Rp %s shipping. %s', $parent_order_id, $shipping_cost, $notes ) );
 				} else {
 					$parent_order->update_meta_data( '_has_warranty_claim', 'yes' );
 					$parent_order->update_meta_data( '_warranty_replacement_order_id', $rep_id );
@@ -2720,25 +2783,27 @@ class Exacoat_Warranty_Manager {
 
 				// Prevent duplicate claims for external marketplace invoices
 				$clean_invoice = trim( ltrim( trim( $marketplace_invoice ), '#' ) );
-				$existing_claim_ids = self::query_order_ids_by_meta( [
+				$invoice_key = $is_replacement ? '_manual_replacement_invoice' : '_rma_original_invoice';
+				$source_filter = $is_replacement ? [ [ 'key' => '_manual_replacement_channel', 'value' => $channel ] ] : [];
+				$existing_claim_ids = self::query_order_ids_by_meta( array_merge( [
 					[
-						'key'     => '_rma_original_invoice',
+						'key'     => $invoice_key,
 						'value'   => $clean_invoice,
 						'compare' => '=',
 					],
-				], [
+				], $source_filter ), [
 					'limit'  => 1,
 					'status' => [ 'pending', 'processing', 'on-hold', 'completed', 'shipped', 'ready-to-ship', 'delivered' ],
 				] );
 
 				if ( empty( $existing_claim_ids ) && $clean_invoice !== trim( $marketplace_invoice ) ) {
-					$existing_claim_ids = self::query_order_ids_by_meta( [
+					$existing_claim_ids = self::query_order_ids_by_meta( array_merge( [
 						[
-							'key'     => '_rma_original_invoice',
+							'key'     => $invoice_key,
 							'value'   => trim( $marketplace_invoice ),
 							'compare' => '=',
 						],
-					], [
+					], $source_filter ), [
 						'limit'  => 1,
 						'status' => [ 'pending', 'processing', 'on-hold', 'completed', 'shipped', 'ready-to-ship', 'delivered' ],
 					] );
@@ -2746,10 +2811,16 @@ class Exacoat_Warranty_Manager {
 
 				$existing_claims = array_filter( array_map( 'wc_get_order', $existing_claim_ids ) );
 
-				$allow_duplicate = ! empty( $request->get_param( 'allow_duplicate' ) ) || ! empty( $request->get_param( 'override_duplicate' ) );
+				$allow_duplicate = ! $is_replacement && ( ! empty( $request->get_param( 'allow_duplicate' ) ) || ! empty( $request->get_param( 'override_duplicate' ) ) );
 
 				if ( ! empty( $existing_claims ) && ! $allow_duplicate ) {
 					$existing_order = reset( $existing_claims );
+					if ( $is_replacement ) {
+						return new \WP_REST_Response( [
+							'success' => false,
+							'message' => sprintf( 'A replacement already exists for this invoice (#%s).', $existing_order->get_order_number() ),
+						], 409 );
+					}
 					$existing_type  = $existing_order->get_meta( '_rma_order_type' ) ?: 'Warranty / Redeem';
 					$existing_num   = $existing_order->get_order_number();
 					return new \WP_REST_Response( [
@@ -2784,8 +2855,8 @@ class Exacoat_Warranty_Manager {
 				$full_customer_note = ! empty( $notes ) ? "{$prefix_note}\n\n{$notes}" : $prefix_note;
 
 				$replacement_order = wc_create_order( [
-					'status'        => $initial_status,
-					'customer_note' => $full_customer_note,
+					'status'        => $is_replacement ? 'pending' : $initial_status,
+					'customer_note' => $is_replacement ? '' : $full_customer_note,
 				] );
 
 				if ( is_wp_error( $replacement_order ) ) {
@@ -2835,6 +2906,8 @@ class Exacoat_Warranty_Manager {
 									$order_item->add_meta_data( '_defect_reason', $claim_reason, true );
 									$new_config = sprintf( '[REDEEM: Company Fault - %s] %s', $claim_reason, $base_config );
 									$order_item->add_meta_data( 'Configuration', trim( $new_config ), true );
+								} elseif ( $is_replacement ) {
+									$order_item->add_meta_data( 'Configuration', $base_config, true );
 								} else {
 									$order_item->add_meta_data( '_is_warranty', 'yes', true );
 									$new_config = sprintf( '[WARRANTY REPLACEMENT] %s', $base_config );
@@ -2891,22 +2964,29 @@ class Exacoat_Warranty_Manager {
 				}
 
 				$replacement_order->set_currency( 'IDR' );
-				$replacement_order->calculate_totals();
+				$replacement_order->calculate_totals( ! $is_replacement );
 
 				$rep_id = $replacement_order->get_id();
-				$replacement_order->update_meta_data( '_rma_order_type', $rma_type );
-				$replacement_order->update_meta_data( '_is_redeem', 'Redeem' === $rma_type ? 'yes' : 'no' );
-				$replacement_order->update_meta_data( '_is_warranty', 'Warranty' === $rma_type ? 'yes' : 'no' );
-				$replacement_order->update_meta_data( '_order_badge', 'Redeem' === $rma_type ? 'REDEEM' : 'WARRANTY' );
-				$replacement_order->update_meta_data( '_rma_marketplace_channel', $channel );
-				$replacement_order->update_meta_data( '_rma_original_invoice', $clean_invoice );
-				$replacement_order->update_meta_data( '_rma_original_order_number', $clean_invoice );
-				$replacement_order->update_meta_data( '_rma_claim_reason', $claim_reason );
-				$replacement_order->update_meta_data( '_rma_status', 'approved' );
-				$replacement_order->update_meta_data( '_actual_shipping_cost', $actual_shipping_cost );
-				$replacement_order->update_meta_data( '_shipping_waived', $is_free ? 'yes' : 'no' );
-				$replacement_order->update_meta_data( '_rma_reviewed_by', $admin_name );
-				$replacement_order->update_meta_data( '_rma_reviewed_at', current_time( 'mysql' ) );
+				if ( $is_replacement ) {
+					$replacement_order->update_meta_data( '_order_badge', 'REPLACEMENT' );
+					$replacement_order->update_meta_data( '_manual_replacement_invoice', $clean_invoice );
+					$replacement_order->update_meta_data( '_manual_replacement_channel', $channel );
+					$replacement_order->set_status( $initial_status );
+				} else {
+					$replacement_order->update_meta_data( '_rma_order_type', $rma_type );
+					$replacement_order->update_meta_data( '_is_redeem', 'Redeem' === $rma_type ? 'yes' : 'no' );
+					$replacement_order->update_meta_data( '_is_warranty', 'Warranty' === $rma_type ? 'yes' : 'no' );
+					$replacement_order->update_meta_data( '_order_badge', 'Redeem' === $rma_type ? 'REDEEM' : 'WARRANTY' );
+					$replacement_order->update_meta_data( '_rma_marketplace_channel', $channel );
+					$replacement_order->update_meta_data( '_rma_original_invoice', $clean_invoice );
+					$replacement_order->update_meta_data( '_rma_original_order_number', $clean_invoice );
+					$replacement_order->update_meta_data( '_rma_claim_reason', $claim_reason );
+					$replacement_order->update_meta_data( '_rma_status', 'approved' );
+					$replacement_order->update_meta_data( '_actual_shipping_cost', $actual_shipping_cost );
+					$replacement_order->update_meta_data( '_shipping_waived', $is_free ? 'yes' : 'no' );
+					$replacement_order->update_meta_data( '_rma_reviewed_by', $admin_name );
+					$replacement_order->update_meta_data( '_rma_reviewed_at', current_time( 'mysql' ) );
+				}
 
 				$c_info = self::resolve_courier_info( $courier_id, $courier_label );
 				$replacement_order->update_meta_data( '_carrier_id', $c_info['slug'] );
@@ -2969,6 +3049,8 @@ class Exacoat_Warranty_Manager {
 							) );
 						}
 					}
+				} elseif ( $is_replacement ) {
+					$replacement_order->add_order_note( sprintf( 'Replacement for %s invoice %s. Customer pays Rp %s shipping. %s', $channel, $clean_invoice, $shipping_cost, $notes ) );
 				} else {
 					$replacement_order->add_order_note( sprintf(
 						'[Marketplace Warranty Claim] Channel: %s | Invoice: %s. Created manually by %s. Courier: %s (Rp %s). Reason: %s',
@@ -3030,6 +3112,10 @@ class Exacoat_Warranty_Manager {
 				'success' => false,
 				'message' => 'Failed to create manual warranty claim: ' . $e->getMessage(),
 			], 500 );
+		} finally {
+			if ( null !== $lock ) {
+				$wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock ) );
+			}
 		}
 	}
 

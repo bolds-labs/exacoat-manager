@@ -66,6 +66,7 @@ function orderTypeTags(order: Order): string[] {
   else if (rma?.order_type === 'Redeem' && getRedeemClaimMeta(order) === null) tags.push('Redeem');
   if (rma?.order_type === 'Warranty' && rma.is_parent_order) tags.push('Warranty claimed');
   if (isEndorsementOrder(order)) tags.push('Endorsement');
+  if (order.meta_data?.some(m => m.key === '_order_badge' && m.value === 'REPLACEMENT')) tags.push('Replacement');
   return tags;
 }
 

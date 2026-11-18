@@ -226,7 +226,8 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
   const isExisting = Boolean(existingOrder);
 
   // Claim Type: Warranty (customer error) vs Redeem (Exacoat fault)
-  const [claimType, setClaimType] = useState<'Warranty' | 'Redeem'>(initialClaimType);
+  const [claimType, setClaimType] = useState<'Warranty' | 'Redeem' | 'Replacement'>(initialClaimType);
+  const isReplacement = claimType === 'Replacement';
 
   // Channel & Reference
   const [channel, setChannel] = useState<string>('Tokopedia');
@@ -327,6 +328,8 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
   const [selectedCourierId, setSelectedCourierId] = useState('jne_reg');
   const [selectedCourierLabel, setSelectedCourierLabel] = useState('JNE Regular');
   const [selectedCourierPrice, setSelectedCourierPrice] = useState(10000);
+  const [quotedDestination, setQuotedDestination] = useState<string | null>(null);
+  const destinationKey = JSON.stringify([country.toUpperCase().trim(), postcode.trim(), city.trim(), address1.trim(), state.trim()]);
   const [waiveShipping, setWaiveShipping] = useState(false);
 
   // Claim Details
@@ -367,6 +370,9 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setAllowDuplicateOverride(false);
+      setQuotedDestination(null);
+      setAdminNotes('');
+      setInitialStatus('processing');
       setClaimType(initialClaimType);
       if (initialClaimType === 'Redeem') {
         setWaiveShipping(true);
@@ -704,7 +710,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
   // Debounced check for invoice availability to prevent duplicates
   useEffect(() => {
     setAllowDuplicateOverride(false);
-    if (isExisting) {
+    if (isExisting || isReplacement) {
       setInvoiceStatus(null);
       return;
     }
@@ -732,7 +738,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
     }, 450);
 
     return () => clearTimeout(timer);
-  }, [marketplaceInvoice, channel, isExisting]);
+  }, [marketplaceInvoice, channel, isExisting, isReplacement]);
 
   // Live Biteship / WooCommerce International Shipping Rates calculation
   const handleCalculateShipping = async (zip: string, overrideCountry?: string) => {
@@ -743,6 +749,8 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
       return;
     }
 
+    setQuotedDestination(null);
+    const requestedDestination = JSON.stringify([activeCountry, cleanZip, city.trim(), address1.trim(), state.trim()]);
     setIsLoadingShipping(true);
     const res = await fetchShippingRatesDirect(
       cleanZip,
@@ -765,7 +773,8 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
         finalRates = filteredRates.length ? filteredRates : res.rates;
       }
       setShippingRates(finalRates);
-      const first = finalRates[0];
+      if (!res.is_fallback) setQuotedDestination(requestedDestination);
+      const first = (isReplacement ? finalRates.find(rate => rate.price > 0 && rate.id !== 'store_pickup') : undefined) || finalRates[0];
       setSelectedCourierId(first.id);
       setSelectedCourierLabel(first.label);
       setSelectedCourierPrice(first.price);
@@ -814,19 +823,27 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
     });
   };
 
-  const isParentAlreadyClaimed = isExisting && Boolean(
+  const hasPreviousReplacement = isReplacement && existingOrder?.meta_data?.some(m => m.key === '_manual_replacement_order_id' && Boolean(m.value));
+  const hasPaidRate = !isLoadingShipping && quotedDestination === destinationKey && selectedCourierPrice > 0 &&
+    !['store_pickup', 'local_pickup'].includes(selectedCourierId) && shippingRates.some(rate => rate.id === selectedCourierId && rate.price === selectedCourierPrice);
+  const isParentAlreadyClaimed = isExisting && !isReplacement && Boolean(
     existingOrder?.meta_data?.some((m) => (m.key === '_has_warranty_claim' || m.key === '_has_redeem_claim') && m.value === 'yes') ||
     existingOrder?.meta_data?.some((m) => (m.key === '_warranty_replacement_order_id' || m.key === '_redeem_replacement_order_id') && Boolean(m.value))
   );
 
   const handleSubmit = async () => {
+    if (isReplacement && !hasPaidRate) {
+      showToast('error', 'Courier rate required', 'Calculate shipping for the current address and select a paid courier rate.');
+      return;
+    }
+    if (hasPreviousReplacement) return;
     // Validation
     if (!isExisting) {
       if (!marketplaceInvoice.trim()) {
         showToast('error', 'Invoice Required', 'Please enter the marketplace order number / invoice.');
         return;
       }
-      if (invoiceStatus?.checked && !invoiceStatus.available && !allowDuplicateOverride) {
+      if (!isReplacement && invoiceStatus?.checked && !invoiceStatus.available && !allowDuplicateOverride) {
         showToast('error', 'Duplicate Invoice Blocked', invoiceStatus.message || 'This invoice has already been claimed or redeemed. Check "Allow duplicate claim" to override.');
         return;
       }
@@ -872,12 +889,12 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
           claim_reason: claimReason,
           courier_id: selectedCourierId,
           courier_label: selectedCourierLabel,
-          shipping_cost: claimType === 'Redeem' || waiveShipping ? 0 : selectedCourierPrice,
+          shipping_cost: claimType === 'Redeem' || (!isReplacement && waiveShipping) ? 0 : selectedCourierPrice,
           actual_shipping_cost: selectedCourierPrice,
           is_qc_fault: isQc,
           qc_deduction_reason: adminNotes.trim(),
-          waive_shipping: claimType === 'Redeem' || waiveShipping,
-          initial_status: claimType === 'Redeem' ? 'processing' : initialStatus,
+          waive_shipping: claimType === 'Redeem' || (!isReplacement && waiveShipping),
+          initial_status: isReplacement ? 'on-hold' as const : claimType === 'Redeem' ? 'processing' as const : initialStatus,
           notes: adminNotes,
           allow_duplicate: allowDuplicateOverride,
           shipping_address: {
@@ -894,7 +911,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
           const webhookNote = res.hr_webhook?.dispatched
             ? (res.hr_webhook.success ? ' HR deduction webhook dispatched.' : ' (HR webhook logged in notes)')
             : '';
-          showToast('success', `${claimType} Claim Created`, (res.message || 'Replacement order generated successfully.') + webhookNote);
+          showToast('success', `${claimType} Order Created`, (res.message || 'Replacement order generated successfully.') + webhookNote);
           onSuccess?.(res.replacement_order_id);
           onClose();
         } else {
@@ -974,13 +991,13 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
           ],
           courier_id: selectedCourierId,
           courier_label: selectedCourierLabel,
-          shipping_cost: claimType === 'Redeem' || waiveShipping ? 0 : selectedCourierPrice,
+          shipping_cost: claimType === 'Redeem' || (!isReplacement && waiveShipping) ? 0 : selectedCourierPrice,
           actual_shipping_cost: selectedCourierPrice,
           is_qc_fault: isQc,
           qc_deduction_reason: adminNotes.trim(),
-          waive_shipping: claimType === 'Redeem' || waiveShipping,
+          waive_shipping: claimType === 'Redeem' || (!isReplacement && waiveShipping),
           claim_reason: claimReason,
-          initial_status: claimType === 'Redeem' ? 'processing' : initialStatus,
+          initial_status: isReplacement ? 'on-hold' as const : claimType === 'Redeem' ? 'processing' as const : initialStatus,
           notes: adminNotes,
           allow_duplicate: allowDuplicateOverride,
         };
@@ -1004,7 +1021,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
     }
   };
 
-  const isFreeShipping = claimType === 'Redeem' || waiveShipping;
+  const isFreeShipping = claimType === 'Redeem' || (!isReplacement && waiveShipping);
 
   return (
     <Modal
@@ -1012,26 +1029,16 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
       onOpenChange={(o) => {
         if (!o && !isSubmitting) onClose();
       }}
-      title={
-        isExisting
-          ? claimType === 'Redeem' ? 'Redeem claim' : 'Installation warranty claim'
-          : claimType === 'Redeem' ? 'Create marketplace redeem order' : 'Create marketplace warranty claim'
-      }
+      title={isExisting ? 'Create replacement order' : 'Create marketplace replacement'}
       reference={isExisting ? `#${String(existingOrder?.order_number || existingOrder?.id || '').replace(/^#+/, '')}` : undefined}
-      description={
-        claimType === 'Redeem'
-          ? 'Replacement order with free shipping (paid by Exacoat) for a factory defect, wrong finish or damaged item.'
-          : isExisting
-          ? 'Pick line items and a courier to create an installation warranty replacement order.'
-          : 'Create an approved warranty replacement order for Shopee, Tokopedia, TikTok Shop or WhatsApp orders.'
-      }
+      description="Choose the replacement type, items, and courier."
       width={896}
       footer={
-        <>
-          <span className="mr-auto text-[12.5px] text-muted">
-            Customer shipping:{' '}
+        <div className="flex w-full flex-wrap items-center justify-end gap-x-3 gap-y-2">
+          <span className="mr-auto w-full text-[13px] text-muted sm:w-auto" aria-live="polite">
+            {isReplacement && !hasPaidRate ? 'Calculate shipping to see the total' : 'Customer pays '}
             <span className="font-mono font-medium text-fg">
-              {isFreeShipping ? 'Rp 0 (free)' : formatCurrency(selectedCourierPrice, 'IDR')}
+              {isReplacement && !hasPaidRate ? null : formatCurrency(isFreeShipping ? 0 : selectedCourierPrice, 'IDR')}
             </span>
             {isFreeShipping && (
               <span className="ml-2 text-[12px] text-faint">
@@ -1047,63 +1054,50 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
             icon={CheckCircle2}
             onClick={handleSubmit}
             disabled={
-              isSubmitting ||
+              isSubmitting || hasPreviousReplacement || (isReplacement && !hasPaidRate) ||
               (isParentAlreadyClaimed && !allowDuplicateOverride) ||
-              (!isExisting && invoiceStatus?.checked && !invoiceStatus.available && !allowDuplicateOverride)
+              (!isReplacement && !isExisting && invoiceStatus?.checked && !invoiceStatus.available && !allowDuplicateOverride)
             }
           >
-            {isSubmitting ? `Creating ${claimType}...` : `Create ${claimType} order`}
+            {isSubmitting ? 'Creating…' : isReplacement ? 'Create replacement' : `Create ${claimType} order`}
           </Button>
-        </>
+        </div>
       }
     >
       <div className="space-y-6 font-sans text-sm">
         {finishesError !== null && <FinishesLoadError message={finishesError} onRetry={loadFinishes} />}
-        {/* Claim Type Selector: Warranty vs Redeem */}
-        <div className="p-1 rounded-2xl bg-neutral-900 border border-white/[0.08] grid grid-cols-2 gap-1">
-          <button
-            type="button"
-            onClick={() => {
-              setClaimType('Warranty');
-              setClaimReason(CLAIM_REASONS[0]);
-              setWaiveShipping(false);
-            }}
-            className={clsx(
-              'py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2.5 cursor-pointer',
-              claimType === 'Warranty'
-                ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 shadow-sm'
-                : 'text-neutral-400 hover:text-white'
-            )}
-          >
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <div className="text-left">
-              <div className="font-bold">Installation Warranty</div>
-              <div className="text-[10px] font-normal text-neutral-400">Customer installation mishap</div>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setClaimType('Redeem');
-              setClaimReason(REDEEM_DEFECT_REASONS[0]);
-              setWaiveShipping(true);
-              setInitialStatus('processing');
-            }}
-            className={clsx(
-              'py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2.5 cursor-pointer',
-              claimType === 'Redeem'
-                ? 'bg-amber-500/20 border border-amber-500/40 text-amber-300 shadow-sm'
-                : 'text-neutral-400 hover:text-white'
-            )}
-          >
-            <RotateCcw className="w-4 h-4 text-amber-400" />
-            <div className="text-left">
-              <div className="font-bold">Redeem</div>
-              <div className="text-[10px] font-normal text-amber-300/80">Cut defect, wrong skin (Free Shipping)</div>
-            </div>
-          </button>
+        <div role="group" aria-label="Replacement type" className="grid gap-2 sm:grid-cols-3">
+          {([
+            { id: 'Warranty', label: 'Installation Warranty', detail: 'Installation issues', icon: ShieldCheck },
+            { id: 'Redeem', label: 'Redeem', detail: 'Exacoat pays shipping', icon: RotateCcw },
+            { id: 'Replacement', label: 'Replacement', detail: 'Free item · Customer pays shipping', icon: Package },
+          ] as const).map(({ id, label, detail, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={claimType === id}
+              className={clsx(
+                'flex min-h-14 items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left focus-visible:outline-2 focus-visible:outline-accent',
+                claimType === id ? 'border-accent bg-field' : 'border-line bg-card hover:bg-field',
+              )}
+              onClick={() => {
+                setClaimType(id);
+                setAllowDuplicateOverride(false);
+                setWaiveShipping(id === 'Redeem');
+                setInitialStatus(id === 'Replacement' ? 'on-hold' : 'processing');
+                setClaimReason(id === 'Redeem' ? REDEEM_DEFECT_REASONS[0] :
+                  id === 'Replacement' ? 'Customer-requested replacement' : CLAIM_REASONS[0]);
+              }}
+            >
+              <Icon className={clsx('mt-0.5 h-4 w-4 shrink-0', claimType === id ? 'text-accent' : 'text-muted')} aria-hidden />
+              <span>
+                <span className="block text-sm font-semibold text-fg">{label}</span>
+                <span className="mt-0.5 block text-xs text-muted">{detail}</span>
+              </span>
+            </button>
+          ))}
         </div>
+        {hasPreviousReplacement && <p role="alert" className="text-sm text-st-stop-fg">This order already has a customer-paid replacement.</p>}
 
         {claimType === 'Redeem' && (
           <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-2.5">
@@ -1117,9 +1111,9 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
 
         {/* Section 1: Channel & Reference (Marketplace Only) */}
         {!isExisting && (
-          <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.08] space-y-3">
+          <div className="border-t border-line pt-4 space-y-3">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-bold uppercase tracking-wider text-neutral-400">
+              <label className="text-sm font-semibold text-fg">
                 Marketplace Channel & Invoice
               </label>
             </div>
@@ -1227,7 +1221,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
 
         {/* Section 2: Items Selection */}
         {isExisting ? (
-          <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.08] space-y-3">
+          <div className="border-t border-line pt-4 space-y-3">
             {isParentAlreadyClaimed && (
               <div className={clsx(
                 "p-3.5 rounded-xl border text-xs space-y-2.5 transition-colors",
@@ -1271,7 +1265,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
                 </div>
               </div>
             )}
-            <label className="text-xs font-bold uppercase tracking-wider text-neutral-400">
+            <label className="text-sm font-semibold text-fg">
               Select Skins to Replace (From Order #{existingOrder?.order_number || existingOrder?.id})
             </label>
             <div className="space-y-2">
@@ -1332,7 +1326,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
                           claimType === 'Redeem' ? 'text-amber-400' : 'text-emerald-400'
                         )}
                       >
-                        {claimType === 'Redeem' ? 'Rp 0 (Redeem)' : 'Rp 0 (Warranty)'}
+                        {claimType === 'Redeem' ? 'Rp 0 (Redeem)' : 'Rp 0 (replacement)'}
                       </span>
                     </div>
 
@@ -1395,7 +1389,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
           /* Marketplace Product Selection & Dual Mode Configuration */
           <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.08] space-y-4">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-bold uppercase tracking-wider text-neutral-400">
+              <label className="text-sm font-semibold text-fg">
                 Device Skin & Configuration
               </label>
               {/* Dual Mode Switcher */}
@@ -1411,7 +1405,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
                   )}
                 >
                   <Palette className="w-3 h-3" />
-                  <span>Mode A: Swatches</span>
+                  <span>Swatches</span>
                 </button>
                 <button
                   type="button"
@@ -1424,7 +1418,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
                   )}
                 >
                   <FileText className="w-3 h-3" />
-                  <span>Mode B: Quick Text</span>
+                  <span>Quick text</span>
                 </button>
               </div>
             </div>
@@ -2038,8 +2032,8 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
         )}
 
         {/* Section 3: Customer Info & Shipping Address */}
-        <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.08] space-y-3">
-          <label className="text-xs font-bold uppercase tracking-wider text-neutral-400">
+        <div className="border-t border-line pt-4 space-y-3">
+          <label className="text-sm font-semibold text-fg">
             Customer Information & Shipping Address
           </label>
 
@@ -2129,18 +2123,20 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
         </div>
 
         {/* Section 4: Live Shipping Calculator */}
-        <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.08] space-y-3">
+        <div className="border-t border-line pt-4 space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <label className="text-xs font-bold uppercase tracking-wider text-neutral-400">
+            <label className="text-sm font-semibold text-fg">
               {country === 'ID'
-                ? 'Live Biteship Shipping Calculator (Domestic)'
-                : `Live WooCommerce Shipping Calculator (${country})`}
+                ? 'Shipping rates · Biteship'
+                : 'Shipping rates · WooCommerce'}
             </label>
             {claimType === 'Redeem' ? (
               <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>Customer Shipping: Free (Rp 0 - Borne by Exacoat)</span>
               </span>
+            ) : isReplacement ? (
+              <span className="text-xs font-medium text-muted">Customer pays the selected rate</span>
             ) : (
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
@@ -2154,10 +2150,11 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
             )}
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className="flex-1">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="min-w-0 flex-1">
               <input
                 type="text"
+                aria-label="Destination postal code"
                 value={postcode}
                 onChange={(e) => setPostcode(e.target.value)}
                 placeholder={
@@ -2190,7 +2187,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
 
           {shippingRates.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
-              {shippingRates.map((rate) => {
+              {shippingRates.filter(rate => !isReplacement || (rate.price > 0 && rate.id !== 'store_pickup' && rate.id !== 'local_pickup')).map((rate) => {
                 const isSelected = selectedCourierId === rate.id;
                 return (
                   <button
@@ -2221,13 +2218,15 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
         </div>
 
         {/* Section 5: Claim Reason & Initial Status */}
-        <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.08] space-y-3">
-          <label className="text-xs font-bold uppercase tracking-wider text-neutral-400">
-            Claim Reason & Order Queue Status
+        <div className="border-t border-line pt-4 space-y-3">
+          <label className="text-sm font-semibold text-fg">
+            {isReplacement ? 'Payment & notes' : 'Claim reason & order status'}
           </label>
 
+          {isReplacement ? (
+            <p className="text-sm text-muted"><strong className="font-medium text-fg">Waiting for payment.</strong> Confirm the shipping payment before moving the order to production.</p>
+          ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Custom Beautiful Claim Reason Select */}
             <div className="relative" ref={claimReasonMenuRef}>
               <div className="flex items-center justify-between mb-1">
                 <label className="text-xs text-neutral-400 font-medium">Claim Reason</label>
@@ -2388,6 +2387,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
               )}
             </div>
           </div>
+          )}
 
           <div>
             <div className="flex items-center justify-between mb-1">
@@ -2408,11 +2408,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
             </div>
             <input
               type="text"
-              placeholder={
-                claimType === 'Redeem'
-                  ? 'Kesalahan kirim, iPhone 18 Pro dikirim iPhone 18.'
-                  : 'e.g. Approved via WhatsApp chat by admin. Customer sent photo of damaged edge.'
-              }
+              aria-label="Internal admin notes"
               value={adminNotes}
               onChange={(e) => setAdminNotes(e.target.value)}
               className={clsx(

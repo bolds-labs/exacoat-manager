@@ -6194,7 +6194,7 @@ export interface ManualWarrantyItem {
 
 export interface ManualWarrantyClaimPayload {
   source_type: 'existing_order' | 'marketplace';
-  rma_type?: 'Warranty' | 'Redeem';
+  rma_type?: 'Warranty' | 'Redeem' | 'Replacement';
   parent_order_id?: number;
   selected_item_ids?: Array<number | string>;
   selected_parts?: Record<string | number, string[]>;
@@ -6334,7 +6334,8 @@ export async function createManualWarrantyClaimDirect(
   error?: string;
 }> {
   const base = getWordPressBaseUrl();
-  const url = `${base}/wp-json/exacoat-core/v1/warranty/manual-claim`;
+  const endpoint = payload.rma_type === 'Replacement' ? 'manual-replacement' : 'manual-claim';
+  const url = `${base}/wp-json/exacoat-core/v1/warranty/${endpoint}`;
 
   try {
     const res = await authenticatedFetch(url, {
