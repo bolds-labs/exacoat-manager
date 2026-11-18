@@ -410,7 +410,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
       // 1. This is a new order ID being viewed (different from last loaded), OR
       // 2. The user has NOT modified the form and the order gained tracking data
       const isNewOrder = lastLoadedOrderIdRef.current !== order.id;
-      const canSyncTracking = isNewOrder || (!isFormDirtyRef.current && Boolean(order.tracking));
+      const canSyncTracking = isNewOrder || !isFormDirtyRef.current;
 
       if (canSyncTracking) {
         lastLoadedOrderIdRef.current = order.id;
@@ -1027,7 +1027,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
 
     const shippingPromoCode = String(findOrderMeta('_shipping_promo_code') || findOrderMeta('_shipping_biteship_applied_coupon') || '').trim();
 
-    const originalShippingRate = rawShippingPriceStr
+    const originalShippingRate = rawShippingPriceStr && findOrderMeta('_exacoat_shipping_price_edited') !== 'yes'
       ? parseFloat(String(rawShippingPriceStr))
       : (shippingDiscount > 0 ? parseFloat(String(order.shipping_total || 0)) + shippingDiscount : parseFloat(String(order.shipping_total || 0)));
 
@@ -1260,6 +1260,21 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
             courier={courier}
             courierOptions={courierOptions}
             courierTag={courierTag}
+            onSaveShipping={async (changes) => {
+              const result = await updateOrderDirect(order.id, changes);
+              const updated = result.order;
+              if (!result.success || !updated) throw new Error(result.error || 'Could not save shipping.');
+              if ((changes.jne_service && updated.jne_service !== changes.jne_service) ||
+                changes.shipping_prices?.some(({ id, total }) =>
+                  !updated.shipping_lines?.some(line => Number(line.id) === id && Number(line.total) === Number(total)))) {
+                throw new Error('The server did not confirm the changes. Check that Exacoat Core is up to date.');
+              }
+              hasJneServiceEdit.current = false;
+              const savedCourier = resolveOrderCourier(updated);
+              setJneService(savedCourier.serviceName || 'REG');
+              handleOrderMutated(updated);
+              showToast('success', 'Shipping saved', 'The order shipping details were updated.');
+            }}
             jneService={jneService}
             onJneServiceChange={(value) => {
               if (value !== 'REG' && value !== 'YES') return;

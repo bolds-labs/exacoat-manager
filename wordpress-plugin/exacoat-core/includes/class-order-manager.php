@@ -1387,6 +1387,42 @@ class Exacoat_Order_Manager {
 
 		$audit_notes = [];
 
+		$jne_service = $params['jne_service'] ?? null;
+		if ( null !== $jne_service ) {
+			$carrier = strtolower( trim( (string) $order->get_meta( 'carrier_id' ) ) );
+			$is_jne = in_array( $carrier, [ 'jne', 'jne express' ], true )
+				|| ( in_array( $carrier, [ '', 'unknown', 'custom' ], true ) && preg_match( '/\bjne\b/i', $order->get_shipping_method() ) );
+			if ( ! $is_jne || ! in_array( $jne_service, [ 'REG', 'YES' ], true ) ) {
+				return new WP_Error( 'invalid_jne_service', 'Choose REG or YES for a JNE order.', [ 'status' => 400 ] );
+			}
+		}
+
+		$shipping_prices = $params['shipping_prices'] ?? [];
+		$shipping_items = $order->get_items( 'shipping' );
+		$price_changes = [];
+		foreach ( is_array( $shipping_prices ) ? $shipping_prices : [ null ] as $price ) {
+			$id = filter_var( $price['id'] ?? null, FILTER_VALIDATE_INT );
+			$total = $price['total'] ?? null;
+			if ( ! isset( $shipping_items[ $id ] ) || isset( $price_changes[ $id ] ) || ! is_string( $total ) ||
+				! preg_match( '/^\d{1,12}(?:\.\d{1,6})?$/D', $total ) ) {
+				return new WP_Error( 'invalid_shipping_price', 'Enter a valid shipping price for an existing shipping line.', [ 'status' => 400 ] );
+			}
+			$price_changes[ $id ] = wc_format_decimal( $total );
+		}
+
+		if ( null !== $jne_service && $order->get_meta( '_exacoat_jne_service' ) !== $jne_service ) {
+			$order->update_meta_data( '_exacoat_jne_service', $jne_service );
+			$audit_notes[] = "JNE service set to {$jne_service}";
+		}
+		foreach ( $price_changes as $id => $total ) {
+			$item = $shipping_items[ $id ];
+			if ( (float) $item->get_total() !== (float) $total ) {
+				$audit_notes[] = sprintf( 'Shipping line #%d changed from %s to %s %s', $id, $item->get_total(), $total, $order->get_currency() );
+				$item->set_total( $total );
+				$order->update_meta_data( '_exacoat_shipping_price_edited', 'yes' );
+			}
+		}
+
 		// 1. Update Customer & Notes if provided
 		if ( isset( $params['customer_name'] ) && ! empty( $params['customer_name'] ) ) {
 			$name_parts = explode( ' ', trim( (string) $params['customer_name'] ), 2 );
@@ -2609,8 +2645,10 @@ class Exacoat_Order_Manager {
 			'pickup'              => 'Store Pickup (SMB)',
 		];
 		$carrier_key = strtolower( trim( (string) $carrier_val ) );
-		$jne_service = 'jne' === $carrier_key ? (string) $order->get_meta( '_exacoat_jne_service' ) : '';
+		$jne_service = ! $is_store_pickup && ( 'jne' === $carrier_key || 'jne' === $detected_carrier )
+			? (string) $order->get_meta( '_exacoat_jne_service' ) : '';
 		if ( in_array( $jne_service, [ 'REG', 'YES' ], true ) ) {
+			$carrier_key = 'jne';
 			$detected_service = $jne_service;
 		} else {
 			$jne_service = null;

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { getOrderCourierDisplay, resolveOrderCourier } from '../../../lib/orderUtils';
 import { AdminActionsCard } from './AdminActionsCard';
 import { CouponsCard } from './CouponsCard';
@@ -164,6 +164,7 @@ describe('ShippingCard', () => {
     courierOptions: [{ value: 'jne', label: 'JNE Express' }],
     jneService: 'REG',
     onJneServiceChange: vi.fn(),
+    onSaveShipping: vi.fn(),
     customCourierName: '',
     customTrackingUrl: '',
     trackingNumber: '',
@@ -190,6 +191,22 @@ describe('ShippingCard', () => {
     expect(screen.getByText('Label not printed')).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Save tracking' }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.queryByRole('button', { name: /track order/i })).toBeNull();
+  });
+
+  it('uses the saved JNE label and saves the shipping price without a resi', async () => {
+    const onSaveShipping = vi.fn().mockResolvedValue(undefined);
+    const order = {
+      ...baseOrder,
+      shipping_method_name: 'JNE - REG',
+      tracking: { carrier_id: 'jne', courier: 'JNE - YES', tracking_number: '0703632100098334' },
+      shipping_lines: [{ id: 42, method_title: 'JNE Express - YES', total: '10000' }],
+    };
+    render(<ShippingCard {...props} order={order} onSaveShipping={onSaveShipping} />);
+    expect(screen.getByRole('combobox', { name: 'JNE service' }).textContent).toContain('REG');
+    fireEvent.change(screen.getByLabelText('Shipping price before tax'), { target: { value: '15000' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save shipping' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save shipping' })).toBeTruthy());
+    expect(onSaveShipping).toHaveBeenCalledWith({ jne_service: undefined, shipping_prices: [{ id: 42, total: '15000' }] });
   });
 
   it('shows the pickup notice and workshop label on pickup orders', () => {

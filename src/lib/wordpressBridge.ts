@@ -3222,6 +3222,8 @@ export async function fetchOrderDetailDirect(orderId: number | string): Promise<
 }
 
 export interface UpdateOrderPayload {
+  jne_service?: 'REG' | 'YES';
+  shipping_prices?: Array<{ id: number; total: string }>;
   customer_name?: string;
   customer_email?: string;
   customer_phone?: string;

@@ -1,4 +1,4 @@
-import type { FormEvent, ReactNode } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import {
   ChevronDown,
   ChevronUp,
@@ -14,6 +14,8 @@ import {
   Truck,
 } from 'lucide-react';
 import type { Order } from '../../../types';
+import type { UpdateOrderPayload } from '../../../lib/wordpressBridge';
+import { resolveOrderCourier } from '../../../lib/orderUtils';
 import { Button } from '../../ds/Button';
 import { Card } from '../../ds/Card';
 import { Select, type SelectOption } from '../../ds/Select';
@@ -37,6 +39,7 @@ export interface ShippingCardProps {
   courierTag?: string;
   jneService: string;
   onJneServiceChange: (value: string) => void;
+  onSaveShipping: (changes: UpdateOrderPayload) => Promise<void>;
   customCourierName: string;
   customTrackingUrl: string;
   trackingNumber: string;
@@ -69,6 +72,81 @@ function SubHead({ icon: Icon, title, tags }: { icon: typeof Truck; title: strin
       <span className="text-[13.5px] font-medium text-fg">{title}</span>
       {tags}
     </div>
+  );
+}
+
+function ShippingDetails({ order, onSave, disabled }: {
+  order: Order;
+  onSave: ShippingCardProps['onSaveShipping'];
+  disabled: boolean;
+}) {
+  const courier = resolveOrderCourier(order);
+  const service = courier.courierId === 'jne' ? courier.serviceName || 'REG' : '';
+  const lines = (order.shipping_lines || []).filter(line => Number(line.id) > 0);
+  const [selected, setSelected] = useState(service);
+  const [prices, setPrices] = useState<Record<number, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  if (!service && !lines.length) return null;
+
+  const edits = lines
+    .filter(line => prices[line.id] !== undefined && Number(prices[line.id]) !== Number(line.total))
+    .map(line => ({ id: Number(line.id), total: prices[line.id] }));
+  const jneService = selected !== service && (selected === 'REG' || selected === 'YES') ? selected : undefined;
+  const canSave = (jneService || edits.length > 0) && !saving && !disabled;
+
+  return (
+    <form className="rounded-xl border border-field-border p-3.5" onSubmit={async (event) => {
+      event.preventDefault();
+      if (!canSave) return;
+      setSaving(true);
+      setError('');
+      try {
+        await onSave({ jne_service: jneService, shipping_prices: edits.length ? edits : undefined });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Could not save shipping.');
+      } finally {
+        setSaving(false);
+      }
+    }}>
+      <div className="mb-3 text-sm font-semibold text-fg">Shipping details</div>
+      <fieldset disabled={saving || disabled} className="grid min-w-0 gap-3 sm:grid-cols-2">
+        {service && (
+          <Select
+            label="JNE service"
+            value={selected}
+            options={[
+              { value: 'REG', label: 'REG' },
+              { value: 'YES', label: 'YES' },
+              ...(!['REG', 'YES'].includes(service) ? [{ value: service, label: service }] : []),
+            ]}
+            onChange={setSelected}
+            disabled={saving || disabled}
+          />
+        )}
+        {lines.map(line => (
+          <TextField
+            key={line.id}
+            label={lines.length === 1 ? 'Shipping price before tax' : `Shipping price before tax · ${line.method_title || line.id}`}
+            inputMode="decimal"
+            pattern="[0-9]{1,12}([.][0-9]{1,6})?"
+            required
+            mono
+            trailing={<span className="text-xs text-muted">{order.currency}</span>}
+            value={prices[line.id] ?? String(line.total ?? '0')}
+            onChange={event => {
+              const total = event.target.value;
+              setPrices(current => ({ ...current, [line.id]: total }));
+            }}
+          />
+        ))}
+      </fieldset>
+      {error && <p role="alert" className="mt-2 text-sm text-st-stop-fg">{error}</p>}
+      <div className="mt-3 flex justify-end">
+        <Button type="submit" disabled={!canSave}>{saving ? 'Saving…' : 'Save shipping'}</Button>
+      </div>
+    </form>
   );
 }
 
@@ -164,17 +242,23 @@ export function ShippingCard(props: ShippingCardProps) {
         </>
       }
     >
-      <form onSubmit={onSaveTracking} className="flex flex-col gap-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+      <ShippingDetails
+        key={JSON.stringify([order.id, order.jne_service, order.shipping_method_name, order.shipping_lines])}
+        order={order}
+        onSave={props.onSaveShipping}
+        disabled={isFulfilling}
+      />
+      <form onSubmit={onSaveTracking} className="mt-4 flex flex-col gap-3 border-t border-field-border pt-4">
+        <div className="grid gap-3 md:grid-cols-2 md:items-end">
           <Select
             label="Courier"
             value={courier || 'jne'}
             options={courierOptions}
             onChange={onCourierChange}
             tag={isJne ? undefined : courierTag}
-            className={isJne ? "min-w-0 sm:flex-1" : "sm:w-[340px] sm:flex-none"}
+            className="min-w-0"
           />
-          {isJne && (
+          {isJne && resolveOrderCourier(order).courierId !== 'jne' && (
             <Select
               label="JNE service"
               value={jneService}
@@ -200,7 +284,7 @@ export function ShippingCard(props: ShippingCardProps) {
             resiField
           )}
           {!isCustom && (
-            <Button type="submit" disabled={!canSave} className="self-start sm:self-auto">
+            <Button type="submit" disabled={!canSave} className="justify-self-start">
               {isFulfilling ? 'Saving...' : 'Save tracking'}
             </Button>
           )}

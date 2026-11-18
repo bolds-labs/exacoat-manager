@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.232] - 2026-11-18
+
+- Save JNE service and shipping prices from Shipping details before assigning a tracking number.
+
 ## [0.1.231] - 2026-11-18
 
 - **Shipping & tracking**: staff can select JNE REG or YES and save the service with tracking.

@@ -524,11 +524,15 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
       const serviceMatch = cleanTitle.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*[-:]\s*([A-Za-z0-9_\s]+)/i) ||
                            cleanTitle.match(/(?:sicepat|jne|j&t|jnt|pos|lion|goorita|dhl|fedex|rayspeed|anteraja|ninja|spx|shopee)\s*\(([A-Za-z0-9_\s]+)\)/i);
       const cleanService = extractCleanService(serviceMatch ? serviceMatch[1] : undefined);
+      const jnePattern = /\bjne(?:\s+express)?[\s(:_-]+(REG|YES|OKE|JTR)\b/i;
+      const jneService = effectiveCarrier === 'jne'
+        ? (String(order.shipping_method_name || '').match(jnePattern) || cleanTitle.match(jnePattern))?.[1].toUpperCase()
+        : undefined;
       const defaultService = (isDomestic && ['sicepat', 'jne', 'pos', 'spx', 'jnt'].includes(effectiveCarrier)) ? 'REG' : undefined;
       return {
         courierId: effectiveCarrier,
         courierName: PRESET_MAP[effectiveCarrier],
-        serviceName: cleanService || defaultService,
+        serviceName: jneService || cleanService || defaultService,
         rawMatch: cleanTitle || PRESET_MAP[effectiveCarrier],
         isCustom: false,
       };
