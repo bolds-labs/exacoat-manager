@@ -35,6 +35,8 @@ export interface ShippingCardProps {
   courierOptions: SelectOption[];
   /** Service name or raw courier match shown as the select's trailing tag. */
   courierTag?: string;
+  jneService: string;
+  onJneServiceChange: (value: string) => void;
   customCourierName: string;
   customTrackingUrl: string;
   trackingNumber: string;
@@ -93,6 +95,8 @@ export function ShippingCard(props: ShippingCardProps) {
     courier,
     courierOptions,
     courierTag,
+    jneService,
+    onJneServiceChange,
     customCourierName,
     customTrackingUrl,
     trackingNumber,
@@ -119,6 +123,7 @@ export function ShippingCard(props: ShippingCardProps) {
   const tracking = order.tracking;
   const hasRealResi = Boolean(tracking?.tracking_number && !tracking.tracking_number.startsWith('field_'));
   const checkpoints = tracking?.checkpoints || [];
+  const isJne = courier === 'jne';
   const isCustom = courier === 'custom';
   const canSave = !isFulfilling && Boolean(trackingNumber.trim()) && (!isCustom || Boolean(customCourierName.trim()));
   const latest = tracking?.latest_status;
@@ -166,9 +171,22 @@ export function ShippingCard(props: ShippingCardProps) {
             value={courier || 'jne'}
             options={courierOptions}
             onChange={onCourierChange}
-            tag={courierTag}
-            className="sm:w-[340px] sm:flex-none"
+            tag={isJne ? undefined : courierTag}
+            className={isJne ? "min-w-0 sm:flex-1" : "sm:w-[340px] sm:flex-none"}
           />
+          {isJne && (
+            <Select
+              label="JNE service"
+              value={jneService}
+              options={[
+                { value: 'REG', label: 'REG' },
+                { value: 'YES', label: 'YES' },
+                ...(!['REG', 'YES'].includes(jneService) ? [{ value: jneService, label: jneService }] : []),
+              ]}
+              onChange={onJneServiceChange}
+              className="sm:w-24 sm:flex-none"
+            />
+          )}
           {isCustom ? (
             <TextField
               label="Courier name"

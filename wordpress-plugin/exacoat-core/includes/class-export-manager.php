@@ -518,10 +518,9 @@ class Exacoat_Export_Manager {
 					continue;
 				}
 
-				$shipping_method = 'REG15';
-				if ( stripos( $method_code, 'yes' ) !== false ) {
-					$shipping_method = 'YES15';
-				}
+				$jne_service = $order->get_meta( '_exacoat_jne_service' );
+				$is_yes = 'YES' === $jne_service || ( 'REG' !== $jne_service && false !== stripos( $method_code, 'yes' ) );
+				$shipping_method = $is_yes ? 'YES15' : 'REG15';
 
 				$order_id       = $order->get_id();
 				$customer_name  = trim( $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() );

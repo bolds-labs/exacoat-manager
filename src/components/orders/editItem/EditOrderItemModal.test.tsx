@@ -125,6 +125,34 @@ describe('EditOrderItemModal on webstore data', () => {
     expect(screen.getByRole('radio', { name: /No Logo Cutout/ }).getAttribute('aria-checked')).toBe('true');
   });
 
+  it('adds, edits and removes production notes without repricing a configured item', async () => {
+    mockFetch(ok);
+    updateOrderDirect.mockResolvedValue({ success: true, order: webOrder });
+    open(webOrder, {
+      ...item,
+      specs: [
+        ...item.specs,
+        { label: 'Note', value: 'Previous instruction' },
+        { label: 'Old note', value: 'Remove me' },
+      ],
+    });
+    await screen.findByText('Additional Production Notes / Overrides');
+    fireEvent.change(screen.getByDisplayValue('Previous instruction'), { target: { value: 'Updated instruction' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Remove detail Old note' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add detail' }));
+    fireEvent.change(screen.getAllByLabelText('Detail name')[1], { target: { value: 'Placement' } });
+    fireEvent.change(screen.getAllByLabelText('Detail value')[1], { target: { value: 'Center align' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save item' }));
+    await waitFor(() => expect(updateOrderDirect).toHaveBeenCalled());
+    const saved = updateOrderDirect.mock.calls[0][1].items[0];
+    expect(saved.specs).toEqual([
+      ...item.specs,
+      { label: 'Note', value: 'Updated instruction' },
+      { label: 'Placement', value: 'Center align' },
+    ]);
+    expect(saved.price).toBe(item.price);
+  });
+
   it('saves the same spec wording as before', async () => {
     mockFetch(ok);
     updateOrderDirect.mockResolvedValue({ success: true, order: webOrder });

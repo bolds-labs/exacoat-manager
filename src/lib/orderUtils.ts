@@ -464,6 +464,15 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
     };
   }
 
+  if (order.jne_service === 'REG' || order.jne_service === 'YES') {
+    return {
+      courierId: 'jne',
+      courierName: 'JNE Express',
+      serviceName: order.jne_service,
+      isCustom: false,
+    };
+  }
+
   const PRESET_MAP = CANONICAL_COURIER_MAP;
 
   // 2. Domestic consolidation shipment to Goorita HQ
@@ -774,6 +783,7 @@ export function resolveOrderCourier(order: any): ResolvedOrderCourier {
 export function getOrderCourierDisplay(order: any): string {
   if (!order) return 'Courier';
   if (isStorePickupOrder(order)) return 'Store Pickup (SMB)';
+  if (order.jne_service === 'REG' || order.jne_service === 'YES') return `JNE - ${order.jne_service}`;
 
   const isConsolidation = Boolean(
     (order.meta_data || []).some((m: any) => m.key === '_is_consolidation_order' && (m.value === 'yes' || m.value === true || m.value === '1')) ||

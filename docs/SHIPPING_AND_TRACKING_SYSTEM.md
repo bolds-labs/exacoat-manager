@@ -67,6 +67,10 @@ The system decouples internal production status from external courier parcel pro
 | `tiki` | TIKI | `tiki` | Domestic Indonesia |
 | `ninja` | Ninja Van | `ninja-van-id` | Domestic & regional |
 
+### JNE service in Exacoat Manager
+
+Shipping & tracking sends an explicit REG or YES edit as `jne_service` when staff save tracking. The fulfillment endpoint validates that the carrier is JNE and writes `_exacoat_jne_service` to WooCommerce order metadata. The order panel, tracking display and JNE export use the override ahead of the original checkout shipping label. The original line and charge are preserved. JNE tracking saves without a service edit preserve a prior override. Saving a different carrier clears it. Orders without an override still use their inferred service.
+
 ### Courier Auto-Detection Fallback
 If a carrier is unspecified or set to "auto", `Exacoat_Shipping_Tracker::detect_trackingmore_courier()` queries `POST https://api.trackingmore.com/v4/couriers/detect` with the tracking number to identify the courier before registration.
 

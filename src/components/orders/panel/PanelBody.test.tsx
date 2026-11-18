@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { getOrderCourierDisplay, resolveOrderCourier } from '../../../lib/orderUtils';
 import { AdminActionsCard } from './AdminActionsCard';
 import { CouponsCard } from './CouponsCard';
 import { addressLines, cleanCustomerNote, CustomerDeliveryCard } from './CustomerDeliveryCard';
@@ -145,12 +146,24 @@ describe('ItemsCard', () => {
 });
 
 describe('ShippingCard', () => {
+  it('resolves a saved JNE service before the original checkout shipping method', () => {
+    const order = {
+      tracking: { carrier_id: 'jne', courier: 'JNE - REG', tracking_number: '0703632100098334' },
+      shipping_lines: [{ method_title: 'JNE - REG' }],
+      jne_service: 'YES',
+    };
+    expect(resolveOrderCourier(order)).toMatchObject({ courierId: 'jne', serviceName: 'YES' });
+    expect(getOrderCourierDisplay(order)).toBe('JNE - YES');
+  });
+
   const props: ShippingCardProps = {
     order: baseOrder,
     isStorePickup: false,
     isPrinted: false,
     courier: 'jne',
     courierOptions: [{ value: 'jne', label: 'JNE Express' }],
+    jneService: 'REG',
+    onJneServiceChange: vi.fn(),
     customCourierName: '',
     customTrackingUrl: '',
     trackingNumber: '',

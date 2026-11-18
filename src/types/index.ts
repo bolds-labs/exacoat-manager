@@ -264,6 +264,7 @@ export interface Order {
   shipping_total: number | string;
   shipping_tax?: number | string;
   shipping_method_name?: string;
+  jne_service?: 'REG' | 'YES' | null;
   created_at: string;
   date_paid?: string | null;
   date_completed?: string | null;

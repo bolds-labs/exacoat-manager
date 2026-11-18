@@ -76,7 +76,7 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({ order, i
   const [load, setLoad] = useState<LoadState>({ kind: 'idle' });
   const [selection, setSelection] = useState<Selection | null>(null);
   const [missing, setMissing] = useState<string[]>([]);
-  /** Free-form details for products without a webstore configurator (404). */
+  /** Unstructured details that do not affect webstore pricing. */
   const [freeSpecs, setFreeSpecs] = useState<FreeSpecRow[]>([]);
   const loadSeq = useRef(0);
   const lastLoad = useRef<{ id: number; name: string; fresh: boolean } | null>(null);
@@ -93,7 +93,7 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({ order, i
 
   // No configurator on the webstore: staff edit the item's details as free-form rows.
   const showNone = useCallback(() => {
-    setFreeSpecs(originalSpecs.map((sp, i) => ({ id: `spec_${i}`, label: sp.label, value: sp.value })));
+    setFreeSpecs(toSpecRows(originalSpecs));
     setLoad({ kind: 'none' });
   }, [originalSpecs]);
 
@@ -145,6 +145,7 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({ order, i
       const data = res.data;
       if (fresh) {
         setSelection(emptySelection(data));
+        setFreeSpecs([]);
       } else {
         const pre = preselectFromSpecs(data, originalSpecs, item?.name || '');
         const base = interactiveLayers(data)[0];
@@ -155,6 +156,7 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({ order, i
           if (c) pre.selection.layers[base.id] = c.id;
         }
         setSelection(pre.selection);
+        setFreeSpecs(toSpecRows(pre.selection.kept));
         setMissing(pre.missing);
       }
       setLoad({ kind: 'ready', data });
@@ -251,7 +253,10 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({ order, i
   };
 
   const compiledSpecs = useMemo<ItemCustomizationSpec[]>(() => {
-    if (data && selection) return selectionToSpecs(data, selection);
+    if (data && selection) {
+      const kept = freeSpecs.filter((r) => r.label.trim() && r.value.trim()).map(({ label, value }) => ({ label, value }));
+      return selectionToSpecs(data, { ...selection, kept });
+    }
     if (load.kind === 'none') {
       return freeSpecs
         .map((r) => ({ label: r.label.trim(), value: r.value.trim() }))
@@ -573,6 +578,7 @@ export const EditOrderItemModal: React.FC<EditOrderItemModalProps> = ({ order, i
             {baseMissing && baseLayer && (
               <p className="text-[12px] text-faint">{baseLayer.name} has no finish on this item.</p>
             )}
+            <FreeSpecEditor title="Additional Production Notes / Overrides" rows={freeSpecs} onChange={setFreeSpecs} />
             <SpecList title="Will be saved as" specs={compiledSpecs} />
           </>
         )}
@@ -620,12 +626,14 @@ interface FreeSpecRow {
   value: string;
 }
 
-/** Label and value rows for products without a webstore configurator (the old Form mode). */
-function FreeSpecEditor({ rows, onChange }: { rows: FreeSpecRow[]; onChange(rows: FreeSpecRow[]): void }) {
+function toSpecRows(specs: ItemCustomizationSpec[]): FreeSpecRow[] {
+  return specs.map(({ label, value }, index) => ({ id: `spec_${index}`, label, value }));
+}
+function FreeSpecEditor({ title = 'Item details', rows, onChange }: { title?: string; rows: FreeSpecRow[]; onChange(rows: FreeSpecRow[]): void }) {
   const update = (id: string, patch: Partial<FreeSpecRow>) => onChange(rows.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-card-border bg-card p-3.5">
-      <div className="text-[12px] text-faint">Item details</div>
+      <div className="text-[12px] text-faint">{title}</div>
       {rows.length === 0 && <p className="text-[12.5px] text-faint">No details yet.</p>}
       {rows.map((r) => (
         <div key={r.id} className="flex items-center gap-2">

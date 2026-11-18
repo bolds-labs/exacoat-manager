@@ -208,6 +208,8 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
   const lastLoadedOrderIdRef = useRef<number | null>(null);
   const isFormDirtyRef = useRef(false);
   const [courier, setCourier] = useState('jne');
+  const [jneService, setJneService] = useState('REG');
+  const hasJneServiceEdit = useRef(false);
   const [customCourierName, setCustomCourierName] = useState('');
   const [customTrackingUrl, setCustomTrackingUrl] = useState('');
   const [trackingNumber, setTrackingNumber] = useState('');
@@ -360,6 +362,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
   useEffect(() => {
     if (!isOpen) {
       lastLoadedOrderIdRef.current = null;
+      hasJneServiceEdit.current = false;
       isFormDirtyRef.current = false;
     }
   }, [isOpen]);
@@ -413,6 +416,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
         lastLoadedOrderIdRef.current = order.id;
         if (isNewOrder) {
           isFormDirtyRef.current = false;
+          hasJneServiceEdit.current = false;
         }
 
         const isConsolidation = Boolean(
@@ -422,6 +426,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
         );
 
         const resolvedCourier = resolveOrderCourier(order);
+        setJneService(resolvedCourier.courierId === 'jne' ? resolvedCourier.serviceName || 'REG' : 'REG');
 
         if (order.tracking) {
           const rawTrack = String(order.tracking.tracking_number || '').trim();
@@ -702,6 +707,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
       const res = await fulfillOrderDirect(order.id, {
         courier: finalCarrier,
         carrier_id: finalCarrier,
+        jne_service: courier === 'jne' && hasJneServiceEdit.current ? jneService : undefined,
         tracking_number: trackingNumber.trim(),
         tracking_url: finalUrl,
         status: targetStatus,
@@ -711,6 +717,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
 
       if (res.success) {
         setShowShippedPromptModal(false);
+        hasJneServiceEdit.current = false;
         const orderNum = cleanOrderNumber(order.id);
         const currentStatusInfo = getOrderStatusInfo(order.status);
         isFormDirtyRef.current = false;
@@ -1253,6 +1260,13 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({
             courier={courier}
             courierOptions={courierOptions}
             courierTag={courierTag}
+            jneService={jneService}
+            onJneServiceChange={(value) => {
+              if (value !== 'REG' && value !== 'YES') return;
+              isFormDirtyRef.current = true;
+              hasJneServiceEdit.current = true;
+              setJneService(value);
+            }}
             customCourierName={customCourierName}
             customTrackingUrl={customTrackingUrl}
             trackingNumber={trackingNumber}

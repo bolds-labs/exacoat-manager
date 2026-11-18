@@ -1814,8 +1814,21 @@ class Exacoat_Order_Manager {
 			'ninja'    => 'Ninja Xpress',
 			'rayspeed' => 'Rayspeed Asia',
 		];
-		// Resolve carrier display with REG service tier default for domestic couriers
-		$carrier_display = self::clean_courier_display( ! empty( $courier ) ? $courier : $carrier_id, $carrier_id );
+		$jne_service = strtoupper( sanitize_text_field( $params['jne_service'] ?? '' ) );
+		if ( '' !== $jne_service && ( 'jne' !== $carrier_id || ! in_array( $jne_service, [ 'REG', 'YES' ], true ) ) ) {
+			return new WP_Error( 'invalid_jne_service', 'Choose REG or YES for JNE Express.', [ 'status' => 400 ] );
+		}
+		if ( 'jne' !== $carrier_id ) {
+			$order->delete_meta_data( '_exacoat_jne_service' );
+		} elseif ( '' !== $jne_service ) {
+			$order->update_meta_data( '_exacoat_jne_service', $jne_service );
+		} else {
+			$jne_service = (string) $order->get_meta( '_exacoat_jne_service' );
+		}
+
+		$carrier_display = in_array( $jne_service, [ 'REG', 'YES' ], true )
+			? "JNE - {$jne_service}"
+			: self::clean_courier_display( ! empty( $courier ) ? $courier : $carrier_id, $carrier_id );
 
 		// Ensure fulfillment mode is definitively Courier Delivery
 		$order->update_meta_data( '_delivery_override', 'yes' );
@@ -2596,6 +2609,12 @@ class Exacoat_Order_Manager {
 			'pickup'              => 'Store Pickup (SMB)',
 		];
 		$carrier_key = strtolower( trim( (string) $carrier_val ) );
+		$jne_service = 'jne' === $carrier_key ? (string) $order->get_meta( '_exacoat_jne_service' ) : '';
+		if ( in_array( $jne_service, [ 'REG', 'YES' ], true ) ) {
+			$detected_service = $jne_service;
+		} else {
+			$jne_service = null;
+		}
 		$base_carrier = $carrier_labels[ $carrier_key ] ?? ( ! empty( $carrier_val ) ? ucfirst( (string) $carrier_val ) : 'Express Courier' );
 
 		if ( $is_store_pickup ) {
@@ -3144,6 +3163,7 @@ class Exacoat_Order_Manager {
 			'items'                      => $items_data,
 			'item_count'                 => count( $items_data ),
 			'tracking'                   => ( ! $is_store_pickup && is_array( $tracking ) ) ? array_merge( $tracking, [ 'courier' => self::clean_courier_display( $tracking['courier'] ?? $carrier_display, $carrier_key ) ] ) : null,
+			'jne_service'                => $jne_service,
 			'detected_courier'           => $is_store_pickup ? 'pickup' : ( $detected_carrier ?: $carrier_key ?: 'jne' ),
 			'shipping_courier_name'      => $is_store_pickup ? 'Store Pickup (SMB)' : self::clean_courier_display( $carrier_display, $carrier_key ),
 			'notes'                      => $notes_data,
