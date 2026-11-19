@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.234] - 2026-11-19
+
+- Shopee and TikTok Shop customers can submit an Installation Warranty request with the order number and last two phone digits. Staff verify the purchase before they can approve the replacement.
+
 ## [0.1.233] - 2026-11-18
 
 - Create customer-paid shipping replacements from a marketplace invoice or existing order. The item is free and the order starts in Waiting for payment.

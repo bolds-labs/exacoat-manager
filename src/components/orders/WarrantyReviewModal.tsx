@@ -110,6 +110,7 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
 
   const [isLoading, setIsLoading] = useState(true);
   const [claim, setClaim] = useState<WarrantyClaimDetails | null>(null);
+  const [purchaseVerified, setPurchaseVerified] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Review action state
@@ -289,6 +290,7 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
 
   useEffect(() => {
     if (isOpen && orderId) {
+      setPurchaseVerified(false);
       setShowRejectInput(false);
       setRejectionReason('');
       setAllowResubmit(false);
@@ -302,11 +304,13 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
     if (!orderId) return;
     setIsProcessing(true);
 
-    const res = await reviewWarrantyClaimDirect(orderId, 'approve');
+    const res = await reviewWarrantyClaimDirect(orderId, 'approve', undefined, undefined, false, purchaseVerified);
     setIsProcessing(false);
 
     if (res.success) {
-      showToast('success', 'Claim Approved', 'Warranty claim approved. Payment link generated and email sent to customer.');
+      showToast('success', 'Claim Approved', claim?.requires_marketplace_review
+        ? 'Marketplace purchase verified and warranty claim approved.'
+        : 'Warranty claim approved. Payment link generated and email sent to customer.');
       if (onClaimReviewed) onClaimReviewed();
       loadDetails();
     } else {
@@ -389,7 +393,7 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
                 <Button variant="danger" icon={XCircle} onClick={() => setShowRejectInput(true)} disabled={isProcessing}>
                   Reject claim
                 </Button>
-                <Button variant="primary" icon={CheckCircle2} onClick={handleApprove} disabled={isProcessing}>
+                <Button variant="primary" icon={CheckCircle2} onClick={handleApprove} disabled={isProcessing || (claim.requires_marketplace_review && !purchaseVerified)}>
                   {isProcessing ? 'Approving...' : 'Approve claim'}
                 </Button>
               </>
@@ -431,6 +435,20 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
         </div>
       ) : claim ? (
         <div className="space-y-6 text-xs text-neutral-300">
+          {claim.requires_marketplace_review && claim.rma_status === 'pending_review' && (
+            <section className="space-y-2 rounded-xl border border-line bg-card p-4 text-sm text-fg">
+              <h3 className="font-semibold">Verify marketplace purchase</h3>
+              <p className="text-muted">
+                Check {claim.channel} invoice <strong className="font-mono text-fg">{claim.parent_order_number}</strong>
+                {" "}in Seller Centre. Submitted phone ending <strong className="font-mono text-fg">***{claim.recipient_phone_suffix}</strong>.
+                Verify the requester, items, delivery date and warranty window before approval.
+              </p>
+              <label className="flex min-h-9 items-center gap-2">
+                <input type="checkbox" checked={purchaseVerified} onChange={event => setPurchaseVerified(event.target.checked)} />
+                I verified the purchase and confirmed the order meets the Installation Warranty requirements.
+              </label>
+            </section>
+          )}
           {/* Warranty Extension Code Callout */}
           {claim.used_warranty_code && (
             <div className="flex items-center justify-between rounded-xl border border-purple-500/30 bg-purple-500/10 px-4 py-3">
@@ -462,7 +480,9 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
               </div>
               <div className="flex items-center justify-between pt-1">
                 <span className="text-neutral-400">Original Invoice</span>
-                {claim.parent_order_id ? (
+                {claim.parent_order_id && claim.channel && !/^(web|webstore)$/i.test(claim.channel) ? (
+                  <span className="font-mono text-neutral-200">{claim.parent_order_number || claim.parent_order_id}</span>
+                ) : claim.parent_order_id ? (
                   <button
                     type="button"
                     onClick={() => {

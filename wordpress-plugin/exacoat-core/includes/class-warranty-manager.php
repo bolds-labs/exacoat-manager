@@ -54,6 +54,9 @@ class Exacoat_Warranty_Manager {
 		add_action( 'woocommerce_order_status_delivered', [ __CLASS__, 'record_delivery_timestamp' ], 10, 1 );
 		add_action( 'woocommerce_order_status_completed', [ __CLASS__, 'record_delivery_timestamp' ], 10, 1 );
 		add_action( 'woocommerce_order_status_changed', [ __CLASS__, 'on_status_changed' ], 10, 4 );
+		add_action( 'woocommerce_before_order_object_save', [ __CLASS__, 'hold_unverified_marketplace_claim' ] );
+		add_filter( 'woocommerce_order_needs_payment', [ __CLASS__, 'marketplace_review_payment_allowed' ], 10, 2 );
+		add_filter( 'woocommerce_email_enabled_customer_on_hold_order', [ __CLASS__, 'marketplace_review_payment_allowed' ], 10, 2 );
 
 		// 2. Register REST API Routes
 		add_action( 'rest_api_init', [ __CLASS__, 'register_routes' ] );
@@ -63,6 +66,19 @@ class Exacoat_Warranty_Manager {
 		if ( ! wp_next_scheduled( 'exacoat_purge_stale_warranty_proofs' ) ) {
 			wp_schedule_event( time() + 3600, 'daily', 'exacoat_purge_stale_warranty_proofs' );
 		}
+	}
+
+	public static function hold_unverified_marketplace_claim( $order ): void {
+		if ( ! self::marketplace_review_payment_allowed( true, $order ) &&
+			! in_array( $order->get_status(), [ 'on-hold', 'cancelled', 'trash' ], true ) ) {
+			throw new \WC_Data_Exception( 'warranty_purchase_review_required', 'Verify the marketplace purchase in Warranty Review first.', 409 );
+		}
+	}
+
+	public static function marketplace_review_payment_allowed( $allowed, $order ): bool {
+		return (bool) $allowed && ( ! is_a( $order, 'WC_Order' )
+			|| ! $order->get_meta( '_rma_unverified_marketplace_ref' )
+			|| $order->get_meta( '_rma_marketplace_verified_at' ) );
 	}
 
 	/**
@@ -177,6 +193,12 @@ class Exacoat_Warranty_Manager {
 			'permission_callback' => [ __CLASS__, 'check_admin_permission' ],
 		] );
 
+		register_rest_route( 'exacoat-core/v1', '/warranty/marketplace-review-request', [
+			'methods'             => \WP_REST_Server::CREATABLE,
+			'callback'            => [ __CLASS__, 'rest_create_marketplace_review_request' ],
+			'permission_callback' => [ 'Exacoat_Core', 'verify_wc_api_credentials' ],
+		] );
+
 		// Admin / Manager: Centralized RMA Claims Log (Warranty & Redeem)
 		register_rest_route( 'exacoat-core/v1', '/warranty/claims-log', [
 			[
@@ -276,6 +298,10 @@ class Exacoat_Warranty_Manager {
 			return true;
 		}
 
+		if ( class_exists( 'Exacoat_Core' ) && Exacoat_Core::verify_bridge_permission( $request ) ) {
+			return true;
+		}
+
 		$header_secret = $request->get_header( 'x-secret-key' );
 		if ( ! empty( $header_secret ) ) {
 			$expected_secret = defined( 'EXA_WEBHOOK_SECRET' ) ? EXA_WEBHOOK_SECRET : get_option( 'exacoat_webhook_secret', '' );
@@ -284,7 +310,7 @@ class Exacoat_Warranty_Manager {
 			}
 		}
 
-		return true;
+		return false;
 	}
 
 	/**
@@ -1904,7 +1930,79 @@ class Exacoat_Warranty_Manager {
 	 * Admin / Manager review endpoint: Approve or Reject warranty claim
 	 * Automatically deletes video proof file from disk on either decision!
 	 */
+	public static function rest_create_marketplace_review_request( \WP_REST_Request $request ): \WP_REST_Response {
+		if ( Exacoat_Request_Guard::hit( 'rma_review_intake', self::client_ip(), 40, HOUR_IN_SECONDS ) ) {
+			return new \WP_REST_Response( [ 'success' => false ], 429 );
+		}
+
+		$payload = (array) $request->get_json_params();
+		$meta = array_column( (array) ( $payload['meta_data'] ?? [] ), 'value', 'key' );
+		$ref = (string) ( $meta['_rma_unverified_marketplace_ref'] ?? '' );
+		$channel = (string) ( $meta['_rma_marketplace_channel'] ?? '' );
+		$email = strtolower( sanitize_email( $payload['billing']['email'] ?? '' ) );
+		if ( ! preg_match( '/^[A-Z0-9]{13,20}$/D', $ref ) || ! in_array( $channel, [ 'Shopee', 'TikTok Shop' ], true ) ||
+			! preg_match( '/^\d{2}$/D', (string) ( $meta['_rma_recipient_phone_suffix'] ?? '' ) ) ||
+			! is_email( $email ) || empty( $meta['_rma_video_proof_url'] ) ||
+			'on-hold' !== ( $payload['status'] ?? '' ) || 'pending_review' !== ( $meta['_rma_status'] ?? '' ) ||
+			! empty( $payload['payment_method'] ) || ! empty( $payload['set_paid'] ) || isset( $meta['_rma_original_invoice'] ) ) {
+			return new \WP_REST_Response( [ 'success' => false ], 400 );
+		}
+
+		global $wpdb;
+		$key = hash( 'sha256', $channel . '|' . $ref . '|' . $email );
+		$lock = 'exa_rma_intake_' . md5( $wpdb->prefix . $key );
+		if ( '1' !== (string) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 0)', $lock ) ) ) {
+			return new \WP_REST_Response( [ 'success' => false ], 409 );
+		}
+		try {
+			$existing = self::query_order_ids_by_meta(
+				[ [ 'key' => '_rma_marketplace_request_key', 'value' => $key ] ],
+				[ 'limit' => 1, 'status' => [ 'on-hold' ] ]
+			);
+			if ( empty( $existing ) ) {
+				$payload['meta_data'][] = [ 'key' => '_rma_marketplace_request_key', 'value' => $key ];
+				$create = new \WP_REST_Request( 'POST', '/wc/v3/orders' );
+				$create->set_header( 'Content-Type', 'application/json' );
+				$create->set_body( wp_json_encode( $payload ) );
+				$result = rest_do_request( $create );
+				if ( $result->get_status() < 200 || $result->get_status() >= 300 ) {
+					return new \WP_REST_Response( [ 'success' => false ], 502 );
+				}
+			}
+			return new \WP_REST_Response( [ 'success' => true, 'pending_review' => true ], 200 );
+		} finally {
+			$wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock ) );
+		}
+	}
+
 	public static function rest_review_claim( \WP_REST_Request $request ): \WP_REST_Response {
+		$order = wc_get_order( absint( $request->get_param( 'order_id' ) ) );
+		$ref = $order ? (string) $order->get_meta( '_rma_unverified_marketplace_ref' ) : '';
+		if ( '' === $ref ) {
+			return self::review_claim_order( $request );
+		}
+
+		$approving = 'approve' === $request->get_param( 'action' );
+		if ( $approving && true !== $request->get_param( 'marketplace_purchase_verified' ) ) {
+			return new \WP_REST_Response( [ 'success' => false, 'message' => 'Verify the marketplace purchase before approving this claim.' ], 400 );
+		}
+
+		global $wpdb;
+		$lock = 'exa_rma_review_' . md5( $wpdb->prefix . strtoupper( $ref ) );
+		if ( '1' !== (string) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 0)', $lock ) ) ) {
+			return new \WP_REST_Response( [ 'success' => false, 'message' => 'This purchase is being reviewed. Refresh before retrying.' ], 409 );
+		}
+		try {
+			if ( $approving && self::check_invoice_claimed( $ref )['already_claimed'] ) {
+				return new \WP_REST_Response( [ 'success' => false, 'message' => 'A warranty replacement already exists for this purchase.' ], 409 );
+			}
+			return self::review_claim_order( $request );
+		} finally {
+			$wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock ) );
+		}
+	}
+
+	private static function review_claim_order( \WP_REST_Request $request ): \WP_REST_Response {
 		$order_id        = absint( $request->get_param( 'order_id' ) );
 		$action          = sanitize_text_field( $request->get_param( 'action' ) );
 		$reason          = sanitize_textarea_field( $request->get_param( 'reason' ) ?: '' );
@@ -1929,12 +2027,27 @@ class Exacoat_Warranty_Manager {
 
 		$video_path   = $order->get_meta( '_rma_video_file_path' );
 		$video_url    = $order->get_meta( '_rma_video_proof_url' );
-		$parent_id    = $order->get_meta( '_rma_original_invoice' );
-		$parent_order = $parent_id ? wc_get_order( $parent_id ) : null;
+		$unverified   = (string) $order->get_meta( '_rma_unverified_marketplace_ref' );
+		$parent_id    = $unverified ?: $order->get_meta( '_rma_original_invoice' );
+		$parent_order = ! $unverified && $parent_id ? wc_get_order( $parent_id ) : null;
+
+		if ( $unverified && 'pending_review' !== $order->get_meta( '_rma_status' ) ) {
+			return new \WP_REST_Response( [ 'success' => false, 'message' => 'This marketplace request has already been reviewed.' ], 409 );
+		}
 
 		$payment_url = 'https://exacoat.com/pay/' . $order_id . '?key=' . $order->get_order_key();
 
 		if ( 'approve' === $action ) {
+			if ( $unverified ) {
+				$order->update_meta_data( '_rma_original_invoice', $unverified );
+				$order->update_meta_data( '_rma_original_order_number', $unverified );
+				$order->update_meta_data( '_rma_marketplace_verified_at', current_time( 'mysql' ) );
+				if ( (float) $order->get_shipping_total() > 0 ) {
+					$order->set_payment_method( 'midtrans' );
+					$order->set_payment_method_title( 'Midtrans / QRIS' );
+					$order->set_status( 'pending' );
+				}
+			}
 			$order->update_meta_data( '_rma_status', 'approved' );
 			$order->update_meta_data( '_warranty_claim_status', 'approved' );
 			$order->update_meta_data( '_warranty_payment_url', $payment_url );
@@ -1954,6 +2067,9 @@ class Exacoat_Warranty_Manager {
 				$order->set_status( 'processing', sprintf( '%s claim approved by %s. Moving to production.', $order_type, $admin_name ) );
 			} else {
 				$order->add_order_note( sprintf( '%s claim approved by %s. Payment link: %s. Awaiting customer shipping fee payment (Rp %s).', $order_type, $admin_name, $payment_url, number_format( $payable_total, 0, ',', '.' ) ) );
+				if ( $unverified ) {
+					$order->save();
+				}
 
 				// Dispatch automated approval email with official payment link
 				$recipient_email = $order->get_billing_email();
@@ -2182,8 +2298,9 @@ class Exacoat_Warranty_Manager {
 			], 404 );
 		}
 
-		$parent_id = $order->get_meta( '_rma_original_invoice' );
-		$parent_order = $parent_id ? wc_get_order( $parent_id ) : null;
+		$unverified = (string) $order->get_meta( '_rma_unverified_marketplace_ref' );
+		$parent_id = $unverified ?: $order->get_meta( '_rma_original_invoice' );
+		$parent_order = ! $unverified && $parent_id ? wc_get_order( $parent_id ) : null;
 		$channel = $order->get_meta( '_rma_marketplace_channel' ) ?: ( $order->get_meta( '_marketplace_channel' ) ?: ( $order->get_meta( '_channel' ) ?: ( empty( $parent_id ) || is_numeric( $parent_id ) ? 'Web' : 'Shopee' ) ) );
 		$buyer_note = $order->get_meta( '_shopee_buyer_note' ) ?: ( $order->get_meta( '_buyer_note' ) ?: '' );
 
@@ -2214,8 +2331,8 @@ class Exacoat_Warranty_Manager {
 			'success'                 => true,
 			'order_id'                => $order_id,
 			'order_number'            => $order->get_order_number(),
-			'order_key'               => $order->get_order_key(),
-			'payment_url'             => $payment_url,
+			'order_key'               => $unverified && ! $order->get_meta( '_rma_marketplace_verified_at' ) ? '' : $order->get_order_key(),
+			'payment_url'             => $unverified && ! $order->get_meta( '_rma_marketplace_verified_at' ) ? '' : $payment_url,
 			'shipping_cost'           => (float) $order->get_shipping_total(),
 			'is_paid'                 => $order->is_paid(),
 			'order_status'            => $order->get_status(),
@@ -2228,6 +2345,8 @@ class Exacoat_Warranty_Manager {
 			'rma_status'              => $order->get_meta( '_rma_status' ) ?: 'pending_review',
 			'claim_reason'            => $order->get_meta( '_rma_claim_reason' ),
 			'customer_notes'          => $order->get_customer_note(),
+			'requires_marketplace_review' => '' !== $unverified && ! $order->get_meta( '_rma_marketplace_verified_at' ),
+			'recipient_phone_suffix'     => $order->get_meta( '_rma_recipient_phone_suffix' ),
 			'video_proof_url'         => $order->get_meta( '_rma_video_proof_url' ),
 			'video_deleted'           => ! empty( $order->get_meta( '_rma_video_deleted_at' ) ),
 			'video_deleted_at'        => $order->get_meta( '_rma_video_deleted_at' ),
@@ -3749,7 +3868,7 @@ class Exacoat_Warranty_Manager {
 				|| ( 'REDEEM' === strtoupper( (string) $order->get_meta( '_order_badge' ) ) );
 			$order_type     = $is_redeem_flag ? 'Redeem' : 'Warranty';
 			$parent_id      = $order->get_meta( '_rma_original_invoice' );
-			$orig_number    = $order->get_meta( '_rma_original_order_number' ) ?: $parent_id;
+			$orig_number    = $order->get_meta( '_rma_original_order_number' ) ?: ( $parent_id ?: $order->get_meta( '_rma_unverified_marketplace_ref' ) );
 			$mp_channel     = $order->get_meta( '_rma_marketplace_channel' ) ?: ( empty( $parent_id ) ? 'Web' : ( is_numeric( $parent_id ) ? 'Web' : 'Marketplace' ) );
 			$rma_status     = $order->get_meta( '_rma_status' ) ?: ( $order->has_status( [ 'processing', 'completed', 'shipped', 'ready-to-ship' ] ) ? 'approved' : ( $order->has_status( [ 'cancelled', 'failed' ] ) ? 'rejected' : 'pending_review' ) );
 			$claim_reason   = $order->get_meta( '_rma_claim_reason' );

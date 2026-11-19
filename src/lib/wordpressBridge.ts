@@ -5974,6 +5974,8 @@ export async function fetchBcaWebhookStatus(): Promise<{
 // ==========================================
 
 export interface WarrantyClaimDetails {
+  requires_marketplace_review?: boolean;
+  recipient_phone_suffix?: string;
   success: boolean;
   order_id: number;
   order_number: string;
@@ -6039,7 +6041,8 @@ export async function reviewWarrantyClaimDirect(
   action: 'approve' | 'reject',
   reason?: string,
   adminName?: string,
-  allowResubmit?: boolean
+  allowResubmit?: boolean,
+  marketplacePurchaseVerified?: boolean,
 ): Promise<{
   success: boolean;
   rma_status?: string;
@@ -6066,6 +6069,7 @@ export async function reviewWarrantyClaimDirect(
         reason: reason || '',
         admin_name: adminName || 'Aurelia',
         allow_resubmit: !!allowResubmit,
+        marketplace_purchase_verified: marketplacePurchaseVerified === true,
       }),
     });
     const data = await res.json();

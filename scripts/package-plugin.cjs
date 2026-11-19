@@ -116,6 +116,7 @@ async function createPluginZip() {
     last_updated: new Date().toISOString(),
     sections: {
       changelog: `### Version ${version}
+- Shopee and TikTok warranty requests with two phone digits stay on hold until staff verify the purchase
 - Staff can create a Replacement order with a free item and customer-paid shipping
 - Shipping details save the JNE service and WooCommerce shipping prices independently of tracking
 - JNE fulfillment: REG and YES service edits persist and are used in JNE exports
