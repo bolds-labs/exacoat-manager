@@ -199,6 +199,12 @@ class Exacoat_Warranty_Manager {
 			'permission_callback' => [ 'Exacoat_Core', 'verify_wc_api_credentials' ],
 		] );
 
+		register_rest_route( 'exacoat-core/v1', '/warranty/marketplace-phone-mask', [
+			'methods'             => \WP_REST_Server::CREATABLE,
+			'callback'            => [ __CLASS__, 'rest_marketplace_phone_mask' ],
+			'permission_callback' => [ 'Exacoat_Core', 'verify_wc_api_credentials' ],
+		] );
+
 		// Admin / Manager: Centralized RMA Claims Log (Warranty & Redeem)
 		register_rest_route( 'exacoat-core/v1', '/warranty/claims-log', [
 			[
@@ -1599,6 +1605,45 @@ class Exacoat_Warranty_Manager {
 			'postcode'    => $postcode,
 			'rates'       => $rates,
 		], 200 );
+	}
+
+	public static function rest_marketplace_phone_mask( \WP_REST_Request $request ): \WP_REST_Response {
+		$fallback = new \WP_REST_Response( [ 'phone_length' => 12 ], 200 );
+		$channel = $request->get_param( 'channel' );
+		$reference = strtoupper( (string) $request->get_param( 'order_id' ) );
+		$suffix = (string) $request->get_param( 'suffix' );
+		if ( ! preg_match( '/^[0-9]{2}$/D', $suffix ) ) {
+			return $fallback;
+		}
+
+		if ( 'shopee' === $channel && preg_match( '/^[0-9]{6}(?=[A-Z0-9]*[A-Z])[A-Z0-9]{7,10}$/D', $reference ) ) {
+			$cache_key = Exacoat_Shopee_Client::ORDERS_CACHE_KEY;
+			$order_key = 'order_sn';
+		} elseif ( 'tiktok_tokopedia' === $channel && preg_match( '/^[0-9]{17,20}$/D', $reference ) ) {
+			$cache_key = Exacoat_TikTok_Client::ORDERS_CACHE_KEY;
+			$order_key = 'order_id';
+		} else {
+			return $fallback;
+		}
+
+		if ( Exacoat_Request_Guard::hit( 'marketplace_phone_mask_ip', self::client_ip(), 30, HOUR_IN_SECONDS ) ||
+			Exacoat_Request_Guard::hit( 'marketplace_phone_mask_order', $channel . ':' . $reference, 10, HOUR_IN_SECONDS ) ) {
+			return $fallback;
+		}
+
+		foreach ( (array) get_option( $cache_key, [] ) as $order ) {
+			if ( $reference !== strtoupper( (string) ( $order[ $order_key ] ?? '' ) ) ) {
+				continue;
+			}
+			$mask = preg_replace( '/[\s()+-]+/u', '', (string) ( $order['recipient_phone'] ?? '' ) );
+			if ( is_string( $mask ) && preg_match( '/^(?=[0-9*xX•]*[*xX•])([0-9*xX•]{5,13})([0-9]{2})$/uD', $mask, $matches ) &&
+				hash_equals( $matches[2], $suffix ) ) {
+				return new \WP_REST_Response( [ 'phone_length' => preg_match_all( '/./u', $mask ) ], 200 );
+			}
+			return $fallback;
+		}
+
+		return $fallback;
 	}
 
 	/** A paid courier rate (not store pickup, not free shipping, not zero cost). */

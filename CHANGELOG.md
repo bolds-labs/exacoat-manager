@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.235] - 2026-11-19
+
+- Provide the storefront with the length of a cached Shopee or TikTok phone mask when the entered last two digits match.
+
 ## [0.1.234] - 2026-11-19
 
 - Shopee and TikTok Shop customers can submit an Installation Warranty request with the order number and last two phone digits. Staff verify the purchase before they can approve the replacement.

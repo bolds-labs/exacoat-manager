@@ -116,6 +116,7 @@ async function createPluginZip() {
     last_updated: new Date().toISOString(),
     sections: {
       changelog: `### Version ${version}
+- Shopee and TikTok warranty forms can size the fixed phone prefix from the cached marketplace mask
 - Shopee and TikTok warranty requests with two phone digits stay on hold until staff verify the purchase
 - Staff can create a Replacement order with a free item and customer-paid shipping
 - Shipping details save the JNE service and WooCommerce shipping prices independently of tracking
