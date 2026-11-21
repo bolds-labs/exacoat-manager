@@ -111,6 +111,7 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [claim, setClaim] = useState<WarrantyClaimDetails | null>(null);
   const [purchaseVerified, setPurchaseVerified] = useState(false);
+  const [selectedSourceItemIds, setSelectedSourceItemIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   // Review action state
@@ -291,6 +292,7 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
   useEffect(() => {
     if (isOpen && orderId) {
       setPurchaseVerified(false);
+      setSelectedSourceItemIds([]);
       setShowRejectInput(false);
       setRejectionReason('');
       setAllowResubmit(false);
@@ -304,7 +306,7 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
     if (!orderId) return;
     setIsProcessing(true);
 
-    const res = await reviewWarrantyClaimDirect(orderId, 'approve', undefined, undefined, false, purchaseVerified);
+    const res = await reviewWarrantyClaimDirect(orderId, 'approve', undefined, undefined, false, purchaseVerified, selectedSourceItemIds);
     setIsProcessing(false);
 
     if (res.success) {
@@ -393,7 +395,7 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
                 <Button variant="danger" icon={XCircle} onClick={() => setShowRejectInput(true)} disabled={isProcessing}>
                   Reject claim
                 </Button>
-                <Button variant="primary" icon={CheckCircle2} onClick={handleApprove} disabled={isProcessing || (claim.requires_marketplace_review && !purchaseVerified)}>
+                <Button variant="primary" icon={CheckCircle2} onClick={handleApprove} disabled={isProcessing || (claim.requires_marketplace_review && (!purchaseVerified || selectedSourceItemIds.length === 0))}>
                   {isProcessing ? 'Approving...' : 'Approve claim'}
                 </Button>
               </>
@@ -443,6 +445,23 @@ export const WarrantyReviewModal: React.FC<WarrantyReviewModalProps> = ({
                 {" "}in Seller Centre. Submitted phone ending <strong className="font-mono text-fg">***{claim.recipient_phone_suffix}</strong>.
                 Verify the requester, items, delivery date and warranty window before approval.
               </p>
+              <fieldset className="space-y-1">
+                <legend className="font-medium">Select invoice items to replace</legend>
+                <p className="text-muted">Each selected invoice line creates one replacement unit.</p>
+                {claim.marketplace_source_items?.length ? claim.marketplace_source_items.map(item => (
+                  <label key={item.id} className="flex min-h-9 items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedSourceItemIds.includes(item.id)}
+                      onChange={event => {
+                        const checked = event.target.checked;
+                        setSelectedSourceItemIds(ids => checked ? [...ids, item.id] : ids.filter(id => id !== item.id));
+                      }}
+                    />
+                    <span>{item.name} · Purchased quantity {item.quantity}{item.sku ? ` · ${item.sku}` : ''}</span>
+                  </label>
+                )) : <p className="text-muted">Invoice items are unavailable. Refresh after the marketplace order syncs.</p>}
+              </fieldset>
               <label className="flex min-h-9 items-center gap-2">
                 <input type="checkbox" checked={purchaseVerified} onChange={event => setPurchaseVerified(event.target.checked)} />
                 I verified the purchase and confirmed the order meets the Installation Warranty requirements.

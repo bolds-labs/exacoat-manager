@@ -75,13 +75,15 @@ export function formatCleanText(str: string | null | undefined): string {
 }
 
 /**
- * Normalizes all string fields in an address object.
+ * Normalizes address display fields while preserving email addresses.
  */
 export function cleanAddressObject<T extends Record<string, any> | undefined | null>(addr: T): T {
   if (!addr || typeof addr !== 'object') return addr;
   const cleaned: Record<string, any> = {};
   for (const [key, val] of Object.entries(addr)) {
-    if (typeof val === 'string') {
+    if (key === 'email') {
+      cleaned[key] = val;
+    } else if (typeof val === 'string') {
       cleaned[key] = formatCleanText(val);
     } else if (val && typeof val === 'object' && !Array.isArray(val)) {
       cleaned[key] = cleanAddressObject(val);

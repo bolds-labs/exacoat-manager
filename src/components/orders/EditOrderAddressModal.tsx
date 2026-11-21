@@ -130,13 +130,13 @@ export const EditOrderAddressModal: React.FC<EditOrderAddressModalProps> = ({
       email: cleanEmail,
     } : {
       ...(order.billing || {}),
-      email: cleanEmail || order.billing?.email,
+      email: cleanEmail,
       phone: cleanPhone || order.billing?.phone,
     };
 
     const payload: UpdateOrderPayload = {
       customer_name: fullName || order.customer_name,
-      customer_email: cleanEmail || order.customer_email,
+      customer_email: cleanEmail,
       customer_phone: cleanPhone || order.customer_phone,
       customer_note: cleanNote,
       is_store_pickup: isStoreAddr ? true : false,
@@ -146,34 +146,20 @@ export const EditOrderAddressModal: React.FC<EditOrderAddressModalProps> = ({
 
     try {
       const res = await updateOrderDirect(order.id, payload);
-      if (res.success && res.order) {
-        if (!isStoreAddr) {
-          toggleLocalStorePickupOrder(order.id, false);
-        }
-        showToast('success', 'Address Updated', `Delivery details for Order ${order.order_number || `#${order.id}`} successfully saved.`);
-        onSaved(res.order);
-        onClose();
-      } else {
-        // Fallback optimistic update if server responds with error in offline/local mock
-        const fallbackOrder: Order = {
-          ...order,
-          customer_name: fullName || order.customer_name,
-          customer_email: cleanEmail || order.customer_email,
-          customer_phone: cleanPhone || order.customer_phone,
-          customer_note: cleanNote,
-          shipping: {
-            ...(order.shipping || {}),
-            ...shippingData,
-          },
-          billing: {
-            ...(order.billing || {}),
-            ...billingData,
-          },
-        };
-        showToast('success', 'Address Updated', `Delivery details for Order ${order.order_number || `#${order.id}`} updated locally.`);
-        onSaved(fallbackOrder);
-        onClose();
+      if (!res.success || !res.order) {
+        setErrorMsg(res.error || 'Failed to update address');
+        return;
       }
+      if ((res.order.customer_email || '') !== cleanEmail || (res.order.billing?.email || '') !== cleanEmail) {
+        setErrorMsg('The saved order still has a different customer email address.');
+        return;
+      }
+      if (!isStoreAddr) {
+        toggleLocalStorePickupOrder(order.id, false);
+      }
+      showToast('success', 'Address Updated', `Delivery details for Order ${order.order_number || `#${order.id}`} successfully saved.`);
+      onSaved(res.order);
+      onClose();
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to update address');
     } finally {

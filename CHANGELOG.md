@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.236] - 2026-11-21
+
+- Enforce purchase-level duplicate checks and validate Installation Warranty items against the original invoice.
+- Save order email corrections across the contact fields used by Manager and warranty orders.
+
 ## [0.1.235] - 2026-11-19
 
 - Provide the storefront with the length of a cached Shopee or TikTok phone mask when the entered last two digits match.

@@ -232,6 +232,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
   // Channel & Reference
   const [channel, setChannel] = useState<string>('Tokopedia');
   const [marketplaceInvoice, setMarketplaceInvoice] = useState('');
+  const [verifiedManualInvoice, setVerifiedManualInvoice] = useState('');
 
   // Customer & Address
   const [customerName, setCustomerName] = useState('');
@@ -252,6 +253,10 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
   const [searchedProducts, setSearchedProducts] = useState<Product[]>([]);
   const [isSearchingProducts, setIsSearchingProducts] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const requiresManualInvoiceVerification = !isReplacement && !isExisting &&
+    !['Shopee', 'TikTok Shop'].includes(channel);
+  const manualInvoiceSelection = JSON.stringify([channel, marketplaceInvoice.trim(), selectedProduct?.id]);
+  const manualInvoiceVerified = verifiedManualInvoice === manualInvoiceSelection;
 
   // Configuration Dual Mode (Mode A: Visual Finishes vs Mode B: Quick Variant Text)
   const [configMode, setConfigMode] = useState<'modeA' | 'modeB'>('modeA');
@@ -364,7 +369,8 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
     existingOrderNumber?: string;
     existingOrderType?: string;
   } | null>(null);
-  const [allowDuplicateOverride, setAllowDuplicateOverride] = useState(false);
+  const [duplicateOverrideRequested, setAllowDuplicateOverride] = useState(false);
+  const allowDuplicateOverride = claimType === 'Redeem' && duplicateOverrideRequested;
 
   // Sync initialClaimType when prop changes or modal opens
   useEffect(() => {
@@ -843,8 +849,12 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
         showToast('error', 'Invoice Required', 'Please enter the marketplace order number / invoice.');
         return;
       }
+      if (requiresManualInvoiceVerification && !manualInvoiceVerified) {
+        showToast('error', 'Verify invoice items', 'Confirm the selected product and quantity against the original invoice.');
+        return;
+      }
       if (!isReplacement && invoiceStatus?.checked && !invoiceStatus.available && !allowDuplicateOverride) {
-        showToast('error', 'Duplicate Invoice Blocked', invoiceStatus.message || 'This invoice has already been claimed or redeemed. Check "Allow duplicate claim" to override.');
+        showToast('error', 'Duplicate Invoice Blocked', invoiceStatus.message || 'This invoice has already been claimed or redeemed.');
         return;
       }
       if (!customerName.trim() || !customerPhone.trim()) {
@@ -865,7 +875,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
         return;
       }
       if (isParentAlreadyClaimed && !allowDuplicateOverride) {
-        showToast('error', 'Order Already Claimed', 'This order has already been processed for an RMA warranty or redeem replacement. Check "Allow secondary RMA claim" to override.');
+        showToast('error', 'Order Already Claimed', 'This order has already been processed for an RMA warranty or redeem replacement.');
         return;
       }
     }
@@ -966,6 +976,7 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
           rma_type: claimType,
           channel,
           marketplace_invoice: marketplaceInvoice.trim(),
+          marketplace_purchase_verified: requiresManualInvoiceVerification && manualInvoiceVerified,
           buyer_note: initialShopeeOrder?.buyer_note || '',
           customer_name: customerName.trim(),
           customer_phone: customerPhone.trim(),
@@ -1168,6 +1179,16 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
                   <span>Checking invoice history for duplicates...</span>
                 </div>
               )}
+              {requiresManualInvoiceVerification && selectedProduct && (
+                <label className="mt-3 flex items-start gap-2 text-sm text-neutral-200">
+                  <input
+                    type="checkbox"
+                    checked={manualInvoiceVerified}
+                    onChange={(event) => setVerifiedManualInvoice(event.target.checked ? manualInvoiceSelection : '')}
+                  />
+                  I checked the original invoice and verified that it covers one unit of {selectedProduct.name}.
+                </label>
+              )}
               {invoiceStatus?.checked && !invoiceStatus.available && (
                 <div className={clsx(
                   "mt-2 p-3.5 rounded-xl border text-xs space-y-2.5 transition-colors",
@@ -1191,22 +1212,24 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-white/[0.08] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <label className="flex items-center gap-2 cursor-pointer select-none text-amber-300 text-xs font-semibold">
-                      <input
-                        type="checkbox"
-                        checked={allowDuplicateOverride}
-                        onChange={(e) => setAllowDuplicateOverride(e.target.checked)}
-                        className="w-4 h-4 rounded border-amber-500/50 bg-neutral-900 text-amber-500 focus:ring-amber-400 focus:ring-offset-neutral-950 cursor-pointer"
-                      />
-                      <span>Allow duplicate claim (Admin Override)</span>
-                    </label>
-                    {allowDuplicateOverride && (
-                      <span className="text-[11px] text-amber-400/90 font-mono">
-                        Override active. Reason will be logged in order notes.
-                      </span>
-                    )}
-                  </div>
+                  {claimType === 'Redeem' && (
+                    <div className="pt-2 border-t border-white/[0.08] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <label className="flex items-center gap-2 cursor-pointer select-none text-amber-300 text-xs font-semibold">
+                        <input
+                          type="checkbox"
+                          checked={allowDuplicateOverride}
+                          onChange={(e) => setAllowDuplicateOverride(e.target.checked)}
+                          className="w-4 h-4 rounded border-amber-500/50 bg-neutral-900 text-amber-500 focus:ring-amber-400 focus:ring-offset-neutral-950 cursor-pointer"
+                        />
+                        <span>Allow duplicate claim (Admin Override)</span>
+                      </label>
+                      {allowDuplicateOverride && (
+                        <span className="text-[11px] text-amber-400/90 font-mono">
+                          Override active. Reason will be logged in order notes.
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
               {invoiceStatus?.checked && invoiceStatus.available && (
@@ -1242,27 +1265,29 @@ export const ManualWarrantyModal: React.FC<ManualWarrantyModalProps> = ({
                       {allowDuplicateOverride ? "Order RMA (Admin Override Active)" : "Order Already Processed for RMA"}
                     </p>
                     <p className="mt-0.5 opacity-90 leading-relaxed">
-                      This order has already been processed for an RMA warranty or redeem replacement. Duplicate replacements are restricted without admin authorization.
+                      This order has already been processed for an RMA warranty or redeem replacement.
                     </p>
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-white/[0.08] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <label className="flex items-center gap-2 cursor-pointer select-none text-amber-300 text-xs font-semibold">
-                    <input
-                      type="checkbox"
-                      checked={allowDuplicateOverride}
-                      onChange={(e) => setAllowDuplicateOverride(e.target.checked)}
-                      className="w-4 h-4 rounded border-amber-500/50 bg-neutral-900 text-amber-500 focus:ring-amber-400 focus:ring-offset-neutral-950 cursor-pointer"
-                    />
-                    <span>Allow secondary RMA claim (Admin Override)</span>
-                  </label>
-                  {allowDuplicateOverride && (
-                    <span className="text-[11px] text-amber-400/90 font-mono">
-                      Override active. Secondary replacement permitted.
-                    </span>
-                  )}
-                </div>
+                {claimType === 'Redeem' && (
+                  <div className="pt-2 border-t border-white/[0.08] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <label className="flex items-center gap-2 cursor-pointer select-none text-amber-300 text-xs font-semibold">
+                      <input
+                        type="checkbox"
+                        checked={allowDuplicateOverride}
+                        onChange={(e) => setAllowDuplicateOverride(e.target.checked)}
+                        className="w-4 h-4 rounded border-amber-500/50 bg-neutral-900 text-amber-500 focus:ring-amber-400 focus:ring-offset-neutral-950 cursor-pointer"
+                      />
+                      <span>Allow secondary RMA claim (Admin Override)</span>
+                    </label>
+                    {allowDuplicateOverride && (
+                      <span className="text-[11px] text-amber-400/90 font-mono">
+                        Override active. Secondary replacement permitted.
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             )}
             <label className="text-sm font-semibold text-fg">

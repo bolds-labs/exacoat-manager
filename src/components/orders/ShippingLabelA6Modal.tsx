@@ -733,7 +733,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
   // If order has Goorita AWB: Sheet 1 is USPS AWB, Sheet 2+ is Exacoat packing manifest
   const totalSheetsForOrder = hasActiveGooritaAwb ? 1 + activeTotalPages : activeTotalPages;
   const safePreviewPageIndex = Math.min(previewPageIndex, Math.max(0, totalSheetsForOrder - 1));
-  const activeUnitsCount = activeOrder.item_count || activeOrderItems.reduce((acc: number, it: any) => acc + (it.quantity || 1), 0);
+  const activeUnitsCount = activeOrderItems.reduce((acc: number, it: any) => acc + Number(it.quantity ?? 1), 0);
 
   let previewHtml = '';
   if (hasActiveGooritaAwb && safePreviewPageIndex === 0) {
@@ -801,7 +801,7 @@ export const ShippingLabelA6Modal: React.FC<ShippingLabelA6ModalProps> = ({
         ? ord.items
         : (ord.line_items && ord.line_items.length > 0 ? ord.line_items : []);
       const { pages, totalPages } = chunkOrderItems(ordItems, rAddrLines.length, Boolean(cTrack));
-      const totalUnitsCount = ord.item_count || ordItems.reduce((acc: number, it: any) => acc + (it.quantity || 1), 0);
+      const totalUnitsCount = ordItems.reduce((acc: number, it: any) => acc + Number(it.quantity ?? 1), 0);
 
       const ordAwbImg = gooritaAwbImages[ord.id];
       const ordHasAwb = Boolean(ordAwbImg);

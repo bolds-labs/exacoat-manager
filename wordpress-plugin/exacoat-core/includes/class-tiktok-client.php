@@ -938,8 +938,9 @@ class Exacoat_TikTok_Client {
 
 			$items[] = [
 				'item_id'           => (string) ( $item['id'] ?? ( $item['item_id'] ?? '' ) ),
-				'item_name'         => trim( (string) ( $item['product_name'] ?? ( $item['item_name'] ?? 'Exacoat Skin' ) ) ),
+				'item_name'         => trim( (string) ( $item['product_name'] ?? ( $item['item_name'] ?? '' ) ) ),
 				'sku_id'            => (string) ( $item['sku_id'] ?? '' ),
+				'seller_sku'        => (string) ( $item['seller_sku'] ?? '' ),
 				'sku_name'          => trim( (string) ( $item['sku_name'] ?? ( $item['model_name'] ?? '' ) ) ),
 				'quantity'          => $qty,
 				'price'             => $gross_price > 0 ? $gross_price : $sale_price,

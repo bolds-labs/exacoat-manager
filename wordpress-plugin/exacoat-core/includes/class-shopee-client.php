@@ -880,9 +880,9 @@ class Exacoat_Shopee_Client {
 		$original_subtotal = 0.0;
 		foreach ( ( $ord['item_list'] ?? [] ) as $item ) {
 			$var_name = trim( $item['model_name'] ?? '' );
-			$prod_name = trim( $item['item_name'] ?? 'Exacoat Skin' );
+			$prod_name = trim( $item['item_name'] ?? '' );
 			$item_note = trim( (string) ( $item['order_item_note'] ?? ( $item['item_note'] ?? ( $item['note'] ?? '' ) ) ) );
-			$qty = (int) ( $item['model_quantity_purchased'] ?? 1 );
+			$qty = (int) ( $item['model_quantity_purchased'] ?? 0 );
 			$disc_price = (float) ( $item['model_discounted_price'] ?? $item['model_original_price'] ?? 0 );
 			$orig_price = (float) ( $item['model_original_price'] ?? $disc_price );
 			$items_subtotal += $disc_price * $qty;
@@ -893,6 +893,7 @@ class Exacoat_Shopee_Client {
 				'item_name'        => $prod_name,
 				'model_id'         => $item['model_id'] ?? 0,
 				'model_name'       => $var_name,
+				'seller_sku'       => (string) ( ( $item['model_sku'] ?? '' ) ?: ( $item['item_sku'] ?? '' ) ),
 				'quantity'         => $qty,
 				'price'            => $disc_price,
 				'original_price'   => $orig_price,
@@ -2239,10 +2240,11 @@ class Exacoat_Shopee_Client {
 					$item_note = trim( (string) ( $item['order_item_note'] ?? ( $item['item_note'] ?? ( $item['note'] ?? '' ) ) ) );
 					$items[] = [
 						'item_id'    => $item['item_id'] ?? 0,
-						'item_name'  => trim( $item['item_name'] ?? 'Exacoat Skin' ),
+						'item_name'  => trim( $item['item_name'] ?? '' ),
 						'model_id'   => $item['model_id'] ?? 0,
 						'model_name' => trim( $item['model_name'] ?? '' ),
-						'quantity'   => (int) ( $item['model_quantity_purchased'] ?? 1 ),
+						'seller_sku' => (string) ( ( $item['model_sku'] ?? '' ) ?: ( $item['item_sku'] ?? '' ) ),
+						'quantity'   => (int) ( $item['model_quantity_purchased'] ?? 0 ),
 						'price'      => (float) ( $item['model_discounted_price'] ?? $item['model_original_price'] ?? 0 ),
 						'image_url'  => $item['image_info']['image_url'] ?? '',
 						'note'       => $item_note,

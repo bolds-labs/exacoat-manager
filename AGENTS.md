@@ -2050,3 +2050,9 @@ Whenever any changes are made to the frontend or the `wordpress-plugin/exacoat-c
 - **Deploy together**: same secret as signed cart prices. Install the plugin, then deploy the storefront right away: in between, Indonesian courier checkouts are refused with the message above (pickup and international keep working).
 - **Message**: "Shipping rates changed, please choose a courier again. If the courier options do not reload, refresh the page."
 - **Tests**: `tests/shipping-quote-test.php`, `tests/headless-shipping-test.php`, `tests/warranty-claim-guard-test.php`; exacoat-web `lib/server/shipping-quote-signature.test.ts`, `lib/server/warranty-shipping.test.ts`, `lib/server/checkout-shipping.test.ts`. Report: `docs/superpowers/plans/2026-11-15-shipping-pricing-report.md`.
+
+## Warranty and order contact corrections (0.1.236)
+
+- Serialize Installation Warranty creation and approval by original purchase and recheck existing claims inside the lock. Use the verified marketplace invoice lines to establish the product and allowed quantity.
+- Order contact edits must update WooCommerce billing and any existing warranty and customer email metadata together. Manager confirms the returned order before closing the editor. Order contact corrections apply to that order.
+- For A6 shipping labels, sum the quantities in the printed item rows. The order serializer’s item_count counts rows.

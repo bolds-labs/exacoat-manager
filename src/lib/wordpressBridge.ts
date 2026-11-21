@@ -5975,6 +5975,7 @@ export async function fetchBcaWebhookStatus(): Promise<{
 
 export interface WarrantyClaimDetails {
   requires_marketplace_review?: boolean;
+  marketplace_source_items?: Array<{ id: string; name: string; quantity: number; sku: string }>;
   recipient_phone_suffix?: string;
   success: boolean;
   order_id: number;
@@ -6043,6 +6044,7 @@ export async function reviewWarrantyClaimDirect(
   adminName?: string,
   allowResubmit?: boolean,
   marketplacePurchaseVerified?: boolean,
+  marketplaceSourceItemIds?: string[],
 ): Promise<{
   success: boolean;
   rma_status?: string;
@@ -6070,6 +6072,7 @@ export async function reviewWarrantyClaimDirect(
         admin_name: adminName || 'Aurelia',
         allow_resubmit: !!allowResubmit,
         marketplace_purchase_verified: marketplacePurchaseVerified === true,
+        marketplace_source_item_ids: marketplaceSourceItemIds,
       }),
     });
     const data = await res.json();
@@ -6204,6 +6207,7 @@ export interface ManualWarrantyClaimPayload {
   selected_parts?: Record<string | number, string[]>;
   channel?: 'Tokopedia' | 'Shopee' | 'TikTok Shop' | 'Manual / WhatsApp' | string;
   marketplace_invoice?: string;
+  marketplace_purchase_verified?: boolean;
   buyer_note?: string;
   customer_name?: string;
   customer_phone?: string;

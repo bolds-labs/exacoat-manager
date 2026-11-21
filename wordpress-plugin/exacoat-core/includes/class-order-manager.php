@@ -1385,6 +1385,14 @@ class Exacoat_Order_Manager {
 			return new WP_Error( 'not_found', 'Order not found', [ 'status' => 404 ] );
 		}
 
+		$email = $params['billing']['email'] ?? $params['customer_email'] ?? null;
+		if ( null !== $email ) {
+			$email = is_string( $email ) ? trim( $email ) : false;
+			if ( false === $email || ( '' !== $email && ! is_email( $email ) ) ) {
+				return new WP_Error( 'invalid_customer_email', 'Enter a valid customer email address.', [ 'status' => 400 ] );
+			}
+		}
+
 		$audit_notes = [];
 
 		$jne_service = $params['jne_service'] ?? null;
@@ -1432,11 +1440,18 @@ class Exacoat_Order_Manager {
 			$order->set_shipping_last_name( sanitize_text_field( $name_parts[1] ?? '' ) );
 		}
 
-		if ( isset( $params['customer_email'] ) ) {
-			$email = sanitize_email( $params['customer_email'] );
+		if ( null !== $email ) {
+			$email = sanitize_email( $email );
 			$order->set_billing_email( $email );
 			if ( method_exists( $order, 'set_shipping_email' ) ) {
 				$order->set_shipping_email( $email );
+			}
+			foreach ( [ '_customer_email', '_warranty_email' ] as $key ) {
+				if ( '' === $email ) {
+					$order->delete_meta_data( $key );
+				} elseif ( $order->meta_exists( $key ) ) {
+					$order->update_meta_data( $key, $email );
+				}
 			}
 		}
 
@@ -1563,7 +1578,6 @@ class Exacoat_Order_Manager {
 			if ( isset( $b['state'] ) )      $order->set_billing_state( sanitize_text_field( $b['state'] ) );
 			if ( isset( $b['postcode'] ) )   $order->set_billing_postcode( sanitize_text_field( $b['postcode'] ) );
 			if ( isset( $b['country'] ) )    $order->set_billing_country( sanitize_text_field( $b['country'] ) );
-			if ( isset( $b['email'] ) )      $order->set_billing_email( sanitize_email( $b['email'] ) );
 			if ( isset( $b['phone'] ) )      $order->set_billing_phone( sanitize_text_field( $b['phone'] ) );
 		}
 
@@ -2917,7 +2931,7 @@ class Exacoat_Order_Manager {
 				'amount_refunded'      => $amt_refunded,
 				'tax_refunded'         => $tax_refunded,
 				'is_refunded'          => $qty_refunded >= $quantity,
-				'sku'                  => $product ? $product->get_sku() : '',
+				'sku'                  => $item->get_meta( 'Marketplace SKU' ) ?: ( $product ? $product->get_sku() : '' ),
 				'image_url'            => $img_url,
 				'orientation'          => $orientation,
 				'feelform_mode'        => $feelform,
@@ -3347,7 +3361,9 @@ class Exacoat_Order_Manager {
 		}
 		$cleaned = [];
 		foreach ( $addr as $key => $val ) {
-			if ( is_string( $val ) ) {
+			if ( 'email' === $key ) {
+				$cleaned[ $key ] = $val;
+			} elseif ( is_string( $val ) ) {
 				$decoded = html_entity_decode( $val, ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 				if ( false !== strpos( $decoded, '&' ) ) {
 					$decoded = html_entity_decode( $decoded, ENT_QUOTES | ENT_HTML5, 'UTF-8' );

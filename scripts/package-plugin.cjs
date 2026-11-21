@@ -116,6 +116,7 @@ async function createPluginZip() {
     last_updated: new Date().toISOString(),
     sections: {
       changelog: `### Version ${version}
+- Warranty orders check the original purchase for duplicate claims and replacement quantities; order email edits update the saved contact
 - Shopee and TikTok warranty forms can size the fixed phone prefix from the cached marketplace mask
 - Shopee and TikTok warranty requests with two phone digits stay on hold until staff verify the purchase
 - Staff can create a Replacement order with a free item and customer-paid shipping

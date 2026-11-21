@@ -20,6 +20,7 @@ class Exacoat_Warranty_Manager {
 	const OPTION_WARRANTY_CODES = 'exacoat_warranty_codes';
 
 	const RATES_UNAVAILABLE_MESSAGE = 'Shipping rates are unavailable right now, please try again shortly.';
+	private static array $rest_claim_locks = [];
 
 	// Cloudflare ranges and the trusted client IP live in Exacoat_Request_Guard.
 
@@ -55,6 +56,8 @@ class Exacoat_Warranty_Manager {
 		add_action( 'woocommerce_order_status_completed', [ __CLASS__, 'record_delivery_timestamp' ], 10, 1 );
 		add_action( 'woocommerce_order_status_changed', [ __CLASS__, 'on_status_changed' ], 10, 4 );
 		add_action( 'woocommerce_before_order_object_save', [ __CLASS__, 'hold_unverified_marketplace_claim' ] );
+		add_filter( 'woocommerce_rest_pre_insert_shop_order_object', [ __CLASS__, 'guard_rest_claim_creation' ], PHP_INT_MAX, 3 );
+		add_filter( 'rest_request_after_callbacks', [ __CLASS__, 'release_rest_claim_lock' ], PHP_INT_MAX, 3 );
 		add_filter( 'woocommerce_order_needs_payment', [ __CLASS__, 'marketplace_review_payment_allowed' ], 10, 2 );
 		add_filter( 'woocommerce_email_enabled_customer_on_hold_order', [ __CLASS__, 'marketplace_review_payment_allowed' ], 10, 2 );
 
@@ -66,6 +69,58 @@ class Exacoat_Warranty_Manager {
 		if ( ! wp_next_scheduled( 'exacoat_purge_stale_warranty_proofs' ) ) {
 			wp_schedule_event( time() + 3600, 'daily', 'exacoat_purge_stale_warranty_proofs' );
 		}
+	}
+
+	private static function acquire_claim_lock( string $reference, string $namespace = 'exa_rma_' ): ?string {
+		global $wpdb;
+		$canonical = strtoupper( ltrim( trim( $reference ), "# \t" ) );
+		$lock = $namespace . md5( $wpdb->prefix . $canonical );
+		return '1' === (string) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 0)', $lock ) ) ? $lock : null;
+	}
+
+	private static function release_claim_lock( string $lock ): void {
+		global $wpdb;
+		$wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock ) );
+	}
+
+	public static function guard_rest_claim_creation( $order, \WP_REST_Request $request, bool $creating ) {
+		if ( ! $creating || ! $order instanceof \WC_Order || 'yes' !== $order->get_meta( '_is_warranty_claim' ) ) {
+			return $order;
+		}
+		$reference = (string) $order->get_meta( '_rma_original_invoice' );
+		if ( '' === $reference && $order->get_meta( '_rma_unverified_marketplace_ref' ) ) {
+			return $order;
+		}
+		if ( '' === trim( $reference, "# \t" ) ) {
+			return new \WP_Error( 'warranty_purchase_required', 'Select the original purchase before creating a claim.', [ 'status' => 400 ] );
+		}
+
+		$lock = self::acquire_claim_lock( $reference );
+		if ( null === $lock ) {
+			return new \WP_Error( 'warranty_claim_in_progress', 'A replacement claim is already being submitted for this purchase.', [ 'status' => 409 ] );
+		}
+		$guarded = false;
+		try {
+			if ( self::check_invoice_claimed( $reference )['already_claimed'] ) {
+				return new \WP_Error( 'warranty_already_claimed', 'A warranty replacement already exists for this purchase.', [ 'status' => 409 ] );
+			}
+			self::$rest_claim_locks[ spl_object_id( $request ) ] = $lock;
+			$guarded = true;
+			return $order;
+		} finally {
+			if ( ! $guarded ) {
+				self::release_claim_lock( $lock );
+			}
+		}
+	}
+
+	public static function release_rest_claim_lock( $response, $handler, \WP_REST_Request $request ) {
+		$key = spl_object_id( $request );
+		if ( isset( self::$rest_claim_locks[ $key ] ) ) {
+			self::release_claim_lock( self::$rest_claim_locks[ $key ] );
+			unset( self::$rest_claim_locks[ $key ] );
+		}
+		return $response;
 	}
 
 	public static function hold_unverified_marketplace_claim( $order ): void {
@@ -1755,7 +1810,21 @@ class Exacoat_Warranty_Manager {
 			], 400 );
 		}
 
-		if ( 'yes' === $parent_order->get_meta( '_has_warranty_claim' ) || 'yes' === $parent_order->get_meta( '_has_redeem_claim' ) || ! empty( $parent_order->get_meta( '_warranty_replacement_order_id' ) ) || ! empty( $parent_order->get_meta( '_redeem_replacement_order_id' ) ) ) {
+		$lock = self::acquire_claim_lock( (string) $parent_order_id );
+		if ( null === $lock ) {
+			return new \WP_REST_Response( [ 'success' => false, 'message' => 'A replacement claim is already being submitted for this purchase.' ], 409 );
+		}
+		try {
+			return self::submit_claim_for_purchase( $request, $parent_order, $parent_order_id );
+		} finally {
+			self::release_claim_lock( $lock );
+		}
+	}
+
+	private static function submit_claim_for_purchase( \WP_REST_Request $request, \WC_Order $parent_order, int $parent_order_id ): \WP_REST_Response {
+		if ( self::check_invoice_claimed( (string) $parent_order_id )['already_claimed'] ||
+			'yes' === $parent_order->get_meta( '_has_warranty_claim' ) || 'yes' === $parent_order->get_meta( '_has_redeem_claim' ) ||
+			$parent_order->get_meta( '_warranty_replacement_order_id' ) || $parent_order->get_meta( '_redeem_replacement_order_id' ) ) {
 			return new \WP_REST_Response( [
 				'success' => false,
 				'message' => 'A replacement claim has already been submitted for this order. Only one claim is permitted per purchase.',
@@ -1993,13 +2062,15 @@ class Exacoat_Warranty_Manager {
 			return new \WP_REST_Response( [ 'success' => false ], 400 );
 		}
 
-		global $wpdb;
 		$key = hash( 'sha256', $channel . '|' . $ref . '|' . $email );
-		$lock = 'exa_rma_intake_' . md5( $wpdb->prefix . $key );
-		if ( '1' !== (string) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 0)', $lock ) ) ) {
+		$lock = self::acquire_claim_lock( $ref );
+		if ( null === $lock ) {
 			return new \WP_REST_Response( [ 'success' => false ], 409 );
 		}
 		try {
+			if ( self::check_invoice_claimed( $ref )['already_claimed'] ) {
+				return new \WP_REST_Response( [ 'success' => true, 'pending_review' => true ], 200 );
+			}
 			$existing = self::query_order_ids_by_meta(
 				[ [ 'key' => '_rma_marketplace_request_key', 'value' => $key ] ],
 				[ 'limit' => 1, 'status' => [ 'on-hold' ] ]
@@ -2016,7 +2087,7 @@ class Exacoat_Warranty_Manager {
 			}
 			return new \WP_REST_Response( [ 'success' => true, 'pending_review' => true ], 200 );
 		} finally {
-			$wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock ) );
+			self::release_claim_lock( $lock );
 		}
 	}
 
@@ -2032,9 +2103,8 @@ class Exacoat_Warranty_Manager {
 			return new \WP_REST_Response( [ 'success' => false, 'message' => 'Verify the marketplace purchase before approving this claim.' ], 400 );
 		}
 
-		global $wpdb;
-		$lock = 'exa_rma_review_' . md5( $wpdb->prefix . strtoupper( $ref ) );
-		if ( '1' !== (string) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 0)', $lock ) ) ) {
+		$lock = self::acquire_claim_lock( $ref );
+		if ( null === $lock ) {
 			return new \WP_REST_Response( [ 'success' => false, 'message' => 'This purchase is being reviewed. Refresh before retrying.' ], 409 );
 		}
 		try {
@@ -2043,8 +2113,99 @@ class Exacoat_Warranty_Manager {
 			}
 			return self::review_claim_order( $request );
 		} finally {
-			$wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock ) );
+			self::release_claim_lock( $lock );
 		}
+	}
+
+	private static function marketplace_invoice_items( string $channel, string $ref ): array {
+		if ( ! in_array( $channel, [ 'Shopee', 'TikTok Shop', 'TikTok' ], true ) ) {
+			return [];
+		}
+		$is_shopee = 'Shopee' === $channel;
+		$client = $is_shopee ? 'Exacoat_Shopee_Client' : 'Exacoat_TikTok_Client';
+		if ( ! class_exists( $client ) ) {
+			return [];
+		}
+		$source = null;
+		foreach ( (array) get_option( $client::ORDERS_CACHE_KEY, [] ) as $candidate ) {
+			$candidate_ref = (string) ( $candidate[ $is_shopee ? 'order_sn' : 'order_id' ] ?? '' );
+			if ( 0 === strcasecmp( $candidate_ref, $ref ) ) {
+				$source = $candidate;
+				break;
+			}
+		}
+		if ( ! $source ) {
+			try {
+				$source = $client::fetch_single_order_live( $ref );
+			} catch ( \Throwable $error ) {
+				return [];
+			}
+		}
+		$source_ref = (string) ( $source[ $is_shopee ? 'order_sn' : 'order_id' ] ?? '' );
+		if ( 0 !== strcasecmp( $source_ref, $ref ) ) {
+			return [];
+		}
+		return self::verified_invoice_lines( (array) ( $source['items'] ?? [] ), $is_shopee );
+	}
+
+	public static function verified_invoice_lines( array $items, bool $is_shopee ): array {
+		$lines = [];
+		$seen = [];
+		foreach ( $items as $item ) {
+			$id = trim( (string) ( $item['item_id'] ?? '' ) );
+			$name = trim( preg_replace( '/\[\s*EXACOAT\s*\]\s*/i', '', (string) ( $item['item_name'] ?? '' ) ) );
+			$quantity = filter_var( $item['quantity'] ?? null, FILTER_VALIDATE_INT, [ 'options' => [ 'min_range' => 1 ] ] );
+			if ( '' === $id || '0' === $id ) {
+				continue;
+			}
+			$variant = trim( (string) ( $item[ $is_shopee ? 'model_name' : 'sku_name' ] ?? '' ) );
+			$id = $is_shopee ? $id . ':' . ( $item['model_id'] ?? 0 ) : $id;
+			if ( isset( $seen[ $id ] ) ) {
+				unset( $lines[ $id ] );
+				continue;
+			}
+			$seen[ $id ] = true;
+			if ( '' === $name || 0 === strcasecmp( 'Exacoat Skin', $name ) || false === $quantity ) {
+				continue;
+			}
+			$lines[ $id ] = [
+				'name' => $variant && false === strpos( $name, $variant ) ? $name . ' - ' . $variant : $name,
+				'variant' => $variant,
+				'quantity' => $quantity,
+				'sku' => (string) ( $item['seller_sku'] ?? '' ),
+			];
+		}
+		return $lines;
+	}
+
+	public static function match_invoice_claim_items( array $requested, array $source ): array {
+		$selected = [];
+		$used = [];
+		foreach ( $requested as $key => $request ) {
+			$source_id = (string) ( $request['source_id'] ?? '' );
+			if ( '' === $source_id ) {
+				$matches = array_filter( $source, static function ( $line ) use ( $request ) {
+					$sku = (string) ( $request['sku'] ?? '' );
+					if ( '' !== $sku && '' !== $line['sku'] ) {
+						return 0 === strcasecmp( $sku, $line['sku'] );
+					}
+					$name = preg_replace( '/\[\s*EXACOAT\s*\]\s*/i', '', (string) $request['name'] );
+					return 0 === strcasecmp( trim( $name ), $line['name'] );
+				} );
+				if ( 1 !== count( $matches ) ) {
+					return [];
+				}
+				$source_id = array_key_first( $matches );
+			}
+			$quantity = filter_var( $request['quantity'] ?? null, FILTER_VALIDATE_INT, [ 'options' => [ 'min_range' => 1 ] ] );
+			if ( ! isset( $source[ $source_id ] ) || isset( $used[ $source_id ] ) || false === $quantity ||
+				$quantity > $source[ $source_id ]['quantity'] ) {
+				return [];
+			}
+			$used[ $source_id ] = true;
+			$selected[ $key ] = $source[ $source_id ] + [ 'source_id' => (string) $source_id ];
+		}
+		return $selected;
 	}
 
 	private static function review_claim_order( \WP_REST_Request $request ): \WP_REST_Response {
@@ -2084,6 +2245,48 @@ class Exacoat_Warranty_Manager {
 
 		if ( 'approve' === $action ) {
 			if ( $unverified ) {
+				$source = self::marketplace_invoice_items( (string) $order->get_meta( '_rma_marketplace_channel' ), $unverified );
+				$source_ids = $request->get_param( 'marketplace_source_item_ids' );
+				$requested = [];
+				if ( is_array( $source_ids ) ) {
+					foreach ( $source_ids as $source_id ) {
+						if ( ! is_string( $source_id ) || '' === $source_id ) {
+							return new \WP_REST_Response( [ 'success' => false, 'message' => 'Select valid items from the original invoice.' ], 400 );
+						}
+						$requested[] = [ 'source_id' => $source_id, 'quantity' => 1 ];
+					}
+				}
+				$resolved = self::match_invoice_claim_items( $requested, $source );
+				if ( empty( $resolved ) ) {
+					return new \WP_REST_Response( [ 'success' => false, 'message' => 'Select distinct purchased items from the original marketplace invoice.' ], 400 );
+				}
+				$claim_items = $order->get_items();
+				$placeholder = reset( $claim_items );
+				if ( ! $placeholder || ! $placeholder->get_product_id() ) {
+					return new \WP_REST_Response( [ 'success' => false, 'message' => 'The request has no replacement item to update.' ], 400 );
+				}
+				$requested_titles = [];
+				foreach ( $claim_items as $item_id => $item ) {
+					$requested_titles[] = $item->get_name();
+					$order->remove_item( $item_id );
+				}
+				$order->update_meta_data( '_rma_requested_item_names', $requested_titles );
+				foreach ( $resolved as $line ) {
+					$item = new \WC_Order_Item_Product();
+					$item->set_product_id( $placeholder->get_product_id() );
+					$item->set_name( '[Warranty Replacement] ' . $line['name'] );
+					$item->set_quantity( 1 );
+					$item->update_meta_data( '_rma_source_item_id', $line['source_id'] );
+					$item->update_meta_data( '_is_warranty', 'yes' );
+					$item->update_meta_data( 'Original Invoice', $unverified );
+					if ( '' !== $line['sku'] ) {
+						$item->update_meta_data( 'Marketplace SKU', $line['sku'] );
+					}
+					if ( '' !== $line['variant'] ) {
+						$item->update_meta_data( 'Variation', $line['variant'] );
+					}
+					$order->add_item( $item );
+				}
 				$order->update_meta_data( '_rma_original_invoice', $unverified );
 				$order->update_meta_data( '_rma_original_order_number', $unverified );
 				$order->update_meta_data( '_rma_marketplace_verified_at', current_time( 'mysql' ) );
@@ -2348,6 +2551,13 @@ class Exacoat_Warranty_Manager {
 		$parent_order = ! $unverified && $parent_id ? wc_get_order( $parent_id ) : null;
 		$channel = $order->get_meta( '_rma_marketplace_channel' ) ?: ( $order->get_meta( '_marketplace_channel' ) ?: ( $order->get_meta( '_channel' ) ?: ( empty( $parent_id ) || is_numeric( $parent_id ) ? 'Web' : 'Shopee' ) ) );
 		$buyer_note = $order->get_meta( '_shopee_buyer_note' ) ?: ( $order->get_meta( '_buyer_note' ) ?: '' );
+		$requires_marketplace_review = '' !== $unverified && ! $order->get_meta( '_rma_marketplace_verified_at' );
+		$source_items = [];
+		if ( $requires_marketplace_review && 'pending_review' === $order->get_meta( '_rma_status' ) ) {
+			foreach ( self::marketplace_invoice_items( (string) $channel, $unverified ) as $source_id => $line ) {
+				$source_items[] = $line + [ 'id' => (string) $source_id ];
+			}
+		}
 
 		$items = [];
 		foreach ( $order->get_items() as $item ) {
@@ -2390,7 +2600,8 @@ class Exacoat_Warranty_Manager {
 			'rma_status'              => $order->get_meta( '_rma_status' ) ?: 'pending_review',
 			'claim_reason'            => $order->get_meta( '_rma_claim_reason' ),
 			'customer_notes'          => $order->get_customer_note(),
-			'requires_marketplace_review' => '' !== $unverified && ! $order->get_meta( '_rma_marketplace_verified_at' ),
+			'requires_marketplace_review' => $requires_marketplace_review,
+			'marketplace_source_items'    => $source_items,
 			'recipient_phone_suffix'     => $order->get_meta( '_rma_recipient_phone_suffix' ),
 			'video_proof_url'         => $order->get_meta( '_rma_video_proof_url' ),
 			'video_deleted'           => ! empty( $order->get_meta( '_rma_video_deleted_at' ) ),
@@ -2593,16 +2804,16 @@ class Exacoat_Warranty_Manager {
 			$is_qc_fault = ! in_array( strtolower( trim( $claim_reason ) ), $external_reasons, true );
 		}
 
-		$lock = null;
+		$reference = 'existing_order' === $source_type
+			? (string) absint( $request->get_param( 'parent_order_id' ) )
+			: sanitize_text_field( $request->get_param( 'marketplace_invoice' ) ?? '' );
 		if ( $is_replacement ) {
-			global $wpdb;
-			$reference = 'existing_order' === $source_type
-				? 'order:' . absint( $request->get_param( 'parent_order_id' ) )
-				: strtolower( sanitize_text_field( $request->get_param( 'channel' ) ?: 'Tokopedia' ) ) . ':' . strtolower( trim( ltrim( sanitize_text_field( $request->get_param( 'marketplace_invoice' ) ?? '' ), '#' ) ) );
-			$lock = 'exa_replace_' . md5( $wpdb->prefix . $reference );
-			if ( '1' !== (string) $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 0)', $lock ) ) ) {
-				return new \WP_REST_Response( [ 'success' => false, 'message' => 'A replacement is already being created. Refresh the order before retrying.' ], 409 );
-			}
+			$source = 'existing_order' === $source_type ? 'order' : sanitize_text_field( $request->get_param( 'channel' ) ?: 'Tokopedia' );
+			$reference = $source . ':' . ltrim( trim( $reference ), "# \t" );
+		}
+		$lock = self::acquire_claim_lock( $reference, $is_replacement ? 'exa_replace_' : 'exa_rma_' );
+		if ( null === $lock ) {
+			return new \WP_REST_Response( [ 'success' => false, 'message' => 'A replacement is already being created. Refresh the order before retrying.' ], 409 );
 		}
 		try {
 			if ( 'existing_order' === $source_type ) {
@@ -2618,6 +2829,10 @@ class Exacoat_Warranty_Manager {
 				// Prevent duplicate claim / redeem on the same parent order
 				$existing_rep_id = $parent_order->get_meta( '_redeem_replacement_order_id' ) ?: $parent_order->get_meta( '_warranty_replacement_order_id' );
 				$already_claimed = ( 'yes' === $parent_order->get_meta( '_has_warranty_claim' ) ) || ( 'yes' === $parent_order->get_meta( '_has_redeem_claim' ) );
+				if ( ! $is_replacement ) {
+					$claim = self::check_invoice_claimed( (string) $parent_order_id );
+					$existing_rep_id = $claim['existing_order_id'] ?? $existing_rep_id;
+				}
 				if ( 'REPLACEMENT' === $parent_order->get_meta( '_order_badge' ) ) {
 					return new \WP_REST_Response( [ 'success' => false, 'message' => 'Select the original order to create a replacement.' ], 400 );
 				}
@@ -2975,7 +3190,13 @@ class Exacoat_Warranty_Manager {
 
 				$existing_claims = array_filter( array_map( 'wc_get_order', $existing_claim_ids ) );
 
-				$allow_duplicate = ! $is_replacement && ( ! empty( $request->get_param( 'allow_duplicate' ) ) || ! empty( $request->get_param( 'override_duplicate' ) ) );
+				$allow_duplicate = $is_redeem && ( ! empty( $request->get_param( 'allow_duplicate' ) ) || ! empty( $request->get_param( 'override_duplicate' ) ) );
+				if ( ! $is_replacement && ! $allow_duplicate ) {
+					$claim = self::check_invoice_claimed( $clean_invoice );
+					if ( $claim['already_claimed'] ) {
+						return new \WP_REST_Response( [ 'success' => false, 'message' => $claim['message'] ], 409 );
+					}
+				}
 
 				if ( ! empty( $existing_claims ) && ! $allow_duplicate ) {
 					$existing_order = reset( $existing_claims );
@@ -2990,7 +3211,7 @@ class Exacoat_Warranty_Manager {
 					return new \WP_REST_Response( [
 						'success' => false,
 						'message' => sprintf(
-							'Invoice "%s" (%s) has already been claimed or redeemed under replacement order #%s (%s). Duplicate claims are not allowed without admin override.',
+							'Invoice "%s" (%s) has already been claimed or redeemed under replacement order #%s (%s).',
 							$clean_invoice,
 							$channel,
 							$existing_num,
@@ -3011,6 +3232,32 @@ class Exacoat_Warranty_Manager {
 						'success' => false,
 						'message' => 'Please select at least one product/device to replace.',
 					], 400 );
+				}
+
+				$resolved_items = [];
+				if ( ! $is_replacement && in_array( $channel, [ 'Shopee', 'TikTok Shop', 'TikTok' ], true ) ) {
+					$requested = [];
+					foreach ( $items as $index => $item ) {
+						$product = wc_get_product( absint( $item['product_id'] ?? 0 ) );
+						if ( ! $product ) {
+							return new \WP_REST_Response( [ 'success' => false, 'message' => 'Select a valid replacement product.' ], 400 );
+						}
+						$requested[ $index ] = [
+							'name' => $product->get_name(),
+							'sku' => $product->get_sku(),
+							'quantity' => $item['quantity'] ?? null,
+						];
+					}
+					$resolved_items = self::match_invoice_claim_items( $requested, self::marketplace_invoice_items( $channel, $clean_invoice ) );
+					if ( empty( $resolved_items ) ) {
+						return new \WP_REST_Response( [ 'success' => false, 'message' => 'Select products and quantities that match the original marketplace invoice.' ], 400 );
+					}
+				} elseif ( ! $is_replacement ) {
+					$manual_item = reset( $items );
+					if ( true !== $request->get_param( 'marketplace_purchase_verified' ) || 1 !== count( $items ) ||
+						false === filter_var( $manual_item['quantity'] ?? null, FILTER_VALIDATE_INT, [ 'options' => [ 'min_range' => 1, 'max_range' => 1 ] ] ) ) {
+						return new \WP_REST_Response( [ 'success' => false, 'message' => 'Verify the original invoice and select one unit of its purchased product.' ], 400 );
+					}
 				}
 
 				$prefix_note = ( 'Redeem' === $rma_type )
@@ -3048,9 +3295,13 @@ class Exacoat_Warranty_Manager {
 
 				$replacement_order->set_address( $addr, 'billing' );
 				$replacement_order->set_address( $addr, 'shipping' );
+				if ( ! $is_replacement && empty( $resolved_items ) ) {
+					$replacement_order->update_meta_data( '_rma_marketplace_verified_at', current_time( 'mysql' ) );
+					$replacement_order->update_meta_data( '_rma_marketplace_verified_by', get_current_user_id() );
+				}
 
 				$added_count = 0;
-				foreach ( $items as $it ) {
+				foreach ( $items as $index => $it ) {
 					$product_id = absint( $it['product_id'] ?? 0 );
 					$product    = $product_id ? wc_get_product( $product_id ) : null;
 					$quantity   = max( 1, intval( $it['quantity'] ?? 1 ) );
@@ -3064,6 +3315,17 @@ class Exacoat_Warranty_Manager {
 						if ( $order_item_id ) {
 							$order_item = $replacement_order->get_item( $order_item_id );
 							if ( $order_item ) {
+								if ( isset( $resolved_items[ $index ] ) ) {
+									$source_line = $resolved_items[ $index ];
+									$order_item->set_name( $source_line['name'] );
+									$order_item->add_meta_data( '_rma_source_item_id', $source_line['source_id'], true );
+									if ( '' !== $source_line['sku'] ) {
+										$order_item->add_meta_data( 'Marketplace SKU', $source_line['sku'], true );
+									}
+									if ( '' !== $source_line['variant'] ) {
+										$order_item->add_meta_data( 'Variation', $source_line['variant'], true );
+									}
+								}
 								$base_config = sanitize_text_field( $it['configuration'] ?? '' );
 								if ( 'Redeem' === $rma_type ) {
 									$order_item->add_meta_data( '_is_redeem', 'yes', true );
@@ -3277,9 +3539,7 @@ class Exacoat_Warranty_Manager {
 				'message' => 'Failed to create manual warranty claim: ' . $e->getMessage(),
 			], 500 );
 		} finally {
-			if ( null !== $lock ) {
-				$wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock ) );
-			}
+			self::release_claim_lock( $lock );
 		}
 	}
 
@@ -3518,7 +3778,7 @@ class Exacoat_Warranty_Manager {
 	 * Authoritative check whether an invoice / order number has already been claimed for Warranty or Redeem
 	 */
 	public static function check_invoice_claimed( string $invoice ): array {
-		$clean = trim( ltrim( trim( $invoice ), '#' ) );
+		$clean = ltrim( trim( $invoice ), "# \t" );
 		if ( empty( $clean ) ) {
 			return [ 'already_claimed' => false ];
 		}
@@ -3527,29 +3787,11 @@ class Exacoat_Warranty_Manager {
 			return [ 'already_claimed' => false ];
 		}
 
-		$invoice_meta_query = [
-			'relation' => 'OR',
-			[
-				'key'     => '_rma_original_invoice',
-				'value'   => $clean,
-				'compare' => '=',
-			],
-			[
-				'key'     => '_rma_original_order_id',
-				'value'   => $clean,
-				'compare' => '=',
-			],
-			[
-				'key'     => '_rma_original_order_number',
-				'value'   => $clean,
-				'compare' => '=',
-			],
-			[
-				'key'     => '_marketplace_invoice',
-				'value'   => $clean,
-				'compare' => '=',
-			],
-		];
+		$forms = array_values( array_unique( [ $clean, '#' . $clean, trim( $invoice ) ] ) );
+		$invoice_meta_query = [ 'relation' => 'OR' ];
+		foreach ( [ '_rma_original_invoice', '_rma_original_order_id', '_rma_original_order_number', '_marketplace_invoice' ] as $key ) {
+			$invoice_meta_query[] = [ 'key' => $key, 'value' => $forms, 'compare' => 'IN' ];
+		}
 
 		$active_statuses = [
 			'pending',
@@ -3561,6 +3803,7 @@ class Exacoat_Warranty_Manager {
 			'delivered',
 			'preparing-order',
 			'in-production',
+			'quality-check',
 			'smb-ready',
 			'smb-picked',
 			'awaiting-pickup',
@@ -3570,36 +3813,6 @@ class Exacoat_Warranty_Manager {
 			'limit'  => 5,
 			'status' => $active_statuses,
 		] );
-
-		if ( empty( $existing_order_ids ) && $clean !== trim( $invoice ) ) {
-			$raw_meta_query = [
-				'relation' => 'OR',
-				[
-					'key'     => '_rma_original_invoice',
-					'value'   => trim( $invoice ),
-					'compare' => '=',
-				],
-				[
-					'key'     => '_rma_original_order_id',
-					'value'   => trim( $invoice ),
-					'compare' => '=',
-				],
-				[
-					'key'     => '_rma_original_order_number',
-					'value'   => trim( $invoice ),
-					'compare' => '=',
-				],
-				[
-					'key'     => '_marketplace_invoice',
-					'value'   => trim( $invoice ),
-					'compare' => '=',
-				],
-			];
-			$existing_order_ids = self::query_order_ids_by_meta( $raw_meta_query, [
-				'limit'  => 5,
-				'status' => $active_statuses,
-			] );
-		}
 
 		if ( empty( $existing_order_ids ) ) {
 			return [ 'already_claimed' => false ];

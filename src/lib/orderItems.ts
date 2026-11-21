@@ -222,6 +222,7 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
       'original order',
       'original channel',
       'variation',
+      'marketplace sku',
       'shopee note',
       'buyer note',
     ];
@@ -243,7 +244,7 @@ export function extractItemSpecs(item: any): ItemCustomizationSpec[] {
   }
 
   // Count specs found so far before checking regular configurator/product attributes
-  const hasConfiguratorSpecs = () => specs.some(s => !['claimed part', 'part to produce', 'original invoice', 'original order', 'original channel', 'variation', 'shopee note', 'buyer note'].includes(s.label.toLowerCase()));
+  const hasConfiguratorSpecs = () => specs.some(s => !['claimed part', 'part to produce', 'original invoice', 'original order', 'original channel', 'variation', 'marketplace sku', 'shopee note', 'buyer note'].includes(s.label.toLowerCase()));
 
   // 0.5. Check item.layers array directly (e.g. from customer API or CMS order payload)
   if (Array.isArray(item.layers) && item.layers.length > 0) {

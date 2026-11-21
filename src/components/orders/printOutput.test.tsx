@@ -78,7 +78,8 @@ describe('printed documents stay byte-identical', () => {
   });
 
   it('shipping label', () => {
-    render(<ShippingLabelA6Modal order={order} orders={[order]} isOpen onClose={() => {}} />);
+    const labelOrder = { ...order, item_count: order.items.length };
+    render(<ShippingLabelA6Modal order={labelOrder} orders={[labelOrder]} isOpen onClose={() => {}} />);
     const iframe = document.querySelector('iframe') as HTMLIFrameElement;
     expect(iframe.getAttribute('srcdoc')).toMatchSnapshot('preview');
     fireEvent.click(printButton(/print 4.6 label/i));
